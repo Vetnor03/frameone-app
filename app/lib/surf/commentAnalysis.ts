@@ -1,3 +1,5 @@
+import { recordOpenAIUsage } from '../server/openaiUsage.mjs'
+
 export const SURF_COMMENT_ANALYSIS_VERSION = 'surf-comment-v1'
 export const SURF_COMMENT_MIN_CONFIDENCE = 0.55
 export const SURF_COMMENT_MAX_LENGTH = 500
@@ -59,7 +61,7 @@ export function validateSurfCommentAnalysis(value: unknown): SurfCommentAnalysis
 export async function analyzeSurfComment(context: AnalysisContext, fetcher: typeof fetch = fetch) {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) return null
-  const model = process.env.SURF_COMMENT_AI_MODEL || process.env.OPENAI_MODEL || 'gpt-5-mini'
+  const model = process.env.SURF_COMMENT_AI_MODEL || 'gpt-6-luna'
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10_000)
   try {
@@ -67,7 +69,7 @@ export async function analyzeSurfComment(context: AnalysisContext, fetcher: type
       method: 'POST', signal: controller.signal,
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model,
+        model, reasoning: { effort: 'none' },
         input: [
           { role: 'developer', content: [{ type: 'input_text', text: 'Extract only surf observations explicitly supported by the surfer comment. Conditions are context only: never infer an observation merely because a number is present. Do not calculate or output any rating, score, residual, adjustment, or multiplier. Use null and omit drivers when unsupported. Keep summary under 160 characters.' }] },
           { role: 'user', content: [{ type: 'input_text', text: JSON.stringify(context) }] },
@@ -85,7 +87,9 @@ export async function analyzeSurfComment(context: AnalysisContext, fetcher: type
       }),
     })
     if (!response.ok) return null
-    const parsed = JSON.parse(outputText(await response.json()))
+    const payload = await response.json()
+    await recordOpenAIUsage('surf_comment', model, payload)
+    const parsed = JSON.parse(outputText(payload))
     const analysis = validateSurfCommentAnalysis(parsed)
     return analysis ? { analysis, model } : null
   } catch { return null } finally { clearTimeout(timeout) }

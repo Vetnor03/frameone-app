@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 Deno.serve(async (req) => {
+  if (!/^(1|true|yes|on)$/i.test(Deno.env.get('AI_FOLLOW_ENABLED') || '')) return Response.json({ ok: false, disabled: true, feature: 'ai_follow' }, { status: 503 })
   if (req.headers.get('x-monitoring-secret') !== Deno.env.get('MONITORING_CRON_SECRET')) return new Response('Unauthorized', { status: 401 })
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
   const max = Number(new URL(req.url).searchParams.get('max') || Deno.env.get('MONITORING_SCHEDULER_BATCH_SIZE') || 100)

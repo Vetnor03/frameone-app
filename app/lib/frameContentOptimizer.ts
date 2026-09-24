@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { sanitizeFrameText } from './frameText.mjs'
+import { completeReservedOpenAICall, reserveBackgroundOpenAICall } from './server/openaiUsage.mjs'
 
 type FrameContentSource = 'remind' | 'spond' | 'teams' | 'waste' | 'local-events' | string
 export type FrameContentType = 'reminder' | 'countdown' | 'ai-follow' | 'news'
@@ -32,7 +33,7 @@ type StructuredOptimizerResponse = { items?: Array<{ id?: unknown; title?: unkno
 
 export const FRAME_TITLE_OPTIMIZER_VERSION = 'v1'
 const NEWS_TITLE_OPTIMIZER_VERSION = 'news-v2'
-const DEFAULT_MODEL = 'gpt-5.6'
+const DEFAULT_MODEL = 'gpt-6-luna'
 const MAX_CACHE_ENTRIES = 1000
 export const PHYSICAL_AI_TIMEOUT_MS = 250
 const PROFILE_LIMITS: Record<DisplayCapacityProfile, { maxTitleChars: number; maxLines: number }> = {
@@ -110,20 +111,31 @@ function extract(payload: OpenAIResponsePayload) {
 
 async function requestTitles(items: FrameContentInput[], model: string, profile: DisplayCapacityProfile, timeoutMs: number) {
   const constraints = PROFILE_LIMITS[profile]
+  const reservation = await reserveBackgroundOpenAICall('frame_title_optimizer', model)
+  if (!reservation.allowed) return new Map<string, string>()
+
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST', signal: controller.signal,
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, input: [
+      body: JSON.stringify({ model, store: false, reasoning: { effort: 'none' }, input: [
         { role: 'developer', content: [{ type: 'input_text', text: INSTRUCTIONS }] },
         { role: 'user', content: [{ type: 'input_text', text: JSON.stringify({ displayProfile: profile, ...constraints, items: items.map(i => ({ id: i.id, title: normalizeText(i.title), contentType: i.contentType || 'reminder', source: i.source || 'unknown' })) }) }] },
       ], text: { format: { type: 'json_schema', name: 'frame_title_optimizations', strict: true, schema: { type: 'object', properties: { items: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, title: { type: 'string' } }, required: ['id', 'title'], additionalProperties: false } } }, required: ['items'], additionalProperties: false } } }, max_output_tokens: 500 }),
     })
-    if (!response.ok) throw new Error(`OpenAI request failed with status ${response.status}`)
-    const parsed = JSON.parse(extract(await response.json() as OpenAIResponsePayload) || '{}') as StructuredOptimizerResponse
+    if (!response.ok) {
+      await completeReservedOpenAICall(reservation.id, null, 'error', `http_${response.status}`)
+      throw new Error(`OpenAI request failed with status ${response.status}`)
+    }
+    const payload = await response.json() as OpenAIResponsePayload
+    await completeReservedOpenAICall(reservation.id, payload)
+    const parsed = JSON.parse(extract(payload) || '{}') as StructuredOptimizerResponse
     return new Map((parsed.items || []).flatMap(i => typeof i.id === 'string' && typeof i.title === 'string' ? [[i.id, fallbackTitle(i.title, constraints.maxTitleChars)] as const] : []))
+  } catch (error) {
+    await completeReservedOpenAICall(reservation.id, null, 'error', controller.signal.aborted ? 'timeout' : 'request_failed')
+    throw error
   } finally { clearTimeout(timeout) }
 }
 
@@ -143,7 +155,9 @@ export async function optimizeFrameContent(items: FrameContentInput[], options: 
   const keys = normalized.map(i => frameTitleCacheKey(i, profile, model))
   const results = new Map<string, string>()
 
-  keys.forEach((key, index) => { const hit = titleCache.get(key); if (hit) results.set(normalized[index].id, hit) })
+  // Most reminder/news titles already fit. Keep them verbatim and spend no AI.
+  normalized.forEach((item) => { if (item.title.length <= maxChars) results.set(item.id, item.title) })
+  keys.forEach((key, index) => { if (!results.has(normalized[index].id)) { const hit = titleCache.get(key); if (hit) results.set(normalized[index].id, hit) } })
   const missingKeys = keys.filter((key, index) => !results.has(normalized[index].id))
   let persistentReadSucceeded = true
   if (missingKeys.length && options.persistentCache) try {

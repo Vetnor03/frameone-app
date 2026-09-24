@@ -14,6 +14,7 @@ import { GET as weatherDetails } from '@/app/api/weather/details/route'
 import { GET as surfScore } from '@/app/api/surf/score/route'
 import { ASSISTANT_HELP_TOPIC_IDS, assistantHelpPrompt, assistantHelpResult, resolveDeterministicAssistantHelp, validateAssistantHelpTopicId, type AssistantHelpTopicId } from '@/app/lib/assistant/help'
 import { normalizeAssistantGapText, sanitizeAssistantGapText } from '@/app/lib/assistant/gapSanitization.mjs'
+import { recordOpenAIUsage } from '@/app/lib/server/openaiUsage.mjs'
 
 export const runtime = 'nodejs'
 
@@ -24,16 +25,19 @@ type ClassifiedIntent = CapabilityRequest | { helpTopicId: AssistantHelpTopicId 
 
 async function aiIntent(text: string): Promise<ClassifiedIntent | null> {
   if (!process.env.OPENAI_API_KEY) return null
+  const model = process.env.ASSISTANT_INTENT_MODEL || 'gpt-6-luna'
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST', headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: process.env.ASSISTANT_INTENT_MODEL || 'gpt-5-mini', store: false, reasoning: { effort: 'minimal' }, max_output_tokens: 180,
+    body: JSON.stringify({ model, store: false, reasoning: { effort: 'none' }, max_output_tokens: 180,
       input: [{ role: 'developer', content: [{ type: 'input_text', text: `Classify one English or Norwegian request as a registered RE:MIND capability or help topic. Choose a capability for a concrete request to perform a supported action. Choose a help topic for a question asking where or how to use the product. Return unsupported for general knowledge. Never write an answer; only classify. Preserve useful capability arguments and never invent app data.\nCapabilities:\n${assistantCapabilityPrompt()}\nHelp topics:\n${assistantHelpPrompt()}` }] }, { role: 'user', content: [{ type: 'input_text', text }] }],
       text: { format: { type: 'json_schema', name: 'assistant_intent', strict: true, schema: { type: 'object', additionalProperties: false, properties: { intentId: { type: 'string', enum: [...ASSISTANT_CAPABILITY_IDS, ...ASSISTANT_HELP_TOPIC_IDS.map((id) => `help:${id}`), 'unsupported'] }, arguments: { type: 'object', additionalProperties: false, properties: { team: { type: ['string', 'null'] }, spot: { type: ['string', 'null'] }, rating: { type: ['integer', 'null'] }, date: { type: ['string', 'null'] }, period: { type: ['string', 'null'] }, time: { type: ['string', 'null'] }, comment: { type: ['string', 'null'] }, title: { type: ['string', 'null'] }, targetDate: { type: ['string', 'null'] }, theme: { type: ['string', 'null'] }, language: { type: ['string', 'null'] }, layout: { type: ['string', 'null'] }, text: { type: ['string', 'null'] }, items: { type: ['array', 'null'], items: { type: 'object', additionalProperties: false, properties: { name: { type: 'string' }, quantity: { type: ['integer', 'null'] } }, required: ['name', 'quantity'] } } }, required: ['team', 'spot', 'rating', 'date', 'period', 'time', 'comment', 'title', 'targetDate', 'theme', 'language', 'layout', 'text', 'items'] } }, required: ['intentId', 'arguments'] } } },
     }),
   }).catch(() => null)
   if (!response?.ok) return null
   try {
-    const parsed = JSON.parse(outputText(await response.json())) as { intentId?: unknown; arguments?: unknown }
+    const payload = await response.json()
+    await recordOpenAIUsage('assistant_intent', model, payload)
+    const parsed = JSON.parse(outputText(payload)) as { intentId?: unknown; arguments?: unknown }
     if (parsed.intentId === 'unsupported') return { unsupported: true }
     const helpId = typeof parsed.intentId === 'string' && parsed.intentId.startsWith('help:') ? validateAssistantHelpTopicId(parsed.intentId.slice(5)) : null
     if (helpId) return { helpTopicId: helpId }

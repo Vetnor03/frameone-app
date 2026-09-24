@@ -24,7 +24,7 @@ function ai(counter, title = 'Stable optimized title') {
     return { ok: true, json: async () => ({ output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ items: supplied.map(item => ({ id: item.id, title })) }) }] }] }) }
   }
 }
-const item = (title = 'A source reminder', extra = {}) => ({ id: 'visible-id', title, source: 'remind', contentType: 'reminder', ...extra })
+const item = (title = 'A source reminder title that is deliberately long enough to need optimization on every display profile', extra = {}) => ({ id: 'visible-id', title, source: 'remind', contentType: 'reminder', ...extra })
 
 test('durable cache survives an empty L1 and ignores display metadata', async () => {
   clearFrameTitleL1CacheForTests()
@@ -32,7 +32,7 @@ test('durable cache survives an empty L1 and ignores display metadata', async ()
   const first = await optimizeFrameContent([item()], { displayProfile: 'standard', persistentCache })
   assert.equal(counter.calls, 1); assert.equal(persistentCache.writes, 1)
   clearFrameTitleL1CacheForTests()
-  const second = await optimizeFrameContent([item('A source reminder', { displayDate: 'Tomorrow', displayTime: '12:00' })], { displayProfile: 'standard', persistentCache })
+  const second = await optimizeFrameContent([item('A source reminder title that is deliberately long enough to need optimization on every display profile', { displayDate: 'Tomorrow', displayTime: '12:00' })], { displayProfile: 'standard', persistentCache })
   assert.deepEqual(second, first); assert.equal(counter.calls, 1)
 })
 
@@ -46,7 +46,7 @@ test('source and meaningful profile changes create one variant; equivalent geome
   await optimizeFrameContent([item()], { displayProfile: 'standard', persistentCache })
   await optimizeFrameContent([item()], { displayProfile: 'compact', persistentCache })
   await optimizeFrameContent([item()], { displayProfile: 'standard', persistentCache })
-  await optimizeFrameContent([item('Changed source')], { displayProfile: 'standard', persistentCache })
+  await optimizeFrameContent([item('A changed source reminder title that is deliberately long enough to require optimization everywhere')], { displayProfile: 'standard', persistentCache })
   assert.equal(counter.calls, 3)
   assert.notEqual(frameTitleCacheKey(item(), 'standard'), frameTitleCacheKey(item(), 'compact'))
 })

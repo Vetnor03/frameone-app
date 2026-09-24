@@ -13,7 +13,7 @@ const candidate = (reminder, missing_fields = [], question = null) => ({ reminde
 const responseFor = (result, inspect) => async (_url, options) => {
   const request = JSON.parse(options.body)
   assert.equal(request.store, false)
-  assert.deepEqual(request.reasoning, { effort: 'minimal' })
+  assert.deepEqual(request.reasoning, { effort: 'none' })
   assert.equal(request.max_output_tokens, 450)
   const payload = JSON.parse(request.input[1].content[0].text)
   assert.equal(Number.isNaN(Date.parse(payload.localNow)), false)
@@ -202,7 +202,7 @@ test('reminder parsing uses its dedicated model and never inherits OPENAI_MODEL'
       selectedModel = JSON.parse(options.body).model
       return responseFor(candidate(base))(_url, options)
     })
-    assert.equal(selectedModel, 'gpt-5-mini')
+    assert.equal(selectedModel, 'gpt-6-luna')
     process.env.REMINDER_PARSE_MODEL = 'reminder-specific-model'
     await parseReminder(context('Dentist tomorrow'), async (_url, options) => {
       selectedModel = JSON.parse(options.body).model
