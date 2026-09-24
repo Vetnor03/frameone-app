@@ -44,3 +44,20 @@ test('News frame rendering uses the reminder-like list without date UI', () => {
   assert.doesNotMatch(home, /const columns = size === 'large' \? 2 : 1/)
   assert.match(home, /NewsModuleSettingsTab/)
 })
+
+
+test('News uses semantic optimizer output and available display space instead of blind ellipsis', () => {
+  const optimizer = read('app/lib/frameContentOptimizer.ts')
+  assert.match(optimizer, /NEWS_TITLE_OPTIMIZER_VERSION = 'news-v2'/)
+  assert.match(optimizer, /complete, natural headline/)
+  assert.match(optimizer, /rephrase it shorter when needed instead of returning a clipped or unfinished fragment/)
+
+  const firmware = read('frame/src/modules/ModuleNews.cpp')
+  assert.match(firmware, /wrapTextToLines/)
+  assert.match(firmware, /show as many newest stories as actually fit/)
+  assert.match(firmware, /if \(nextH > availableH\) break/)
+  assert.doesNotMatch(firmware, /fitTextToWidth\(displayTitle\(g_cache->items\[i\], false\)/)
+
+  const home = read('app/HomePageClient.tsx')
+  assert.match(home, /whitespace-normal break-words/)
+})
