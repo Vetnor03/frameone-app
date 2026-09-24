@@ -57,6 +57,7 @@ type FrameSetupSelection = { purpose: SetupPurpose; modules: Record<string, any>
 // these features can be re-enabled without rebuilding them.
 const SHOW_AI_FOLLOW_UI = false
 const SHOW_CUSTOM_LAYOUT_UI = false
+const SHOW_NOTIFICATIONS_UI = false
 
 type AppLanguage = 'en' | 'no'
 type AppFontSize = 'normal' | 'large'
@@ -1338,7 +1339,7 @@ export default function HomePage() {
   // Resolve this as soon as authentication is ready, rather than waiting for
   // Settings to mount. Settings can then render the shared, already-known state.
   useEffect(() => {
-    if (!userId) {
+    if (!SHOW_NOTIFICATIONS_UI || !userId) {
       setNotificationState(loadingNotificationState)
       return
     }
@@ -8702,7 +8703,9 @@ function SettingsTab({
                   />
                 </div>
               </div>
-              <NotificationsSetting language={language} state={notificationState} onStateChange={onNotificationStateChange} />
+              {SHOW_NOTIFICATIONS_UI && (
+                <NotificationsSetting language={language} state={notificationState} onStateChange={onNotificationStateChange} />
+              )}
               {SHOW_AI_FOLLOW_UI && (
                 <div className="py-4">
                   <div className="mb-3 text-xs tracking-[0.22em] text-[color:var(--fg-50)]">{language === 'no' ? 'KI-ASSISTENT' : 'AI ASSISTANT'}</div>
