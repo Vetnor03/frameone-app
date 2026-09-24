@@ -26,3 +26,10 @@ def test_news_module_uses_only_headline_space():
 
 def test_news_module_is_adaptive():
     assert 'exactOnly(module, "news")' in CAPABILITY
+
+
+def test_news_wraps_complete_optimized_titles_before_reducing_story_count():
+    assert 'wrapTextToLines' in NEWS_CPP
+    assert 'show as many newest stories as actually fit' in NEWS_CPP
+    assert 'if (nextH > availableH) break;' in NEWS_CPP
+    assert 'fitTextToWidth(displayTitle(g_cache->items[i], false)' not in NEWS_CPP
