@@ -292,6 +292,16 @@ void drawCenteredTextInFrame(const char* text, int big) {
 }
 
 
+void drawUpdatingScreen() {
+  display.setFullWindow();
+  display.firstPage();
+  do {
+    fillThemeBackground();
+    drawCenteredTextInFrame("Updating...", 1);
+  } while (display.nextPage());
+}
+
+
 void drawRechargeScreen() {
   display.setFullWindow();
   display.firstPage();
