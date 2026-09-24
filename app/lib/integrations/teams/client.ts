@@ -211,15 +211,32 @@ export async function fetchMicrosoftCalendarView(accessToken: string, startIso: 
   url.searchParams.set('$orderby', 'start/dateTime')
   url.searchParams.set('$top', '50')
 
-  const resp = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Prefer: 'outlook.timezone="UTC"',
-    },
-  })
-  const data = (await resp.json().catch(() => ({}))) as { value?: GraphEvent[]; error?: { message?: string } } & Record<string, unknown>
-  if (!resp.ok) throw new Error(data.error?.message || `Microsoft calendar request failed with status ${resp.status}`)
-  return (Array.isArray(data.value) ? data.value : [])
+  const events: GraphEvent[] = []
+  let nextUrl: string | null = url.toString()
+  let pageCount = 0
+
+  while (nextUrl && pageCount < 20) {
+    const resp = await fetch(nextUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Prefer: 'outlook.timezone="UTC"',
+      },
+    })
+    const data = (await resp.json().catch(() => ({}))) as {
+      value?: GraphEvent[]
+      error?: { message?: string }
+      '@odata.nextLink'?: string
+    } & Record<string, unknown>
+    if (!resp.ok) throw new Error(data.error?.message || `Microsoft calendar request failed with status ${resp.status}`)
+
+    if (Array.isArray(data.value)) events.push(...data.value)
+    nextUrl = typeof data['@odata.nextLink'] === 'string' && data['@odata.nextLink']
+      ? data['@odata.nextLink']
+      : null
+    pageCount += 1
+  }
+
+  return events
     .map(normalizeGraphEvent)
     .filter((item): item is TeamsMeeting => Boolean(item))
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
