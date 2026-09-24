@@ -14,7 +14,7 @@ import { GET as weatherDetails } from '@/app/api/weather/details/route'
 import { GET as surfScore } from '@/app/api/surf/score/route'
 import { ASSISTANT_HELP_TOPIC_IDS, assistantHelpPrompt, assistantHelpResult, resolveDeterministicAssistantHelp, validateAssistantHelpTopicId, type AssistantHelpTopicId } from '@/app/lib/assistant/help'
 import { normalizeAssistantGapText, sanitizeAssistantGapText } from '@/app/lib/assistant/gapSanitization.mjs'
-import { recordOpenAIUsage } from '@/app/lib/server/openaiUsage.mjs'
+import { costControlledModel, recordOpenAIUsage } from '@/app/lib/server/openaiUsage.mjs'
 
 export const runtime = 'nodejs'
 
@@ -25,7 +25,7 @@ type ClassifiedIntent = CapabilityRequest | { helpTopicId: AssistantHelpTopicId 
 
 async function aiIntent(text: string): Promise<ClassifiedIntent | null> {
   if (!process.env.OPENAI_API_KEY) return null
-  const model = process.env.ASSISTANT_INTENT_MODEL || 'gpt-6-luna'
+  const model = costControlledModel(process.env.ASSISTANT_INTENT_MODEL)
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST', headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model, store: false, reasoning: { effort: 'none' }, max_output_tokens: 180,
