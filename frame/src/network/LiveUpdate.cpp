@@ -93,6 +93,10 @@ bool LiveUpdate::probe(const String& deviceToken, LiveUpdateState& out) {
   return true;
 }
 
+uint32_t LiveUpdate::lastNetworkProbeStartedAtMs() {
+  return g_lastProbeNetworkStartedAtMs;
+}
+
 bool LiveUpdate::acknowledge(const String& deviceToken, uint64_t revision) {
   String json = "{\"device_id\":\"" + DeviceIdentity::getDeviceId() +
                 "\",\"displayed_revision\":" + revisionString(revision) + "}";
