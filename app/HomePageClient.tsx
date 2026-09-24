@@ -14128,6 +14128,25 @@ const manualItems: ReminderUiItem[] = (data || [])
         }
         setAvailableSources(['remind', 'teams', 'spond', 'local-events', 'waste'].filter((source) => connectedSources.has(source as ReminderSourceFilter)) as ReminderSourceFilter[])
 
+        if (connectedSources.has('teams')) {
+          try {
+            const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+            if (accessToken) {
+              const syncResp = await fetch('/api/integrations/teams/sync', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${accessToken}` },
+                cache: 'no-store',
+              })
+              if (!syncResp.ok) {
+                const syncJson = await syncResp.json().catch(() => ({}))
+                console.warn('[reminders] Teams calendar refresh failed', syncJson?.error || syncResp.status)
+              }
+            }
+          } catch (error) {
+            console.warn('[reminders] Teams calendar refresh failed', error)
+          }
+        }
+
         const nowIso = new Date().toISOString()
         let localEventSkippedIds = new Set<string>()
         let localEventHiddenSkippedIds = new Set<string>()
