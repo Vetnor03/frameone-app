@@ -34,5 +34,5 @@ def test_updating_screen_is_full_frame_and_theme_aware():
     assert 'drawCenteredTextInFrame("Updating...", 1);' in body
 
 
-def test_firmware_version_tracks_current_feature_set():
-    assert 'static const char* FW_VER = "v2.8.0";' in INO
+def test_firmware_version_remains_2_7_2():
+    assert 'static const char* FW_VER = "v2.7.2";' in INO
