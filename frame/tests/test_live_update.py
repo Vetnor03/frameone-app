@@ -11,7 +11,7 @@ def test_revision_probe_uses_source_aware_idle_cadence_and_is_cheap():
     loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('// --------------------------------------\n// Setup')]
     assert 'remainingProbeWaitMs' in loop
     assert 'waitForInteractiveCadence(pwr.usbPresent, remainingProbeWaitMs)' in loop
-    assert 'lastProbeStartedAtMs = probeStartedAtMs;' in loop
+    assert 'LiveUpdate::lastNetworkProbeStartedAtMs()' in loop
     assert 'LiveUpdate::probe' in loop
     assert 'FrameConfigApi::fetchWithStatus' not in loop.split('// Exactly one cheap revision probe')[1]
 
@@ -233,5 +233,6 @@ def test_idle_probe_uses_short_realtime_network_burst_and_ten_seconds_from_probe
     assert 'g_lastProbeNetworkStartedAtMs = millis();' not in LIVE
 
     loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('// --------------------------------------\n// Setup')]
-    assert 'const uint32_t sinceProbeStartedMs = millis() - lastProbeStartedAtMs;' in loop
+    assert 'const uint32_t lastProbeStartedAtMs = LiveUpdate::lastNetworkProbeStartedAtMs();' in loop
+    assert 'lastProbeStartedAtMs == 0 ? probeCadenceMs : millis() - lastProbeStartedAtMs' in loop
     assert 'sinceProbeStartedMs >= probeCadenceMs ? 0 : probeCadenceMs - sinceProbeStartedMs' in loop
