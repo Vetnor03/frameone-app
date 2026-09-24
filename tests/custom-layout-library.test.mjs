@@ -91,7 +91,9 @@ test('no-op edit keeps slot assignments while changed geometry clears ambiguous 
 test('custom creation and editing use the inline Frame tab state',async()=>{
   const page=await readFile(new URL('../app/HomePageClient.tsx',import.meta.url),'utf8')
   const library=await readFile(new URL('../app/components/CustomLayoutLibrary.tsx',import.meta.url),'utf8')
-  assert.match(page,/carouselItemId==='add-layout' \? \{title:'CUSTOM',subtitle:'Tap \+ to create your own layout'\}/)
+  assert.match(page,/const SHOW_CUSTOM_LAYOUT_UI = false/)
+  assert.match(page,/SHOW_CUSTOM_LAYOUT_UI && carouselItemId==='add-layout'/)
+  assert.match(page,/isAddCard=\{SHOW_CUSTOM_LAYOUT_UI && carouselItemId==='add-layout'\}/)
   assert.match(page,/onAdd=\{beginCreateLayout\}/)
   assert.match(page,/editorMode\?<InlineCustomLayoutEditor/)
   assert.match(page,/aria-label="Layout name"/)
