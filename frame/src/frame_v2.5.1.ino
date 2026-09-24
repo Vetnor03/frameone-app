@@ -25,6 +25,7 @@
 #include "ModuleWeather.h"
 #include "ModuleSurf.h"
 #include "ModuleReminders.h"
+#include "ModuleNews.h"
 #include "ModuleSoccer.h"
 #include "ModuleStocks.h"
 #include "FirmwareUpdater.h"
@@ -40,7 +41,7 @@
 #include <inttypes.h>
 
 // Change this string whenever you want to force one redraw after flashing/OTA
-static const char* FW_VER = "v2.7.4";
+static const char* FW_VER = "v2.8.0";
 
 // Public app page shown during pairing
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
@@ -745,6 +746,7 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
   ModuleWeather::setConfig(&g_cfg);
   ModuleSurf::setConfig(&g_cfg);
   ModuleReminders::setConfig(&g_cfg);
+  ModuleNews::setConfig(&g_cfg);
   ModuleSoccer::setConfig(&g_cfg);
   ModuleStocks::setConfig(&g_cfg);
   const uint8_t reminderProfiles = Layout::reminderProfileMask(g_cfg.layout, g_cfg);
@@ -761,6 +763,15 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
   if (remindersActive) ModuleReminders::preload();
   Serial.printf("Render timing reminders_preload_ms=%lu active=%u\n",
     (unsigned long)(millis() - remindersPreloadStartedAtMs), remindersActive ? 1U : 0U);
+
+  bool newsActive = false;
+  for (int i = 0; i < activeAssignmentCount; ++i) {
+    if (strcmp(activeAssignments[i].module, "news") == 0) { newsActive = true; break; }
+  }
+  const uint32_t newsPreloadStartedAtMs = millis();
+  if (newsActive) ModuleNews::preload();
+  Serial.printf("Render timing news_preload_ms=%lu active=%u\n",
+    (unsigned long)(millis() - newsPreloadStartedAtMs), newsActive ? 1U : 0U);
 
   uint8_t soccerAssignments = 0;
   const uint32_t soccerPreloadStartedAtMs = millis();
@@ -814,9 +825,14 @@ static bool renderSmartDashboard(const BatteryState& batt, const PowerSenseDebug
 
   DisplayCore::setBatteryStatus(batt.percent, batt.isCharging, pwr.usbPresent);
   ModuleDate::setConfig(&g_cfg); ModuleWeather::setConfig(&g_cfg); ModuleSurf::setConfig(&g_cfg);
-  ModuleReminders::setConfig(&g_cfg); ModuleSoccer::setConfig(&g_cfg); ModuleStocks::setConfig(&g_cfg);
+  ModuleReminders::setConfig(&g_cfg); ModuleNews::setConfig(&g_cfg); ModuleSoccer::setConfig(&g_cfg); ModuleStocks::setConfig(&g_cfg);
   ModuleReminders::setRequiredProfiles(Layout::reminderProfileMask(g_cfg.layout, g_cfg));
   ModuleReminders::preload();
+  bool newsDirty = false;
+  for (uint8_t i = 0; i < desired.moduleCount; ++i) {
+    if (plan.dirty[i] && desired.modules[i].key == "news") { newsDirty = true; break; }
+  }
+  if (newsDirty) ModuleNews::preload();
   ensureDisplay(); Theme::set(g_cfg.theme); resetTextStateForDashboard();
 
   bool success = true;

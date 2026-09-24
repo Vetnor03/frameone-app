@@ -107,6 +107,7 @@ struct FrameConfig {
   LayoutKey layout = LAYOUT_DEFAULT;
   ThemeKey theme = THEME_DARK;
   bool powerSaver = false;
+  char language[4] = {'e', 'n', '\0', '\0'};
 
   SlotModule assigns[MAX_FRAME_ASSIGNMENTS];
   int assignCount = 0;
