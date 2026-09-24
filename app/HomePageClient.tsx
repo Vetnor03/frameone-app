@@ -444,6 +444,26 @@ type MirrorModuleDetail = {
   surfWaterMaxC?: number
   surfSunrise?: string
   surfSunset?: string
+  skiFreshCm?: number | null
+  skiTotalCm?: number | null
+  skiTempC?: number | null
+  skiWindMps?: number | null
+  skiWindDirDeg?: number | null
+  skiAvalancheAvailable?: boolean
+  skiAvalancheAssessed?: boolean
+  skiAvalancheLevel?: number | null
+  skiResortAvailable?: boolean
+  skiResortName?: string
+  skiResortOpen?: boolean
+  skiLiftsOpen?: number | null
+  skiLiftsTotal?: number | null
+  skiSlopesOpen?: number | null
+  skiSlopesTotal?: number | null
+  skiPowderFound?: boolean
+  skiPowderDate?: string
+  skiPowderLowCm?: number | null
+  skiPowderHighCm?: number | null
+  skiPowderMidCm?: number | null
   stockTitle?: string
   stockSymbol?: string
   stockPrice?: string
@@ -4212,6 +4232,11 @@ function frameModuleDetail(
     return { primary: t.modules.surf, secondary: spot || (language === 'no' ? 'Lagret spot' : 'Saved spot') }
   }
 
+  if (module === 'ski') {
+    const label = String(cfg.label ?? cfg.name ?? '').trim()
+    return { module: 'ski', primary: label || t.modules.ski, secondary: language === 'no' ? 'Lagret skiområde' : 'Saved ski area' }
+  }
+
   if (module === 'soccer') {
     const team = String(cfg.teamName ?? cfg.team ?? '').trim()
     const competition = String(cfg.competitionName ?? '').trim()
@@ -6028,6 +6053,89 @@ function MirrorSmallRemindersCard({ detail, language, borderColor, mutedColor }:
 
 
 
+
+function MirrorSkiCard({
+  detail,
+  language,
+  size,
+  full,
+  borderColor,
+  mutedColor,
+}: {
+  detail: MirrorModuleDetail
+  language: AppLanguage
+  size: CellSize
+  full?: boolean
+  borderColor: string
+  mutedColor: string
+}) {
+  const isNo = language === 'no'
+  const title = detail.primary || 'Ski'
+  const fresh = detail.skiFreshCm == null ? '--' : `${Math.round(detail.skiFreshCm)} cm`
+  const total = detail.skiTotalCm == null ? '--' : `${Math.round(detail.skiTotalCm)} cm`
+  const temp = detail.skiTempC == null ? '--°' : `${Math.round(detail.skiTempC)}°`
+  const wind = detail.skiWindMps == null
+    ? '-- m/s'
+    : `${skiWindDirectionLabel(detail.skiWindDirDeg)} ${Math.round(detail.skiWindMps)} m/s`
+  const avalanche = detail.skiAvalancheAssessed && Number(detail.skiAvalancheLevel) > 0
+    ? `${isNo ? 'Skredfare' : 'Avalanche'} ${Math.round(Number(detail.skiAvalancheLevel))}`
+    : (isNo ? 'Ikke vurdert' : 'Not assessed')
+  const resort = detail.skiResortAvailable
+    ? `${detail.skiResortName || (isNo ? 'Anlegg' : 'Resort')} ${detail.skiResortOpen ? (isNo ? 'åpent' : 'open') : (isNo ? 'stengt' : 'closed')}${detail.skiLiftsOpen != null && detail.skiLiftsTotal ? ` · ${Math.round(detail.skiLiftsOpen)}/${Math.round(detail.skiLiftsTotal)} ${isNo ? 'heiser' : 'lifts'}` : ''}`
+    : ''
+  const powderCm = detail.skiPowderLowCm != null && detail.skiPowderHighCm != null
+    ? `${Math.round(detail.skiPowderLowCm)}–${Math.round(detail.skiPowderHighCm)} cm`
+    : detail.skiPowderMidCm != null ? `${Math.round(detail.skiPowderMidCm)} cm` : ''
+  const powder = detail.skiPowderFound && detail.skiPowderDate
+    ? `${isNo ? 'Neste pudderdag' : 'Next powder'} ${detail.skiPowderDate}${powderCm ? ` · ${powderCm}` : ''}`
+    : ''
+
+  if (size === 'small') {
+    const stats = [
+      `${fresh} ${isNo ? 'nysnø' : 'fresh'}`,
+      `${total} ${isNo ? 'totalt' : 'total'}`,
+      avalanche,
+    ]
+    return (
+      <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.5rem,1.25vw,0.85rem)] py-[clamp(0.42rem,1vw,0.68rem)] text-center leading-none">
+        <div className="flex shrink-0 justify-center"><MirrorModuleHeader title={title} /></div>
+        <div className="mt-[clamp(0.35rem,0.9vw,0.58rem)] grid min-h-0 flex-1 grid-cols-3 items-center">
+          {stats.map((stat, index) => (
+            <div key={stat} className="flex h-full min-w-0 items-center justify-center px-[clamp(0.25rem,0.7vw,0.45rem)] text-[clamp(0.58rem,1.3vw,0.82rem)] font-medium tracking-[0.04em]" style={index ? { borderLeft: `1px solid ${borderColor}` } : undefined}>
+              <span className="whitespace-normal leading-tight">{stat}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const extra = (size === 'large' || full) ? [resort, powder].filter(Boolean) : []
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.65rem,1.7vw,1.15rem)] py-[clamp(0.62rem,1.55vw,1rem)] text-center leading-none">
+      <div className="flex shrink-0 justify-center"><MirrorModuleHeader title={title} /></div>
+      <div className="mt-[clamp(0.55rem,1.35vw,0.9rem)] grid grid-cols-2 items-center">
+        <div className="px-2">
+          <div className="text-[clamp(1rem,2.6vw,1.7rem)] font-semibold">{fresh}</div>
+          <div className="mt-1 text-[clamp(0.52rem,1.1vw,0.72rem)] tracking-[0.1em]" style={{ color: mutedColor }}>{isNo ? 'NYSNØ' : 'FRESH'}</div>
+        </div>
+        <div className="px-2" style={{ borderLeft: `1px solid ${borderColor}` }}>
+          <div className="text-[clamp(0.82rem,2vw,1.3rem)] font-semibold">{total}</div>
+          <div className="mt-1 text-[clamp(0.52rem,1.1vw,0.72rem)] tracking-[0.1em]" style={{ color: mutedColor }}>{isNo ? 'TOTALT' : 'TOTAL'}</div>
+        </div>
+      </div>
+      <div className="mx-auto mt-[clamp(0.45rem,1.15vw,0.72rem)] h-px w-[82%]" style={{ backgroundColor: borderColor }} />
+      <div className="mt-[clamp(0.45rem,1.1vw,0.7rem)] flex items-center justify-center gap-[clamp(0.8rem,2vw,1.45rem)] text-[clamp(0.62rem,1.45vw,0.92rem)] font-medium tracking-[0.04em]">
+        <span>{temp}</span><span>{wind}</span><span>{avalanche}</span>
+      </div>
+      {extra.length > 0 && (
+        <div className="mt-[clamp(0.45rem,1.15vw,0.72rem)] flex min-h-0 flex-1 flex-col items-center justify-center gap-[clamp(0.28rem,0.7vw,0.45rem)] text-[clamp(0.56rem,1.2vw,0.78rem)] font-medium tracking-[0.035em]" style={{ color: mutedColor }}>
+          {extra.map((line) => <div key={line} className="max-w-full whitespace-normal leading-tight">{line}</div>)}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function MirrorNewsCard({
   detail,
@@ -7977,6 +8085,10 @@ function LandscapeFrameMirror({
 
     if (module === 'assistant' && size === 'small') {
       return <MirrorAiAssistantCard detail={detail} language={language} mutedColor={mutedColor} borderColor={borderColor} maxItems={1} variant="small" />
+    }
+
+    if (module === 'ski') {
+      return <MirrorSkiCard detail={detail} language={language} size={size} full={snapshot.layoutKey === 'full'} borderColor={borderColor} mutedColor={mutedColor} />
     }
 
     if (module === 'news') {

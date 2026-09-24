@@ -26,10 +26,8 @@ bool ModuleRenderer::canRenderCell(const char* module, const Cell& cell) {
     return AdaptiveModuleCapability::exactOnly(module, "assistant");
   if (AdaptiveModuleCapability::hasPrefix(module, "surf"))
     return AdaptiveModuleCapability::numericInstance(module, "surf");
-  if (AdaptiveModuleCapability::hasPrefix(module, "ski")) {
-    if (!AdaptiveModuleCapability::numericInstance(module, "ski")) return false;
-    return cell.size == CELL_MEDIUM || (cell.size == CELL_ADAPTIVE && cell.colSpan == 2 && cell.rowSpan == 2);
-  }
+  if (AdaptiveModuleCapability::hasPrefix(module, "ski"))
+    return AdaptiveModuleCapability::numericInstance(module, "ski", 4);
   if (cell.size != CELL_ADAPTIVE) return true; // frozen anchor dispatch/support
   return AdaptiveModuleCapability::supports(module);
 }
@@ -129,7 +127,7 @@ void ModuleRenderer::renderPlaceholders(const SlotModule* assigns, int assignCou
       continue;
     }
 
-    if (AdaptiveModuleCapability::numericInstance(mod.c_str(), "ski")) {
+    if (AdaptiveModuleCapability::numericInstance(mod.c_str(), "ski", 4)) {
       ModuleSki::render(c, mod);
       Serial.printf("Render timing module=%s slot=%u ms=%lu\n", mod.c_str(), c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
