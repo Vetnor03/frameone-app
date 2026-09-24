@@ -45,7 +45,7 @@ def test_live_update_uses_shared_hardened_network_client():
 def test_live_update_real_network_probe_is_limited_to_ten_seconds():
     assert 'LIVE_PROBE_MIN_NETWORK_INTERVAL_MS = 10000' in LIVE
     assert 'g_haveCachedProbeState' in LIVE
-    assert 'nowMs - g_lastProbeNetworkAtMs' in LIVE
+    assert 'nowMs - g_lastProbeNetworkStartedAtMs' in LIVE
 
 
 def test_successful_ack_updates_cached_probe_state_to_prevent_redraw_rollback():
