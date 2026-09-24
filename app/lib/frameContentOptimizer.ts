@@ -31,6 +31,7 @@ type OpenAIResponsePayload = { output?: Array<{ type?: string; content?: Array<{
 type StructuredOptimizerResponse = { items?: Array<{ id?: unknown; title?: unknown }> }
 
 export const FRAME_TITLE_OPTIMIZER_VERSION = 'v1'
+const NEWS_TITLE_OPTIMIZER_VERSION = 'news-v2'
 const DEFAULT_MODEL = 'gpt-5.6'
 const MAX_CACHE_ENTRIES = 1000
 export const PHYSICAL_AI_TIMEOUT_MS = 250
@@ -42,7 +43,7 @@ const PROFILE_LIMITS: Record<DisplayCapacityProfile, { maxTitleChars: number; ma
 const titleCache = new Map<string, string>()
 const inFlightOptimizations = new Map<string, Promise<string | null>>()
 
-const INSTRUCTIONS = `Optimize titles for a calm e-ink home display. Keep the original language and facts. Remove filler and provider boilerplate. Dates and times are rendered separately. Use plain typography and no emoji. Preserve Norwegian æ/ø/å. For news items, state only what the report is about: shorten clickbait or teaser phrasing without changing the factual claim, preserve attribution and uncertainty when material, and never add motives, judgment, political evaluation, or sensational wording. Return every supplied id and respect each display profile, maximum characters, and line count.`
+const INSTRUCTIONS = `Optimize titles for a calm e-ink home display. Keep the original language and facts. Remove filler and provider boilerplate. Dates and times are rendered separately. Use plain typography and no emoji. Preserve Norwegian æ/ø/å. For news items, state only what the report is about: shorten clickbait or teaser phrasing without changing the factual claim, preserve attribution and uncertainty when material, and never add motives, judgment, political evaluation, or sensational wording. A news title must remain a complete, natural headline: rephrase it shorter when needed instead of returning a clipped or unfinished fragment. Return every supplied id and respect each display profile, maximum characters, and line count.`
 
 const normalizeText = (value: string) => String(value || '').replace(/\s+/g, ' ').trim()
 function truncateAtWordBoundary(value: string, maxChars: number) {
@@ -66,8 +67,12 @@ export function deriveReminderDisplayProfile(input: { usableWidth?: number; maxL
   return 'spacious'
 }
 
+function optimizerVersion(item: FrameContentInput) {
+  return item.contentType === 'news' ? NEWS_TITLE_OPTIMIZER_VERSION : FRAME_TITLE_OPTIMIZER_VERSION
+}
+
 export function frameTitleCacheKey(item: FrameContentInput, profile: DisplayCapacityProfile, model = DEFAULT_MODEL) {
-  const identity = [FRAME_TITLE_OPTIMIZER_VERSION, model, item.contentType || 'reminder', item.source || 'unknown', normalizeText(item.title), profile]
+  const identity = [optimizerVersion(item), model, item.contentType || 'reminder', item.source || 'unknown', normalizeText(item.title), profile]
   return createHash('sha256').update(JSON.stringify(identity)).digest('hex')
 }
 
@@ -164,9 +169,9 @@ export async function optimizeFrameContent(items: FrameContentInput[], options: 
       const batch = (async () => {
         try {
           const fresh = await requestTitles(newEntries.map(([, item]) => item), model, profile, options.aiTimeoutMs ?? 5000)
-          const rows = newEntries.flatMap(([key]) => {
+          const rows = newEntries.flatMap(([key, item]) => {
             const title = fresh.get(key)
-            return title ? [{ cache_key: key, optimized_title: title, optimizer_version: FRAME_TITLE_OPTIMIZER_VERSION, model, display_profile: profile, updated_at: new Date().toISOString() }] : []
+            return title ? [{ cache_key: key, optimized_title: title, optimizer_version: optimizerVersion(item), model, display_profile: profile, updated_at: new Date().toISOString() }] : []
           })
           // Never expose an AI title until its durable write succeeds.
           if (rows.length && options.persistentCache) await options.persistentCache.write(rows)
