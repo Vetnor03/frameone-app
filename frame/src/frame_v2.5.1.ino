@@ -40,7 +40,7 @@
 #include <inttypes.h>
 
 // Change this string whenever you want to force one redraw after flashing/OTA
-static const char* FW_VER = "v2.7.3";
+static const char* FW_VER = "v2.7.4";
 
 // Public app page shown during pairing
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
@@ -844,6 +844,17 @@ static bool fetchAndRenderExplicit(
     "LiveUpdate timing probe_to_pending_ms=%lu\n",
     (unsigned long)(explicitTimingStartedAtMs - explicitRevisionObservedAtMs)
   );
+  // Manual Update is an intentional user action. Give immediate physical
+  // acknowledgement before the slower config/content fetches begin. Power Save
+  // never reaches this path for routine sleeping updates.
+  if (!g_powerSaverMode) {
+    ensureDisplay();
+    Theme::set(g_cfg.theme);
+    DisplayCore::drawUpdatingScreen();
+    shutdownDisplay();
+    Serial.println("LiveUpdate: Updating screen displayed");
+  }
+
   const uint32_t configFetchStartedAtMs = millis();
   FrameConfigApi::FetchResult result =
     FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
