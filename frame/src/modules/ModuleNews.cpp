@@ -7,14 +7,13 @@
 #include "NetClient.h"
 #include "Theme.h"
 
-#include "FreeSans9ptNO.h"
 #include "FreeSansBold12ptNO.h"
 
 #include <ArduinoJson.h>
 #include <string.h>
 #include <new>
 
-#define NEWS_FONT_BODY (&FreeSans9pt8b)
+#define NEWS_FONT_BODY (&FreeSansBold12pt8b)
 #define NEWS_FONT_HEADER (&FreeSansBold12pt8b)
 
 namespace ModuleNews {
@@ -124,7 +123,7 @@ static int drawHeader(const Cell& c) {
   uint16_t tw, th;
   measureText(header, NEWS_FONT_HEADER, x1, y1, tw, th);
 
-  const int topPad = c.h <= 150 ? 18 : 24;
+  const int topPad = c.h <= 150 ? 20 : 26;
   const int baseline = c.y + topPad - y1;
   const int x = c.x + c.w / 2 - (int)tw / 2 - x1;
 
@@ -135,7 +134,7 @@ static int drawHeader(const Cell& c) {
   d.print(header);
   d.setFont(nullptr);
 
-  const int underlineY = baseline + y1 + (int)th + 2;
+  const int underlineY = baseline + y1 + (int)th + 1;
   d.fillRect(c.x + c.w / 2 - (int)tw / 2, underlineY, tw, 2, Theme::ink());
   return underlineY + 10;
 }
@@ -262,36 +261,52 @@ static void renderShallow(const Cell& c) {
 static void renderList(const Cell& c) {
   auto& d = DisplayCore::get();
   const int contentTop = drawHeader(c);
-  const int contentBottom = c.y + c.h - 10;
+  const int contentBottom = c.y + c.h - 12;
   const int visible = min(g_cache->count, capacityForCell(c));
   if (visible <= 0) { drawEmpty(c); return; }
 
-  const int columns = c.w >= 600 && c.h >= 180 ? 2 : 1;
-  const int rows = (visible + columns - 1) / columns;
+  // Match the Reminders module's centered list treatment: bold content,
+  // compact bullets only when there is more than one item, and a centered
+  // block that uses the full cell instead of reserving calendar/date space.
+  const int dotR = 3;
+  const int gap = 10;
+  const int sidePad = 18;
+  const bool drawBullets = visible > 1;
+  const int bulletSpace = drawBullets ? dotR * 2 + gap : 0;
+  const int maxTextW = max(24, c.w - sidePad * 2 - bulletSpace);
+
+  int maxLineW = 0;
+  for (int i = 0; i < visible; ++i) {
+    char fit[112] = {0};
+    fitTextToWidth(displayTitle(g_cache->items[i], false),
+                   fit, sizeof(fit), maxTextW, NEWS_FONT_BODY);
+    const int lineW = textWidth(fit, NEWS_FONT_BODY);
+    if (lineW > maxLineW) maxLineW = lineW;
+  }
+
   const int availableH = max(1, contentBottom - contentTop);
-  const int rowStep = min(28, max(20, availableH / max(1, rows)));
-  const int gridH = rowStep * rows;
-  const int startY = contentTop + max(0, (availableH - gridH) / 2);
-  const int columnGap = columns > 1 ? 18 : 0;
-  const int columnW = (c.w - columnGap * (columns - 1)) / columns;
+  const int rowStep = min(28, max(20, availableH / max(1, visible)));
+  const int blockH = rowStep * visible;
+  const int startY = contentTop + max(0, (availableH - blockH) / 2);
+
+  const int rowW = bulletSpace + maxLineW;
+  int textX = c.x + (c.w - rowW) / 2 + bulletSpace;
+  const int minTextX = c.x + sidePad + bulletSpace;
+  if (textX < minTextX) textX = minTextX;
+  const int bulletX = drawBullets ? textX - gap - dotR : textX;
 
   for (int i = 0; i < visible; ++i) {
-    const int row = i / columns;
-    const int col = i % columns;
-    const int x0 = c.x + col * (columnW + columnGap);
-    const int centerY = startY + row * rowStep + rowStep / 2;
-    const int bulletX = x0 + 18;
-    const int textX = bulletX + 12;
-    const int maxTextW = max(12, columnW - (textX - x0) - 12);
-
     char fit[112] = {0};
-    fitTextToWidth(displayTitle(g_cache->items[i], false), fit, sizeof(fit), maxTextW, NEWS_FONT_BODY);
+    fitTextToWidth(displayTitle(g_cache->items[i], false),
+                   fit, sizeof(fit), maxTextW, NEWS_FONT_BODY);
 
     int16_t tx1, ty1;
     uint16_t tw, th;
     measureText(fit, NEWS_FONT_BODY, tx1, ty1, tw, th);
+
+    const int centerY = startY + i * rowStep + rowStep / 2;
     const int baseline = centerY - (int)th / 2 - ty1;
-    d.fillCircle(bulletX, centerY, 3, Theme::ink());
+    if (drawBullets) d.fillCircle(bulletX, centerY, dotR, Theme::ink());
     drawLeft(textX - tx1, baseline, fit, NEWS_FONT_BODY);
   }
 }
