@@ -86,8 +86,9 @@ test('proactive tip copy is exact in English and Norwegian and remains free', ()
     { en: 'You can ask me to add groceries.', no: 'Du kan be meg legge til dagligvarer.' },
     { en: 'Try: “Remind me to call Mum tomorrow.”', no: 'Prøv: «Minn meg på å ringe mamma i morgen.»' },
     { en: 'I can help you find settings too.', no: 'Jeg kan også hjelpe deg å finne innstillinger.' },
+    { en: 'Want longer battery life? Turn on Power Save in Settings.', no: 'Vil du ha lengre batteritid? Slå på Strømsparing i Innstillinger.' },
   ])
-  assert.deepEqual(ASSISTANT_TIPS.map(({ id }) => id), ['landscape-frame-preview', 'add-groceries', 'reminder-example', 'settings-help'])
+  assert.deepEqual(ASSISTANT_TIPS.map(({ id }) => id), ['landscape-frame-preview', 'add-groceries', 'reminder-example', 'settings-help', 'power-save'])
   assert.doesNotMatch(tips, /fetch\(|openai|aiIntent/i)
 })
 
