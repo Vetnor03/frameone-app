@@ -21,6 +21,8 @@ test('News smart refresh only hashes visible titles and checks periodically', ()
   assert.match(signature, /ref\.base === 'news'/)
   assert.match(signature, /\/api\/news/)
   assert.match(signature, /NEWS_SOURCE_FRESHNESS_MS = 30 \* 60_000/)
+  assert.match(signature, /NEWS_POWER_SAVE_FRESHNESS_MS = 2 \* 60 \* 60_000/)
+  assert.match(signature, /settings\?\.powerSaver \? NEWS_POWER_SAVE_FRESHNESS_MS : NEWS_SOURCE_FRESHNESS_MS/)
   assert.match(signature, /function newsProjection/)
 })
 
@@ -28,6 +30,8 @@ test('News frame rendering uses the reminder-like list without date UI', () => {
   const firmware = read('frame/src/modules/ModuleNews.cpp')
   assert.match(firmware, /"Nyheter" : "News"/)
   assert.match(firmware, /MAX_NEWS_ITEMS = 14/)
+  assert.match(firmware, /#define NEWS_FONT_BODY \(&FreeSansBold12pt8b\)/)
+  assert.match(firmware, /Match the Reminders module's centered list treatment/)
   assert.doesNotMatch(firmware, /ModuleDate|drawCalendar|calendar/i)
 
   const renderer = read('frame/src/modules/ModuleRenderer.cpp')
