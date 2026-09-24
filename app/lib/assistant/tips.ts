@@ -3,6 +3,7 @@ export const ASSISTANT_TIPS = [
   { id: 'add-groceries', en: 'You can ask me to add groceries.', no: 'Du kan be meg legge til dagligvarer.', command: { en: 'Add milk, eggs and bread', no: 'Legg til melk, egg og brød' } },
   { id: 'reminder-example', en: 'Try: “Remind me to call Mum tomorrow.”', no: 'Prøv: «Minn meg på å ringe mamma i morgen.»', command: { en: 'Remind me to call Mum tomorrow', no: 'Minn meg på å ringe mamma i morgen' } },
   { id: 'settings-help', en: 'I can help you find settings too.', no: 'Jeg kan også hjelpe deg å finne innstillinger.' },
+  { id: 'power-save', en: 'Want longer battery life? Turn on Power Save in Settings.', no: 'Vil du ha lengre batteritid? Slå på Strømsparing i Innstillinger.' },
 ] as const
 
 export const ASSISTANT_TIP_LIMIT = ASSISTANT_TIPS.length
