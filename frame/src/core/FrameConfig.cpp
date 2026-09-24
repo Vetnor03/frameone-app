@@ -174,6 +174,7 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
   // reset core
   out.layout = LAYOUT_DEFAULT;
   out.theme = THEME_DARK;
+  out.powerSaver = false;
   resetCustomLayout(out);
 
   out.assignCount = 0;
@@ -255,6 +256,9 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
     Serial.println("frame-config missing settings_json");
     return FETCH_ERROR;
   }
+
+  // Power Saver is opt-in. Missing/invalid values preserve Normal mode.
+  out.powerSaver = (bool)(settings["powerSaver"] | false);
 
   // theme
   const char* themeStr = settings["theme"] | "dark";

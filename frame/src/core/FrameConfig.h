@@ -106,6 +106,7 @@ struct StocksModuleConfig {
 struct FrameConfig {
   LayoutKey layout = LAYOUT_DEFAULT;
   ThemeKey theme = THEME_DARK;
+  bool powerSaver = false;
 
   SlotModule assigns[MAX_FRAME_ASSIGNMENTS];
   int assignCount = 0;

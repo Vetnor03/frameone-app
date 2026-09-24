@@ -40,7 +40,7 @@
 #include <inttypes.h>
 
 // Change this string whenever you want to force one redraw after flashing/OTA
-static const char* FW_VER = "v2.7.2";
+static const char* FW_VER = "v2.7.3";
 
 // Public app page shown during pairing
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
@@ -63,6 +63,9 @@ RTC_DATA_ATTR static uint32_t normalSyncElapsedSeconds = 0;
 RTC_DATA_ATTR static uint32_t plannedDeepSleepSeconds = SmartRefresh::REVISION_SAFETY_SECONDS;
 RTC_DATA_ATTR static time_t g_nextScheduledWake = 0;
 RTC_DATA_ATTR static time_t g_revisionRetryNotBefore = 0;
+// Power Save is retained across timer wakes so the frame can choose the correct
+// wake policy before making any routine network request.
+RTC_DATA_ATTR static bool g_powerSaverMode = false;
 // Retained across dynamically scheduled deep-sleep wake cycles. A cold boot may redraw
 // once, but ordinary setup-pending probes never refresh unchanged e-paper.
 RTC_DATA_ATTR static bool setupPendingScreenDisplayed = false;
@@ -109,6 +112,22 @@ struct PowerSenseDebug {
   bool usbPresent;
   bool stable;
 };
+
+static void setPowerSaverMode(bool enabled) {
+  if (g_powerSaverMode == enabled) return;
+  g_powerSaverMode = enabled;
+  normalSyncElapsedSeconds = 0;
+
+  const time_t now = time(nullptr);
+  if (now >= 1000000000 && g_smartState.moduleCount > 0) {
+    g_nextScheduledWake = now + SmartRefresh::secondsUntilNextWake(
+      g_smartState, now, g_revisionCheckedAt, !g_powerSaverMode);
+  }
+
+  Serial.println(g_powerSaverMode
+    ? "Power mode: Power Saver (scheduled deep sleep only)"
+    : "Power mode: Normal (persistent Wi-Fi + live updates)");
+}
 
 #if defined(FRAME_IS_ALFRED_V1_2)
 // While battery ALS is active, PGOOD_N must wake the blocked interactive task
@@ -338,7 +357,8 @@ static void goToSleepForUs(uint64_t us, bool usbPresent) {
 static uint64_t nextDeepSleepDurationUs() {
   const time_t now = time(nullptr);
   const time_t checkedAt = g_revisionCheckedAt > 0 ? g_revisionCheckedAt : now;
-  uint32_t seconds = SmartRefresh::secondsUntilNextWake(g_smartState, now, checkedAt);
+  uint32_t seconds = SmartRefresh::secondsUntilNextWake(
+    g_smartState, now, checkedAt, !g_powerSaverMode);
   if (seconds <= 1 && g_revisionRetryNotBefore > now)
     seconds = (uint32_t)(g_revisionRetryNotBefore - now);
   // Invalid/unset wall time or scheduler state falls back to the revision
@@ -347,7 +367,7 @@ static uint64_t nextDeepSleepDurationUs() {
   // Deep sleep cannot receive a cloud manual-update request. Keep the smart
   // scheduler's due-work calculation, but never sleep longer than the manual
   // discovery ceiling so the app Update button remains responsive on battery.
-  if (seconds > SmartRefresh::MANUAL_PROBE_SECONDS)
+  if (!g_powerSaverMode && seconds > SmartRefresh::MANUAL_PROBE_SECONDS)
     seconds = SmartRefresh::MANUAL_PROBE_SECONDS;
   return (uint64_t)seconds * 1000000ULL;
 }
@@ -356,7 +376,9 @@ static void goToSleep(bool usbPresent) {
   // A fully sleeping radio cannot see a cloud manual-update request. Alfred's
   // connected/light-sleep path retains fast polling; true deep sleep wakes only
   // for the combined module/revision deadline or the independent EXT1 event.
-  Serial.println("LiveUpdate: dynamic deep sleep");
+  Serial.println(g_powerSaverMode
+    ? "Power Saver: sleeping until next scheduled deadline"
+    : "LiveUpdate: dynamic deep sleep");
   const uint64_t durationUs = nextDeepSleepDurationUs();
   plannedDeepSleepSeconds = (uint32_t)(durationUs / 1000000ULL);
   goToSleepForUs(durationUs, usbPresent);
@@ -529,7 +551,7 @@ static void postDeviceStatus(
   json += "\"is_usb_present\":" + String(pwr.usbPresent ? "true" : "false") + ",";
   json += "\"pwr_sense_raw\":" + String(pwr.raw) + ",";
   json += "\"pwr_sense_stable\":" + String(pwr.highCount) + ",";
-  json += "\"power_mode\":\"" + String(WiFiManagerV2::operationalPowerMode()) + "\",";
+  json += "\"power_mode\":\"" + String(g_powerSaverMode ? "power_saver_deep_sleep" : WiFiManagerV2::operationalPowerMode()) + "\",";
   const esp_sleep_wakeup_cause_t statusWakeCause = esp_sleep_get_wakeup_cause();
   const char* statusWakeReason =
     statusWakeCause == ESP_SLEEP_WAKEUP_TIMER ? "timer" :
@@ -869,7 +891,7 @@ static bool fetchAndRenderExplicit(
   SmartRefresh::mergeScheduler(g_smartState, desired, true);
   g_revisionCheckedAt = time(nullptr);
   g_nextScheduledWake = g_revisionCheckedAt + SmartRefresh::secondsUntilNextWake(
-    g_smartState, g_revisionCheckedAt, g_revisionCheckedAt);
+    g_smartState, g_revisionCheckedAt, g_revisionCheckedAt, !g_powerSaverMode);
   SmartRefresh::saveScheduler(g_smartState, g_revisionCheckedAt);
   ContentRevisionState contentRevision;
   if (SmartRefresh::probeRevision(DeviceIdentity::getToken(), SmartRefresh::displayedRevision(), contentRevision))
@@ -1113,6 +1135,14 @@ static InteractiveModeResult runInteractiveMode(
         refreshContentSignatureBestEffort();
         explicitRevisionObservedAtMs = 0;
         explicitAcked = true;
+        setPowerSaverMode(g_cfg.powerSaver);
+      }
+
+      if (g_powerSaverMode && explicitAcked) {
+        // Do not add a status-only network round-trip here. The update is
+        // already durably acknowledged; Power Save should go straight to sleep.
+        Serial.println("Power Saver: explicit update committed; leaving interactive mode for deep sleep");
+        return INTERACTIVE_FINISHED;
       }
 
       const bool operationalPolicyRestored =
@@ -1229,7 +1259,7 @@ void setup() {
   }
 
   const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
-  if (wakeCause == ESP_SLEEP_WAKEUP_TIMER) {
+  if (wakeCause == ESP_SLEEP_WAKEUP_TIMER && !g_powerSaverMode) {
     normalSyncElapsedSeconds += plannedDeepSleepSeconds;
   }
   // Power events never advance, reset, or trigger the display-content clock.
@@ -1237,9 +1267,9 @@ void setup() {
   bool normalSyncDue =
     wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED ||
     (g_nextScheduledWake > 0 && time(nullptr) >= g_nextScheduledWake) ||
-    normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS;
+    (!g_powerSaverMode && normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS);
   if (normalSyncDue) {
-    if (normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS) {
+    if (!g_powerSaverMode && normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS) {
       normalSyncElapsedSeconds -= MAX_REVISION_POLL_SECONDS;
     } else {
       normalSyncElapsedSeconds = 0;
@@ -1359,9 +1389,10 @@ void setup() {
 
   // Normal mode uses the measured connected-idle policy as soon as saved Wi-Fi
   // has association + DHCP, before time sync or any following backend traffic.
-  const bool startupOperationalPolicyReady =
-    WiFiManagerV2::applyOperationalPowerPolicy(pwrEarly.usbPresent, true);
-  if (!pwrEarly.usbPresent && !startupOperationalPolicyReady) {
+  const bool startupOperationalPolicyReady = g_powerSaverMode
+    ? false
+    : WiFiManagerV2::applyOperationalPowerPolicy(pwrEarly.usbPresent, true);
+  if (!g_powerSaverMode && !pwrEarly.usbPresent && !startupOperationalPolicyReady) {
     Serial.println("WiFi power policy: startup connected-idle unavailable; fallback remains armed");
   }
 
@@ -1369,7 +1400,7 @@ void setup() {
   if (SmartRefresh::loadScheduler(g_smartState, g_revisionCheckedAt)) {
     const time_t restoredNow = time(nullptr);
     g_nextScheduledWake = restoredNow + SmartRefresh::secondsUntilNextWake(
-      g_smartState, restoredNow, g_revisionCheckedAt);
+      g_smartState, restoredNow, g_revisionCheckedAt, !g_powerSaverMode);
     Serial.printf("SmartRefresh: restored %u module schedules\n", g_smartState.moduleCount);
   } else {
     g_nextScheduledWake = 0;
@@ -1435,6 +1466,7 @@ void setup() {
     goToSleepForUs(10ULL * 1000000ULL, pwrEarly.usbPresent);
   } else if (postPairConfig == FrameConfigApi::FETCH_OK) {
     setupPendingScreenDisplayed = false;
+    setPowerSaverMode(g_cfg.powerSaver);
   }
 
   // Complete one-time renderer maintenance deterministically after networking
@@ -1445,24 +1477,29 @@ void setup() {
   );
 
   LiveUpdateState liveState{};
-  const uint32_t liveProbeStartedAtMs = millis();
-  const bool liveProbeOk = LiveUpdate::probe(DeviceIdentity::getToken(), liveState);
-  if (liveProbeOk) {
-    if (liveState.requestedRevision > liveState.displayedRevision) {
-      explicitRevisionObservedAtMs = liveProbeStartedAtMs;
-    }
-    Serial.printf(
-      "LiveUpdate: probe requested=%" PRIu64 " displayed=%" PRIu64 "\n",
-      liveState.requestedRevision, liveState.displayedRevision
-    );
-    uint64_t awaitingAck = LiveUpdate::getRenderedAwaitingAck();
-    if (retryRenderedAck(liveState.displayedRevision) &&
-        awaitingAck > liveState.displayedRevision) {
-      liveState.displayedRevision = awaitingAck;
-      refreshContentSignatureBestEffort();
+  bool liveProbeOk = false;
+  if (!g_powerSaverMode) {
+    const uint32_t liveProbeStartedAtMs = millis();
+    liveProbeOk = LiveUpdate::probe(DeviceIdentity::getToken(), liveState);
+    if (liveProbeOk) {
+      if (liveState.requestedRevision > liveState.displayedRevision) {
+        explicitRevisionObservedAtMs = liveProbeStartedAtMs;
+      }
+      Serial.printf(
+        "LiveUpdate: probe requested=%" PRIu64 " displayed=%" PRIu64 "\n",
+        liveState.requestedRevision, liveState.displayedRevision
+      );
+      uint64_t awaitingAck = LiveUpdate::getRenderedAwaitingAck();
+      if (retryRenderedAck(liveState.displayedRevision) &&
+          awaitingAck > liveState.displayedRevision) {
+        liveState.displayedRevision = awaitingAck;
+        refreshContentSignatureBestEffort();
+      }
+    } else {
+      Serial.println("LiveUpdate: probe failed");
     }
   } else {
-    Serial.println("LiveUpdate: probe failed");
+    Serial.println("Power Saver: live update probe skipped");
   }
 
   const uint64_t locallyRendered = LiveUpdate::getRenderedAwaitingAck();
@@ -1471,15 +1508,18 @@ void setup() {
     liveState.requestedRevision > liveState.displayedRevision &&
     liveState.requestedRevision > locallyRendered;
 
-  if (!explicitRevisionPending && LiveUpdate::getRenderedAwaitingAck() == 0) {
+  if (!g_powerSaverMode &&
+      !explicitRevisionPending && LiveUpdate::getRenderedAwaitingAck() == 0) {
     PowerSenseDebug overlayPwr = readPowerSenseDebug();
     BatteryState overlayBatt = BatteryManager::readAndUpdate(overlayPwr.usbPresent);
     refreshPowerOverlayIfNeeded(overlayBatt, overlayPwr);
   }
 
-  const bool connectedIdleReady =
-    WiFiManagerV2::applyOperationalPowerPolicy(pwrEarly.usbPresent, true);
-  if (!pwrEarly.usbPresent && !connectedIdleReady && !normalSyncDue && !explicitRevisionPending) {
+  const bool connectedIdleReady = g_powerSaverMode
+    ? false
+    : WiFiManagerV2::applyOperationalPowerPolicy(pwrEarly.usbPresent, true);
+  if (!g_powerSaverMode &&
+      !pwrEarly.usbPresent && !connectedIdleReady && !normalSyncDue && !explicitRevisionPending) {
     goToSleep(pwrEarly.usbPresent);
     return;
   }
@@ -1494,6 +1534,7 @@ run_normal_sync:
     if (fetchAndRenderExplicit(manualBatt, manualPwr, liveState.requestedRevision) &&
         retryRenderedAck(liveState.displayedRevision)) {
       liveState.displayedRevision = liveState.requestedRevision;
+      setPowerSaverMode(g_cfg.powerSaver);
       postDeviceStatus(manualBatt, manualPwr, true);
       renderedWithoutSignature = !refreshContentSignatureBestEffort();
     }
@@ -1517,7 +1558,8 @@ run_normal_sync:
   }
 
   if (!normalSyncDue) {
-    if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
+    if (!g_powerSaverMode &&
+        runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
       consumeNormalSyncPeriod();
       normalSyncDue = true;
       goto run_normal_sync;
@@ -1538,7 +1580,7 @@ run_normal_sync:
     g_revisionRetryNotBefore = 0;
     g_revisionCheckedAt = time(nullptr);
     g_nextScheduledWake = g_revisionCheckedAt + SmartRefresh::secondsUntilNextWake(
-      g_smartState, g_revisionCheckedAt, g_revisionCheckedAt);
+      g_smartState, g_revisionCheckedAt, g_revisionCheckedAt, !g_powerSaverMode);
     SmartRefresh::saveScheduler(g_smartState, g_revisionCheckedAt);
     Serial.println("Revision unchanged; no config, source, or display work");
 #if TEMP_REFRESH_AUDIT_ENABLED
@@ -1586,7 +1628,7 @@ run_normal_sync:
           if (batt.percent >= 0) UpdateChecker::saveBatteryPercent(batt.percent);
           g_revisionCheckedAt = time(nullptr);
           g_nextScheduledWake = time(nullptr) + SmartRefresh::secondsUntilNextWake(
-            g_smartState, time(nullptr), g_revisionCheckedAt);
+            g_smartState, time(nullptr), g_revisionCheckedAt, !g_powerSaverMode);
           SmartRefresh::saveScheduler(g_smartState, g_revisionCheckedAt);
           postDeviceStatus(batt, pwr, displayPlan.type != SmartDisplayPlan::NONE);
           Serial.println(displayPlan.type == SmartDisplayPlan::NONE
@@ -1598,7 +1640,8 @@ run_normal_sync:
   }
 
   normalSyncDue = false;
-  if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
+  if (!g_powerSaverMode &&
+      runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
     consumeNormalSyncPeriod();
     normalSyncDue = true;
     goto run_normal_sync;

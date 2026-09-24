@@ -148,10 +148,11 @@ test('unchanged revision rebases and persists scheduler progress without display
   assert.doesNotMatch(branch, /fetchRenderState|ensureDisplay|renderSmartDashboard|commitSuccessfulDisplay|sourceSucceeded/)
 })
 
-test('one scheduler combines hard, soft, and revision safety deadlines', () => {
-  assert.match(smart, /revisionCheckedAt \+ REVISION_SAFETY_SECONDS/)
-  assert.match(smart, /deadline\.at > now && deadline\.at < next/)
-  assert.match(firmware, /g_nextScheduledWake.*secondsUntilNextWake/s)
+test('scheduler keeps revision safety in Normal mode but can omit it for Power Save', () => {
+  assert.match(smart, /includeRevisionSafety[\s\S]*revisionCheckedAt \+ REVISION_SAFETY_SECONDS/)
+  assert.match(smart, /next == 0 \|\| deadline\.at < next/)
+  assert.match(firmware, /secondsUntilNextWake\([\s\S]*!g_powerSaverMode/)
+  assert.match(firmware, /!g_powerSaverMode && seconds > SmartRefresh::MANUAL_PROBE_SECONDS/)
 })
 
 test('user-scoped integration and Surf mutations resolve physical membership ids', () => {

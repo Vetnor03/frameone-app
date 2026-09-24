@@ -137,12 +137,23 @@ String SmartRefresh::TEMP_REFRESH_AUDIT_physicalRenderHash(const SmartRenderStat
 uint64_t SmartRefresh::displayedRevision() { prefs.begin("smart_refresh", true); uint64_t value = prefs.getULong64("revision", 0); prefs.end(); return value; }
 void SmartRefresh::saveDisplayedRevision(uint64_t value) { prefs.begin("smart_refresh", false); prefs.putULong64("revision", value); prefs.end(); }
 
-uint32_t SmartRefresh::secondsUntilNextWake(const SmartRenderState& state, time_t now, time_t revisionCheckedAt) {
-  time_t next = revisionCheckedAt + REVISION_SAFETY_SECONDS;
+uint32_t SmartRefresh::secondsUntilNextWake(const SmartRenderState& state, time_t now,
+                                                   time_t revisionCheckedAt,
+                                                   bool includeRevisionSafety) {
+  time_t next = includeRevisionSafety && revisionCheckedAt > 0
+    ? revisionCheckedAt + REVISION_SAFETY_SECONDS
+    : 0;
+
   for (uint8_t i = 0; i < state.moduleCount; ++i) for (uint8_t j = 0; j < state.modules[i].deadlineCount; ++j) {
     const SmartDeadline& deadline = state.modules[i].deadlines[j];
-    if (deadline.at > now && deadline.at < next) next = deadline.at; // hard is never delayed; soft establishes/coalesces this wake.
+    if (deadline.at <= now) continue;
+    if (next == 0 || deadline.at < next) next = deadline.at; // hard is never delayed; soft establishes/coalesces this wake.
   }
+
+  // Schedule-only mode should normally always have a real module deadline. If
+  // persisted scheduler data is empty or malformed, recover once per day rather
+  // than reverting to the normal ten-minute safety poll or sleeping forever.
+  if (next == 0) next = now + 24 * 60 * 60;
   if (next <= now) return 1;
   return (uint32_t)(next - now);
 }
