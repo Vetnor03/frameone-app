@@ -267,7 +267,7 @@ static void renderList(const Cell& c) {
 
   // Match the Reminders module's centered list treatment: bold content,
   // compact bullets only when there is more than one item, and a centered
-  // block that uses the full cell instead of reserving calendar/date space.
+  // block that uses the full cell instead of reserving secondary date-panel space.
   const int dotR = 3;
   const int gap = 10;
   const int sidePad = 18;
