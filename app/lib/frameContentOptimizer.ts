@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { sanitizeFrameText } from './frameText.mjs'
-import { completeReservedOpenAICall, reserveBackgroundOpenAICall } from './server/openaiUsage.mjs'
+import { completeReservedOpenAICall, costControlledModel, reserveBackgroundOpenAICall } from './server/openaiUsage.mjs'
 
 type FrameContentSource = 'remind' | 'spond' | 'teams' | 'waste' | 'local-events' | string
 export type FrameContentType = 'reminder' | 'countdown' | 'ai-follow' | 'news'
@@ -150,7 +150,7 @@ export async function optimizeFrameContent(items: FrameContentInput[], options: 
 } = {}): Promise<FrameContentOutput[]> {
   const profile = options.displayProfile || (options.maxTitleChars && options.maxTitleChars <= 30 ? 'compact' : options.maxTitleChars && options.maxTitleChars > 56 ? 'spacious' : 'standard')
   const maxChars = options.maxTitleChars || PROFILE_LIMITS[profile].maxTitleChars
-  const model = String(process.env.FRAME_AI_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL
+  const model = costControlledModel(process.env.FRAME_AI_MODEL, DEFAULT_MODEL)
   const normalized = items.map(i => ({ ...i, title: sanitizeFrameText(i.title) }))
   const keys = normalized.map(i => frameTitleCacheKey(i, profile, model))
   const results = new Map<string, string>()
