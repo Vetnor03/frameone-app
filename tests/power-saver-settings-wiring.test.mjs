@@ -28,3 +28,9 @@ test('Frame Update saves without creating a realtime request while Power Save is
   assert.match(updateFlow, /Saved\. Power Save will apply these changes at the next scheduled wake\./)
   assert.ok(updateFlow.indexOf('if (powerSaver)') < updateFlow.indexOf("setExplicitUpdateStatus('requesting')"))
 })
+
+
+test('Power Save settings use the approved concise responsiveness copy', () => {
+  assert.match(home, /Longer battery life, less responsive\./)
+  assert.match(home, /Lengre batteritid, mindre responsiv\./)
+})
