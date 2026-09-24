@@ -12,6 +12,7 @@
 
 #include <ArduinoJson.h>
 #include <string.h>
+#include <new>
 
 #define NEWS_FONT_BODY (&FreeSans9pt8b)
 #define NEWS_FONT_HEADER (&FreeSansBold12pt8b)
@@ -37,7 +38,18 @@ struct NewsCache {
   NewsItem items[MAX_NEWS_ITEMS];
 };
 
-static NewsCache g_cache;
+static_assert(sizeof(NewsCache) <= 4096, "News cache exceeded heap budget");
+static NewsCache* g_cache = nullptr;
+static bool g_cacheAllocationAttempted = false;
+
+static bool ensureCacheAllocated() {
+  if (g_cache) return true;
+  if (g_cacheAllocationAttempted) return false;
+  g_cacheAllocationAttempted = true;
+  g_cache = new (std::nothrow) NewsCache{};
+  if (!g_cache) Serial.println("News cache allocation failed");
+  return g_cache != nullptr;
+}
 
 static void safeCopy(char* dst, size_t dstSize, const char* src) {
   if (!dst || dstSize == 0) return;
@@ -49,7 +61,9 @@ static void normalizeDisplayText(char* out, size_t outSize, const char* in) {
   FrameText::normalizeUtf8ForDisplay(out, outSize, in ? in : "");
 }
 
-static void clearCache() { g_cache = NewsCache{}; }
+static void clearCache() {
+  if (g_cache) memset(g_cache, 0, sizeof(*g_cache));
+}
 
 static bool isNorwegian() {
   if (!g_cfg) return false;
@@ -133,6 +147,7 @@ static const char* displayTitle(const NewsItem& item, bool compact) {
 }
 
 static bool fetchNews() {
+  if (!ensureCacheAllocated()) return false;
   clearCache();
   String url = String(BASE_URL) + "/api/news?limit=14&links=0&display_profiles=compact,standard";
   int code = 0;
@@ -141,8 +156,8 @@ static bool fetchNews() {
 
   if (!httpOk || code != 200 || body.length() == 0 || body.length() > NEWS_MAX_BODY_BYTES) {
     Serial.printf("News HTTP failed, code=%d bytes=%u\n", code, (unsigned int)body.length());
-    g_cache.loaded = true;
-    g_cache.ok = false;
+    g_cache->loaded = true;
+    g_cache->ok = false;
     return false;
   }
 
@@ -158,8 +173,8 @@ static bool fetchNews() {
   body = String();
   if (err || !(bool)(doc["ok"] | false)) {
     Serial.printf("News JSON failed: %s\n", err ? err.c_str() : "not ok");
-    g_cache.loaded = true;
-    g_cache.ok = false;
+    g_cache->loaded = true;
+    g_cache->ok = false;
     return false;
   }
 
@@ -171,7 +186,7 @@ static bool fetchNews() {
       const char* rawTitle = row["title"] | "";
       if (!rawTitle || !rawTitle[0]) continue;
 
-      NewsItem& item = g_cache.items[index];
+      NewsItem& item = g_cache->items[index];
       item.used = true;
       normalizeDisplayText(item.title, sizeof(item.title), rawTitle);
       normalizeDisplayText(item.compact, sizeof(item.compact), row["profile_titles"]["compact"] | rawTitle);
@@ -180,13 +195,16 @@ static bool fetchNews() {
     }
   }
 
-  g_cache.count = index;
-  g_cache.loaded = true;
-  g_cache.ok = true;
+  g_cache->count = index;
+  g_cache->loaded = true;
+  g_cache->ok = true;
   return true;
 }
 
-static void ensureLoaded() { if (!g_cache.loaded) fetchNews(); }
+static void ensureLoaded() {
+  if (!ensureCacheAllocated()) return;
+  if (!g_cache->loaded) fetchNews();
+}
 
 static bool shallowLayout(const Cell& c) {
   return c.size == CELL_SMALL || (c.h <= 150 && c.w >= 500);
@@ -216,7 +234,7 @@ static void drawEmpty(const Cell& c) {
 static void renderShallow(const Cell& c) {
   auto& d = DisplayCore::get();
   const int contentTop = drawHeader(c);
-  const int visible = min(g_cache.count, 3);
+  const int visible = min(g_cache->count, 3);
   if (visible <= 0) { drawEmpty(c); return; }
 
   const int contentBottom = c.y + c.h - 8;
@@ -231,7 +249,7 @@ static void renderShallow(const Cell& c) {
     const int x1Cell = c.x + (c.w * (i + 1)) / visible;
     const int width = x1Cell - x0;
     char fit[96] = {0};
-    fitTextToWidth(displayTitle(g_cache.items[i], true), fit, sizeof(fit), width - 20, NEWS_FONT_BODY);
+    fitTextToWidth(displayTitle(g_cache->items[i], true), fit, sizeof(fit), width - 20, NEWS_FONT_BODY);
 
     int16_t tx1, ty1;
     uint16_t tw, th;
@@ -245,7 +263,7 @@ static void renderList(const Cell& c) {
   auto& d = DisplayCore::get();
   const int contentTop = drawHeader(c);
   const int contentBottom = c.y + c.h - 10;
-  const int visible = min(g_cache.count, capacityForCell(c));
+  const int visible = min(g_cache->count, capacityForCell(c));
   if (visible <= 0) { drawEmpty(c); return; }
 
   const int columns = c.w >= 600 && c.h >= 180 ? 2 : 1;
@@ -267,7 +285,7 @@ static void renderList(const Cell& c) {
     const int maxTextW = max(12, columnW - (textX - x0) - 12);
 
     char fit[112] = {0};
-    fitTextToWidth(displayTitle(g_cache.items[i], false), fit, sizeof(fit), maxTextW, NEWS_FONT_BODY);
+    fitTextToWidth(displayTitle(g_cache->items[i], false), fit, sizeof(fit), maxTextW, NEWS_FONT_BODY);
 
     int16_t tx1, ty1;
     uint16_t tw, th;
@@ -283,7 +301,7 @@ void preload() { fetchNews(); }
 
 void render(const Cell& c, const String&) {
   ensureLoaded();
-  if (!g_cache.ok || g_cache.count <= 0) { drawEmpty(c); return; }
+  if (!g_cache || !g_cache->ok || g_cache->count <= 0) { drawEmpty(c); return; }
   if (shallowLayout(c)) renderShallow(c);
   else renderList(c);
 }
