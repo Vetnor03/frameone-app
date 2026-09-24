@@ -39,6 +39,7 @@ function validateInterpretationLanguage(v: ReturnType<typeof normalize>) {
 }
 
 Deno.serve(async (req) => {
+  if (!/^(1|true|yes|on)$/i.test(Deno.env.get('AI_FOLLOW_ENABLED') || '')) return Response.json({ ok: false, disabled: true, feature: 'ai_follow' }, { status: 503 })
   const service = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
   if (req.headers.get('x-monitoring-secret') === Deno.env.get('MONITORING_WORKER_SECRET')) return processQueue(req, service)
   return enqueueRetry(req, service)
@@ -121,7 +122,7 @@ async function callOpenAI(originalRequest: string) {
     const controller = new AbortController(); const timeout = setTimeout(() => controller.abort('openai_timeout'), 30_000)
     let openai: Response
     try {
-      openai = await fetch(OPENAI_RESPONSES_URL, { method: 'POST', signal: controller.signal, headers: { authorization: `Bearer ${Deno.env.get('OPENAI_API_KEY')}`, 'content-type': 'application/json' }, body: JSON.stringify({ model: monitoringModelFromEnv(Deno.env), store: false, input: interpretationPrompt(originalRequest, attempt > 0), text: { format: { type: 'json_schema', name: 'ai_assistant_interpretation', strict: true, schema } } }) })
+      openai = await fetch(OPENAI_RESPONSES_URL, { method: 'POST', signal: controller.signal, headers: { authorization: `Bearer ${Deno.env.get('OPENAI_API_KEY')}`, 'content-type': 'application/json' }, body: JSON.stringify({ model: monitoringModelFromEnv(Deno.env), store: false, reasoning: { effort: 'none' }, input: interpretationPrompt(originalRequest, attempt > 0), text: { format: { type: 'json_schema', name: 'ai_assistant_interpretation', strict: true, schema } } }) })
     } finally { clearTimeout(timeout) }
     if (!openai.ok) throw new Error(`OpenAI Responses API failed: ${openai.status}`)
     try { return validateInterpretationLanguage(normalize(JSON.parse(textFrom(await openai.json())))) } catch (err) {
