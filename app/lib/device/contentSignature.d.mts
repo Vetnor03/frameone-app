@@ -42,7 +42,7 @@ export function physicalModuleDeadlines(args: { settings: PhysicalSettings; sour
 export function physicalRenderManifest(args: { settings: PhysicalSettings; sources: UnknownRecord; now?: number }): PhysicalModuleManifest[]
 export function withPhysicalCellGeometry(settings: UnknownRecord, layouts: UnknownRecord): PhysicalSettings
 export function activePhysicalReferences(settings: UnknownRecord): Map<string, { key: string; base: string; id: number | null; cell: PhysicalCell }>
-export function buildContentRequestPlan(args: { settings: UnknownRecord; deviceId: string; origin: string; now?: number }): {
+export function buildContentRequestPlan(args: { settings: UnknownRecord; deviceId: string; origin: string; now?: number; refreshModules?: Set<string> }): {
   refs: Map<string, { key: string; base: string; id: number | null; cell: PhysicalCell }>
   requests: Array<{ key: string; url: URL; surf?: unknown }>
   timeInputs: UnknownRecord
@@ -54,4 +54,5 @@ export function collectVisibleContent(args: {
   authorization: string
   now?: number
   fetchImpl?: typeof fetch
+  refreshModules?: Set<string>
 }): Promise<VisibleContent>
