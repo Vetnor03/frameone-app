@@ -148,7 +148,10 @@ uint32_t SmartRefresh::secondsUntilNextWake(const SmartRenderState& state, time_
 
   for (uint8_t i = 0; i < state.moduleCount; ++i) for (uint8_t j = 0; j < state.modules[i].deadlineCount; ++j) {
     const SmartDeadline& deadline = state.modules[i].deadlines[j];
-    if (deadline.at <= now) continue;
+    if (deadline.at <= 0) continue;
+    // A missed deadline is work due NOW, not a reason to select a later one.
+    // This matters after reconnect, light/deep sleep, and scheduler restore.
+    if (deadline.at <= now) return 1;
     if (next == 0 || deadline.at < next) next = deadline.at; // hard is never delayed; soft establishes/coalesces this wake.
   }
 
@@ -201,6 +204,39 @@ void SmartRefresh::mergeScheduler(SmartRenderState& complete, const SmartRenderS
       if (complete.modules[j].key == update.modules[i].key) { destination = j; break; }
     if (destination < 0 && complete.moduleCount < MAX_GRID_CELLS) destination = complete.moduleCount++;
     if (destination >= 0) complete.modules[destination] = update.modules[i];
+  }
+}
+
+void SmartRefresh::preserveManualSurfFreshness(const SmartRenderState& previous,
+                                                SmartRenderState& updated) {
+  // Manual Update repaints cached Surf values but does not refresh the upstream
+  // result. Retain the earlier due time for active, matching Surf instances.
+  // A newly added instance keeps its own deadline; other modules are unchanged.
+  for (uint8_t i = 0; i < updated.moduleCount; ++i) {
+    SmartModuleState& current = updated.modules[i];
+    if (!current.key.startsWith("surf:")) continue;
+    const SmartModuleState* old = nullptr;
+    for (uint8_t j = 0; j < previous.moduleCount; ++j) {
+      if (previous.modules[j].key == current.key) {
+        old = &previous.modules[j];
+        break;
+      }
+    }
+    if (!old) continue;
+    time_t previousSoft = 0;
+    for (uint8_t j = 0; j < old->deadlineCount; ++j) {
+      const SmartDeadline& deadline = old->deadlines[j];
+      if (deadline.type != SMART_SOFT || deadline.at <= 0) continue;
+      if (!previousSoft || deadline.at < previousSoft) previousSoft = deadline.at;
+    }
+    if (!previousSoft) continue;
+    for (uint8_t j = 0; j < current.deadlineCount; ++j) {
+      SmartDeadline& deadline = current.deadlines[j];
+      if (deadline.type == SMART_SOFT && deadline.at > previousSoft) {
+        deadline.at = previousSoft;
+        break;
+      }
+    }
   }
 }
 
