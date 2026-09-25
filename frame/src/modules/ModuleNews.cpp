@@ -7,13 +7,14 @@
 #include "NetClient.h"
 #include "Theme.h"
 
+#include "FreeSans12ptNO.h"
 #include "FreeSansBold12ptNO.h"
 
 #include <ArduinoJson.h>
 #include <string.h>
 #include <new>
 
-#define NEWS_FONT_BODY (&FreeSansBold12pt8b)
+#define NEWS_FONT_BODY (&FreeSans12ptNO8b)
 #define NEWS_FONT_HEADER (&FreeSansBold12pt8b)
 
 namespace ModuleNews {
@@ -22,12 +23,11 @@ static const FrameConfig* g_cfg = nullptr;
 static const int MAX_NEWS_ITEMS = 14;
 static const size_t NEWS_MAX_BODY_BYTES = 12288;
 static const size_t NEWS_JSON_CAPACITY = 10240;
+static const int NEWS_TITLE_BYTES = 224;
 
 struct NewsItem {
   bool used = false;
-  char title[112] = {0};
-  char compact[64] = {0};
-  char standard[96] = {0};
+  char title[NEWS_TITLE_BYTES] = {0}; // Complete source headline, never clipped.
 };
 
 struct NewsCache {
@@ -97,27 +97,8 @@ static void drawLeft(int x, int baselineY, const char* text, const GFXfont* font
   d.setFont(nullptr);
 }
 
-static void fitTextToWidth(const char* src, char* dst, size_t dstSize, int maxWidth, const GFXfont* font) {
-  if (!dst || dstSize == 0) return;
-  dst[0] = '\0';
-  if (!src || !src[0] || maxWidth <= 0) return;
-  if (textWidth(src, font) <= maxWidth) { safeCopy(dst, dstSize, src); return; }
-
-  const int srcLen = (int)strlen(src);
-  for (int n = srcLen; n >= 1; --n) {
-    char buf[128] = {0};
-    const int take = min(n, (int)sizeof(buf) - 4);
-    memcpy(buf, src, take);
-    buf[take] = '\0';
-    while (strlen(buf) > 0 && buf[strlen(buf) - 1] == ' ') buf[strlen(buf) - 1] = '\0';
-    strlcat(buf, "...", sizeof(buf));
-    if (textWidth(buf, font) <= maxWidth) { safeCopy(dst, dstSize, buf); return; }
-  }
-  safeCopy(dst, dstSize, "...");
-}
-
-static const int NEWS_MAX_WRAP_LINES = 4;
-static const int NEWS_WRAP_LINE_BYTES = 112;
+static const int NEWS_MAX_WRAP_LINES = 6;
+static const int NEWS_WRAP_LINE_BYTES = 128;
 
 static int wrapTextToLines(const char* src,
                            char lines[][NEWS_WRAP_LINE_BYTES],
@@ -130,7 +111,8 @@ static int wrapTextToLines(const char* src,
 
   for (int i = 0; i < maxLines; ++i) lines[i][0] = '\0';
 
-  char work[NEWS_WRAP_LINE_BYTES] = {0};
+  char work[NEWS_TITLE_BYTES] = {0};
+  if (strlen(src) >= sizeof(work)) return 0;
   safeCopy(work, sizeof(work), src);
   char current[NEWS_WRAP_LINE_BYTES] = {0};
   int lineCount = 0;
@@ -139,10 +121,12 @@ static int wrapTextToLines(const char* src,
   char* word = strtok_r(work, " ", &save);
   while (word) {
     char candidate[NEWS_WRAP_LINE_BYTES] = {0};
-    if (current[0]) snprintf(candidate, sizeof(candidate), "%s %s", current, word);
-    else safeCopy(candidate, sizeof(candidate), word);
+    const int written = current[0]
+      ? snprintf(candidate, sizeof(candidate), "%s %s", current, word)
+      : snprintf(candidate, sizeof(candidate), "%s", word);
 
-    if (textWidth(candidate, font) <= maxWidth) {
+    if (written >= 0 && written < (int)sizeof(candidate) &&
+        textWidth(candidate, font) <= maxWidth) {
       safeCopy(current, sizeof(current), candidate);
     } else {
       if (current[0]) {
@@ -154,10 +138,8 @@ static int wrapTextToLines(const char* src,
       if (textWidth(word, font) <= maxWidth) {
         safeCopy(current, sizeof(current), word);
       } else {
-        // Pathological single tokens are the only case where pixel fitting is
-        // still allowed. Normal headlines are never ellipsis-truncated.
-        if (lineCount >= maxLines) return lineCount;
-        fitTextToWidth(word, lines[lineCount++], NEWS_WRAP_LINE_BYTES, maxWidth, font);
+        // Even a long single word must not be ellipsis-truncated.
+        return 0;
       }
     }
 
@@ -196,16 +178,10 @@ static int drawHeader(const Cell& c) {
   return underlineY + 10;
 }
 
-static const char* displayTitle(const NewsItem& item, bool compact) {
-  if (compact && item.compact[0]) return item.compact;
-  if (!compact && item.standard[0]) return item.standard;
-  return item.title;
-}
-
 static bool fetchNews() {
   if (!ensureCacheAllocated()) return false;
   clearCache();
-  String url = String(BASE_URL) + "/api/news?limit=14&links=0&display_profiles=compact,standard";
+  String url = String(BASE_URL) + "/api/news?limit=14&links=0&raw_titles=1";
   int code = 0;
   String body;
   const bool httpOk = NetClient::httpGetAuth(url, DeviceIdentity::getToken(), code, body);
@@ -221,8 +197,6 @@ static bool fetchNews() {
   filter["ok"] = true;
   JsonObject itemFilter = filter["items"][0].to<JsonObject>();
   itemFilter["title"] = true;
-  itemFilter["profile_titles"]["compact"] = true;
-  itemFilter["profile_titles"]["standard"] = true;
 
   DynamicJsonDocument doc(NEWS_JSON_CAPACITY);
   DeserializationError err = deserializeJson(doc, body, DeserializationOption::Filter(filter));
@@ -243,10 +217,11 @@ static bool fetchNews() {
       if (!rawTitle || !rawTitle[0]) continue;
 
       NewsItem& item = g_cache->items[index];
-      item.used = true;
+      // A headline that exceeds local storage is skipped, never shown incomplete.
+      if (strlen(rawTitle) >= sizeof(item.title)) continue;
       normalizeDisplayText(item.title, sizeof(item.title), rawTitle);
-      normalizeDisplayText(item.compact, sizeof(item.compact), row["profile_titles"]["compact"] | rawTitle);
-      normalizeDisplayText(item.standard, sizeof(item.standard), row["profile_titles"]["standard"] | rawTitle);
+      if (!item.title[0]) continue;
+      item.used = true;
       ++index;
     }
   }
@@ -290,18 +265,34 @@ static void drawEmpty(const Cell& c) {
 static void renderShallow(const Cell& c) {
   auto& d = DisplayCore::get();
   const int contentTop = drawHeader(c);
-  const int visible = min(g_cache->count, 3);
-  if (visible <= 0) { drawEmpty(c); return; }
-
   const int contentBottom = c.y + c.h - 8;
   const int contentH = max(1, contentBottom - contentTop);
+  const int lineStep = 25;
+  const int maxLines = min(NEWS_MAX_WRAP_LINES, max(1, contentH / lineStep));
+  const int candidateCount = min(g_cache->count, 3);
+
+  // Prefer three columns; reduce to two or one if whole headlines need room.
+  int visible = 0;
+  int selected[3] = {0};
+  for (int columns = candidateCount; columns >= 1 && visible == 0; --columns) {
+    const int cellTextW = c.w / columns - 20;
+    int found = 0;
+    for (int i = 0; i < g_cache->count && found < columns; ++i) {
+      char lines[NEWS_MAX_WRAP_LINES][NEWS_WRAP_LINE_BYTES] = {{0}};
+      bool complete = false;
+      const int n = wrapTextToLines(g_cache->items[i].title, lines,
+                                    maxLines, cellTextW, NEWS_FONT_BODY, complete);
+      if (complete && n > 0 && n * lineStep <= contentH) selected[found++] = i;
+    }
+    if (found == columns) visible = found;
+  }
+  if (!visible) { drawEmpty(c); return; }
+
   for (int i = 1; i < visible; ++i) {
     const int x = c.x + (c.w * i) / visible;
     d.drawFastVLine(x, contentTop + 6, max(4, contentH - 12), Theme::ink());
   }
 
-  const int lineStep = 22;
-  const int maxLines = min(NEWS_MAX_WRAP_LINES, max(1, contentH / lineStep));
   for (int i = 0; i < visible; ++i) {
     const int x0 = c.x + (c.w * i) / visible;
     const int x1Cell = c.x + (c.w * (i + 1)) / visible;
@@ -309,14 +300,12 @@ static void renderShallow(const Cell& c) {
     char lines[NEWS_MAX_WRAP_LINES][NEWS_WRAP_LINE_BYTES] = {{0}};
     bool complete = false;
     const int lineCount = wrapTextToLines(
-      displayTitle(g_cache->items[i], true),
-      lines, maxLines, width - 20, NEWS_FONT_BODY, complete
+      g_cache->items[selected[i]].title, lines, maxLines,
+      width - 20, NEWS_FONT_BODY, complete
     );
-
     if (!complete || lineCount <= 0) continue;
     const int blockH = lineCount * lineStep;
     const int startY = contentTop + max(0, (contentH - blockH) / 2);
-
     for (int line = 0; line < lineCount; ++line) {
       int16_t tx1, ty1;
       uint16_t tw, th;
@@ -334,20 +323,20 @@ static void renderList(const Cell& c) {
   const int contentBottom = c.y + c.h - 12;
   if (g_cache->count <= 0) { drawEmpty(c); return; }
 
-  // Headlines arrive already semantically shortened by the title optimizer.
-  // Do not run a second dumb truncation pass here. Wrap each complete optimized
-  // headline and show as many newest stories as actually fit in the available
-  // height.
+  // Match the Reminders module's centered list treatment. Wrap complete
+  // original headlines and show as many newest stories as actually fit in the
+  // available height. Never draw a partial sentence or append ellipses.
   const int dotR = 3;
   const int gap = 10;
   const int sidePad = 18;
-  const int lineStep = 22;
-  const int itemGap = 6;
+  const int lineStep = 25;
+  const int itemGap = 7;
   const int candidateCount = min(g_cache->count, capacityForCell(c));
   const int maxTextW = max(24, c.w - sidePad * 2 - dotR * 2 - gap);
   const int availableH = max(1, contentBottom - contentTop);
 
   int visible = 0;
+  int selected[MAX_NEWS_ITEMS] = {0};
   int usedH = 0;
   int maxLineW = 0;
 
@@ -355,21 +344,24 @@ static void renderList(const Cell& c) {
     char lines[NEWS_MAX_WRAP_LINES][NEWS_WRAP_LINE_BYTES] = {{0}};
     bool complete = false;
     const int lineCount = wrapTextToLines(
-      displayTitle(g_cache->items[i], false),
+      g_cache->items[i].title,
       lines, NEWS_MAX_WRAP_LINES, maxTextW, NEWS_FONT_BODY, complete
     );
-    if (!complete || lineCount <= 0) break;
+    if (!complete || lineCount <= 0) continue;
 
     const int itemH = lineCount * lineStep;
     const int nextH = usedH + (visible > 0 ? itemGap : 0) + itemH;
-    if (nextH > availableH) break;
+    if (nextH > availableH) {
+      if (!visible) continue; // A too-long first story cannot hide every other story.
+      break;
+    }
 
     for (int line = 0; line < lineCount; ++line) {
       const int lineW = textWidth(lines[line], NEWS_FONT_BODY);
       if (lineW > maxLineW) maxLineW = lineW;
     }
     usedH = nextH;
-    ++visible;
+    selected[visible++] = i;
   }
 
   if (visible <= 0) return;
@@ -387,7 +379,7 @@ static void renderList(const Cell& c) {
     char lines[NEWS_MAX_WRAP_LINES][NEWS_WRAP_LINE_BYTES] = {{0}};
     bool complete = false;
     const int lineCount = wrapTextToLines(
-      displayTitle(g_cache->items[i], false),
+      g_cache->items[selected[i]].title,
       lines, NEWS_MAX_WRAP_LINES, maxTextW, NEWS_FONT_BODY, complete
     );
     if (!complete || lineCount <= 0) break;
