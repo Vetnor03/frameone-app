@@ -825,11 +825,14 @@ static bool renderSmartDashboard(const BatteryState& batt, const PowerSenseDebug
   ModuleDate::setConfig(&g_cfg); ModuleWeather::setConfig(&g_cfg); ModuleSurf::setConfig(&g_cfg);
   ModuleReminders::setConfig(&g_cfg); ModuleNews::setConfig(&g_cfg); ModuleSoccer::setConfig(&g_cfg); ModuleStocks::setConfig(&g_cfg);
   ModuleReminders::setRequiredProfiles(Layout::reminderProfileMask(g_cfg.layout, g_cfg));
-  ModuleReminders::preload();
+  bool remindersDirty = false;
   bool newsDirty = false;
   for (uint8_t i = 0; i < desired.moduleCount; ++i) {
-    if (plan.dirty[i] && desired.modules[i].key == "news") { newsDirty = true; break; }
+    if (!plan.dirty[i]) continue;
+    if (desired.modules[i].key == "reminders") remindersDirty = true;
+    if (desired.modules[i].key == "news") newsDirty = true;
   }
+  if (remindersDirty) ModuleReminders::preload();
   if (newsDirty) ModuleNews::preload();
   ensureDisplay(); Theme::set(g_cfg.theme); resetTextStateForDashboard();
 
@@ -1636,9 +1639,13 @@ run_normal_sync:
       Serial.println("Changed layout/config fetch failed; preserving physical state");
     } else {
       SmartRenderState desired;
-      if (!SmartRefresh::fetchRenderState(DeviceIdentity::getToken(), affected, desired)) {
+      if (!SmartRefresh::fetchRenderState(DeviceIdentity::getToken(), affected, desired, scheduledModules)) {
         Serial.println("Affected render-state fetch failed; preserving freshness and hashes");
       } else {
+        // Only scheduled Surf deadlines invalidate the ESP32's local Surf value.
+        // Manual Update and unrelated module changes keep drawing the last
+        // completed scheduled Surf result.
+        ModuleSurf::invalidateScheduled(scheduledModules);
         SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);
 #if TEMP_REFRESH_AUDIT_ENABLED
         const String TEMP_REFRESH_AUDIT_previous = SmartRefresh::TEMP_REFRESH_AUDIT_physicalRenderHash(desired);
