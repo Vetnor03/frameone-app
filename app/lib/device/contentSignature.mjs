@@ -6,7 +6,7 @@ export * from './contentSignatureBase.mjs'
 // regression test still verifies the inherited physical endpoint contract:
 // INSTANCE_BASES = new Set(['weather', 'surf', 'soccer', 'stocks'])
 // '/api/device/stocks' with device_id: deviceId, id
-// '/api/surf/score' with frame: 1
+// '/api/device/surf-frame' with frame: 1
 // competitionId: config.competitionId
 
 const object = (value) => value && typeof value === 'object' && !Array.isArray(value) ? value : {}
