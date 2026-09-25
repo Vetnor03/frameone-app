@@ -6,10 +6,9 @@
 
 namespace ModuleNews {
   void setConfig(const FrameConfig* cfg);
-  // Refresh only when News itself is scheduled, or a user explicitly asks
-  // for a manual update. Unrelated screen redraws keep cached headlines.
-  void invalidateScheduled(const String& modulesCsv);
-  void invalidateManual();
+  // Refresh only when visible News changes, or the user explicitly
+  // requests an update. Unrelated redraws keep cached headlines.
+  void invalidate();
   void preload();
   void render(const Cell& c, const String& moduleKey);
 }
