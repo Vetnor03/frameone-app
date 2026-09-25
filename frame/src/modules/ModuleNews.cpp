@@ -120,6 +120,8 @@ static int wrapTextToLines(const char* src,
   char* save = nullptr;
   char* word = strtok_r(work, " ", &save);
   while (word) {
+    // snprintf/safeCopy must never silently shorten a pathological long token.
+    if (strlen(word) >= NEWS_WRAP_LINE_BYTES) return 0;
     char candidate[NEWS_WRAP_LINE_BYTES] = {0};
     const int written = current[0]
       ? snprintf(candidate, sizeof(candidate), "%s %s", current, word)
