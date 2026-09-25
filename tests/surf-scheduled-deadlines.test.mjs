@@ -17,7 +17,7 @@ test('an overdue saved module deadline is immediately due, not silently discarde
   assert.match(nextWake, /deadline\.at <= 0\) continue/)
   assert.match(nextWake, /deadline\.at <= now\) return 1/)
   assert.doesNotMatch(nextWake, /deadline\.at <= now\) continue/)
-  assert.match(scheduler, /d\.at <= now \|\| \(d\.type == SMART_SOFT/)
+  assert.match(scheduler, /d\.at <= now \|\|\s*\(d\.type == SMART_SOFT && !newsFreshness/)
 })
 
 test('manual redraw preserves existing Surf freshness without forcing Surf requests', () => {
