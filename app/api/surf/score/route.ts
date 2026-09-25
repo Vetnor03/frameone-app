@@ -2549,13 +2549,27 @@ function buildSurfFrameResultCacheKey(args: {
 }) {
   const namespace = physicalSurfCacheNamespace(args.req)
   if (!namespace) return null
+  const sortedCustomSpots = [...args.customSpots]
+    .sort((a, b) => String(a.id).localeCompare(String(b.id)))
+  const sortedExperiences = Object.fromEntries(
+    Object.entries(args.experiences)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([spotId, rows]) => [
+        spotId,
+        [...rows].sort((a, b) => {
+          const aKey = `${String(a.id ?? '')}|${String(a.updated_at ?? '')}|${String(a.logged_at ?? '')}`
+          const bKey = `${String(b.id ?? '')}|${String(b.updated_at ?? '')}|${String(b.logged_at ?? '')}`
+          return aKey.localeCompare(bKey)
+        }),
+      ])
+  )
   const material = canonicalCacheValue({
     version: SURF_FRAME_RESULT_CACHE_VERSION,
     device: namespace,
     query: normalizedSurfFrameQuery(args.url),
     tables: SURF_TABLES_FINGERPRINT,
-    customSpots: args.customSpots,
-    experiences: args.experiences,
+    customSpots: sortedCustomSpots,
+    experiences: sortedExperiences,
   })
   return crypto.createHash('sha256').update(JSON.stringify(material)).digest('hex')
 }
