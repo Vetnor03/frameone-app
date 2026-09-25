@@ -43,6 +43,7 @@ static const int MAX_INSTANCES = 4;
 
 static const char* TODAYS_BEST_ID    = "__todays_best__";
 static const char* TODAYS_BEST_LABEL = "Today's Best";
+static const uint32_t SURF_SOURCE_REFRESH_FLOOR_MS = 3UL * 60UL * 60UL * 1000UL;
 
 struct SurfInstanceConfig {
   uint8_t id = 1;
@@ -50,7 +51,7 @@ struct SurfInstanceConfig {
   char spot[48] = {0};
   float lat = 0.0f;
   float lon = 0.0f;
-  uint32_t refreshMs = 1800000UL;
+  uint32_t refreshMs = SURF_SOURCE_REFRESH_FLOOR_MS;
 };
 
 struct SurfDayPart {
@@ -781,7 +782,7 @@ static SurfInstanceConfig makeInactiveSurfInstance(uint8_t id) {
   cfg.id = id;
   cfg.spotId[0] = 0;
   cfg.spot[0] = 0;
-  cfg.refreshMs = 1800000UL;
+  cfg.refreshMs = SURF_SOURCE_REFRESH_FLOOR_MS;
   return cfg;
 }
 
@@ -820,12 +821,14 @@ static void applyConfigFromFrameConfig() {
     char spotLatin1[48] = {0};
     if (src.spot[0]) utf8ToLatin1(spotLatin1, sizeof(spotLatin1), src.spot);
 
-    bool changed = cfgChanged(oldCfg, src.spotId, spotLatin1, src.lat, src.lon, src.refreshMs);
+    const uint32_t effectiveRefreshMs =
+      src.refreshMs > SURF_SOURCE_REFRESH_FLOOR_MS ? src.refreshMs : SURF_SOURCE_REFRESH_FLOOR_MS;
+    bool changed = cfgChanged(oldCfg, src.spotId, spotLatin1, src.lat, src.lon, effectiveRefreshMs);
 
     dst.id = src.id;
     dst.lat = src.lat;
     dst.lon = src.lon;
-    dst.refreshMs = src.refreshMs;
+    dst.refreshMs = effectiveRefreshMs;
 
     if (src.spotId[0]) strlcpy(dst.spotId, src.spotId, sizeof(dst.spotId));
     if (spotLatin1[0]) strlcpy(dst.spot, spotLatin1, sizeof(dst.spot));
@@ -886,7 +889,7 @@ static String buildSurfUrlBase(const SurfInstanceConfig& cfg, const char* spotId
   bool hasSpotId = cfg.spotId[0] != 0;
   bool hasSpot   = cfg.spot[0] != 0;
 
-  String url = String(BASE_URL) + "/api/surf/score?";
+  String url = String(BASE_URL) + "/api/device/surf-frame?device_id=" + urlEncode(DeviceIdentity::getDeviceId().c_str()) + "&";
 
   if (spotIdOverrideOrNull && spotIdOverrideOrNull[0]) {
     url += "spotId=" + urlEncode(spotIdOverrideOrNull);
@@ -1173,7 +1176,7 @@ static bool fetchSurfScore2(const SurfInstanceConfig& cfg,
   }
 
   DynamicJsonDocument docWinner(SURF_JSON_CAPACITY);
-  String urlW = String(BASE_URL) + "/api/surf/score?";
+  String urlW = String(BASE_URL) + "/api/device/surf-frame?device_id=" + urlEncode(DeviceIdentity::getDeviceId().c_str()) + "&";
   urlW += "spotId=" + urlEncode(out.spotIdResolved);
   urlW += "&hours=4";
   urlW += "&frame=1";
@@ -1213,12 +1216,13 @@ static void tick(int idx, const SurfAdaptivePolicy::SurfDataNeeds& dataNeeds) {
   SurfInstanceConfig& cfg = g_inst[idx];
   SurfCache& cache = g_cache[idx];
 
-  const uint32_t now = millis();
-
   const bool wantDayparts = dataNeeds.dayparts;
   const bool wantDaily = dataNeeds.daily;
 
-  bool needs = (!cache.valid) || ((now - cache.fetchedAtMs) > cfg.refreshMs);
+  // SmartRefresh owns Surf source timing. Manual redraws reuse the last
+  // completed result; invalidateScheduled() is the only timed invalidation.
+  // A geometry change may still fetch detail that was never cached locally.
+  bool needs = !cache.valid;
 
   if (!needs && wantDayparts && !cache.hasDayparts) needs = true;
   if (!needs && wantDaily && !cache.hasDaily) needs = true;
@@ -1228,7 +1232,7 @@ static void tick(int idx, const SurfAdaptivePolicy::SurfDataNeeds& dataNeeds) {
   SurfCache fresh = cache;
   if (fetchSurfScore2(cfg, fresh, wantDayparts, wantDaily)) {
     fresh.valid = true;
-    fresh.fetchedAtMs = now;
+    fresh.fetchedAtMs = millis();
     cache = fresh;
   }
 }
@@ -2780,6 +2784,20 @@ static void renderCommon(const Cell& c,
 // TAB 9 — Public module API
 // =========================================================
 namespace ModuleSurf {
+
+void invalidateScheduled(const String& modulesCsv) {
+  const String wrapped = "," + modulesCsv + ",";
+  const bool allSurf = wrapped.indexOf(",surf,") >= 0 || wrapped.indexOf(",all,") >= 0;
+  for (int i = 0; i < MAX_INSTANCES; ++i) {
+    if (!g_inst[i].spotId[0] && !g_inst[i].spot[0]) continue;
+    const String key = String("surf:") + String(i + 1);
+    if (allSurf || wrapped.indexOf("," + key + ",") >= 0) {
+      g_cache[i].valid = false;
+      g_cache[i].fetchedAtMs = 0;
+    }
+  }
+}
+
 
 void setConfig(const FrameConfig* cfg) {
   g_cfg = cfg;

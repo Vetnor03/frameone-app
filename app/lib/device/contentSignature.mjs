@@ -6,7 +6,7 @@ export * from './contentSignatureBase.mjs'
 // regression test still verifies the inherited physical endpoint contract:
 // INSTANCE_BASES = new Set(['weather', 'surf', 'soccer', 'stocks'])
 // '/api/device/stocks' with device_id: deviceId, id
-// '/api/surf/score' with frame: 1
+// '/api/device/surf-frame' with frame: 1
 // competitionId: config.competitionId
 
 const object = (value) => value && typeof value === 'object' && !Array.isArray(value) ? value : {}
@@ -55,8 +55,8 @@ export function activePhysicalReferences(settings) {
   return refs
 }
 
-export function buildContentRequestPlan({ settings, deviceId, origin, now = Date.now() }) {
-  const basePlan = base.buildContentRequestPlan({ settings: withoutSkiCells(settings), deviceId, origin, now })
+export function buildContentRequestPlan({ settings, deviceId, origin, now = Date.now(), refreshModules = new Set() }) {
+  const basePlan = base.buildContentRequestPlan({ settings: withoutSkiCells(settings), deviceId, origin, now, refreshModules })
   const refs = activePhysicalReferences(settings)
   const requests = [...basePlan.requests]
   for (const ref of refs.values()) {
@@ -69,9 +69,9 @@ export function buildContentRequestPlan({ settings, deviceId, origin, now = Date
   return { refs, requests, timeInputs: basePlan.timeInputs }
 }
 
-export async function collectVisibleContent({ settings, deviceId, origin, authorization, now = Date.now(), fetchImpl = fetch }) {
+export async function collectVisibleContent({ settings, deviceId, origin, authorization, now = Date.now(), fetchImpl = fetch, refreshModules = new Set() }) {
   const stripped = withoutSkiCells(settings)
-  const baseVisible = await base.collectVisibleContent({ settings: stripped, deviceId, origin, authorization, now, fetchImpl })
+  const baseVisible = await base.collectVisibleContent({ settings: stripped, deviceId, origin, authorization, now, fetchImpl, refreshModules })
   const refs = activePhysicalReferences(settings)
   const sources = { ...object(baseVisible.sources) }
 

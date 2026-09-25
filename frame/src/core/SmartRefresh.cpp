@@ -44,8 +44,10 @@ bool SmartRefresh::probeRevision(const String& token, uint64_t since, ContentRev
   return true;
 }
 
-bool SmartRefresh::fetchRenderState(const String& token, const String& modules, SmartRenderState& out) {
+bool SmartRefresh::fetchRenderState(const String& token, const String& modules, SmartRenderState& out,
+                                    const String& refreshModules) {
   String url = String(BASE_URL) + "/api/device/render-state?device_id=" + DeviceIdentity::getDeviceId() + "&modules=" + modules;
+  if (refreshModules.length()) url += "&refresh_modules=" + refreshModules;
   int code = 0; String body;
   if (!NetClient::httpGetAuth(url, token, code, body) || code != 200 || body.length() > 16384) return false;
   DynamicJsonDocument doc(16384);
