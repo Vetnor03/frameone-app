@@ -70,7 +70,10 @@ def test_unchanged_revision_is_cheap_and_changed_content_uses_display_policy():
 def test_revision_and_render_state_failures_preserve_display():
     scheduled = MAIN[MAIN.index('ContentRevisionState revisionState;'):]
     assert 'Revision safety poll unavailable; preserving display and sources' in scheduled
-    assert 'g_revisionRetryNotBefore = time(nullptr) + 60' in scheduled
+    assert 'deferFailedScheduledRefresh("revision probe unavailable")' in scheduled
+    retry = MAIN[MAIN.index('static void deferFailedScheduledRefresh'):MAIN.index('static void consumeNormalSyncPeriod')]
+    assert 'g_revisionRetryNotBefore = time(nullptr) + 60' in retry
+    assert 'g_nextScheduledWake = g_revisionRetryNotBefore' in retry
     assert 'Affected render-state fetch failed; preserving freshness and hashes' in scheduled
 
 def test_manual_ack_precedes_signature_bookkeeping():
