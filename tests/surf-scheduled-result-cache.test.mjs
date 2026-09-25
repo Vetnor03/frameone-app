@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { buildContentRequestPlan } from '../app/lib/device/contentSignatureBase.mjs'
 
-const surfRoute = readFileSync(new URL('../app/api/surf/score/route.ts', import.meta.url), 'utf8')
+const surfFrameRoute = readFileSync(new URL('../app/api/device/surf-frame/route.ts', import.meta.url), 'utf8')
+const surfScoringRoute = readFileSync(new URL('../app/api/surf/score/route.ts', import.meta.url), 'utf8')
 const renderStateRoute = readFileSync(new URL('../app/api/device/render-state/route.ts', import.meta.url), 'utf8')
 const migration = readFileSync(new URL('../supabase/migrations/20260925060000_add_surf_frame_result_cache.sql', import.meta.url), 'utf8')
 
@@ -32,7 +33,7 @@ test('physical content plan fetches only modules active in frame cells', () => {
   })
   assert.deepEqual(plan.requests.map((request) => request.key), ['surf:1'])
   const requestUrl = new URL(plan.requests[0].url)
-  assert.equal(requestUrl.pathname, '/api/surf/score')
+  assert.equal(requestUrl.pathname, '/api/device/surf-frame')
   assert.equal(requestUrl.searchParams.get('refresh'), null)
 })
 
@@ -49,11 +50,13 @@ test('only scheduled Surf scope asks the Surf endpoint to refresh', () => {
 })
 
 test('physical Surf result cache persists compact output and enforces three-hour minimum refresh', () => {
-  assert.match(surfRoute, /SURF_FRAME_RESULT_CACHE_MIN_REFRESH_MS = 3 \* 60 \* 60 \* 1000/)
-  assert.match(surfRoute, /from\('surf_frame_result_cache'\)/)
-  assert.match(surfRoute, /requestContext\.forceRefresh[\s\S]*ageMs >= SURF_FRAME_RESULT_CACHE_MIN_REFRESH_MS/)
-  assert.match(surfRoute, /status: requestContext\.forceRefresh \? 'scheduled-not-due' : 'hit'/)
-  assert.match(surfRoute, /writeSurfFrameResultCache\(frameCacheKey, outgoing\)/)
+  assert.match(surfFrameRoute, /SURF_FRAME_RESULT_MIN_REFRESH_MS = 3 \* 60 \* 60 \* 1000/)
+  assert.match(surfFrameRoute, /from\('surf_frame_result_cache'\)/)
+  assert.match(surfFrameRoute, /refreshRequested && ageMs >= SURF_FRAME_RESULT_MIN_REFRESH_MS/)
+  assert.match(surfFrameRoute, /refreshRequested \? 'scheduled-not-due' : 'hit'/)
+  assert.match(surfFrameRoute, /new URL\('\/api\/surf\/score', url\.origin\)/)
+  assert.match(surfFrameRoute, /\.upsert\(\{/)
+  assert.doesNotMatch(surfScoringRoute, /surf_frame_result_cache/)
 })
 
 test('render-state separates requested modules from scheduled source refresh intent', () => {
