@@ -36,8 +36,19 @@ export async function GET(req: Request) {
   )
 }
 
+// The physical frame can piggyback one small timing snapshot on the normal ACK.
+// Only numeric, whitelisted fields are logged; no token, content or titles.
+const MANUAL_TIMING_FIELDS = [
+  'attempts', 'probe_to_pending_ms', 'updating_screen_ms', 'config_fetch_ms',
+  'render_state_fetch_ms', 'reminders_preload_ms', 'news_preload_ms',
+  'soccer_preload_ms', 'display_ms', 'render_total_ms', 'post_render_ms',
+  'before_ack_ms',
+] as const
+
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => null)) as { device_id?: unknown; displayed_revision?: unknown } | null
+  const body = (await req.json().catch(() => null)) as {
+    device_id?: unknown; displayed_revision?: unknown; manual_timing?: unknown
+  } | null
   const deviceId = deviceIdFrom(body?.device_id)
   const revision = Number(body?.displayed_revision)
   if (!deviceId) return NextResponse.json({ error: 'missing_device_id' }, { status: 400 })
@@ -56,5 +67,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'revision_not_requested' }, { status: 409 })
   }
   if (error) return NextResponse.json({ error: 'internal_error' }, { status: 500 })
+
+  // Diagnostics are strictly optional and never affect ACK validation or the
+  // physical-display progress state. Vercel logs can be correlated by revision.
+  const input = body?.manual_timing
+  if (input && typeof input === 'object' && !Array.isArray(input)) {
+    const record = input as Record<string, unknown>
+    const timings: Record<string, number> = {}
+    for (const key of MANUAL_TIMING_FIELDS) {
+      const value = record[key]
+      if (typeof value === 'number' && Number.isSafeInteger(value) &&
+          value >= 0 && value <= 3_600_000) timings[key] = value
+    }
+    if (Object.keys(timings).length >= 4) {
+      console.info('[device/update-state] manual-timing', {
+        device_id: deviceId, revision: data, ...timings,
+      })
+    }
+  }
   return NextResponse.json({ displayed_revision: data })
 }

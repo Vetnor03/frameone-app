@@ -10,12 +10,16 @@ export const dynamic = 'force-dynamic'
 // This is deliberately the second-stage, potentially expensive request. The
 // firmware calls it only for affected/due modules or a manual screen-wide check.
 export async function GET(req: Request) {
+  const startedAtMs = Date.now()
   const url = new URL(req.url)
   const deviceId = deviceIdFrom(url.searchParams.get('device_id'))
   if (!deviceId) return NextResponse.json({ error: 'missing_device_id' }, { status: 400 })
   const auth = await authenticatePhysicalDevice(req, deviceId)
   if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const authMs = Date.now() - startedAtMs
+  const configStartedAtMs = Date.now()
   const config = await buildFrameConfigPayload(auth.supabase, deviceId)
+  const configMs = Date.now() - configStartedAtMs
   if ('pair_required' in config || 'setup_pending' in config) return NextResponse.json(config, { status: 409 })
   const settings = withPhysicalCellGeometry(config.settings_json, frameLayouts.layouts)
   const requested = new Set((url.searchParams.get('modules') ?? 'all').split(',').map((x) => x.trim()).filter(Boolean))
@@ -27,6 +31,7 @@ export async function GET(req: Request) {
       return requested.has(key) || requested.has(key.split(':')[0])
     }),
   }
+  const sourcesStartedAtMs = Date.now()
   const visible = await collectVisibleContent({
     settings: selectedSettings,
     deviceId,
@@ -34,10 +39,22 @@ export async function GET(req: Request) {
     authorization: req.headers.get('authorization') ?? '',
     refreshModules,
   })
+  const sourcesMs = Date.now() - sourcesStartedAtMs
+  const manifestStartedAtMs = Date.now()
   const renderSources = { ...visible.sources, date: visible.time.date ?? null }
   const modules = physicalRenderManifest({ settings: selectedSettings, sources: renderSources })
     .filter((module) => requested.has('all') || requested.has(module.key) || requested.has(module.key.split(':')[0]))
   const layoutHash = contentDigest({ layout: settings.layout, theme: settings.theme, cells: settings.cells })
+  console.info('[device/render-state] timing', {
+    device_id: deviceId,
+    request_kind: requested.has('all') ? 'all' : 'selective',
+    auth_ms: authMs,
+    config_ms: configMs,
+    sources_ms: sourcesMs,
+    manifest_ms: Date.now() - manifestStartedAtMs,
+    total_ms: Date.now() - startedAtMs,
+    module_count: modules.length,
+  })
   return NextResponse.json({ layout_hash: layoutHash, modules },
     { headers: { 'Cache-Control': 'private, no-store, max-age=0' } })
 }

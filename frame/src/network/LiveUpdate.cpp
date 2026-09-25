@@ -97,9 +97,26 @@ uint32_t LiveUpdate::lastNetworkProbeStartedAtMs() {
   return g_lastProbeNetworkStartedAtMs;
 }
 
-bool LiveUpdate::acknowledge(const String& deviceToken, uint64_t revision) {
+bool LiveUpdate::acknowledge(const String& deviceToken, uint64_t revision, const ManualUpdateTimings* timings) {
   String json = "{\"device_id\":\"" + DeviceIdentity::getDeviceId() +
-                "\",\"displayed_revision\":" + revisionString(revision) + "}";
+                "\",\"displayed_revision\":" + revisionString(revision);
+  if (timings && timings->ready) {
+    json += ",\"manual_timing\":{";
+    json += "\"attempts\":" + String(timings->attempts);
+    json += ",\"probe_to_pending_ms\":" + String(timings->probeToPendingMs);
+    json += ",\"updating_screen_ms\":" + String(timings->updatingScreenMs);
+    json += ",\"config_fetch_ms\":" + String(timings->configFetchMs);
+    json += ",\"render_state_fetch_ms\":" + String(timings->renderStateFetchMs);
+    json += ",\"reminders_preload_ms\":" + String(timings->remindersPreloadMs);
+    json += ",\"news_preload_ms\":" + String(timings->newsPreloadMs);
+    json += ",\"soccer_preload_ms\":" + String(timings->soccerPreloadMs);
+    json += ",\"display_ms\":" + String(timings->displayMs);
+    json += ",\"render_total_ms\":" + String(timings->renderTotalMs);
+    json += ",\"post_render_ms\":" + String(timings->postRenderMs);
+    json += ",\"before_ack_ms\":" + String(timings->beforeAckMs);
+    json += "}";
+  }
+  json += "}";
   int code = 0;
   String body;
   const bool ok = NetClient::httpPostAuthJson(
