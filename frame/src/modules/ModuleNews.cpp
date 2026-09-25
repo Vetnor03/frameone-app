@@ -425,16 +425,9 @@ void setConfig(const FrameConfig* cfg) {
   g_cfg = cfg;
 }
 
-void invalidateScheduled(const String& modulesCsv) {
-  const String wrapped = "," + modulesCsv + ",";
-  if (wrapped.indexOf(",news,") >= 0 || wrapped.indexOf(",all,") >= 0) {
-    if (g_cache) g_cache->loaded = false;
-  }
-}
-
-void invalidateManual() {
-  // The app's explicit Update button asks for fresh content, unlike an
-  // unrelated redraw, charger edge or the cheap revision-safety probe.
+void invalidate() {
+  // News only needs a new source fetch when its visible content actually
+  // changed, or the app's explicit Update button requests fresh content.
   if (g_cache) g_cache->loaded = false;
 }
 
