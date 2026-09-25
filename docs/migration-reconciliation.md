@@ -97,3 +97,36 @@ For `20260906120000_authoritative_waste_provider_families.sql`, the current regi
 Next, classify all 35 repo-only migrations against a reviewed baseline, compare current function/policy definitions rather than just object names, and use a disposable local/branch database to validate the replay chain. Reconcile version IDs via the official CLI only after that evidence is complete, avoiding direct SQL against `supabase_migrations.schema_migrations`. Do not mark all entries applied merely to silence the history mismatch.
 
 Source reference: Supabase Database Migrations guide, “Diagnosing and fixing sync errors” (migration repair changes tracking only; it does not apply SQL).
+
+
+## 2026-09-25 isolated replay preflight — blocked before execution
+
+This follow-up inspected the full GitHub migration filename tree, `supabase/config.toml`, the initial migration bodies, and production catalog/history **read-only**. Supabase reports no existing development branches. The current execution environment has no Docker, Supabase CLI, `psql` or local PostgreSQL server. No branch was provisioned and no production change was made.
+
+### Prerequisite 1: historical baseline is absent
+
+The earliest repository migration is `20260424103000_add_grocery_items.sql`. It creates grocery tables and defines policies referencing `public.device_members`, which it does not create. Other early migrations require `public.devices`, `public.reminders` and `public.user_surf_experiences`. There are **no SQL files outside `supabase/migrations/`** in the repository that establish these pre-existing tables. The local migration folder therefore does **not** constitute a standalone fresh-install history.
+
+A proper full historical replay requires a *schema-only pre-April-24 baseline* (with relevant tables, types, grants, functions, policies, extensions, and dependencies) that precedes the first checked-in migration. An export of today's production schema cannot simply be prepended: today's objects already include later schema changes and will collide with older migrations.
+
+### Prerequisite 2: configured seed input is absent
+
+`supabase/config.toml` has `[db.seed] enabled = true` and `sql_paths = ["./seed.sql"]`, and `supabase/seed.sql` **was absent at the start of this audit**. This PR adds an intentionally empty, commented seed file, resolving this specific file-path prerequisite. It does not add production data or fix the missing historical baseline. Do not seed customer/production data into a disposable environment.
+
+### Prerequisite 3: historical type evolution needs examination
+
+The stored SQL for **production-recorded** `20260501110000_add_reminder_completions` defines `reminder_completions.device_id uuid references public.devices(id)` and membership policies comparing device IDs. The **current** production catalog has `devices.id uuid`, `devices.device_id text`, `device_members.device_id text`, and `reminder_completions.device_id text`. The current reminder-completion table has no FK to `devices(id)`. This is evidence that the old migration text does not describe today's target table; determine the precise intervening conversion/rebuild from historical files and records before claiming a full replay passes. Do **not** alter production column types or rewrite the already-recorded historical migration to guess at a fix.
+
+### Explicit go/no-go
+
+**NO-GO for any fresh historical `db reset`, `db push`, `migration repair`, or Supabase development-branch creation at this stage.**
+
+- First locate/reconstruct the historical baseline, or explicitly decide to adopt a *new current-state baseline* and archive the old chain. These are different migration strategies and should not be mixed.
+- The seed path is now supplied by this documentation/seed PR; keep it synthetic-only.
+- Run a disposable *local-only* full replay under a Docker-compatible engine with the baseline and seeded defaults. Avoid `--linked` or remote `--db-url` reset flags.
+- Compare the result with live schema-only inventory and run owner/member/outsider RLS smoke tests plus normal frame/API contract checks.
+- Only then use official migration-history reconciliation, one verified version at a time.
+
+Creating a Supabase development branch may have a cost, requires explicit price confirmation, and does not solve the missing historical baseline by itself. This audit deliberately did not create one.
+
+Reference: Supabase CLI `db reset` documentation says it recreates the **local** database from migrations then seeds; `--linked`/`--db-url` variants identify and drop user-created entities on the remote target. Never use those remote reset variants on RE:MIND production.
