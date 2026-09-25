@@ -948,8 +948,8 @@ function todaysBest(config) {
   const label = String(config.spot ?? '').trim().toLowerCase()
   return id === '__todays_best__' || label === "today's best" || label === 'todays best' || label === 'dagens beste'
 }
-function surfUrl(origin, config, settings, needs, spotIdOverride) {
-  const params = { hours: 4, frame: 1 }
+function surfUrl(origin, config, settings, needs, spotIdOverride, deviceId = '', forceRefresh = false) {
+  const params = { hours: 4, frame: 1, device_id: deviceId, ...(forceRefresh ? { refresh: 1 } : {}) }
   if (spotIdOverride) params.spotId = spotIdOverride
   else if (config.spotId) params.spotId = config.spotId
   else params.spot = config.spot || 'Surf'
@@ -966,8 +966,9 @@ function surfUrl(origin, config, settings, needs, spotIdOverride) {
   return url(origin, '/api/surf/score', params)
 }
 
-export function buildContentRequestPlan({ settings, deviceId, origin, now = Date.now() }) {
+export function buildContentRequestPlan({ settings, deviceId, origin, now = Date.now(), refreshModules = new Set() }) {
   const refs = activePhysicalReferences(settings)
+  const refreshSet = refreshModules instanceof Set ? refreshModules : new Set(Array.isArray(refreshModules) ? refreshModules : [])
   const modules = object(settings?.modules)
   const requests = []
   const timeInputs = {}
@@ -991,7 +992,16 @@ export function buildContentRequestPlan({ settings, deviceId, origin, now = Date
       if (config) requests.push({ key: ref.key, url: url(origin, '/api/soccer/frame', { teamId: config.teamId ?? '', competitionId: config.competitionId ?? '' }) })
     } else if (ref.base === 'surf') {
       const config = configuredInstance(modules, 'surf', id)
-      if (config) { const needs = surfNeeds(ref.cell); const best = todaysBest(config); requests.push({ key: ref.key, url: surfUrl(origin, config, settings, best && (needs.dayparts || needs.daily) ? { dayparts: false, daily: false } : needs), surf: { config, needs, todaysBest: best, settings, origin } }) }
+      if (config) {
+        const needs = surfNeeds(ref.cell)
+        const best = todaysBest(config)
+        const forceRefresh = refreshSet.has('all') || refreshSet.has('surf') || refreshSet.has(ref.key)
+        requests.push({
+          key: ref.key,
+          url: surfUrl(origin, config, settings, best && (needs.dayparts || needs.daily) ? { dayparts: false, daily: false } : needs, undefined, deviceId, forceRefresh),
+          surf: { config, needs, todaysBest: best, settings, origin, deviceId, forceRefresh },
+        })
+      }
     }
   }
   return { refs, requests, timeInputs }
@@ -1002,8 +1012,8 @@ async function responseJson(fetchImpl, request, authorization) {
   if (!response.ok) throw new Error(`content_source_${response.status}`)
   return canonicalVisible(await response.json())
 }
-export async function collectVisibleContent({ settings, deviceId, origin, authorization, now, fetchImpl = fetch }) {
-  const plan = buildContentRequestPlan({ settings, deviceId, origin, now })
+export async function collectVisibleContent({ settings, deviceId, origin, authorization, now, fetchImpl = fetch, refreshModules = new Set() }) {
+  const plan = buildContentRequestPlan({ settings, deviceId, origin, now, refreshModules })
   const sources = {}
   // Each module is an independent pipeline. Surf winner detail remains ordered
   // inside its own pipeline, while it no longer delays unrelated modules.
@@ -1012,7 +1022,7 @@ export async function collectVisibleContent({ settings, deviceId, origin, author
     if (request.surf?.todaysBest && (request.surf.needs.dayparts || request.surf.needs.daily)) {
       const winnerId = first?.spotId ?? first?.picked?.spotId
       if (winnerId) {
-        const winnerRequest = { url: surfUrl(request.surf.origin, request.surf.config, request.surf.settings, request.surf.needs, winnerId) }
+        const winnerRequest = { url: surfUrl(request.surf.origin, request.surf.config, request.surf.settings, request.surf.needs, winnerId, request.surf.deviceId, request.surf.forceRefresh) }
         sources[request.key] = { selected_spot_id: winnerId, visible: await responseJson(fetchImpl, winnerRequest, authorization) }
         return
       }
