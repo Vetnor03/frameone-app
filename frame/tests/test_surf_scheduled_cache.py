@@ -31,6 +31,8 @@ def test_local_surf_cache_has_no_independent_age_expiry():
     assert "cache.fetchedAtMs" not in body.split("bool needs =", 1)[1].split("if (!needs) return;", 1)[0]
     assert "invalidateScheduled(const String& modulesCsv)" in SURF_CPP
     assert "void invalidateScheduled(const String& modulesCsv);" in SURF_H
+    assert '"/api/device/surf-frame?device_id="' in SURF_CPP
+    assert '"/api/surf/score?"' not in SURF_CPP
 
 
 def test_surf_config_floor_matches_backend_three_hour_schedule():
