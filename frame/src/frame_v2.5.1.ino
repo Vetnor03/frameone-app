@@ -931,7 +931,7 @@ static bool fetchAndRenderExplicit(
 #endif
   // Manual Update is an explicit fresh-content request, so News is allowed
   // one source fetch. Routine wakeups and unrelated redraws reuse its cache.
-  ModuleNews::invalidateManual();
+  ModuleNews::invalidate();
   g_captureManualRenderTimings = true;
   const bool rendered = renderSmartDashboard(batt, pwr, desired, displayPlan);
   g_captureManualRenderTimings = false;
@@ -1696,8 +1696,15 @@ run_normal_sync:
         // Manual Update and unrelated module changes keep drawing the last
         // completed scheduled Surf result.
         ModuleSurf::invalidateScheduled(scheduledModules);
-        ModuleNews::invalidateScheduled(scheduledModules);
         SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);
+        // A due News poll with identical headlines needs no e-paper redraw or
+        // second News fetch. Fetch only when the visible News hash changed.
+        for (uint8_t i = 0; i < desired.moduleCount; ++i) {
+          if (desired.modules[i].key == "news" && displayPlan.dirty[i]) {
+            ModuleNews::invalidate();
+            break;
+          }
+        }
 #if TEMP_REFRESH_AUDIT_ENABLED
         const String TEMP_REFRESH_AUDIT_previous = SmartRefresh::TEMP_REFRESH_AUDIT_physicalRenderHash(desired);
 #endif
