@@ -929,6 +929,9 @@ static bool fetchAndRenderExplicit(
   const uint64_t TEMP_REFRESH_AUDIT_backendBefore = SmartRefresh::displayedRevision();
   const String TEMP_REFRESH_AUDIT_previous = SmartRefresh::TEMP_REFRESH_AUDIT_physicalRenderHash(desired);
 #endif
+  // Manual Update is an explicit fresh-content request, so News is allowed
+  // one source fetch. Routine wakeups and unrelated redraws reuse its cache.
+  ModuleNews::invalidateManual();
   g_captureManualRenderTimings = true;
   const bool rendered = renderSmartDashboard(batt, pwr, desired, displayPlan);
   g_captureManualRenderTimings = false;
@@ -1693,6 +1696,7 @@ run_normal_sync:
         // Manual Update and unrelated module changes keep drawing the last
         // completed scheduled Surf result.
         ModuleSurf::invalidateScheduled(scheduledModules);
+        ModuleNews::invalidateScheduled(scheduledModules);
         SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);
 #if TEMP_REFRESH_AUDIT_ENABLED
         const String TEMP_REFRESH_AUDIT_previous = SmartRefresh::TEMP_REFRESH_AUDIT_physicalRenderHash(desired);
