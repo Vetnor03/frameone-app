@@ -12,7 +12,8 @@
     "generate:frame-layouts": "node scripts/generate-frame-layouts.mjs",
     "check:frame-layouts": "node scripts/generate-frame-layouts.mjs --check",
     "test:ci-stable": "node scripts/run-ci-stable-tests.mjs",
-    "lint:changed": "node scripts/lint-changed-files.mjs"
+    "lint:changed": "node scripts/lint-changed-files.mjs",
+    "check:migrations": "node scripts/check-migration-files.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
