@@ -55,8 +55,8 @@ export function activePhysicalReferences(settings) {
   return refs
 }
 
-export function buildContentRequestPlan({ settings, deviceId, origin, now = Date.now() }) {
-  const basePlan = base.buildContentRequestPlan({ settings: withoutSkiCells(settings), deviceId, origin, now })
+export function buildContentRequestPlan({ settings, deviceId, origin, now = Date.now(), refreshModules = new Set() }) {
+  const basePlan = base.buildContentRequestPlan({ settings: withoutSkiCells(settings), deviceId, origin, now, refreshModules })
   const refs = activePhysicalReferences(settings)
   const requests = [...basePlan.requests]
   for (const ref of refs.values()) {
