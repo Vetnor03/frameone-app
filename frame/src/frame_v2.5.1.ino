@@ -941,6 +941,9 @@ static bool fetchAndRenderExplicit(
   TempRefreshAudit::TEMP_REFRESH_AUDIT_flushPiggyback(DeviceIdentity::getToken(), true);
 #endif
   if (!rendered) return false;
+  // The manual display used cached Surf data. Keep any earlier Surf source
+  // deadline rather than pretending the manual redraw refreshed the forecast.
+  SmartRefresh::preserveManualSurfFreshness(g_smartState, desired);
   SmartRefresh::mergeScheduler(g_smartState, desired, true);
   g_revisionCheckedAt = time(nullptr);
   g_nextScheduledWake = g_revisionCheckedAt + SmartRefresh::secondsUntilNextWake(
@@ -1043,6 +1046,12 @@ static InteractiveModeResult finishInteractiveMode(
   const uint32_t awakeSeconds = (millis() - startedAtMs) / 1000U;
   normalSyncElapsedSeconds = baselineElapsedAtEntry + awakeSeconds;
   return result;
+}
+
+static void deferFailedScheduledRefresh(const char* reason) {
+  g_revisionRetryNotBefore = time(nullptr) + 60;
+  g_nextScheduledWake = g_revisionRetryNotBefore;
+  Serial.printf("SmartRefresh: %s; retry in 60 seconds\n", reason);
 }
 
 static void consumeNormalSyncPeriod() {
@@ -1468,6 +1477,11 @@ void setup() {
     const time_t restoredNow = time(nullptr);
     g_nextScheduledWake = restoredNow + SmartRefresh::secondsUntilNextWake(
       g_smartState, restoredNow, g_revisionCheckedAt, !g_powerSaverMode);
+    // A failed network refresh must not cause immediate retries after a sleep
+    // or reconnect just because its original source deadline is overdue.
+    if (g_revisionRetryNotBefore > restoredNow &&
+        g_nextScheduledWake < g_revisionRetryNotBefore)
+      g_nextScheduledWake = g_revisionRetryNotBefore;
     Serial.printf("SmartRefresh: restored %u module schedules\n", g_smartState.moduleCount);
   } else {
     g_nextScheduledWake = 0;
@@ -1641,7 +1655,7 @@ run_normal_sync:
   String scheduledModules = SmartRefresh::dueModuleCsv(g_smartState, time(nullptr));
   if (wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED && !scheduledModules.length()) scheduledModules = "all";
   if (!SmartRefresh::probeRevision(DeviceIdentity::getToken(), knownRevision, revisionState)) {
-    g_revisionRetryNotBefore = time(nullptr) + 60;
+    deferFailedScheduledRefresh("revision probe unavailable");
     Serial.println("Revision safety poll unavailable; preserving display and sources");
   } else if (!revisionState.changed && !scheduledModules.length()) {
     g_revisionRetryNotBefore = 0;
@@ -1667,10 +1681,12 @@ run_normal_sync:
     String affected = SmartRefresh::unionModuleCsv(revisionState.affectedModules, scheduledModules);
     if (!affected.length()) affected = "all";
     if (affected == "all" && FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken()) != FrameConfigApi::FETCH_OK) {
+      deferFailedScheduledRefresh("config fetch failed");
       Serial.println("Changed layout/config fetch failed; preserving physical state");
     } else {
       SmartRenderState desired;
       if (!SmartRefresh::fetchRenderState(DeviceIdentity::getToken(), affected, desired, scheduledModules)) {
+        deferFailedScheduledRefresh("render-state fetch failed");
         Serial.println("Affected render-state fetch failed; preserving freshness and hashes");
       } else {
         // Only scheduled Surf deadlines invalidate the ESP32's local Surf value.
@@ -1705,6 +1721,8 @@ run_normal_sync:
           Serial.println(displayPlan.type == SmartDisplayPlan::NONE
             ? "Revision changed schedule/source state only; display untouched"
             : "Changed visible modules committed after display success");
+        } else {
+          deferFailedScheduledRefresh("physical display failed");
         }
       }
     }
