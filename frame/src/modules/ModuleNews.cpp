@@ -37,17 +37,35 @@ struct NewsCache {
   NewsItem items[MAX_NEWS_ITEMS];
 };
 
-static_assert(sizeof(NewsCache) <= 4096, "News cache exceeded heap budget");
+static_assert(sizeof(NewsCache) <= 4096, "News cache exceeded memory budget");
 static NewsCache* g_cache = nullptr;
 static bool g_cacheAllocationAttempted = false;
 
+#if defined(FRAME_IS_ALFRED_V1_2)
+// Retain headlines in RTC RAM across Power Save deep sleep. NVS has limited
+// free space and should not be written with multi-kilobyte News results.
+static const uint32_t NEWS_RTC_CACHE_MAGIC = 0x4E575331UL; // "NWS1"
+RTC_DATA_ATTR static NewsCache g_retainedNews;
+RTC_DATA_ATTR static uint32_t g_retainedNewsMagic = 0;
+#endif
+
 static bool ensureCacheAllocated() {
   if (g_cache) return true;
+#if defined(FRAME_IS_ALFRED_V1_2)
+  g_cache = &g_retainedNews;
+  if (g_retainedNewsMagic != NEWS_RTC_CACHE_MAGIC ||
+      g_cache->count < 0 || g_cache->count > MAX_NEWS_ITEMS) {
+    memset(g_cache, 0, sizeof(*g_cache));
+    g_retainedNewsMagic = NEWS_RTC_CACHE_MAGIC;
+  }
+  return true;
+#else
   if (g_cacheAllocationAttempted) return false;
   g_cacheAllocationAttempted = true;
   g_cache = new (std::nothrow) NewsCache{};
   if (!g_cache) Serial.println("News cache allocation failed");
   return g_cache != nullptr;
+#endif
 }
 
 static void safeCopy(char* dst, size_t dstSize, const char* src) {
@@ -401,8 +419,19 @@ static void renderList(const Cell& c) {
   }
 }
 
-void setConfig(const FrameConfig* cfg) { g_cfg = cfg; clearCache(); }
-void preload() { fetchNews(); }
+void setConfig(const FrameConfig* cfg) {
+  // Language is read from g_cfg at draw time. A config/layout redraw does not
+  // make the already fetched NRK headlines stale.
+  g_cfg = cfg;
+}
+
+void invalidate() {
+  // News only needs a new source fetch when its visible content actually
+  // changed, or the app's explicit Update button requests fresh content.
+  if (g_cache) g_cache->loaded = false;
+}
+
+void preload() { ensureLoaded(); }
 
 void render(const Cell& c, const String&) {
   ensureLoaded();

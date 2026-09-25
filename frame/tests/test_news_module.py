@@ -51,3 +51,32 @@ def test_news_regular_twelve_font_preserves_norwegian_glyphs():
     for cp in (0xC5, 0xC6, 0xD8, 0xE5, 0xE6, 0xF8):
         offset, width, height, advance, x, y = map(int, re.findall(r'-?\d+', glyphs[cp - 0x20]))
         assert width > 0 and height > 0 and advance > 0
+
+
+def test_news_cache_is_preserved_across_unrelated_redraws():
+    # The cheap update probe and unrelated module redraws cannot force News IO.
+    news = NEWS_CPP[NEWS_CPP.index('void setConfig('):]
+    assert 'void setConfig(const FrameConfig* cfg)' in news
+    assert 'g_cfg = cfg;' in news
+    assert 'clearCache()' not in news
+    assert 'void preload() { ensureLoaded(); }' in news
+    assert 'if (!g_cache->loaded) fetchNews();' in NEWS_CPP
+    assert 'void invalidate()' in news
+
+
+def test_news_is_invalidated_only_for_manual_or_changed_visible_content():
+    manual = INO[INO.index('static bool fetchAndRenderExplicit'):INO.index('static bool refreshContentSignatureBestEffort')]
+    scheduled = INO[INO.index('ContentRevisionState revisionState;'):]
+    assert 'ModuleNews::invalidate();' in manual
+    assert manual.index('ModuleNews::invalidate();') < manual.index('renderSmartDashboard(batt, pwr, desired, displayPlan)')
+    assert 'if (desired.modules[i].key == "news" && displayPlan.dirty[i])' in scheduled
+    assert 'ModuleNews::invalidate();' in scheduled
+    assert 'ModuleNews::invalidateScheduled' not in INO
+
+
+def test_alfred_retains_headlines_across_power_save_deep_sleep_without_nvs_writes():
+    assert '#if defined(FRAME_IS_ALFRED_V1_2)' in NEWS_CPP
+    assert 'RTC_DATA_ATTR static NewsCache g_retainedNews;' in NEWS_CPP
+    assert 'g_cache = &g_retainedNews;' in NEWS_CPP
+    assert 'g_retainedNewsMagic != NEWS_RTC_CACHE_MAGIC' in NEWS_CPP
+    assert 'prefs.put' not in NEWS_CPP

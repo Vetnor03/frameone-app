@@ -169,7 +169,14 @@ String SmartRefresh::dueModuleCsv(const SmartRenderState& state, time_t now) {
     bool due = false;
     for (uint8_t j = 0; j < state.modules[i].deadlineCount; ++j) {
       const SmartDeadline& d = state.modules[i].deadlines[j];
-      if (d.at <= now || (d.type == SMART_SOFT && d.at <= now + COALESCE_SECONDS)) { due = true; break; }
+      // Coalesce other soft work, but never pull News forward by 15 minutes
+      // on an unrelated wake: its 30m / 2h source interval is a real floor.
+      const bool newsFreshness = state.modules[i].key == "news";
+      if (d.at <= now ||
+          (d.type == SMART_SOFT && !newsFreshness && d.at <= now + COALESCE_SECONDS)) {
+        due = true;
+        break;
+      }
     }
     if (due) { if (result.length()) result += ','; result += state.modules[i].key; }
   }
