@@ -1,0 +1,4 @@
+-- Intentionally empty local development seed file.
+-- This path is referenced by supabase/config.toml [db.seed].
+-- Do not copy customer, token, device, integration, or production data here.
+-- Only add synthetic development fixtures in a separate reviewed change.
