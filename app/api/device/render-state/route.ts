@@ -19,6 +19,7 @@ export async function GET(req: Request) {
   if ('pair_required' in config || 'setup_pending' in config) return NextResponse.json(config, { status: 409 })
   const settings = withPhysicalCellGeometry(config.settings_json, frameLayouts.layouts)
   const requested = new Set((url.searchParams.get('modules') ?? 'all').split(',').map((x) => x.trim()).filter(Boolean))
+  const refreshModules = new Set((url.searchParams.get('refresh_modules') ?? '').split(',').map((x) => x.trim()).filter(Boolean))
   const selectedSettings = requested.has('all') ? settings : {
     ...settings,
     cells: settings.cells.filter((cell: Record<string, unknown>) => {
@@ -26,7 +27,13 @@ export async function GET(req: Request) {
       return requested.has(key) || requested.has(key.split(':')[0])
     }),
   }
-  const visible = await collectVisibleContent({ settings: selectedSettings, deviceId, origin: url.origin, authorization: req.headers.get('authorization') ?? '' })
+  const visible = await collectVisibleContent({
+    settings: selectedSettings,
+    deviceId,
+    origin: url.origin,
+    authorization: req.headers.get('authorization') ?? '',
+    refreshModules,
+  })
   const renderSources = { ...visible.sources, date: visible.time.date ?? null }
   const modules = physicalRenderManifest({ settings: selectedSettings, sources: renderSources })
     .filter((module) => requested.has('all') || requested.has(module.key) || requested.has(module.key.split(':')[0]))
