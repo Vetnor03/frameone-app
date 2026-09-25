@@ -889,7 +889,7 @@ static String buildSurfUrlBase(const SurfInstanceConfig& cfg, const char* spotId
   bool hasSpotId = cfg.spotId[0] != 0;
   bool hasSpot   = cfg.spot[0] != 0;
 
-  String url = String(BASE_URL) + "/api/device/surf-frame?device_id=" + urlEncode(DeviceIdentity::getDeviceId()) + "&";
+  String url = String(BASE_URL) + "/api/device/surf-frame?device_id=" + urlEncode(DeviceIdentity::getDeviceId().c_str()) + "&";
 
   if (spotIdOverrideOrNull && spotIdOverrideOrNull[0]) {
     url += "spotId=" + urlEncode(spotIdOverrideOrNull);
@@ -1176,7 +1176,7 @@ static bool fetchSurfScore2(const SurfInstanceConfig& cfg,
   }
 
   DynamicJsonDocument docWinner(SURF_JSON_CAPACITY);
-  String urlW = String(BASE_URL) + "/api/device/surf-frame?device_id=" + urlEncode(DeviceIdentity::getDeviceId()) + "&";
+  String urlW = String(BASE_URL) + "/api/device/surf-frame?device_id=" + urlEncode(DeviceIdentity::getDeviceId().c_str()) + "&";
   urlW += "spotId=" + urlEncode(out.spotIdResolved);
   urlW += "&hours=4";
   urlW += "&frame=1";
