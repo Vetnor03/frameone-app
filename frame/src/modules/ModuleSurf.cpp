@@ -1216,12 +1216,13 @@ static void tick(int idx, const SurfAdaptivePolicy::SurfDataNeeds& dataNeeds) {
   SurfInstanceConfig& cfg = g_inst[idx];
   SurfCache& cache = g_cache[idx];
 
-  const uint32_t now = millis();
-
   const bool wantDayparts = dataNeeds.dayparts;
   const bool wantDaily = dataNeeds.daily;
 
-  bool needs = (!cache.valid) || ((now - cache.fetchedAtMs) > cfg.refreshMs);
+  // SmartRefresh owns Surf source timing. Manual redraws reuse the last
+  // completed result; invalidateScheduled() is the only timed invalidation.
+  // A geometry change may still fetch detail that was never cached locally.
+  bool needs = !cache.valid;
 
   if (!needs && wantDayparts && !cache.hasDayparts) needs = true;
   if (!needs && wantDaily && !cache.hasDaily) needs = true;
@@ -1231,7 +1232,7 @@ static void tick(int idx, const SurfAdaptivePolicy::SurfDataNeeds& dataNeeds) {
   SurfCache fresh = cache;
   if (fetchSurfScore2(cfg, fresh, wantDayparts, wantDaily)) {
     fresh.valid = true;
-    fresh.fetchedAtMs = now;
+    fresh.fetchedAtMs = millis();
     cache = fresh;
   }
 }
