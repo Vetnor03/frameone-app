@@ -2504,119 +2504,8 @@ function compactSurfPayload(payload: any) {
   return compact
 }
 
-const SURF_FRAME_RESULT_CACHE_VERSION = 'v1'
-const SURF_FRAME_RESULT_CACHE_MIN_REFRESH_MS = 3 * 60 * 60 * 1000
-const SURF_TABLES_FINGERPRINT = crypto.createHash('sha256').update(JSON.stringify(TABLES)).digest('hex').slice(0, 24)
-
-function canonicalCacheValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalCacheValue)
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, item]) => [key, canonicalCacheValue(item)])
-    )
-  }
-  return value
-}
-
-function normalizedSurfFrameQuery(url: URL) {
-  const excluded = new Set(['refresh', 'forceRefresh', 'configUpdatedAt', 'device_id', 'frame', 'compact'])
-  const numeric = new Set(['lat', 'lon', 'homeLat', 'homeLon'])
-  return Array.from(url.searchParams.entries())
-    .filter(([key]) => !excluded.has(key))
-    .map(([key, value]) => {
-      if (!numeric.has(key)) return [key, value] as const
-      const numberValue = Number(value)
-      return [key, Number.isFinite(numberValue) ? numberValue.toFixed(5) : value] as const
-    })
-    .sort(([ak, av], [bk, bv]) => ak.localeCompare(bk) || av.localeCompare(bv))
-}
-
-function physicalSurfCacheNamespace(req: Request): string | null {
-  const bearer = authBearerFromReq(req)
-  if (!bearer || bearerLooksLikeUserJwt(bearer)) return null
-  const token = rawTokenFromBearer(bearer)
-  if (!token) return null
-  return crypto.createHash('sha256').update(token).digest('hex').slice(0, 32)
-}
-
-function buildSurfFrameResultCacheKey(args: {
-  req: Request
-  url: URL
-  customSpots: CustomSurfSpotRow[]
-  experiences: UserExpMap
-}) {
-  const namespace = physicalSurfCacheNamespace(args.req)
-  if (!namespace) return null
-  const sortedCustomSpots = [...args.customSpots]
-    .sort((a, b) => String(a.id).localeCompare(String(b.id)))
-  const sortedExperiences = Object.fromEntries(
-    Object.entries(args.experiences)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([spotId, rows]) => [
-        spotId,
-        [...rows].sort((a, b) => {
-          const aKey = `${String(a.id ?? '')}|${String(a.updated_at ?? '')}|${String(a.logged_at ?? '')}`
-          const bKey = `${String(b.id ?? '')}|${String(b.updated_at ?? '')}|${String(b.logged_at ?? '')}`
-          return aKey.localeCompare(bKey)
-        }),
-      ])
-  )
-  const material = canonicalCacheValue({
-    version: SURF_FRAME_RESULT_CACHE_VERSION,
-    device: namespace,
-    query: normalizedSurfFrameQuery(args.url),
-    tables: SURF_TABLES_FINGERPRINT,
-    customSpots: sortedCustomSpots,
-    experiences: sortedExperiences,
-  })
-  return crypto.createHash('sha256').update(JSON.stringify(material)).digest('hex')
-}
-
-type SurfFrameResultCacheEntry = {
-  payload: unknown
-  refreshedAtMs: number
-}
-
-function surfFrameCacheAdmin() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!supabaseUrl || !serviceRoleKey) return null
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-}
-
-async function readSurfFrameResultCache(cacheKey: string): Promise<SurfFrameResultCacheEntry | null> {
-  const admin = surfFrameCacheAdmin()
-  if (!admin) return null
-  const { data, error } = await admin
-    .from('surf_frame_result_cache')
-    .select('payload, refreshed_at')
-    .eq('cache_key', cacheKey)
-    .maybeSingle()
-  if (error) {
-    console.warn('[surf-frame-cache] read failed', { code: error.code })
-    return null
-  }
-  if (!data?.payload) return null
-  const refreshedAtMs = Date.parse(String(data.refreshed_at || ''))
-  if (!Number.isFinite(refreshedAtMs)) return null
-  return { payload: data.payload, refreshedAtMs }
-}
-
-async function writeSurfFrameResultCache(cacheKey: string, payload: unknown) {
-  const admin = surfFrameCacheAdmin()
-  if (!admin) return
-  const { error } = await admin
-    .from('surf_frame_result_cache')
-    .upsert({
-      cache_key: cacheKey,
-      payload,
-      refreshed_at: new Date().toISOString(),
-    }, { onConflict: 'cache_key' })
-  if (error) console.warn('[surf-frame-cache] write failed', { code: error.code })
+function surfJsonResponse(payload: any, compact: boolean, init?: { status?: number }) {
+  return jsonNoStore(compact ? compactSurfPayload(payload) : payload, init)
 }
 
 export async function GET(req: Request) {
@@ -2672,45 +2561,6 @@ export async function GET(req: Request) {
         )
       )
     )
-
-    const frameCacheKey = compactOn
-      ? buildSurfFrameResultCacheKey({
-          req,
-          url,
-          customSpots: customSpotsForUser,
-          experiences: userExpBySpotId,
-        })
-      : null
-    if (frameCacheKey) {
-      const cached = await readSurfFrameResultCache(frameCacheKey)
-      if (cached) {
-        const ageMs = Math.max(0, Date.now() - cached.refreshedAtMs)
-        const refreshDue =
-          requestContext.forceRefresh &&
-          ageMs >= SURF_FRAME_RESULT_CACHE_MIN_REFRESH_MS
-        if (!refreshDue) {
-          console.info('[surf-frame-cache]', {
-            status: requestContext.forceRefresh ? 'scheduled-not-due' : 'hit',
-            age_ms: ageMs,
-            min_refresh_ms: SURF_FRAME_RESULT_CACHE_MIN_REFRESH_MS,
-          })
-          return jsonNoStore(cached.payload)
-        }
-        console.info('[surf-frame-cache]', {
-          status: 'scheduled-refresh',
-          age_ms: ageMs,
-          min_refresh_ms: SURF_FRAME_RESULT_CACHE_MIN_REFRESH_MS,
-        })
-      } else {
-        console.info('[surf-frame-cache]', { status: 'miss' })
-      }
-    }
-
-    const respondSurf = async (payload: unknown) => {
-      const outgoing = compactOn ? compactSurfPayload(payload) : payload
-      if (frameCacheKey) await writeSurfFrameResultCache(frameCacheKey, outgoing)
-      return jsonNoStore(outgoing)
-    }
 
     // ---------- Today's Best ----------
     if (isTodaysBest(spotIdQ, spotQ)) {
@@ -2950,7 +2800,7 @@ export async function GET(req: Request) {
           })
         : undefined
 
-      return respondSurf({
+      return surfJsonResponse({
         spot: chosen.spotLabel,
         spotId: chosen.spotId,
         geo: { lat: chosen.lat, lon: chosen.lon, source: 'todays_best', query: null, forecast: chosen.series.forecastPoint, coordinate_resolution: chosen.series.coordinateResolution },
@@ -3105,7 +2955,7 @@ export async function GET(req: Request) {
             sst_cache_ttl_ms: SST_CACHE_TTL_MS,
           },
         },
-      })
+      }, compactOn)
     }
 
     // ---------- Normal existing logic ----------
@@ -3292,7 +3142,7 @@ export async function GET(req: Request) {
         })
       : undefined
 
-    return respondSurf({
+    return surfJsonResponse({
       spot: spotLabel ?? spotQ ?? spotId,
       spotId,
       geo: { lat, lon, source: geoSource, query: geoQuery, forecast: series.forecastPoint, coordinate_resolution: series.coordinateResolution },
@@ -3441,7 +3291,7 @@ export async function GET(req: Request) {
           sst_cache_ttl_ms: SST_CACHE_TTL_MS,
         },
       },
-    })
+    }, compactOn)
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e)
     console.error('[surf-score:error]', {
