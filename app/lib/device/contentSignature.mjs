@@ -69,9 +69,9 @@ export function buildContentRequestPlan({ settings, deviceId, origin, now = Date
   return { refs, requests, timeInputs: basePlan.timeInputs }
 }
 
-export async function collectVisibleContent({ settings, deviceId, origin, authorization, now = Date.now(), fetchImpl = fetch }) {
+export async function collectVisibleContent({ settings, deviceId, origin, authorization, now = Date.now(), fetchImpl = fetch, refreshModules = new Set() }) {
   const stripped = withoutSkiCells(settings)
-  const baseVisible = await base.collectVisibleContent({ settings: stripped, deviceId, origin, authorization, now, fetchImpl })
+  const baseVisible = await base.collectVisibleContent({ settings: stripped, deviceId, origin, authorization, now, fetchImpl, refreshModules })
   const refs = activePhysicalReferences(settings)
   const sources = { ...object(baseVisible.sources) }
 
