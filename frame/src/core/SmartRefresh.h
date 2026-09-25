@@ -105,5 +105,8 @@ namespace SmartRefresh {
   bool saveScheduler(const SmartRenderState& state, time_t revisionCheckedAt);
   void mergeScheduler(SmartRenderState& complete, const SmartRenderState& update,
                       bool screenWide);
+  // An explicit redraw uses cached Surf data: it must not postpone the
+  // independent source freshness deadline. Called only for manual updates.
+  void preserveManualSurfFreshness(const SmartRenderState& previous, SmartRenderState& updated);
   String unionModuleCsv(const String& first, const String& second);
 }
