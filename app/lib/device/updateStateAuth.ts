@@ -18,19 +18,25 @@ export async function authenticateUserForDevice(req: Request, deviceId: string) 
   if (!token) return { error: 'missing_auth_token' as const, status: 401 as const }
 
   const supabase = createServiceClient()
-  const { data: authData, error: authError } = await supabase.auth.getUser(token)
-  if (authError || !authData.user) return { error: 'invalid_auth_token' as const, status: 401 as const }
+  // We only need the verified user identity for membership authorization.
+  // getClaims(token) verifies the Supabase Auth JWT and can use the cached JWKS
+  // path, avoiding getUser()'s mandatory Auth-server round trip on every Update.
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token)
+  const userId = typeof claimsData?.claims?.sub === 'string'
+    ? claimsData.claims.sub.trim()
+    : ''
+  if (claimsError || !userId) return { error: 'invalid_auth_token' as const, status: 401 as const }
 
   const { data: member, error: memberError } = await supabase
     .from('device_members')
     .select('device_id')
     .eq('device_id', deviceId)
-    .eq('user_id', authData.user.id)
+    .eq('user_id', userId)
     .maybeSingle()
 
   if (memberError) return { error: 'internal_error' as const, status: 500 as const }
   if (!member) return { error: 'forbidden' as const, status: 403 as const }
-  return { supabase, userId: authData.user.id }
+  return { supabase, userId }
 }
 
 export async function authenticatePhysicalDevice(req: Request, deviceId: string) {

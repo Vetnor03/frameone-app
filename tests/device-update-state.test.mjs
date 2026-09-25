@@ -17,10 +17,11 @@ const manualRequestMigration = readFileSync(new URL('../supabase/migrations/2026
 const repairMigration = readFileSync(new URL('../supabase/migrations/20260901120000_repair_device_update_telemetry.sql', import.meta.url), 'utf8')
 
 test('app operations authenticate a user and require device membership', () => {
-  assert.match(auth, /supabase\.auth\.getUser\(token\)/)
+  assert.match(auth, /supabase\.auth\.getClaims\(token\)/)
+  assert.match(auth, /claimsData\?\.claims\?\.sub/)
   assert.match(auth, /from\('device_members'\)/)
   assert.match(auth, /\.eq\('device_id', deviceId\)/)
-  assert.match(auth, /\.eq\('user_id', authData\.user\.id\)/)
+  assert.match(auth, /\.eq\('user_id', userId\)/)
   assert.match(activity, /authenticateUserForDevice/)
   assert.match(request, /authenticateUserForDevice/)
   assert.match(appStatus, /authenticateUserForDevice/)
