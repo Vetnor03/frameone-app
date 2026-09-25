@@ -70,6 +70,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run check:frame-layouts
+      - run: npm run check:migrations
 
   changed-file-lint:
     name: No new lint debt
