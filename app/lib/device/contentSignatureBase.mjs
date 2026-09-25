@@ -963,7 +963,7 @@ function surfUrl(origin, config, settings, needs, spotIdOverride, deviceId = '',
       params.homeLat = surfSettings.homeLat; params.homeLon = surfSettings.homeLon
     }
   }
-  return url(origin, '/api/surf/score', params)
+  return url(origin, '/api/device/surf-frame', params)
 }
 
 export function buildContentRequestPlan({ settings, deviceId, origin, now = Date.now(), refreshModules = new Set() }) {
