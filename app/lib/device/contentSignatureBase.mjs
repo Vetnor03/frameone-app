@@ -644,19 +644,19 @@ function countdownProjection(value, cell, now) {
 }
 
 function renderConfigProjection(base, cell, config) {
-  const module = object(config?.module)
+  const moduleConfig = object(config?.module)
   let visibleModule = {}
   if (base === 'weather') {
     const { w, h } = dimensions(cell), area = Number(cell?.colSpan ?? Math.max(1, Math.round(w / 200))) * Number(cell?.rowSpan ?? Math.max(1, Math.round(h / 120)))
     const adaptive = String(cell?.size ?? 'ADAPTIVE').toUpperCase() === 'ADAPTIVE'
-    visibleModule = { configured: Boolean(Number(module.lat) && Number(module.lon)), units: module.units ?? 'metric',
-      showHiLo: !adaptive || area >= 3 ? module.showHiLo ?? module.hiLo ?? true : undefined,
-      showCondition: adaptive && area >= 2 ? module.showCondition ?? true : undefined,
-      label: adaptive ? (area >= 3 ? module.label : undefined) : ['SMALL', 'LARGE'].includes(String(cell?.size).toUpperCase()) ? module.label : undefined }
-  } else if (base === 'surf') visibleModule = { spot: module.spot, todaysBest: todaysBest(module) }
-  else if (base === 'stocks') visibleModule = pick(module, ['symbol', 'name', 'chartRange'])
-  else if (base === 'soccer') visibleModule = pick(module, ['teamName', 'competitionName'])
-  else if (base === 'date') visibleModule = pick(module, ['country', 'holidays'])
+    visibleModule = { configured: Boolean(Number(moduleConfig.lat) && Number(moduleConfig.lon)), units: moduleConfig.units ?? 'metric',
+      showHiLo: !adaptive || area >= 3 ? moduleConfig.showHiLo ?? moduleConfig.hiLo ?? true : undefined,
+      showCondition: adaptive && area >= 2 ? moduleConfig.showCondition ?? true : undefined,
+      label: adaptive ? (area >= 3 ? moduleConfig.label : undefined) : ['SMALL', 'LARGE'].includes(String(cell?.size).toUpperCase()) ? moduleConfig.label : undefined }
+  } else if (base === 'surf') visibleModule = { spot: moduleConfig.spot, todaysBest: todaysBest(moduleConfig) }
+  else if (base === 'stocks') visibleModule = pick(moduleConfig, ['symbol', 'name', 'chartRange'])
+  else if (base === 'soccer') visibleModule = pick(moduleConfig, ['teamName', 'competitionName'])
+  else if (base === 'date') visibleModule = pick(moduleConfig, ['country', 'holidays'])
   return { language: config?.language, timeZone: config?.timeZone, theme: config?.theme, module: visibleModule }
 }
 
