@@ -55,7 +55,7 @@ test('Soccer request has physical teamId and competitionId parity', () => {
 test('Surf hashes actual frame score response and visible forecast changes alter SHA', async () => {
   const current = settings([{ module: 'surf:2', w: 800, h: 240 }])
   const run = async (wave, wind, rating) => collectVisibleContent({ settings: current, deviceId, origin, authorization: 'Bearer token', fetchImpl: async (url) => {
-    assert.equal(url.pathname, '/api/surf/score'); assert.equal(url.searchParams.get('frame'), '1'); assert.equal(url.searchParams.get('dayparts'), '1')
+    assert.equal(url.pathname, '/api/device/surf-frame'); assert.equal(url.searchParams.get('frame'), '1'); assert.equal(url.searchParams.get('dayparts'), '1')
     return { ok: true, json: async () => ({ rating, forecast: { wave_height_range_label: wave }, inputs: { wind_speed_ms: wind }, dayparts: [{ label: 'Now' }] }) }
   } })
   const before = contentDigest(await run('1-2m', 3, 4))
