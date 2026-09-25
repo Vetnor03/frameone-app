@@ -978,7 +978,7 @@ export function buildContentRequestPlan({ settings, deviceId, origin, now = Date
   for (const ref of refs.values()) {
     const id = ref.id
     if (ref.base === 'reminders') requests.push({ key: ref.key, url: url(origin, '/api/device/reminders', { device_id: deviceId, limit: 10, tz: 'Europe/Oslo', skip_sync: 0 }) })
-    else if (ref.base === 'news') requests.push({ key: ref.key, url: url(origin, '/api/news', { limit: 14, links: 0, display_profiles: 'compact,standard' }) })
+    else if (ref.base === 'news') requests.push({ key: ref.key, url: url(origin, '/api/news', { limit: 14, links: 0, raw_titles: 1 }) })
     else if (ref.base === 'countdown') requests.push({ key: ref.key, url: url(origin, '/api/device/countdowns', { device_id: deviceId }) })
     else if (ref.base === 'groceries') requests.push({ key: ref.key, url: url(origin, '/api/device/groceries', { device_id: deviceId }) })
     else if (ref.base === 'assistant') requests.push({ key: ref.key, url: url(origin, '/api/device/assistant', { device_id: deviceId }) })

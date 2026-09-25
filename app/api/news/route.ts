@@ -110,6 +110,22 @@ export async function GET(req: Request) {
     const profiles = requestedProfiles(requestUrl.searchParams.get('display_profiles') || requestUrl.searchParams.get('display_profile'))
     const selected = (await loadNrkNews()).slice(0, limit)
 
+    // The physical frame measures and wraps the original, complete RSS title.
+    // Do not send it an optimizer fallback that may end in an unfinished phrase.
+    // Keep the existing optimized response unchanged for app/other callers.
+    if (requestUrl.searchParams.get('raw_titles') === '1') {
+      return NextResponse.json({
+        ok: true,
+        source: 'NRK',
+        refresh_seconds: FRAME_REFRESH_SECONDS,
+        items: selected.map((item) => ({
+          id: item.id,
+          title: item.title,
+          ...(includeLinks ? { url: item.url, published_at: item.publishedAt } : {}),
+        })),
+      })
+    }
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     const persistentCache = supabaseUrl && serviceRoleKey
