@@ -546,9 +546,12 @@ export async function GET(req: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
+    const sharedScopeStartedAt = Date.now()
     const sharedDeviceIds = await sharedDeviceIdsForFrame(supabase, device_id)
+    const sharedScopeMs = Date.now() - sharedScopeStartedAt
 
     // These reads share only sharedDeviceIds, so overlap their network latency.
+    const coreReadsStartedAt = Date.now()
     const [remindersResult, completionsResult, membersResult, deviceSettingsResult] = await Promise.all([supabase
       .from('reminders')
       .select('id, device_id, title, due_date, due_time, end_date, end_time, repeat_type, custom_repeat_days, is_done, starter_key')
@@ -566,6 +569,7 @@ export async function GET(req: Request) {
       .select('settings_json')
       .eq('device_id', device_id)
       .maybeSingle()])
+    const coreReadsMs = Date.now() - coreReadsStartedAt
     const { data, error } = remindersResult
     const { data: completionsData, error: completionsError } = completionsResult
     const { data: membersData, error: membersError } = membersResult
@@ -760,26 +764,30 @@ export async function GET(req: Request) {
       } })(), (async () => { try {
         if (!providerEnabled('local-events')) return
 
-        const { data: localEventsData, error: localEventsError } = await supabase
-          .from('integration_items')
-          .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
-          .eq('provider', 'edge-of-norway')
-          .eq('device_id', device_id)
-          .order('starts_at', { ascending: true, nullsFirst: false })
+        const localEventsStartedAt = Date.now()
+        const [eventsResult, skipsResult] = await Promise.all([
+          supabase
+            .from('integration_items')
+            .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
+            .eq('provider', 'edge-of-norway')
+            .eq('device_id', device_id)
+            .order('starts_at', { ascending: true, nullsFirst: false }),
+          supabase
+            .from('local_event_frame_skips')
+            .select('device_id, provider, external_event_id, skipped')
+            .eq('device_id', device_id)
+            .eq('provider', 'edge-of-norway'),
+        ])
 
-        if (localEventsError) throw localEventsError
+        if (eventsResult.error) throw eventsResult.error
+        if (skipsResult.error) throw skipsResult.error
 
-        const { data: localEventsIntegrationData } = await supabase
-          .from('user_integrations')
-          .select('encrypted_credentials')
-          .eq('device_id', device_id)
-          .eq('provider', 'edge-of-norway')
-          .maybeSingle()
-        const localEventCredentials = (localEventsIntegrationData?.encrypted_credentials || null) as {
+        const configuredLocalEvents = selectedIntegrations['local-events'] as {
+          enabled?: boolean
           areaPreference?: { primaryPlaceId?: unknown }
-        } | null
-        const selectedLocalEventArea = String(localEventCredentials?.areaPreference?.primaryPlaceId || '').trim()
-        const localEventRows = (Array.isArray(localEventsData) ? (localEventsData as IntegrationItemRow[]) : [])
+        } | undefined
+        const selectedLocalEventArea = String(configuredLocalEvents?.areaPreference?.primaryPlaceId || '').trim()
+        const localEventRows = (Array.isArray(eventsResult.data) ? (eventsResult.data as IntegrationItemRow[]) : [])
           .filter((row) => {
             if (!selectedLocalEventArea) return true
             const raw = row.raw && typeof row.raw === 'object' && !Array.isArray(row.raw)
@@ -790,22 +798,18 @@ export async function GET(req: Request) {
             }
             return String(raw.areaKey || raw.primaryPlaceId || '').trim() === selectedLocalEventArea
           })
-        const localEventExternalIds = localEventRows.map((row) => String(row.external_id || '').trim()).filter(Boolean)
-        let localEventSkipRows: LocalEventSkipRow[] = []
 
-        if (localEventExternalIds.length > 0) {
-          const { data: skipsData, error: skipsError } = await supabase
-            .from('local_event_frame_skips')
-            .select('device_id, provider, external_event_id, skipped')
-            .eq('device_id', device_id)
-            .eq('provider', 'edge-of-norway')
-            .in('external_event_id', Array.from(new Set(localEventExternalIds)))
-
-          if (skipsError) throw skipsError
-          localEventSkipRows = Array.isArray(skipsData) ? (skipsData as LocalEventSkipRow[]) : []
-        }
+        const localEventSkipRows = Array.isArray(skipsResult.data)
+          ? (skipsResult.data as LocalEventSkipRow[])
+          : []
 
         localEventItems = buildLocalEventFrameItem(localEventRows, localEventSkipRows, todayYmd, now)
+        console.info('[device/reminders] local-events timing', {
+          device_id,
+          rows: localEventRows.length,
+          skips: localEventSkipRows.length,
+          total_ms: Date.now() - localEventsStartedAt,
+        })
       } catch (error) {
         logOptionalReminderProviderFailure('local-events', error)
       } })()])
@@ -866,6 +870,8 @@ export async function GET(req: Request) {
       ai_optimized: Boolean(process.env.OPENAI_API_KEY) && String(process.env.FRAME_AI_OPTIMIZATION_ENABLED || '').toLowerCase() !== 'false',
       total_ms: Date.now() - requestStartedAt,
       upstream_sync: skipSync ? 'skipped' : 'deferred',
+      shared_scope_ms: sharedScopeMs,
+      core_reads_ms: coreReadsMs,
     })
 
     return NextResponse.json({ items: physicalItems })
