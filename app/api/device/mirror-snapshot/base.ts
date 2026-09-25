@@ -576,23 +576,14 @@ function uniqueNonEmpty(values: unknown[]) {
 }
 
 async function resolveMirrorDeviceScope(supabase: SupabaseClient, deviceId: string, fallbackUserId: string): Promise<MirrorDeviceScope> {
-  let currentDevice: UnknownRecord | null = null
+  const { data: currentDeviceData, error: currentDeviceError } = await supabase
+    .from('devices')
+    .select('id, device_id, owner_user_id')
+    .eq('device_id', deviceId)
+    .maybeSingle()
 
-  for (const select of ['id, device_id, owner_id', 'id, device_id, user_id', 'id, device_id']) {
-    const { data, error } = await supabase
-      .from('devices')
-      .select(select)
-      .eq('device_id', deviceId)
-      .maybeSingle()
-
-    if (!error) {
-      currentDevice = asRecord(data)
-      break
-    }
-  }
-
-  const ownerIdFromDevice = asString(currentDevice?.owner_id || currentDevice?.user_id).trim()
-  let ownerId = ownerIdFromDevice
+  const currentDevice = currentDeviceError ? null : asRecord(currentDeviceData)
+  let ownerId = asString(currentDevice?.owner_user_id).trim()
 
   if (!ownerId) {
     const { data: ownerMember } = await supabase
@@ -608,16 +599,13 @@ async function resolveMirrorDeviceScope(supabase: SupabaseClient, deviceId: stri
 
   let ownedDeviceRows: UnknownRecord[] = []
   if (ownerId) {
-    for (const column of ['owner_id', 'user_id']) {
-      const { data, error } = await supabase
-        .from('devices')
-        .select('id, device_id')
-        .eq(column, ownerId)
+    const { data: ownedDevices, error: ownedDevicesError } = await supabase
+      .from('devices')
+      .select('id, device_id')
+      .eq('owner_user_id', ownerId)
 
-      if (!error) {
-        ownedDeviceRows = Array.isArray(data) ? data.map(asRecord) : []
-        break
-      }
+    if (!ownedDevicesError) {
+      ownedDeviceRows = Array.isArray(ownedDevices) ? ownedDevices.map(asRecord) : []
     }
   }
 
