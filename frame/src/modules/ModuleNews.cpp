@@ -401,8 +401,26 @@ static void renderList(const Cell& c) {
   }
 }
 
-void setConfig(const FrameConfig* cfg) { g_cfg = cfg; clearCache(); }
-void preload() { fetchNews(); }
+void setConfig(const FrameConfig* cfg) {
+  // Language is read from g_cfg at draw time. A config/layout redraw does not
+  // make the already fetched NRK headlines stale.
+  g_cfg = cfg;
+}
+
+void invalidateScheduled(const String& modulesCsv) {
+  const String wrapped = "," + modulesCsv + ",";
+  if (wrapped.indexOf(",news,") >= 0 || wrapped.indexOf(",all,") >= 0) {
+    if (g_cache) g_cache->loaded = false;
+  }
+}
+
+void invalidateManual() {
+  // The app's explicit Update button asks for fresh content, unlike an
+  // unrelated redraw, charger edge or the cheap revision-safety probe.
+  if (g_cache) g_cache->loaded = false;
+}
+
+void preload() { ensureLoaded(); }
 
 void render(const Cell& c, const String&) {
   ensureLoaded();
