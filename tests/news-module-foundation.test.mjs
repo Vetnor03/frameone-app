@@ -67,3 +67,20 @@ test('News preserves complete physical headlines while the app retains semantic 
   const home = read('app/HomePageClient.tsx')
   assert.match(home, /whitespace-normal break-words/)
 })
+
+
+test('News freshness is independent from cheap wakeups and unrelated redraws', () => {
+  const signature = read('app/lib/device/contentSignatureBase.mjs')
+  const news = read('frame/src/modules/ModuleNews.cpp')
+  const firmware = read('frame/src/frame_v2.5.1.ino')
+
+  assert.match(signature, /NEWS_SOURCE_FRESHNESS_MS = 30 \* 60_000/)
+  assert.match(signature, /NEWS_POWER_SAVE_FRESHNESS_MS = 2 \* 60 \* 60_000/)
+  assert.match(news, /void preload\(\) \{ ensureLoaded\(\); \}/)
+  assert.match(news, /RTC_DATA_ATTR static NewsCache g_retainedNews;/)
+  const config = news.slice(news.indexOf('void setConfig('), news.indexOf('void invalidate()'))
+  assert.doesNotMatch(config, /clearCache\(\)/)
+  const schedule = firmware.slice(firmware.indexOf('ContentRevisionState revisionState;'))
+  assert.match(schedule, /desired\.modules\[i\]\.key == "news" && displayPlan\.dirty\[i\]/)
+  assert.doesNotMatch(schedule, /ModuleNews::invalidateScheduled/)
+})
