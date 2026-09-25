@@ -443,6 +443,7 @@ function buildOccurrencesForRow(
   horizonEndYmd: string,
   _includeOverdue: boolean
 ): DeviceReminderItem[] {
+  void _includeOverdue
   const title = String(row.title ?? '').trim()
   const dueDate = String(row.due_date ?? '').trim()
   const dueTime = normalizeReminderTime(row.due_time)
@@ -526,6 +527,7 @@ function buildOccurrencesForRow(
 }
 
 export async function GET(req: Request) {
+  const requestStartedAt = Date.now()
   try {
     const url = new URL(req.url)
     const device_id = url.searchParams.get('device_id')
@@ -663,19 +665,31 @@ export async function GET(req: Request) {
     let teamsItems: DeviceReminderItem[] = []
     let wasteItems: DeviceReminderItem[] = []
     let localEventItems: DeviceReminderItem[] = []
-    const configuredModules = (deviceSettingsData?.settings_json as any)?.modules
-    const frameLanguage = (deviceSettingsData?.settings_json as any)?.language === 'no' ? 'no' : 'en'
+    const settingsJson = (deviceSettingsData?.settings_json || null) as {
+      modules?: {
+        integration_selection_explicit?: boolean
+        integrations?: Record<string, { enabled?: boolean }>
+      }
+      language?: string
+    } | null
+    const configuredModules = settingsJson?.modules
+    const frameLanguage = settingsJson?.language === 'no' ? 'no' : 'en'
     const explicitIntegrationSelection = configuredModules?.integration_selection_explicit === true
     const selectedIntegrations = configuredModules?.integrations || {}
-    const providerEnabled = (provider: string) => !deviceSettingsError && (!explicitIntegrationSelection || selectedIntegrations?.[provider]?.enabled === true)
+    const providerEnabled = (provider: string) => !deviceSettingsError && (!explicitIntegrationSelection || selectedIntegrations[provider]?.enabled === true)
     if (memberUserIds.length > 0) {
       if (!skipSync) {
-        const syncResults = await Promise.allSettled([
-          providerEnabled('spond') ? syncSpondIfStaleForUsers(memberUserIds) : Promise.resolve(),
-          Promise.allSettled((providerEnabled('teams') ? memberUserIds : []).map((userId) => syncTeamsIfStaleForUser(userId, { horizonDays }))),
-        ])
-        syncResults.forEach((result) => {
-          if (result.status === 'rejected') logOptionalReminderProviderFailure('integration-sync', result.reason)
+        // Physical refreshes must never wait for third-party integrations.
+        // Refresh stale upstream caches after the response so this request can
+        // render immediately from the data already stored in Supabase.
+        after(async () => {
+          const syncResults = await Promise.allSettled([
+            providerEnabled('spond') ? syncSpondIfStaleForUsers(memberUserIds) : Promise.resolve(),
+            Promise.allSettled((providerEnabled('teams') ? memberUserIds : []).map((userId) => syncTeamsIfStaleForUser(userId, { horizonDays }))),
+          ])
+          syncResults.forEach((result) => {
+            if (result.status === 'rejected') logOptionalReminderProviderFailure('integration-sync', result.reason)
+          })
         })
       }
 
@@ -761,9 +775,21 @@ export async function GET(req: Request) {
           .eq('device_id', device_id)
           .eq('provider', 'edge-of-norway')
           .maybeSingle()
-        const selectedLocalEventArea = String(((localEventsIntegrationData?.encrypted_credentials as any)?.areaPreference?.primaryPlaceId) || '').trim()
+        const localEventCredentials = (localEventsIntegrationData?.encrypted_credentials || null) as {
+          areaPreference?: { primaryPlaceId?: unknown }
+        } | null
+        const selectedLocalEventArea = String(localEventCredentials?.areaPreference?.primaryPlaceId || '').trim()
         const localEventRows = (Array.isArray(localEventsData) ? (localEventsData as IntegrationItemRow[]) : [])
-          .filter((row) => !selectedLocalEventArea || (Array.isArray((row.raw as any)?.areaKeys) ? (row.raw as any).areaKeys.includes(selectedLocalEventArea) : String((row.raw as any)?.areaKey || (row.raw as any)?.primaryPlaceId || '').trim() === selectedLocalEventArea))
+          .filter((row) => {
+            if (!selectedLocalEventArea) return true
+            const raw = row.raw && typeof row.raw === 'object' && !Array.isArray(row.raw)
+              ? row.raw as Record<string, unknown>
+              : {}
+            if (Array.isArray(raw.areaKeys)) {
+              return raw.areaKeys.map((value) => String(value)).includes(selectedLocalEventArea)
+            }
+            return String(raw.areaKey || raw.primaryPlaceId || '').trim() === selectedLocalEventArea
+          })
         const localEventExternalIds = localEventRows.map((row) => String(row.external_id || '').trim()).filter(Boolean)
         let localEventSkipRows: LocalEventSkipRow[] = []
 
@@ -838,6 +864,8 @@ export async function GET(req: Request) {
       compact_json_byte_size: compactJsonByteSize,
       includes_local_events: selectedItems.some((item) => item.source === 'local-events'),
       ai_optimized: Boolean(process.env.OPENAI_API_KEY) && String(process.env.FRAME_AI_OPTIMIZATION_ENABLED || '').toLowerCase() !== 'false',
+      total_ms: Date.now() - requestStartedAt,
+      upstream_sync: skipSync ? 'skipped' : 'deferred',
     })
 
     return NextResponse.json({ items: physicalItems })
