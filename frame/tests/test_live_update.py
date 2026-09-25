@@ -55,7 +55,7 @@ def test_revision_safety_poll_replaces_four_hour_redraw_policy():
 def test_signature_uses_exact_active_instances_and_physical_endpoints():
     assert "INSTANCE_BASES = new Set(['weather', 'surf', 'soccer', 'stocks'])" in SIGNATURE
     assert "'/api/device/stocks'" in SIGNATURE and 'device_id: deviceId, id' in SIGNATURE
-    assert "'/api/surf/score'" in SIGNATURE and 'frame: 1' in SIGNATURE
+    assert "'/api/device/surf-frame'" in SIGNATURE and 'frame: 1' in SIGNATURE
     assert 'competitionId: config.competitionId' in SIGNATURE
     assert 'optimizeFrameContent' not in SIGNATURE
 
