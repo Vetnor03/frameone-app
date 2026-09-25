@@ -73,7 +73,10 @@ test('News freshness is independent from cheap wakeups and unrelated redraws', (
   const signature = read('app/lib/device/contentSignatureBase.mjs')
   const news = read('frame/src/modules/ModuleNews.cpp')
   const firmware = read('frame/src/frame_v2.5.1.ino')
+  const scheduler = read('frame/src/core/SmartRefresh.cpp')
 
+  assert.match(scheduler, /const bool newsFreshness = state\.modules\[i\]\.key == "news"/)
+  assert.match(scheduler, /d\.type == SMART_SOFT && !newsFreshness/)
   assert.match(signature, /NEWS_SOURCE_FRESHNESS_MS = 30 \* 60_000/)
   assert.match(signature, /NEWS_POWER_SAVE_FRESHNESS_MS = 2 \* 60 \* 60_000/)
   assert.match(news, /void preload\(\) \{ ensureLoaded\(\); \}/)
