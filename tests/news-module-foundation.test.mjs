@@ -30,7 +30,8 @@ test('News frame rendering uses the reminder-like list without date UI', () => {
   const firmware = read('frame/src/modules/ModuleNews.cpp')
   assert.match(firmware, /"Nyheter" : "News"/)
   assert.match(firmware, /MAX_NEWS_ITEMS = 14/)
-  assert.match(firmware, /#define NEWS_FONT_BODY \(&FreeSansBold12pt8b\)/)
+  assert.match(firmware, /#define NEWS_FONT_BODY \(&FreeSans12ptNO8b\)/)
+  assert.match(firmware, /#define NEWS_FONT_HEADER \(&FreeSansBold12pt8b\)/)
   assert.match(firmware, /Match the Reminders module's centered list treatment/)
   assert.doesNotMatch(firmware, /ModuleDate|drawCalendar|calendar/i)
 
@@ -46,7 +47,7 @@ test('News frame rendering uses the reminder-like list without date UI', () => {
 })
 
 
-test('News uses semantic optimizer output and available display space instead of blind ellipsis', () => {
+test('News preserves complete physical headlines while the app retains semantic optimization', () => {
   const optimizer = read('app/lib/frameContentOptimizer.ts')
   assert.match(optimizer, /NEWS_TITLE_OPTIMIZER_VERSION = 'news-v2'/)
   assert.match(optimizer, /complete, natural headline/)
@@ -55,8 +56,13 @@ test('News uses semantic optimizer output and available display space instead of
   const firmware = read('frame/src/modules/ModuleNews.cpp')
   assert.match(firmware, /wrapTextToLines/)
   assert.match(firmware, /show as many newest stories as actually fit/)
-  assert.match(firmware, /if \(nextH > availableH\) break/)
-  assert.doesNotMatch(firmware, /fitTextToWidth\(displayTitle\(g_cache->items\[i\], false\)/)
+  assert.match(firmware, /if \(nextH > availableH\)/)
+  assert.match(firmware, /raw_titles=1/)
+  assert.match(firmware, /selected\[visible\+\+\] = i/)
+  assert.doesNotMatch(firmware, /fitTextToWidth|profile_titles|\.\.\./)
+  assert.match(read('app/api/news/route.ts'), /searchParams\.get\('raw_titles'\) === '1'/)
+  assert.match(read('app/lib/device/contentSignatureBase.mjs'), /raw_titles: 1/)
+  assert.match(read('frame/src/assets/fonts/FreeSans12ptNO.h'), /0x20, 0xFF, 29/)
 
   const home = read('app/HomePageClient.tsx')
   assert.match(home, /whitespace-normal break-words/)
