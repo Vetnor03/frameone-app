@@ -111,7 +111,7 @@ A proper full historical replay requires a *schema-only pre-April-24 baseline* (
 
 ### Prerequisite 2: configured seed input is absent
 
-`supabase/config.toml` has `[db.seed] enabled = true` and `sql_paths = ["./seed.sql"]`, but `supabase/seed.sql` is not present. Supply a deliberately empty seed file or disable local seeding as a separate, reviewable repository-only fix before running a clean local reset. Do not seed customer/production data into a disposable environment.
+`supabase/config.toml` has `[db.seed] enabled = true` and `sql_paths = ["./seed.sql"]`, and `supabase/seed.sql` **was absent at the start of this audit**. This PR adds an intentionally empty, commented seed file, resolving this specific file-path prerequisite. It does not add production data or fix the missing historical baseline. Do not seed customer/production data into a disposable environment.
 
 ### Prerequisite 3: historical type evolution needs examination
 
@@ -122,7 +122,7 @@ The stored SQL for **production-recorded** `20260501110000_add_reminder_completi
 **NO-GO for any fresh historical `db reset`, `db push`, `migration repair`, or Supabase development-branch creation at this stage.**
 
 - First locate/reconstruct the historical baseline, or explicitly decide to adopt a *new current-state baseline* and archive the old chain. These are different migration strategies and should not be mixed.
-- Fix the seed configuration in an independent PR.
+- The seed path is now supplied by this documentation/seed PR; keep it synthetic-only.
 - Run a disposable *local-only* full replay under a Docker-compatible engine with the baseline and seeded defaults. Avoid `--linked` or remote `--db-url` reset flags.
 - Compare the result with live schema-only inventory and run owner/member/outsider RLS smoke tests plus normal frame/API contract checks.
 - Only then use official migration-history reconciliation, one verified version at a time.
