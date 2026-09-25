@@ -86,7 +86,8 @@ namespace SmartRefresh {
   static const uint32_t MANUAL_PROBE_SECONDS = 10;
   static const uint32_t COALESCE_SECONDS = 15 * 60;
   bool probeRevision(const String& token, uint64_t since, ContentRevisionState& out);
-  bool fetchRenderState(const String& token, const String& modules, SmartRenderState& out);
+  bool fetchRenderState(const String& token, const String& modules, SmartRenderState& out,
+                        const String& refreshModules = "");
   SmartDisplayPlan plan(const SmartRenderState& desired, bool grayscaleMode = false);
   void commitSuccessfulDisplay(const SmartRenderState& desired, const SmartDisplayPlan& plan);
 #if TEMP_REFRESH_AUDIT_ENABLED
