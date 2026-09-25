@@ -88,6 +88,10 @@ static bool g_displayReady = false;
 static bool g_dashboardLoaded = false;
 static bool g_powerRefreshPending = false;
 static bool g_lastEvaluationDrew = false;
+// One-shot, in-memory timing only during explicit manual updates.
+static ManualUpdateTimings g_manualTiming{};
+static bool g_captureManualRenderTimings = false;
+static uint32_t g_manualTimingAttempts = 0;
 
 
 enum SetupStep {
@@ -759,8 +763,10 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
   }
   const uint32_t remindersPreloadStartedAtMs = millis();
   if (remindersActive) ModuleReminders::preload();
+  const uint32_t remindersPreloadMs = millis() - remindersPreloadStartedAtMs;
+  if (g_captureManualRenderTimings) g_manualTiming.remindersPreloadMs = remindersPreloadMs;
   Serial.printf("Render timing reminders_preload_ms=%lu active=%u\n",
-    (unsigned long)(millis() - remindersPreloadStartedAtMs), remindersActive ? 1U : 0U);
+    (unsigned long)remindersPreloadMs, remindersActive ? 1U : 0U);
 
   bool newsActive = false;
   for (int i = 0; i < activeAssignmentCount; ++i) {
@@ -768,8 +774,10 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
   }
   const uint32_t newsPreloadStartedAtMs = millis();
   if (newsActive) ModuleNews::preload();
+  const uint32_t newsPreloadMs = millis() - newsPreloadStartedAtMs;
+  if (g_captureManualRenderTimings) g_manualTiming.newsPreloadMs = newsPreloadMs;
   Serial.printf("Render timing news_preload_ms=%lu active=%u\n",
-    (unsigned long)(millis() - newsPreloadStartedAtMs), newsActive ? 1U : 0U);
+    (unsigned long)newsPreloadMs, newsActive ? 1U : 0U);
 
   uint8_t soccerAssignments = 0;
   const uint32_t soccerPreloadStartedAtMs = millis();
@@ -778,8 +786,10 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
     ModuleSoccer::preload(String(activeAssignments[i].module));
     soccerAssignments++;
   }
+  const uint32_t soccerPreloadMs = millis() - soccerPreloadStartedAtMs;
+  if (g_captureManualRenderTimings) g_manualTiming.soccerPreloadMs = soccerPreloadMs;
   Serial.printf("Render timing soccer_preload_ms=%lu active_assignments=%u\n",
-    (unsigned long)(millis() - soccerPreloadStartedAtMs), (unsigned int)soccerAssignments);
+    (unsigned long)soccerPreloadMs, (unsigned int)soccerAssignments);
 
   ensureDisplay();
   Theme::set(g_cfg.theme);
@@ -792,6 +802,10 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
   shutdownDisplay();
   g_dashboardLoaded = true;
   g_powerRefreshPending = false;
+  if (g_captureManualRenderTimings) {
+    g_manualTiming.displayMs = millis() - displayStartedAtMs;
+    g_manualTiming.renderTotalMs = millis() - renderStartedAtMs;
+  }
   Serial.printf(
     "Render timing epaper_and_composition_ms=%lu\n",
     (unsigned long)(millis() - displayStartedAtMs)
@@ -855,11 +869,16 @@ static bool fetchAndRenderExplicit(
   const PowerSenseDebug& pwr,
   uint64_t revision
 ) {
+  if (explicitTimingRevision != revision) g_manualTimingAttempts = 0;
   explicitTimingRevision = revision;
   explicitTimingStartedAtMs = millis();
+  g_manualTiming = ManualUpdateTimings{};
+  g_manualTiming.attempts = ++g_manualTimingAttempts;
+  g_manualTiming.probeToPendingMs = explicitRevisionObservedAtMs
+    ? explicitTimingStartedAtMs - explicitRevisionObservedAtMs : 0;
   Serial.printf(
     "LiveUpdate timing probe_to_pending_ms=%lu\n",
-    (unsigned long)(explicitTimingStartedAtMs - explicitRevisionObservedAtMs)
+    (unsigned long)g_manualTiming.probeToPendingMs
   );
   // Manual Update is an intentional user action. Give immediate physical
   // acknowledgement before the slower config/content fetches begin. Power Save
@@ -872,12 +891,14 @@ static bool fetchAndRenderExplicit(
     Serial.println("LiveUpdate: Updating screen displayed");
   }
 
+  g_manualTiming.updatingScreenMs = millis() - explicitTimingStartedAtMs;
   const uint32_t configFetchStartedAtMs = millis();
   FrameConfigApi::FetchResult result =
     FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
+  g_manualTiming.configFetchMs = millis() - configFetchStartedAtMs;
   Serial.printf(
     "LiveUpdate timing config_fetch_ms=%lu\n",
-    (unsigned long)(millis() - configFetchStartedAtMs)
+    (unsigned long)g_manualTiming.configFetchMs
   );
   if (result != FrameConfigApi::FETCH_OK) {
     Serial.printf("LiveUpdate: revision %" PRIu64 " frame fetch failed\n", revision);
@@ -889,9 +910,10 @@ static bool fetchAndRenderExplicit(
   const uint32_t renderStateStartedAtMs = millis();
   const bool renderStateOk =
     SmartRefresh::fetchRenderState(DeviceIdentity::getToken(), "all", desired);
+  g_manualTiming.renderStateFetchMs = millis() - renderStateStartedAtMs;
   Serial.printf(
     "LiveUpdate timing render_state_fetch_ms=%lu\n",
-    (unsigned long)(millis() - renderStateStartedAtMs)
+    (unsigned long)g_manualTiming.renderStateFetchMs
   );
   if (!renderStateOk) return false;
   SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);
@@ -907,7 +929,10 @@ static bool fetchAndRenderExplicit(
   const uint64_t TEMP_REFRESH_AUDIT_backendBefore = SmartRefresh::displayedRevision();
   const String TEMP_REFRESH_AUDIT_previous = SmartRefresh::TEMP_REFRESH_AUDIT_physicalRenderHash(desired);
 #endif
+  g_captureManualRenderTimings = true;
   const bool rendered = renderSmartDashboard(batt, pwr, desired, displayPlan);
+  g_captureManualRenderTimings = false;
+  const uint32_t postRenderStartedAtMs = millis();
 #if TEMP_REFRESH_AUDIT_ENABLED
   TempRefreshAudit::TEMP_REFRESH_AUDIT_record("manual_refresh", "all", desired,
     TEMP_REFRESH_AUDIT_previous, displayPlan, rendered, TEMP_REFRESH_AUDIT_backendBefore,
@@ -928,6 +953,8 @@ static bool fetchAndRenderExplicit(
   // A successful physical render also satisfies the one-time renderer-version
   // maintenance redraw, even if its revision ACK needs a network retry.
   UpdateChecker::saveFirmwareVersion(FW_VER);
+  g_manualTiming.postRenderMs = millis() - postRenderStartedAtMs;
+  g_manualTiming.ready = true;
   Serial.printf("LiveUpdate: revision %" PRIu64 " evaluated; display=%s\n", revision,
                 g_lastEvaluationDrew ? "updated" : "unchanged");
   return true;
@@ -953,7 +980,10 @@ static bool retryRenderedAck(uint64_t backendDisplayed) {
   }
 
   const uint32_t ackStartedAtMs = millis();
-  if (LiveUpdate::acknowledge(DeviceIdentity::getToken(), rendered)) {
+  const bool reportManualTiming = rendered == explicitTimingRevision && g_manualTiming.ready;
+  if (reportManualTiming) g_manualTiming.beforeAckMs = ackStartedAtMs - explicitTimingStartedAtMs;
+  if (LiveUpdate::acknowledge(DeviceIdentity::getToken(), rendered,
+                              reportManualTiming ? &g_manualTiming : nullptr)) {
     LiveUpdate::clearRenderedAwaitingAckThrough(rendered);
     Serial.printf("LiveUpdate: ACK %" PRIu64 " success\n", rendered);
     if (rendered == explicitTimingRevision) {
@@ -966,6 +996,7 @@ static bool retryRenderedAck(uint64_t backendDisplayed) {
         (unsigned long)(millis() - explicitTimingStartedAtMs)
       );
       explicitTimingRevision = 0;
+      g_manualTiming.ready = false;
     }
     return true;
   }
