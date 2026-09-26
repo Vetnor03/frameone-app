@@ -7,14 +7,14 @@
 #include "NetClient.h"
 #include "Theme.h"
 
-#include "FreeSans12ptNO.h"
+#include "FreeSans9ptNO.h"
 #include "FreeSansBold12ptNO.h"
 
 #include <ArduinoJson.h>
 #include <string.h>
 #include <new>
 
-#define NEWS_FONT_BODY (&FreeSans12ptNO8b)
+#define NEWS_FONT_BODY (&FreeSans9pt8b)
 #define NEWS_FONT_HEADER (&FreeSansBold12pt8b)
 
 namespace ModuleNews {
@@ -287,7 +287,7 @@ static void renderShallow(const Cell& c) {
   const int contentTop = drawHeader(c);
   const int contentBottom = c.y + c.h - 8;
   const int contentH = max(1, contentBottom - contentTop);
-  const int lineStep = 25;
+  const int lineStep = 21;
   const int maxLines = min(NEWS_MAX_WRAP_LINES, max(1, contentH / lineStep));
   const int candidateCount = min(g_cache->count, 3);
 
@@ -349,7 +349,7 @@ static void renderList(const Cell& c) {
   const int dotR = 3;
   const int gap = 10;
   const int sidePad = 18;
-  const int lineStep = 25;
+  const int lineStep = 21;
   const int itemGap = 7;
   const int candidateCount = min(g_cache->count, capacityForCell(c));
   const int maxTextW = max(24, c.w - sidePad * 2 - dotR * 2 - gap);
