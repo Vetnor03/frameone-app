@@ -374,15 +374,15 @@ void drawShelfScreen(const String& deviceId) {
     display.setFont(&FreeMonoBold9pt7b);
     display.getTextBounds(idLine.c_str(), 0, 0, &x1, &y1, &w, &h);
     int idX = FRAME_X + (FRAME_W - (int)w) / 2 - x1;
-    int idY = FRAME_Y + FRAME_H - 62;
+    int idY = FRAME_Y + FRAME_H - 88;
     display.setCursor(idX, idY);
     display.print(idLine);
 
-    // Reuse the former footer position for the actual setup instruction.
+    // Keep the setup instruction near the bottom with a little more breathing room.
     display.setFont(&FreeMonoBold9pt7b);
     display.getTextBounds(line3, 0, 0, &x1, &y1, &w, &h);
     int infoX = FRAME_X + (FRAME_W - (int)w) / 2 - x1;
-    int infoY = FRAME_Y + FRAME_H - 26;
+    int infoY = FRAME_Y + FRAME_H - 42;
     display.setCursor(infoX, infoY);
     display.print(line3);
   } while (display.nextPage());
