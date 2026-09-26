@@ -14,6 +14,35 @@ String keyFor(const String& module) {
   for (size_t i = 0; i < module.length(); ++i) { hash ^= (uint8_t)module[i]; hash *= 16777619u; }
   char key[14]; snprintf(key, sizeof(key), "rh_%08lx", (unsigned long)hash); return String(key);
 }
+// Both keys stay below the ESP32 Preferences 15-character key limit.
+String weatherStableKeyFor(const String& module) {
+  String key = keyFor(module); key.setCharAt(0, 's'); key.setCharAt(1, 'h'); return key;
+}
+String weatherTemperatureKeyFor(const String& module) {
+  String key = keyFor(module); key.setCharAt(0, 't'); key.setCharAt(1, 'p'); return key;
+}
+
+// Compare with the last successfully PAINTED temperatures, never with the
+// previous fetch. A sequence of one-degree forecast changes can accumulate.
+bool significantWeatherTemperatureChange(const String& displayed, const String& desired, uint8_t threshold) {
+  if (displayed == desired) return false;
+  if (!displayed.length() || !desired.length() || threshold == 0) return true;
+  const char* before = displayed.c_str();
+  const char* after = desired.c_str();
+  while (true) {
+    if (!*before || !*after) return true;
+    char* beforeEnd = nullptr;
+    char* afterEnd = nullptr;
+    const long previous = strtol(before, &beforeEnd, 10);
+    const long current = strtol(after, &afterEnd, 10);
+    if (beforeEnd == before || afterEnd == after) return true;
+    if (labs(current - previous) >= threshold) return true;
+    if (*beforeEnd == '\0' && *afterEnd == '\0') return false;
+    if (*beforeEnd != ',' || *afterEnd != ',') return true;
+    before = beforeEnd + 1;
+    after = afterEnd + 1;
+  }
+}
 bool overlapOrNear(const Cell& a, const Cell& b) {
   const int gap = 8;
   return a.x <= b.x + b.w + gap && b.x <= a.x + a.w + gap &&
@@ -57,6 +86,22 @@ bool SmartRefresh::fetchRenderState(const String& token, const String& modules, 
     if (out.moduleCount >= MAX_GRID_CELLS) break;
     SmartModuleState& module = out.modules[out.moduleCount++];
     module.key = String((const char*)(item["key"] | "")); module.hash = String((const char*)(item["render_hash"] | ""));
+    module.weatherStableHash = String((const char*)(item["weather_stable_hash"] | ""));
+    module.weatherTemperatures = "";
+    module.weatherTemperatureThreshold = 0;
+    if (module.weatherStableHash.length() && item["weather_temperatures"].is<JsonArray>()) {
+      module.weatherTemperatureThreshold = (uint8_t)constrain((int)(item["weather_temperature_threshold"] | 3), 1, 30);
+      JsonArray temperatures = item["weather_temperatures"].as<JsonArray>();
+      // Fail open to exact render_hash comparison if a future payload is larger
+      // or invalid. Never silently omit temperature slots from the comparison.
+      if (temperatures.size() > 16) module.weatherStableHash = "";
+      for (JsonVariant temperature : temperatures) {
+        if (!module.weatherStableHash.length()) break;
+        if (!temperature.is<int>()) { module.weatherStableHash = ""; break; }
+        if (module.weatherTemperatures.length()) module.weatherTemperatures += ',';
+        module.weatherTemperatures += String(temperature.as<int>());
+      }
+    }
     module.bounds.x = item["bounds"]["x"] | 0; module.bounds.y = item["bounds"]["y"] | 0;
     module.bounds.w = item["bounds"]["w"] | 0; module.bounds.h = item["bounds"]["h"] | 0;
     module.partialSafe = item["partial_safe"] == true; module.deadlineCount = 0;
@@ -79,8 +124,22 @@ SmartDisplayPlan SmartRefresh::plan(const SmartRenderState& desired, bool graysc
   uint32_t addedArea = 0;
   for (uint8_t i = 0; i < desired.moduleCount; ++i) {
     const SmartModuleState& module = desired.modules[i];
-    prefs.begin("smart_refresh", true); String shown = prefs.getString(keyFor(module.key).c_str(), ""); prefs.end();
+    prefs.begin("smart_refresh", true);
+    const String shown = prefs.getString(keyFor(module.key).c_str(), "");
+    const bool weatherBaselineAvailable = module.key.startsWith("weather:") &&
+      module.weatherStableHash.length() == 64 && module.weatherTemperatureThreshold > 0;
+    const String shownStable = weatherBaselineAvailable
+      ? prefs.getString(weatherStableKeyFor(module.key).c_str(), "") : "";
+    const String shownTemperatures = weatherBaselineAvailable
+      ? prefs.getString(weatherTemperatureKeyFor(module.key).c_str(), "") : "";
+    prefs.end();
     result.dirty[i] = shown != module.hash;
+    if (result.dirty[i] && weatherBaselineAvailable &&
+        shownStable == module.weatherStableHash &&
+        !significantWeatherTemperatureChange(shownTemperatures, module.weatherTemperatures,
+                                             module.weatherTemperatureThreshold)) {
+      result.dirty[i] = false;
+    }
     if (!result.dirty[i]) continue;
     addedArea += module.bounds.w * module.bounds.h;
     if (grayscaleMode || !module.partialSafe) result.type = SmartDisplayPlan::FULL;
@@ -106,7 +165,15 @@ void SmartRefresh::commitSuccessfulDisplay(const SmartRenderState& desired, cons
   if (plan.type == SmartDisplayPlan::NONE) return;
   prefs.begin("smart_refresh", false);
   prefs.putString("layout", desired.layoutHash);
-  for (uint8_t i = 0; i < desired.moduleCount; ++i) if (plan.type == SmartDisplayPlan::FULL || plan.dirty[i]) prefs.putString(keyFor(desired.modules[i].key).c_str(), desired.modules[i].hash);
+  for (uint8_t i = 0; i < desired.moduleCount; ++i) {
+    if (plan.type != SmartDisplayPlan::FULL && !plan.dirty[i]) continue;
+    const SmartModuleState& module = desired.modules[i];
+    prefs.putString(keyFor(module.key).c_str(), module.hash);
+    if (module.key.startsWith("weather:") && module.weatherStableHash.length() == 64) {
+      prefs.putString(weatherStableKeyFor(module.key).c_str(), module.weatherStableHash);
+      prefs.putString(weatherTemperatureKeyFor(module.key).c_str(), module.weatherTemperatures);
+    }
+  }
   if (plan.type == SmartDisplayPlan::FULL) { prefs.putUInt("partial_n", 0); prefs.putUInt("dirty_area", 0); }
   else { prefs.putUInt("partial_n", prefs.getUInt("partial_n", 0) + 1); uint32_t area = 0; for (uint8_t i = 0; i < plan.regionCount; ++i) area += plan.regions[i].w * plan.regions[i].h; prefs.putUInt("dirty_area", prefs.getUInt("dirty_area", 0) + area); }
   prefs.end();
