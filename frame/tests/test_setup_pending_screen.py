@@ -17,3 +17,12 @@ def test_waiting_screen_is_retained_across_short_wakes():
     assert 'skipping e-paper redraw' in LOOP
     assert 'setupPendingScreenDisplayed = false' in LOOP
     assert 'Waiting for setup' in SCREEN
+
+
+def test_shelf_screen_has_no_bottom_explanatory_footer():
+    display = (ROOT / 'src/display/DisplayCore.cpp').read_text()
+    shelf = display.split('void drawShelfScreen(', 1)[1].split('} // namespace DisplayCore', 1)[0]
+    assert 'Plug in the frame to begin setup' in shelf
+    assert 'display.print(idLine);' in shelf
+    assert 'This display stays visible without power' not in shelf
+    assert 'line4' not in shelf
