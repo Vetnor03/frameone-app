@@ -24,20 +24,17 @@ def test_updating_screen_is_not_used_by_scheduled_refresh_paths():
     assert INO.count("DisplayCore::drawUpdatingScreen();") == 1
 
 
-def test_updating_screen_prefers_small_partial_update_and_keeps_full_fallback():
+def test_updating_screen_uses_full_panel_redraw_without_partial_overlay():
     assert "void drawUpdatingScreen();" in DISPLAY_H
     start = DISPLAY_CPP.index("void drawUpdatingScreen()")
     end = DISPLAY_CPP.index("void drawRechargeScreen()", start)
     body = DISPLAY_CPP[start:end]
-    partial = body.index("beginPartialUpdate(boxX, boxY, boxW, boxH, false)")
-    fallback = body.index("display.setFullWindow();")
-    assert partial < fallback
-    assert "const int boxW = 220;" in body
-    assert "const int boxH = 64;" in body
-    assert "display.fillRect(boxX, boxY, boxW, boxH, Theme::paper());" in body
-    assert 'const char* text = "Updating...";' in body
-    assert "display.drawRoundRect" in body
+    assert "beginFrameUpdate();" in body
+    assert "fillThemeBackground();" in body
     assert 'drawCenteredTextInFrame("Updating...", 1);' in body
+    assert "nextFrameUpdate()" in body
+    assert "beginPartialUpdate" not in body
+    assert "drawRoundRect" not in body
 
 
 def test_firmware_version_remains_2_7_2():
