@@ -355,35 +355,36 @@ void drawShelfScreen(const String& deviceId) {
     int16_t x1, y1;
     uint16_t w, h;
 
+    // Treat the logo and welcome as one vertically centered group.
     display.setFont(&FreeMonoBold18pt7b);
     display.getTextBounds(line1, 0, 0, &x1, &y1, &w, &h);
-    int titleX = FRAME_X + (FRAME_W - (int)w) / 2;
-    int titleY = FRAME_Y + 120;
+    int titleX = FRAME_X + (FRAME_W - (int)w) / 2 - x1;
+    int titleY = FRAME_Y + FRAME_H / 2 - 22;
     display.setCursor(titleX, titleY);
     display.print(line1);
 
     display.setFont(&FreeMonoBold12pt7b);
     display.getTextBounds(line2, 0, 0, &x1, &y1, &w, &h);
-    int welcomeX = FRAME_X + (FRAME_W - (int)w) / 2;
+    int welcomeX = FRAME_X + (FRAME_W - (int)w) / 2 - x1;
     int welcomeY = titleY + 56;
     display.setCursor(welcomeX, welcomeY);
     display.print(line2);
 
-    display.setFont(&FreeMonoBold12pt7b);
-    display.getTextBounds(line3, 0, 0, &x1, &y1, &w, &h);
-    int infoX = FRAME_X + (FRAME_W - (int)w) / 2;
-    int infoY = welcomeY + 74;
-    display.setCursor(infoX, infoY);
-    display.print(line3);
-
     String idLine = String("frame id: ") + deviceId;
     display.setFont(&FreeMonoBold9pt7b);
     display.getTextBounds(idLine.c_str(), 0, 0, &x1, &y1, &w, &h);
-    int idX = FRAME_X + (FRAME_W - (int)w) / 2;
+    int idX = FRAME_X + (FRAME_W - (int)w) / 2 - x1;
     int idY = FRAME_Y + FRAME_H - 62;
     display.setCursor(idX, idY);
     display.print(idLine);
 
+    // Reuse the former footer position for the actual setup instruction.
+    display.setFont(&FreeMonoBold9pt7b);
+    display.getTextBounds(line3, 0, 0, &x1, &y1, &w, &h);
+    int infoX = FRAME_X + (FRAME_W - (int)w) / 2 - x1;
+    int infoY = FRAME_Y + FRAME_H - 26;
+    display.setCursor(infoX, infoY);
+    display.print(line3);
   } while (display.nextPage());
 }
 
