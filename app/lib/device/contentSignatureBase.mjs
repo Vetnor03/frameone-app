@@ -753,6 +753,34 @@ function significantBackgroundProjection(moduleKey, projection) {
   return projection
 }
 
+// A weather source may move one or two displayed degrees without justifying
+// a panel transaction. Keep the ordinary render hash unchanged for consumers
+// that need the exact visible values, and give firmware a second hash covering
+// everything EXCEPT displayed temperature values. Firmware compares those
+// temperatures to the values last physically painted, not to the last fetch.
+// This avoids arbitrary bucket-boundary redraws and lets small changes accrue.
+const WEATHER_TEMPERATURE_FIELDS = new Set([
+  'temperature_2m', 'temperature_2m_min', 'temperature_2m_max',
+  'current', 'range', 'high', 'low',
+])
+function weatherAutomaticBaseline(projection) {
+  const temperatures = []
+  const withoutTemperatures = (value, field = '') => {
+    if (Array.isArray(value)) return value.map((child) => withoutTemperatures(child, field))
+    if (value && typeof value === 'object') return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [key, withoutTemperatures(child, key)]))
+    if (typeof value === 'number' && WEATHER_TEMPERATURE_FIELDS.has(field)) {
+      temperatures.push(value)
+      return '__display_temperature__'
+    }
+    return value
+  }
+  return {
+    weather_stable_hash: contentDigest({ ...projection, visible: withoutTemperatures(projection.visible) }),
+    weather_temperatures: temperatures,
+  }
+}
+
 // This digest is the scheduler's automatic-refresh contract. User data modules
 // still hash their exact rendered projection; Weather, Surf and Ski apply the
 // significance policy above so tiny source fluctuations do not move e-paper.
@@ -881,20 +909,28 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
 export function physicalRenderManifest({ settings, sources, now = Date.now() }) {
   const refs = activePhysicalReferences(settings)
   const deadlines = physicalModuleDeadlines({ settings, sources, now })
-  return [...refs.values()].map((ref) => ({
-    key: ref.key,
-    render_hash: physicalRenderDigest(ref.key, sources[ref.key] ?? null, ref.cell, {
+  return [...refs.values()].map((ref) => {
+    const config = {
       language: settings?.language ?? settings?.locale ?? 'en',
       timeZone: settings?.timeZone ?? settings?.timezone ?? 'Europe/Oslo',
       theme: settings?.theme ?? 'default',
       module: ref.id == null
         ? canonicalVisible(object(settings?.modules)[ref.base] ?? {})
         : canonicalVisible(configuredInstance(settings?.modules, ref.base, ref.id) ?? {}),
-    }, now),
-    bounds: { x: Number(ref.cell.col ?? 0) * 200, y: Number(ref.cell.row ?? 0) * 120, w: Number(ref.cell.w ?? 800), h: Number(ref.cell.h ?? 480) },
-    partial_safe: true,
-    deadlines: deadlines[ref.key] ?? [],
-  }))
+    }
+    const projection = physicalRenderProjection(ref.key, sources[ref.key] ?? null, ref.cell, config, now)
+    const automatic = significantBackgroundProjection(ref.key, projection)
+    const weatherBaseline = ref.base === 'weather' ? weatherAutomaticBaseline(automatic) : null
+    return {
+      key: ref.key,
+      render_hash: contentDigest(automatic),
+      ...(weatherBaseline ?? {}),
+      ...(weatherBaseline ? { weather_temperature_threshold: String(config.module?.units ?? 'metric').toLowerCase() === 'imperial' ? 5 : 3 } : {}),
+      bounds: { x: Number(ref.cell.col ?? 0) * 200, y: Number(ref.cell.row ?? 0) * 120, w: Number(ref.cell.w ?? 800), h: Number(ref.cell.h ?? 480) },
+      partial_safe: true,
+      deadlines: deadlines[ref.key] ?? [],
+    }
+  })
 }
 
 function physicalGeometry(cell) {
