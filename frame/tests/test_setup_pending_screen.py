@@ -31,10 +31,9 @@ def test_shelf_screen_has_no_bottom_explanatory_footer():
 def test_shelf_welcome_is_centered_and_setup_instruction_is_in_footer():
     display = (ROOT / 'src/display/DisplayCore.cpp').read_text()
     shelf = display.split('void drawShelfScreen(', 1)[1].split('} // namespace DisplayCore', 1)[0]
-    assert 'int titleY = FRAME_Y + FRAME_H / 2 - 22;' in shelf
-    assert 'int welcomeY = titleY + 56;' in shelf
     # The welcome remains centered; only the footer lines shift upward.
     assert 'int titleY = FRAME_Y + FRAME_H / 2 - 22;' in shelf
+    assert 'int welcomeY = titleY + 56;' in shelf
     for name in ('titleX', 'welcomeX', 'idX', 'infoX'):
         assert f'int {name} = FRAME_X + (FRAME_W - (int)w) / 2 - x1;' in shelf
     assert 'int idY = FRAME_Y + FRAME_H - 88;' in shelf
