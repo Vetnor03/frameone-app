@@ -293,43 +293,14 @@ void drawCenteredTextInFrame(const char* text, int big) {
 
 
 void drawUpdatingScreen() {
-  // A manual Update should acknowledge the tap quickly without paying for an
-  // extra full 800x480 e-paper refresh before the real dashboard redraw.
-  // Reuse the same monochrome partial-update path as normal smart refreshes.
-  const int boxW = 220;
-  const int boxH = 64;
-  const int boxX = FRAME_X + (FRAME_W - boxW) / 2;
-  const int boxY = FRAME_Y + (FRAME_H - boxH) / 2;
-
-  if (beginPartialUpdate(boxX, boxY, boxW, boxH, false)) {
-    do {
-      display.fillRect(boxX, boxY, boxW, boxH, Theme::paper());
-      display.drawRoundRect(boxX + 1, boxY + 1, boxW - 2, boxH - 2, 6, Theme::ink());
-
-      const char* text = "Updating...";
-      display.setFont(&FreeMonoBold12pt7b);
-      display.setTextColor(Theme::ink());
-      display.setTextSize(1);
-
-      int16_t x1, y1;
-      uint16_t w, h;
-      display.getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
-      const int textX = boxX + (boxW - (int)w) / 2 - x1;
-      const int textY = boxY + (boxH - (int)h) / 2 - y1;
-      display.setCursor(textX, textY);
-      display.print(text);
-    } while (nextFrameUpdate());
-    return;
-  }
-
-  // Defensive fallback for any panel/configuration that cannot use a partial
-  // update. Keep the old full-screen acknowledgement rather than showing none.
-  display.setFullWindow();
-  display.firstPage();
+  // Explicit manual updates replace the whole screen with clean feedback.
+  // Avoid a partial overlay against an old dashboard, especially on Alfred
+  // where the panel controller is reinitialized after its power rail is cut.
+  beginFrameUpdate();
   do {
     fillThemeBackground();
     drawCenteredTextInFrame("Updating...", 1);
-  } while (display.nextPage());
+  } while (nextFrameUpdate());
 }
 
 
