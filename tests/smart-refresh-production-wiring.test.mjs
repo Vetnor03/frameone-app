@@ -215,6 +215,46 @@ test('automatic Weather hash ignores small forecast jitter but keeps meaningful 
   assert.notEqual(base, meaningful)
 })
 
+test('Weather exposes last-painted temperature baseline separately from meaningful conditions', () => {
+  const settings = {
+    cells: [{ module: 'weather:1', col: 0, row: 0, colSpan: 2, rowSpan: 2, w: 400, h: 240, size: 'ADAPTIVE' }],
+    modules: { weather: [{ id: 1, units: 'metric' }] },
+  }
+  const now = Date.parse('2026-09-26T10:00:00Z')
+  const source = (temp, high = 15, code = 2, wind = 5) => ({
+    current: { time: '2026-09-26T12:00', temperature_2m: temp, weather_code: code, wind_speed_10m: wind },
+    daily: { time: ['2026-09-26'], temperature_2m_min: [8], temperature_2m_max: [high], weather_code: [code] },
+    hourly: { time: [], temperature_2m: [], wind_speed_10m: [], precipitation: [], weather_code: [] },
+  })
+  const manifest = (payload, config = settings) => physicalRenderManifest({ settings: config, sources: { 'weather:1': payload }, now })[0]
+  const first = manifest(source(12, 15))
+  const plusOne = manifest(source(13, 16))
+  const plusThree = manifest(source(15, 18))
+  const changedCondition = manifest(source(13, 16, 63))
+  assert.notEqual(first.render_hash, plusOne.render_hash, 'exact renderer hash still changes with displayed values')
+  assert.equal(first.weather_stable_hash, plusOne.weather_stable_hash, 'temperature alone must not change the stable hash')
+  assert.deepEqual(first.weather_temperatures, [12, 15, 8])
+  assert.deepEqual(plusOne.weather_temperatures, [13, 16, 8])
+  assert.deepEqual(plusThree.weather_temperatures, [15, 18, 8])
+  assert.equal(first.weather_temperature_threshold, 3)
+  assert.notEqual(first.weather_stable_hash, changedCondition.weather_stable_hash, 'changed conditions bypass temperature suppression')
+  assert.notEqual(first.weather_stable_hash, manifest(source(13, 16, 2, 9)).weather_stable_hash, 'wind-band transitions still matter')
+  const imperial = structuredClone(settings); imperial.modules.weather[0].units = 'imperial'
+  assert.equal(manifest(source(12), imperial).weather_temperature_threshold, 5)
+})
+
+test('Weather hysteresis persists only after a successful panel draw and manual Update remains explicit', () => {
+  const header = read('frame/src/core/SmartRefresh.h')
+  assert.match(header, /weatherStableHash/)
+  assert.match(header, /weatherTemperatures/)
+  assert.match(smart, /shownStable == module.weatherStableHash/)
+  assert.match(smart, /significantWeatherTemperatureChange\(shownTemperatures, module.weatherTemperatures/)
+  assert.match(smart, /labs\(current - previous\) >= threshold/)
+  assert.match(smart, /if \(plan.type == SmartDisplayPlan::NONE\) return;/)
+  assert.match(smart, /prefs.putString\(weatherTemperatureKeyFor\(module.key\)/)
+  assert.match(firmware, /displayPlan.type = SmartDisplayPlan::FULL;/)
+})
+
 test('automatic Surf hash ignores small wind/period jitter but keeps rating and condition-band changes', () => {
   const settings = {
     cells: [{ module: 'surf:1', col: 0, row: 0, colSpan: 2, rowSpan: 2, w: 400, h: 240, size: 'ADAPTIVE' }],

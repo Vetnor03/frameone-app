@@ -53,6 +53,10 @@ struct SmartDeadline { time_t at = 0; SmartDeadlineType type = SMART_SOFT; };
 struct SmartModuleState {
   String key;
   String hash;
+  // Optional Weather-only values, compared with the last successful panel draw.
+  String weatherStableHash;
+  String weatherTemperatures;
+  uint8_t weatherTemperatureThreshold = 0;
   Cell bounds{};
   bool partialSafe = false;
   SmartDeadline deadlines[12];

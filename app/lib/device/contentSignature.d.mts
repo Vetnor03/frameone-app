@@ -23,6 +23,9 @@ export type PhysicalSettings = UnknownRecord & {
 export type PhysicalModuleManifest = {
   key: string
   render_hash: string
+  weather_stable_hash?: string
+  weather_temperatures?: number[]
+  weather_temperature_threshold?: number
   bounds: { x: number; y: number; w: number; h: number }
   partial_safe: boolean
   deadlines: PhysicalDeadline[]
