@@ -1052,9 +1052,12 @@ static InteractiveModeResult finishInteractiveMode(
 }
 
 static void deferFailedScheduledRefresh(const char* reason) {
-  g_revisionRetryNotBefore = time(nullptr) + 60;
+  // Transient server outages must not repeatedly wake a battery-powered frame.
+  // This changes only failed-request retries, not module deadlines or redraws.
+  const uint32_t retrySeconds = g_powerSaverMode ? 30UL * 60UL : 60UL;
+  g_revisionRetryNotBefore = time(nullptr) + retrySeconds;
   g_nextScheduledWake = g_revisionRetryNotBefore;
-  Serial.printf("SmartRefresh: %s; retry in 60 seconds\n", reason);
+  Serial.printf("SmartRefresh: %s; retry in %lu seconds\n", reason, (unsigned long)retrySeconds);
 }
 
 static void consumeNormalSyncPeriod() {
