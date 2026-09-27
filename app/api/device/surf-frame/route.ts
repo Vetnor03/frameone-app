@@ -86,10 +86,12 @@ export async function GET(req: Request) {
     const ageMs = Number.isFinite(refreshedAtMs)
       ? Math.max(0, Date.now() - refreshedAtMs)
       : Number.POSITIVE_INFINITY
-    const scheduledRefreshDue =
-      refreshRequested && ageMs >= SURF_FRAME_RESULT_MIN_REFRESH_MS
+    // Cache variants (for example Today's Best and its winner detail) are
+    // fetched independently. A missed refresh flag must never make a variant
+    // reusable forever; the three-hour age limit applies to every request.
+    const sourceRefreshDue = ageMs >= SURF_FRAME_RESULT_MIN_REFRESH_MS
 
-    if (!scheduledRefreshDue) {
+    if (!sourceRefreshDue) {
       console.info('[device/surf-frame]', {
         device_id: deviceId,
         status: refreshRequested ? 'scheduled-not-due' : 'hit',
@@ -101,7 +103,7 @@ export async function GET(req: Request) {
 
     console.info('[device/surf-frame]', {
       device_id: deviceId,
-      status: 'scheduled-refresh',
+      status: refreshRequested ? 'scheduled-refresh' : 'expired-refresh',
       age_ms: Number.isFinite(ageMs) ? ageMs : null,
     })
   }
