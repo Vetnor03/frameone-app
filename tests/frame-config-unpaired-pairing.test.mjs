@@ -20,6 +20,10 @@ test('firmware handles unpaired frame-config before generic setup error', () => 
   assert.match(frameConfig, /doc\["pair_required"\] == true/)
   assert.match(frameConfig, /DeviceIdentity::clearToken\(\)/)
   assert.match(frameLoop, /frame-config unpaired/)
-  assert.match(frameLoop, /ScreenPairing::showError\("Could not load frame"\)/)
-  assert.ok(frameLoop.indexOf('frame-config unpaired') < frameLoop.indexOf('ScreenPairing::showError("Could not load frame")'))
+  assert.match(frameLoop, /recoverPairingIfTokenLost\("initial frame fetch"/)
+  assert.match(frameLoop, /postPairConfig == FrameConfigApi::FETCH_ERROR/)
+  assert.match(
+    frameLoop,
+    /else if \(postPairConfig == FrameConfigApi::FETCH_UNPAIRED\) \{[\s\S]*?\} else if \(postPairConfig == FrameConfigApi::FETCH_ERROR\) \{/
+  )
 })

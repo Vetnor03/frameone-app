@@ -1,7 +1,8 @@
 // app/api/device/frame-config/route.ts
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/app/lib/supabase/serviceClient'
-import { buildFrameConfigPayload, pairRequiredPayload } from './builder'
+import { authenticatePhysicalDevice } from '@/app/lib/device/updateStateAuth'
+import { buildFrameConfigPayload, deviceHasOwnerAccessLink, pairRequiredPayload } from './builder'
 
 export const runtime = 'nodejs'
 
@@ -12,8 +13,6 @@ function asPairingCode(value: unknown) {
 type PairingRpcClient = {
   rpc: (fn: 'start_pairing', args: { p_device_id: string }) => Promise<{ data: unknown; error: { message: string } | null }>
 }
-
-type BuiltFrameConfigPayload = Awaited<ReturnType<typeof buildFrameConfigPayload>>
 
 async function startPairingPayload(rpcClient: PairingRpcClient, deviceId: string) {
   const { data, error } = await rpcClient.rpc('start_pairing', { p_device_id: deviceId })
@@ -42,20 +41,46 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Missing device_id' }, { status: 400 })
     }
 
-    phase = 'build_payload'
     const supabase = createServiceClient()
-    const builtPayload = await buildFrameConfigPayload(supabase, device_id)
-    const isUnpaired = 'pair_required' in builtPayload && builtPayload.pair_required === true
 
-    phase = isUnpaired ? 'start_pairing' : 'serialize_payload'
-    const payload = isUnpaired
-      ? await startPairingPayload(supabase as unknown as PairingRpcClient, device_id)
-      : builtPayload
-    const responseBody = JSON.stringify(payload)
+    // Pairing remains available without a device token.
+    phase = 'check_pairing'
+    const hasOwnerAccessLink = await deviceHasOwnerAccessLink(supabase, device_id)
 
-    if (device_id === 'frm_54AE37455F34') {
-      console.info(responseBody)
+    if (!hasOwnerAccessLink) {
+      phase = 'start_pairing'
+      const payload = await startPairingPayload(
+        supabase as unknown as PairingRpcClient,
+        device_id
+      )
+      return NextResponse.json(payload)
     }
+
+    // Paired-device configuration requires its own device token.
+    phase = 'authenticate_device'
+    const auth = await authenticatePhysicalDevice(req, device_id)
+
+    if ('error' in auth) {
+      return NextResponse.json(
+        { error: auth.error },
+        { status: auth.status }
+      )
+    }
+
+    phase = 'build_payload'
+    const payload = await buildFrameConfigPayload(supabase, device_id)
+
+    // Do not issue a pairing response after authentication.
+    // A changed pairing state should not cause firmware to clear its token.
+    if ('pair_required' in payload && payload.pair_required === true) {
+      return NextResponse.json(
+        { error: 'Pairing state changed' },
+        { status: 409 }
+      )
+    }
+
+    phase = 'serialize_payload'
+    const responseBody = JSON.stringify(payload)
 
     return new NextResponse(responseBody, {
       headers: {
