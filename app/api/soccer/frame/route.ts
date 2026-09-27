@@ -12,6 +12,52 @@ const SOCCER_STALE_SECONDS = 60 * 60
 
 type SoccerLogContext = Record<string, unknown>
 
+type FootballTeam = {
+  id?: number
+  name?: string
+  shortName?: string
+  tla?: string
+  team?: FootballTeam
+}
+type FootballMatch = {
+  utcDate?: string
+  homeTeam?: FootballTeam
+  awayTeam?: FootballTeam
+  score?: { fullTime?: { home?: number | null; away?: number | null } }
+  status?: string
+  competition?: { name?: string; code?: string }
+  matchday?: number | null
+  venue?: string | null
+  goals?: Array<{
+    scorer?: { name?: string }
+    person?: { name?: string }
+    team?: FootballTeam
+    scorerTeam?: FootballTeam
+    teamId?: number
+    minute?: number
+  }>
+}
+type FootballStandingRow = {
+  position?: number
+  points?: number
+  playedGames?: number
+  won?: number
+  draw?: number
+  lost?: number
+  goalsFor?: number
+  goalsAgainst?: number
+  goalDifference?: number
+  form?: string
+  team?: FootballTeam
+}
+type FootballScorer = {
+  team?: FootballTeam
+  player?: { name?: string }
+  goals?: number
+  assists?: number
+  penalties?: number
+}
+
 class SoccerExternalApiError extends Error {
   status: number
   debugReason: string
@@ -123,7 +169,7 @@ function compactName(name: string) {
     .trim()
 }
 
-function compactTableShortName(row: any) {
+function compactTableShortName(row: FootballStandingRow) {
   const tla = String(row?.team?.tla || '').trim()
   if (tla) return tla
 
@@ -135,7 +181,7 @@ function compactTableShortName(row: any) {
   return compactName(String(short || ''))
 }
 
-function formatMatch(m: any, teamId: number) {
+function formatMatch(m: FootballMatch | null, teamId: number) {
   if (!m) return null
 
   return {
@@ -157,7 +203,7 @@ function formatMatch(m: any, teamId: number) {
   }
 }
 
-function extractTeamScorersFromMatch(match: any, teamId: number) {
+function extractTeamScorersFromMatch(match: FootballMatch, teamId: number) {
   const goals = Array.isArray(match?.goals) ? match.goals : []
   const out: Array<{ name: string; minute?: number | null }> = []
 
@@ -188,7 +234,7 @@ function normalizeForm(form: string | null | undefined) {
   return raw.split(',').map((x) => x.trim()).filter(Boolean)
 }
 
-function buildStanding(table: any[], teamId: number) {
+function buildStanding(table: FootballStandingRow[], teamId: number) {
   if (!Array.isArray(table) || !table.length) return null
 
   const idx = table.findIndex((row) => Number(row?.team?.id) === teamId)
@@ -222,7 +268,7 @@ function buildStanding(table: any[], teamId: number) {
   }
 }
 
-function buildTableRows(table: any[], teamId: number) {
+function buildTableRows(table: FootballStandingRow[], teamId: number) {
   if (!Array.isArray(table) || !table.length) return []
 
   const selectedRow = table.find((row) => Number(row?.team?.id) === teamId)
@@ -252,7 +298,7 @@ function buildTableRows(table: any[], teamId: number) {
   })
 }
 
-function pickTopScorerForTeam(scorers: any[], teamId: number) {
+function pickTopScorerForTeam(scorers: FootballScorer[], teamId: number) {
   if (!Array.isArray(scorers) || !scorers.length) return null
 
   const hit = scorers.find((s) => Number(s?.team?.id) === teamId)
@@ -382,8 +428,8 @@ export async function GET(req: NextRequest) {
       ),
     ])
 
-    const nextMatches = Array.isArray(nextData?.matches) ? nextData.matches : []
-    const lastMatches = Array.isArray(lastData?.matches) ? lastData.matches : []
+    const nextMatches: FootballMatch[] = Array.isArray(nextData?.matches) ? nextData.matches : []
+    const lastMatches: FootballMatch[] = Array.isArray(lastData?.matches) ? lastData.matches : []
 
     soccerLog('matches:parsed', { requestId, nextCount: nextMatches.length, lastCount: lastMatches.length })
 
@@ -393,7 +439,7 @@ export async function GET(req: NextRequest) {
     let standing = null
     let topScorer = null
     let competitionName: string | null = null
-    let table: any[] = []
+    let table: ReturnType<typeof buildTableRows> = []
 
     if (domesticCompetitionCode) {
       try {
@@ -404,17 +450,17 @@ export async function GET(req: NextRequest) {
 
         competitionName = standingsData?.competition?.name || null
 
-        const standingsList = Array.isArray(standingsData?.standings) ? standingsData.standings : []
+        const standingsList: Array<{ type?: string; table?: FootballStandingRow[] }> = Array.isArray(standingsData?.standings) ? standingsData.standings : []
         const totalStanding =
-          standingsList.find((s: any) => s?.type === 'TOTAL') ||
+          standingsList.find((s) => s?.type === 'TOTAL') ||
           standingsList[0] ||
           null
 
-        const rawTable = Array.isArray(totalStanding?.table) ? totalStanding.table : []
+        const rawTable: FootballStandingRow[] = Array.isArray(totalStanding?.table) ? totalStanding.table : []
         standing = buildStanding(rawTable, teamId)
         table = buildTableRows(rawTable, teamId)
 
-        const scorers = Array.isArray(scorersData?.scorers) ? scorersData.scorers : []
+        const scorers: FootballScorer[] = Array.isArray(scorersData?.scorers) ? scorersData.scorers : []
         topScorer = pickTopScorerForTeam(scorers, teamId)
       } catch (e: unknown) {
         soccerError('competition:optional-data-failed', { requestId, teamKey, domesticCompetitionCode, reason: errorMessage(e) })
