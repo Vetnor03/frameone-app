@@ -8,6 +8,14 @@ on:
   workflow_dispatch:
 
 jobs:
+  live-backend-tls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify live re-mind.no TLS using firmware CA bundle
+        run: python3 frame/tools/check_backend_tls.py
+
   firmware:
     runs-on: ubuntu-latest
     steps:
