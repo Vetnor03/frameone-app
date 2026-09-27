@@ -283,7 +283,7 @@ function buildTableRows(table: FootballStandingRow[], teamId: number) {
 
     return {
       position: Number.isFinite(Number(row?.position)) ? Number(row.position) : null,
-      teamId: Number.isFinite(Number(row?.team?.id)) ? Number(row.team.id) : null,
+      teamId: Number.isFinite(Number(row?.team?.id)) ? Number(row.team?.id) : null,
       teamName: row?.team?.name || '',
       teamShort: compactTableShortName(row),
       points,
