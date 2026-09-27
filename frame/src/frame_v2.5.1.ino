@@ -929,9 +929,10 @@ static bool fetchAndRenderExplicit(
   const uint64_t TEMP_REFRESH_AUDIT_backendBefore = SmartRefresh::displayedRevision();
   const String TEMP_REFRESH_AUDIT_previous = SmartRefresh::TEMP_REFRESH_AUDIT_physicalRenderHash(desired);
 #endif
-  // Manual Update is an explicit fresh-content request, so News is allowed
-  // one source fetch. Routine wakeups and unrelated redraws reuse its cache.
-  ModuleNews::invalidate();
+  // New servers deliver the exact News titles with their render hash, so
+  // preload must NOT refetch a different snapshot. Older servers keep the
+  // previous on-demand source request as a compatibility fallback.
+  if (!desired.newsSnapshotReady) ModuleNews::invalidate();
   g_captureManualRenderTimings = true;
   const bool rendered = renderSmartDashboard(batt, pwr, desired, displayPlan);
   g_captureManualRenderTimings = false;
@@ -1700,12 +1701,15 @@ run_normal_sync:
         // completed scheduled Surf result.
         ModuleSurf::invalidateScheduled(scheduledModules);
         SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);
-        // A due News poll with identical headlines needs no e-paper redraw or
-        // second News fetch. Fetch only when the visible News hash changed.
-        for (uint8_t i = 0; i < desired.moduleCount; ++i) {
-          if (desired.modules[i].key == "news" && displayPlan.dirty[i]) {
-            ModuleNews::invalidate();
-            break;
+        // The render-state News snapshot is already the authoritative source
+        // and repairs a retained local cache without needing a redraw. On an
+        // older server, keep the prior fallback for changed News content only.
+        if (!desired.newsSnapshotReady) {
+          for (uint8_t i = 0; i < desired.moduleCount; ++i) {
+            if (desired.modules[i].key == "news" && displayPlan.dirty[i]) {
+              ModuleNews::invalidate();
+              break;
+            }
           }
         }
 #if TEMP_REFRESH_AUDIT_ENABLED
