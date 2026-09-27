@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { authenticatePhysicalDevice, deviceIdFrom } from '@/app/lib/device/updateStateAuth'
 import { buildFrameConfigPayload } from '@/app/api/device/frame-config/builder'
 import frameLayouts from '@/shared/frame-layouts.json'
-import { collectVisibleContent, contentDigest, physicalRenderManifest, withPhysicalCellGeometry } from '@/app/lib/device/contentSignature.mjs'
+import { collectVisibleContent, contentDigest, physicalNewsSnapshot, physicalRenderManifest, withPhysicalCellGeometry } from '@/app/lib/device/contentSignature.mjs'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -49,17 +49,7 @@ export async function GET(req: Request) {
       // The ESP32 must paint the same headlines this render hash describes.
       // A second independent RSS request can race a feed change, fail, or
       // reuse a retained older snapshot while the new hash gets committed.
-      const news = visible.sources.news
-      const available = news?.ok === true
-      return {
-        ...module,
-        news_snapshot: {
-          ok: available,
-          titles: available && Array.isArray(news.items)
-            ? news.items.slice(0, 14).map((item: { title?: unknown }) => String(item?.title ?? '')).filter(Boolean)
-            : [],
-        },
-      }
+      return { ...module, news_snapshot: physicalNewsSnapshot(visible.sources.news) }
     })
   const layoutHash = contentDigest({ layout: settings.layout, theme: settings.theme, cells: settings.cells })
   console.info('[device/render-state] timing', {
