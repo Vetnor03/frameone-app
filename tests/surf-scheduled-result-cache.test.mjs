@@ -52,7 +52,9 @@ test('only scheduled Surf scope asks the Surf endpoint to refresh', () => {
 test('physical Surf result cache persists compact output and enforces three-hour minimum refresh', () => {
   assert.match(surfFrameRoute, /SURF_FRAME_RESULT_MIN_REFRESH_MS = 3 \* 60 \* 60 \* 1000/)
   assert.match(surfFrameRoute, /from\('surf_frame_result_cache'\)/)
-  assert.match(surfFrameRoute, /refreshRequested && ageMs >= SURF_FRAME_RESULT_MIN_REFRESH_MS/)
+  assert.match(surfFrameRoute, /const sourceRefreshDue = ageMs >= SURF_FRAME_RESULT_MIN_REFRESH_MS/)
+  assert.doesNotMatch(surfFrameRoute, /refreshRequested && ageMs >= SURF_FRAME_RESULT_MIN_REFRESH_MS/)
+  assert.match(surfFrameRoute, /refreshRequested \? 'scheduled-refresh' : 'expired-refresh'/)
   assert.match(surfFrameRoute, /refreshRequested \? 'scheduled-not-due' : 'hit'/)
   assert.match(surfFrameRoute, /new URL\('\/api\/surf\/score', url\.origin\)/)
   assert.match(surfFrameRoute, /\.upsert\(\{/)
