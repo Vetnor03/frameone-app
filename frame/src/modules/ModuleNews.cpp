@@ -82,6 +82,38 @@ static void clearCache() {
   if (g_cache) memset(g_cache, 0, sizeof(*g_cache));
 }
 
+bool adoptRenderStateSnapshot(JsonVariantConst snapshot) {
+  if (!snapshot.is<JsonObjectConst>()) return false;
+  JsonObjectConst source = snapshot.as<JsonObjectConst>();
+  if (!source["ok"].is<bool>() || !source["titles"].is<JsonArrayConst>()) return false;
+  const bool available = source["ok"].as<bool>();
+  JsonArrayConst titles = source["titles"].as<JsonArrayConst>();
+  if (titles.size() > MAX_NEWS_ITEMS || (!available && titles.size() != 0)) return false;
+
+  // Validate before touching retained pixels' matching source data. A bad
+  // response must not be acknowledged as a successful News refresh.
+  char normalized[NEWS_TITLE_BYTES] = {0};
+  for (JsonVariantConst value : titles) {
+    if (!value.is<const char*>()) return false;
+    const char* title = value.as<const char*>();
+    if (!title || !title[0] || strlen(title) >= NEWS_TITLE_BYTES) return false;
+    normalizeDisplayText(normalized, sizeof(normalized), title);
+    if (!normalized[0]) return false;
+  }
+  if (!ensureCacheAllocated()) return false;
+  clearCache();
+  int index = 0;
+  for (JsonVariantConst value : titles) {
+    NewsItem& item = g_cache->items[index++];
+    normalizeDisplayText(item.title, sizeof(item.title), value.as<const char*>());
+    item.used = true;
+  }
+  g_cache->count = index;
+  g_cache->loaded = true;
+  g_cache->ok = available;
+  return true;
+}
+
 static bool isNorwegian() {
   if (!g_cfg) return false;
   return strcmp(g_cfg->language, "no") == 0 || strcmp(g_cfg->language, "nb") == 0;
@@ -89,6 +121,7 @@ static bool isNorwegian() {
 
 static const char* headerText() { return isNorwegian() ? "Nyheter" : "News"; }
 static const char* emptyText() { return isNorwegian() ? "Ingen nyheter" : "No news"; }
+static const char* unavailableText() { return isNorwegian() ? "Nyheter utilgjengelig" : "News unavailable"; }
 
 static void measureText(const char* text, const GFXfont* font,
                         int16_t& x1, int16_t& y1, uint16_t& tw, uint16_t& th) {
@@ -273,7 +306,7 @@ static int capacityForCell(const Cell& c) {
 
 static void drawEmpty(const Cell& c) {
   const int contentTop = drawHeader(c);
-  const char* message = emptyText();
+  const char* message = g_cache && g_cache->ok ? emptyText() : unavailableText();
   int16_t x1, y1;
   uint16_t tw, th;
   measureText(message, NEWS_FONT_BODY, x1, y1, tw, th);
