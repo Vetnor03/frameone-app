@@ -42,7 +42,8 @@ test('only scheduled Surf checks ask backend to refresh the three-hour result ca
   assert.match(renderState, /refreshModules = new Set/)
   assert.match(renderState, /refreshModules,/)
   assert.match(signature, /refreshSet\.has\('all'\) \|\| refreshSet\.has\('surf'\) \|\| refreshSet\.has\(ref\.key\)/)
-  assert.match(surfCache, /refreshRequested && ageMs >= SURF_FRAME_RESULT_MIN_REFRESH_MS/)
+  assert.match(surfCache, /const sourceRefreshDue = ageMs >= SURF_FRAME_RESULT_MIN_REFRESH_MS/)
+  assert.doesNotMatch(surfCache, /refreshRequested && ageMs >= SURF_FRAME_RESULT_MIN_REFRESH_MS/)
 })
 
 test('failed scheduled requests have bounded retries, including after restoring overdue schedule', () => {
