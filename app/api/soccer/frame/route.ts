@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 const API_KEY = process.env.FOOTBALL_DATA_API_KEY
 const SOCCER_FETCH_TIMEOUT_MS = 8000
 const SOCCER_DATA_REVALIDATE_SECONDS = 5 * 60
-const SOCCER_STALE_SECONDS = 24 * 60 * 60
+const SOCCER_STALE_SECONDS = 60 * 60
 
 type SoccerLogContext = Record<string, unknown>
 
