@@ -602,6 +602,19 @@ function skiProjection(value, cell) {
   return result
 }
 
+// Reuse the same raw RSS titles for the hash and for the physical News cache.
+// This is attached only to a due/manual render-state, never to cheap probes.
+export function physicalNewsSnapshot(value) {
+  const source = object(value)
+  const available = source.ok === true
+  return {
+    ok: available,
+    titles: available && Array.isArray(source.items)
+      ? source.items.slice(0, 14).map((item) => String(item?.title ?? '')).filter(Boolean)
+      : [],
+  }
+}
+
 function newsProjection(value, cell) {
   const source = object(value), rows = Array.isArray(source.items) ? source.items : []
   const size = String(cell?.size ?? 'ADAPTIVE').toUpperCase()
