@@ -73,7 +73,23 @@ def main() -> int:
         print("Return code 0:", "Verify return code: 0 (ok)" in transcript)
         raise SystemExit(1)
 
+    # Prove the test really checks the hostname rather than merely accepting
+    # any certificate signed by the same root.
+    wrong_host_cmd = cmd.copy()
+    wrong_host_cmd[7] = "wrong-host.invalid"
+    try:
+        rejected = subprocess.run(
+            wrong_host_cmd, input="", text=True, capture_output=True,
+            timeout=20, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise SystemExit(f"TLS check: negative hostname probe unavailable: {type(exc).__name__}") from exc
+    rejected_output = (rejected.stdout + rejected.stderr).lower()
+    if rejected.returncode == 0 or "hostname mismatch" not in rejected_output:
+        raise SystemExit("TLS check: invalid hostname did not produce a verified mismatch")
+
     print(f"TLS chain and hostname verified for {host} with firmware CA bundle.")
+    print("Invalid hostname correctly rejected.")
     return 0
 
 
