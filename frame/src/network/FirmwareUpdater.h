@@ -19,7 +19,6 @@ private:
   static void performCheck();
   static bool fetchManifest(String& latestVersion, bool& updateAvailable, String& binUrl);
   static bool installFromUrl(const String& url);
-  static bool isHttpsUrl(const String& url);
   static bool isNewerVersion(const String& currentVersion, const String& latestVersion);
   static bool parseVersionTriplet(const String& s, int& major, int& minor, int& patch);
   static void scheduleNext(unsigned long msFromNow);
