@@ -279,7 +279,7 @@ function buildNextLineupStub() {
   }
 }
 
-const fetchJson = unstable_cache(async (
+const fetchJsonCached = unstable_cache(async (
   url: string,
   stage: string,
   extraHeaders?: Record<string, string>
@@ -316,7 +316,7 @@ const fetchJson = unstable_cache(async (
 
     const json = await res.json()
     soccerLog('external-fetch:parsed', { stage, status: res.status, durationMs, keys: json && typeof json === 'object' ? Object.keys(json).slice(0, 10) : [] })
-    return json
+    return { payload: json, fetchedAt: Date.now() }
   } catch (e: unknown) {
     const durationMs = Date.now() - startedAt
     if (e instanceof SoccerExternalApiError) throw e
@@ -327,7 +327,19 @@ const fetchJson = unstable_cache(async (
   } finally {
     clearTimeout(timeout)
   }
-}, ['soccer-football-data-v1'], { revalidate: SOCCER_DATA_REVALIDATE_SECONDS })
+}, ['soccer-football-data-v2'], { revalidate: SOCCER_DATA_REVALIDATE_SECONDS })
+
+async function fetchJson(url: string, stage: string, extraHeaders?: Record<string, string>) {
+  const entry = await fetchJsonCached(url, stage, extraHeaders)
+  // unstable_cache may serve an old success while revalidating after origin
+  // failures. A one-hour cap applies to that internal cache as well as CDN.
+  const ageMs = Date.now() - Number(entry?.fetchedAt)
+  if (!entry || !Number.isFinite(ageMs) || ageMs < -60_000 ||
+      ageMs >= SOCCER_STALE_SECONDS * 1000) {
+    throw new SoccerExternalApiError('Soccer snapshot expired', 502, 'cached soccer source exceeded one hour')
+  }
+  return entry.payload
+}
 
 export async function GET(req: NextRequest) {
   const requestId = crypto.randomUUID()
