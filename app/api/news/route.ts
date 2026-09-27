@@ -6,7 +6,6 @@ import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type 
 export const runtime = 'nodejs'
 
 const DEFAULT_RSS_URL = 'https://www.nrk.no/toppsaker.rss'
-const RSS_REVALIDATE_SECONDS = 15 * 60
 const FRAME_REFRESH_SECONDS = 30 * 60
 const MAX_NEWS_ITEMS = 20
 
