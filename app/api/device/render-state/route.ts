@@ -44,6 +44,23 @@ export async function GET(req: Request) {
   const renderSources = { ...visible.sources, date: visible.time.date ?? null }
   const modules = physicalRenderManifest({ settings: selectedSettings, sources: renderSources })
     .filter((module) => requested.has('all') || requested.has(module.key) || requested.has(module.key.split(':')[0]))
+    .map((module) => {
+      if (module.key !== 'news') return module
+      // The ESP32 must paint the same headlines this render hash describes.
+      // A second independent RSS request can race a feed change, fail, or
+      // reuse a retained older snapshot while the new hash gets committed.
+      const news = visible.sources.news
+      const available = news?.ok === true
+      return {
+        ...module,
+        news_snapshot: {
+          ok: available,
+          titles: available && Array.isArray(news.items)
+            ? news.items.slice(0, 14).map((item: { title?: unknown }) => String(item?.title ?? '')).filter(Boolean)
+            : [],
+        },
+      }
+    })
   const layoutHash = contentDigest({ layout: settings.layout, theme: settings.theme, cells: settings.cells })
   console.info('[device/render-state] timing', {
     device_id: deviceId,
