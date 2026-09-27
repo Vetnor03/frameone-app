@@ -72,7 +72,8 @@ def test_revision_and_render_state_failures_preserve_display():
     assert 'Revision safety poll unavailable; preserving display and sources' in scheduled
     assert 'deferFailedScheduledRefresh("revision probe unavailable")' in scheduled
     retry = MAIN[MAIN.index('static void deferFailedScheduledRefresh'):MAIN.index('static void consumeNormalSyncPeriod')]
-    assert 'g_revisionRetryNotBefore = time(nullptr) + 60' in retry
+    assert 'const uint32_t retrySeconds = g_powerSaverMode ? 30UL * 60UL : 60UL' in retry
+    assert 'g_revisionRetryNotBefore = time(nullptr) + retrySeconds' in retry
     assert 'g_nextScheduledWake = g_revisionRetryNotBefore' in retry
     assert 'Affected render-state fetch failed; preserving freshness and hashes' in scheduled
 

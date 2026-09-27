@@ -8,9 +8,55 @@ export const runtime = 'nodejs'
 const API_KEY = process.env.FOOTBALL_DATA_API_KEY
 const SOCCER_FETCH_TIMEOUT_MS = 8000
 const SOCCER_DATA_REVALIDATE_SECONDS = 5 * 60
-const SOCCER_STALE_SECONDS = 24 * 60 * 60
+const SOCCER_STALE_SECONDS = 60 * 60
 
 type SoccerLogContext = Record<string, unknown>
+
+type FootballTeam = {
+  id?: number
+  name?: string
+  shortName?: string
+  tla?: string
+  team?: FootballTeam
+}
+type FootballMatch = {
+  utcDate?: string
+  homeTeam?: FootballTeam
+  awayTeam?: FootballTeam
+  score?: { fullTime?: { home?: number | null; away?: number | null } }
+  status?: string
+  competition?: { name?: string; code?: string }
+  matchday?: number | null
+  venue?: string | null
+  goals?: Array<{
+    scorer?: { name?: string }
+    person?: { name?: string }
+    team?: FootballTeam
+    scorerTeam?: FootballTeam
+    teamId?: number
+    minute?: number
+  }>
+}
+type FootballStandingRow = {
+  position?: number
+  points?: number
+  playedGames?: number
+  won?: number
+  draw?: number
+  lost?: number
+  goalsFor?: number
+  goalsAgainst?: number
+  goalDifference?: number
+  form?: string
+  team?: FootballTeam
+}
+type FootballScorer = {
+  team?: FootballTeam
+  player?: { name?: string }
+  goals?: number
+  assists?: number
+  penalties?: number
+}
 
 class SoccerExternalApiError extends Error {
   status: number
@@ -123,7 +169,7 @@ function compactName(name: string) {
     .trim()
 }
 
-function compactTableShortName(row: any) {
+function compactTableShortName(row: FootballStandingRow) {
   const tla = String(row?.team?.tla || '').trim()
   if (tla) return tla
 
@@ -135,7 +181,7 @@ function compactTableShortName(row: any) {
   return compactName(String(short || ''))
 }
 
-function formatMatch(m: any, teamId: number) {
+function formatMatch(m: FootballMatch | null, teamId: number) {
   if (!m) return null
 
   return {
@@ -157,7 +203,7 @@ function formatMatch(m: any, teamId: number) {
   }
 }
 
-function extractTeamScorersFromMatch(match: any, teamId: number) {
+function extractTeamScorersFromMatch(match: FootballMatch, teamId: number) {
   const goals = Array.isArray(match?.goals) ? match.goals : []
   const out: Array<{ name: string; minute?: number | null }> = []
 
@@ -188,7 +234,7 @@ function normalizeForm(form: string | null | undefined) {
   return raw.split(',').map((x) => x.trim()).filter(Boolean)
 }
 
-function buildStanding(table: any[], teamId: number) {
+function buildStanding(table: FootballStandingRow[], teamId: number) {
   if (!Array.isArray(table) || !table.length) return null
 
   const idx = table.findIndex((row) => Number(row?.team?.id) === teamId)
@@ -222,7 +268,7 @@ function buildStanding(table: any[], teamId: number) {
   }
 }
 
-function buildTableRows(table: any[], teamId: number) {
+function buildTableRows(table: FootballStandingRow[], teamId: number) {
   if (!Array.isArray(table) || !table.length) return []
 
   const selectedRow = table.find((row) => Number(row?.team?.id) === teamId)
@@ -237,7 +283,7 @@ function buildTableRows(table: any[], teamId: number) {
 
     return {
       position: Number.isFinite(Number(row?.position)) ? Number(row.position) : null,
-      teamId: Number.isFinite(Number(row?.team?.id)) ? Number(row.team.id) : null,
+      teamId: Number.isFinite(Number(row?.team?.id)) ? Number(row.team?.id) : null,
       teamName: row?.team?.name || '',
       teamShort: compactTableShortName(row),
       points,
@@ -252,7 +298,7 @@ function buildTableRows(table: any[], teamId: number) {
   })
 }
 
-function pickTopScorerForTeam(scorers: any[], teamId: number) {
+function pickTopScorerForTeam(scorers: FootballScorer[], teamId: number) {
   if (!Array.isArray(scorers) || !scorers.length) return null
 
   const hit = scorers.find((s) => Number(s?.team?.id) === teamId)
@@ -279,7 +325,7 @@ function buildNextLineupStub() {
   }
 }
 
-const fetchJson = unstable_cache(async (
+const fetchJsonCached = unstable_cache(async (
   url: string,
   stage: string,
   extraHeaders?: Record<string, string>
@@ -316,7 +362,7 @@ const fetchJson = unstable_cache(async (
 
     const json = await res.json()
     soccerLog('external-fetch:parsed', { stage, status: res.status, durationMs, keys: json && typeof json === 'object' ? Object.keys(json).slice(0, 10) : [] })
-    return json
+    return { payload: json, fetchedAt: Date.now() }
   } catch (e: unknown) {
     const durationMs = Date.now() - startedAt
     if (e instanceof SoccerExternalApiError) throw e
@@ -327,7 +373,19 @@ const fetchJson = unstable_cache(async (
   } finally {
     clearTimeout(timeout)
   }
-}, ['soccer-football-data-v1'], { revalidate: SOCCER_DATA_REVALIDATE_SECONDS })
+}, ['soccer-football-data-v2'], { revalidate: SOCCER_DATA_REVALIDATE_SECONDS })
+
+async function fetchJson(url: string, stage: string, extraHeaders?: Record<string, string>) {
+  const entry = await fetchJsonCached(url, stage, extraHeaders)
+  // unstable_cache may serve an old success while revalidating after origin
+  // failures. A one-hour cap applies to that internal cache as well as CDN.
+  const ageMs = Date.now() - Number(entry?.fetchedAt)
+  if (!entry || !Number.isFinite(ageMs) || ageMs < -60_000 ||
+      ageMs >= SOCCER_STALE_SECONDS * 1000) {
+    throw new SoccerExternalApiError('Soccer snapshot expired', 502, 'cached soccer source exceeded one hour')
+  }
+  return entry.payload
+}
 
 export async function GET(req: NextRequest) {
   const requestId = crypto.randomUUID()
@@ -370,8 +428,8 @@ export async function GET(req: NextRequest) {
       ),
     ])
 
-    const nextMatches = Array.isArray(nextData?.matches) ? nextData.matches : []
-    const lastMatches = Array.isArray(lastData?.matches) ? lastData.matches : []
+    const nextMatches: FootballMatch[] = Array.isArray(nextData?.matches) ? nextData.matches : []
+    const lastMatches: FootballMatch[] = Array.isArray(lastData?.matches) ? lastData.matches : []
 
     soccerLog('matches:parsed', { requestId, nextCount: nextMatches.length, lastCount: lastMatches.length })
 
@@ -381,7 +439,7 @@ export async function GET(req: NextRequest) {
     let standing = null
     let topScorer = null
     let competitionName: string | null = null
-    let table: any[] = []
+    let table: ReturnType<typeof buildTableRows> = []
 
     if (domesticCompetitionCode) {
       try {
@@ -392,17 +450,17 @@ export async function GET(req: NextRequest) {
 
         competitionName = standingsData?.competition?.name || null
 
-        const standingsList = Array.isArray(standingsData?.standings) ? standingsData.standings : []
+        const standingsList: Array<{ type?: string; table?: FootballStandingRow[] }> = Array.isArray(standingsData?.standings) ? standingsData.standings : []
         const totalStanding =
-          standingsList.find((s: any) => s?.type === 'TOTAL') ||
+          standingsList.find((s) => s?.type === 'TOTAL') ||
           standingsList[0] ||
           null
 
-        const rawTable = Array.isArray(totalStanding?.table) ? totalStanding.table : []
+        const rawTable: FootballStandingRow[] = Array.isArray(totalStanding?.table) ? totalStanding.table : []
         standing = buildStanding(rawTable, teamId)
         table = buildTableRows(rawTable, teamId)
 
-        const scorers = Array.isArray(scorersData?.scorers) ? scorersData.scorers : []
+        const scorers: FootballScorer[] = Array.isArray(scorersData?.scorers) ? scorersData.scorers : []
         topScorer = pickTopScorerForTeam(scorers, teamId)
       } catch (e: unknown) {
         soccerError('competition:optional-data-failed', { requestId, teamKey, domesticCompetitionCode, reason: errorMessage(e) })

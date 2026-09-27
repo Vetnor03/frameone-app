@@ -42,12 +42,14 @@ test('only scheduled Surf checks ask backend to refresh the three-hour result ca
   assert.match(renderState, /refreshModules = new Set/)
   assert.match(renderState, /refreshModules,/)
   assert.match(signature, /refreshSet\.has\('all'\) \|\| refreshSet\.has\('surf'\) \|\| refreshSet\.has\(ref\.key\)/)
-  assert.match(surfCache, /refreshRequested && ageMs >= SURF_FRAME_RESULT_MIN_REFRESH_MS/)
+  assert.match(surfCache, /const sourceRefreshDue = ageMs >= SURF_FRAME_RESULT_MIN_REFRESH_MS/)
+  assert.doesNotMatch(surfCache, /refreshRequested && ageMs >= SURF_FRAME_RESULT_MIN_REFRESH_MS/)
 })
 
 test('failed scheduled requests have bounded retries, including after restoring overdue schedule', () => {
   assert.match(firmware, /deferFailedScheduledRefresh\(const char\* reason\)/)
-  assert.match(firmware, /g_revisionRetryNotBefore = time\(nullptr\) \+ 60/)
+  assert.match(firmware, /const uint32_t retrySeconds = g_powerSaverMode \? 30UL \* 60UL : 60UL/)
+  assert.match(firmware, /g_revisionRetryNotBefore = time\(nullptr\) \+ retrySeconds/)
   assert.match(firmware, /g_nextScheduledWake = g_revisionRetryNotBefore/)
   assert.match(firmware, /g_revisionRetryNotBefore > restoredNow[\s\S]*g_nextScheduledWake = g_revisionRetryNotBefore/)
   for (const reason of ['revision probe unavailable', 'config fetch failed', 'render-state fetch failed', 'physical display failed']) {

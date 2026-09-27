@@ -1,11 +1,11 @@
 import { after, NextResponse } from 'next/server'
+import { newsCacheDecision } from '@/app/lib/news/cachePolicy'
 import { createClient } from '@supabase/supabase-js'
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 
 export const runtime = 'nodejs'
 
 const DEFAULT_RSS_URL = 'https://www.nrk.no/toppsaker.rss'
-const RSS_REVALIDATE_SECONDS = 15 * 60
 const FRAME_REFRESH_SECONDS = 30 * 60
 const MAX_NEWS_ITEMS = 20
 
@@ -88,18 +88,105 @@ function parseRss(xml: string): NewsItem[] {
   })
 }
 
-async function loadNrkNews() {
+type NewsSnapshot = {
+  items: NewsItem[]
+  available: boolean
+  stale: boolean
+  fetchedAt: string | null
+}
+
+type NewsFeedCacheRow = {
+  items: NewsItem[] | null
+  refreshed_at: string | null
+  checked_at: string | null
+}
+
+async function loadNrkNews(): Promise<NewsSnapshot> {
   const configured = String(process.env.NRK_NEWS_RSS_URL || '').trim()
   const feedUrl = configured || DEFAULT_RSS_URL
   const parsedFeed = new URL(feedUrl)
   const host = parsedFeed.hostname.toLowerCase()
   if (host !== 'nrk.no' && !host.endsWith('.nrk.no')) throw new Error('NRK_NEWS_RSS_URL must point to nrk.no')
-  const response = await fetch(parsedFeed.toString(), {
-    headers: { Accept: 'application/rss+xml, application/xml;q=0.9, text/xml;q=0.8' },
-    next: { revalidate: RSS_REVALIDATE_SECONDS },
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabase = supabaseUrl && serviceRoleKey
+    ? createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
+    : null
+
+  let stored: NewsFeedCacheRow | null = null
+  if (supabase) {
+    const { data, error } = await supabase.from('news_feed_cache')
+      .select('items, refreshed_at, checked_at').eq('feed_url', feedUrl).maybeSingle()
+    if (error) console.warn('[news] snapshot read failed', { code: error.code })
+    else stored = data as NewsFeedCacheRow | null
+  }
+
+  const oldItems = Array.isArray(stored?.items)
+    ? stored.items.filter((item) => item && typeof item.id === 'string' &&
+      typeof item.title === 'string' && item.title.length > 0 &&
+      typeof item.url === 'string' && Boolean(nrkArticleUrl(item.url)))
+    : []
+  const decision = newsCacheDecision({
+    refreshedAt: stored?.refreshed_at,
+    checkedAt: stored?.checked_at,
+    hasItems: oldItems.length > 0,
   })
-  if (!response.ok) throw new Error('NRK RSS returned ' + response.status)
-  return parseRss(await response.text())
+  const fallback = (): NewsSnapshot => decision.usableStale
+    ? { items: oldItems, available: true, stale: true, fetchedAt: stored?.refreshed_at ?? null }
+    : { items: [], available: false, stale: false, fetchedAt: null }
+
+  if (decision.fresh) {
+    return { items: oldItems, available: true, stale: false, fetchedAt: stored?.refreshed_at ?? null }
+  }
+  // If NRK is rejecting requests, do not retry on every wake or parallel
+  // render-state request. This limit also works when no good snapshot exists.
+  if (!decision.retryAllowed) return fallback()
+
+  try {
+    const response = await fetch(parsedFeed.toString(), {
+      headers: {
+        Accept: 'application/rss+xml, application/xml;q=0.9, text/xml;q=0.8',
+        'User-Agent': 'RE:MIND/1.0 (+https://re-mind.no)',
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!response.ok) throw new Error('NRK RSS returned ' + response.status)
+    const items = parseRss(await response.text())
+    if (!items.length) throw new Error('NRK RSS contained no valid articles')
+
+    const checkedAt = new Date().toISOString()
+    if (supabase) {
+      const { error } = await supabase.from('news_feed_cache').upsert({
+        feed_url: feedUrl, items, refreshed_at: checkedAt, checked_at: checkedAt,
+      }, { onConflict: 'feed_url' })
+      if (error) console.warn('[news] snapshot write failed', { code: error.code })
+    }
+    return { items, available: true, stale: false, fetchedAt: checkedAt }
+  } catch (error) {
+    console.warn('[news] RSS fetch failed', error instanceof Error ? error.message : String(error))
+    if (supabase) {
+      // A concurrent successful fetch must never be overwritten by the
+      // failure's old snapshot. Update only the observed row/version.
+      const checkedAt = new Date().toISOString()
+      if (stored) {
+        let update = supabase.from('news_feed_cache').update({ checked_at: checkedAt })
+          .eq('feed_url', feedUrl)
+        update = stored.refreshed_at
+          ? update.eq('refreshed_at', stored.refreshed_at)
+          : update.is('refreshed_at', null)
+        const { error } = await update
+        if (error) console.warn('[news] retry backoff update failed', { code: error.code })
+      } else {
+        const { error } = await supabase.from('news_feed_cache').upsert({
+          feed_url: feedUrl, items: [], refreshed_at: null, checked_at: checkedAt,
+        }, { onConflict: 'feed_url', ignoreDuplicates: true })
+        if (error) console.warn('[news] retry backoff insert failed', { code: error.code })
+      }
+    }
+    return fallback()
+  }
 }
 
 export async function GET(req: Request) {
@@ -108,7 +195,14 @@ export async function GET(req: Request) {
     const limit = normalizeLimit(requestUrl.searchParams.get('limit'))
     const includeLinks = requestUrl.searchParams.get('links') !== '0'
     const profiles = requestedProfiles(requestUrl.searchParams.get('display_profiles') || requestUrl.searchParams.get('display_profile'))
-    const selected = (await loadNrkNews()).slice(0, limit)
+    const snapshot = await loadNrkNews()
+    const selected = snapshot.items.slice(0, limit)
+    // A failed source must not turn the entire frame render-state into HTTP 500.
+    // Once the two-hour safety window passes, show unavailable instead of
+    // continuing to display yesterday's headlines as current.
+    if (!snapshot.available) return NextResponse.json({
+      ok: false, source: 'NRK', stale: false, items: [], error: 'News temporarily unavailable',
+    }, { headers: { 'Cache-Control': 'private, no-store' } })
 
     // The physical frame measures and wraps the original, complete RSS title.
     // Do not send it an optimizer fallback that may end in an unfinished phrase.
@@ -118,6 +212,8 @@ export async function GET(req: Request) {
         ok: true,
         source: 'NRK',
         refresh_seconds: FRAME_REFRESH_SECONDS,
+        stale: snapshot.stale,
+        fetched_at: snapshot.fetchedAt,
         items: selected.map((item) => ({
           id: item.id,
           title: item.title,
@@ -157,9 +253,12 @@ export async function GET(req: Request) {
       ...(includeLinks ? { url: item.url, published_at: item.publishedAt } : {}),
     }))
 
-    return NextResponse.json({ ok: true, source: 'NRK', refresh_seconds: FRAME_REFRESH_SECONDS, items })
+    return NextResponse.json({ ok: true, source: 'NRK', refresh_seconds: FRAME_REFRESH_SECONDS,
+      stale: snapshot.stale, fetched_at: snapshot.fetchedAt, items },
+      { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error('[news]', error)
-    return NextResponse.json({ ok: false, source: 'NRK', items: [], error: 'News temporarily unavailable' }, { status: 502 })
+    return NextResponse.json({ ok: false, source: 'NRK', stale: false, items: [], error: 'News temporarily unavailable' },
+      { headers: { 'Cache-Control': 'private, no-store' } })
   }
 }

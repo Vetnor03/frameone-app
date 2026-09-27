@@ -602,6 +602,19 @@ function skiProjection(value, cell) {
   return result
 }
 
+// Reuse the same raw RSS titles for the hash and for the physical News cache.
+// This is attached only to a due/manual render-state, never to cheap probes.
+export function physicalNewsSnapshot(value) {
+  const source = object(value)
+  const available = source.ok === true
+  return {
+    ok: available,
+    titles: available && Array.isArray(source.items)
+      ? source.items.slice(0, 14).map((item) => String(item?.title ?? '')).filter(Boolean)
+      : [],
+  }
+}
+
 function newsProjection(value, cell) {
   const source = object(value), rows = Array.isArray(source.items) ? source.items : []
   const size = String(cell?.size ?? 'ADAPTIVE').toUpperCase()
@@ -828,7 +841,7 @@ const WEATHER_SOURCE_FRESHNESS_MS = 2 * 60 * 60_000
 const SURF_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
 const SKI_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
 const NEWS_SOURCE_FRESHNESS_MS = 30 * 60_000
-const NEWS_POWER_SAVE_FRESHNESS_MS = 2 * 60 * 60_000
+const NEWS_POWER_SAVE_FRESHNESS_MS = 60 * 60_000
 
 export function physicalModuleDeadlines({ settings, sources, now = Date.now() }) {
   const refs = activePhysicalReferences(settings)
@@ -1054,16 +1067,25 @@ export async function collectVisibleContent({ settings, deviceId, origin, author
   // Each module is an independent pipeline. Surf winner detail remains ordered
   // inside its own pipeline, while it no longer delays unrelated modules.
   await Promise.all(plan.requests.map(async (request) => {
-    const first = await responseJson(fetchImpl, request, authorization)
-    if (request.surf?.todaysBest && (request.surf.needs.dayparts || request.surf.needs.daily)) {
-      const winnerId = first?.spotId ?? first?.picked?.spotId
-      if (winnerId) {
-        const winnerRequest = { url: surfUrl(request.surf.origin, request.surf.config, request.surf.settings, request.surf.needs, winnerId, request.surf.deviceId, request.surf.forceRefresh) }
-        sources[request.key] = { selected_spot_id: winnerId, visible: await responseJson(fetchImpl, winnerRequest, authorization) }
-        return
+    try {
+      const first = await responseJson(fetchImpl, request, authorization)
+      if (request.surf?.todaysBest && (request.surf.needs.dayparts || request.surf.needs.daily)) {
+        const winnerId = first?.spotId ?? first?.picked?.spotId
+        if (winnerId) {
+          const winnerRequest = { url: surfUrl(request.surf.origin, request.surf.config, request.surf.settings, request.surf.needs, winnerId, request.surf.deviceId, request.surf.forceRefresh) }
+          sources[request.key] = { selected_spot_id: winnerId, visible: await responseJson(fetchImpl, winnerRequest, authorization) }
+          return
+        }
       }
+      sources[request.key] = first
+    } catch (error) {
+      // NRK origin failures must not block an otherwise valid dashboard.
+      // A failed News source has an explicit empty-state projection, unlike
+      // Weather/Surf, whose last successful physical screen is preserved on error.
+      if (request.key !== 'news') throw error
+      console.warn('[content-signature] News unavailable', error instanceof Error ? error.message : String(error))
+      sources.news = { ok: false, items: [] }
     }
-    sources[request.key] = first
   }))
   const groceryItems = Array.isArray(sources.groceries?.items) ? sources.groceries.items : []
   if (groceryItems.length >= 2) plan.timeInputs.groceries_rotation = Math.floor((now ?? Date.now()) / (4 * 60 * 60 * 1000))
