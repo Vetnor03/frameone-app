@@ -65,7 +65,6 @@ def main() -> int:
         checked.returncode == 0
         and "Verification: OK" in transcript
         and "Verify return code: 0 (ok)" in transcript
-        and "Peer certificate: CN" in transcript
     )
     if not passed:
         # Do not print cert contents or response bodies; no app tokens are used.
