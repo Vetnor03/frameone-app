@@ -170,9 +170,10 @@ export async function deviceHasOwnerAccessLink(supabase: SupabaseClient, device_
   }
 
   const device = deviceRow && typeof deviceRow === 'object' ? (deviceRow as UnknownRecord) : null
+  const ownerUserId = asString(device?.owner_user_id, '').trim()
   const ownerId = asString(device?.owner_id, '').trim()
   const userId = asString(device?.user_id, '').trim()
-  if (ownerId || userId) return true
+  if (ownerUserId || ownerId || userId) return true
 
   const { data: memberRows, error: memberError } = await supabase
     .from('device_members')
