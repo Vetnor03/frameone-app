@@ -118,6 +118,12 @@ struct PowerSenseDebug {
   bool stable;
 };
 
+// USB power temporarily overrides the selected Power Save setting. Unplugging
+// returns to scheduled deep sleep without changing the setting in the app.
+static bool interactiveModeEnabled(bool usbPresent) {
+  return usbPresent || !g_powerSaverMode;
+}
+
 static void setPowerSaverMode(bool enabled) {
   if (g_powerSaverMode == enabled) return;
   g_powerSaverMode = enabled;
@@ -130,7 +136,7 @@ static void setPowerSaverMode(bool enabled) {
   }
 
   Serial.println(g_powerSaverMode
-    ? "Power mode: Power Saver (scheduled deep sleep only)"
+    ? "Power mode: Power Saver selected (USB overrides sleep)"
     : "Power mode: Normal (persistent Wi-Fi + live updates)");
 }
 
@@ -554,7 +560,7 @@ static void postDeviceStatus(
   json += "\"is_usb_present\":" + String(pwr.usbPresent ? "true" : "false") + ",";
   json += "\"pwr_sense_raw\":" + String(pwr.raw) + ",";
   json += "\"pwr_sense_stable\":" + String(pwr.highCount) + ",";
-  json += "\"power_mode\":\"" + String(g_powerSaverMode ? "power_saver_deep_sleep" : WiFiManagerV2::operationalPowerMode()) + "\",";
+  json += "\"power_mode\":\"" + String(g_powerSaverMode && !pwr.usbPresent ? "power_saver_deep_sleep" : WiFiManagerV2::operationalPowerMode()) + "\",";
   const esp_sleep_wakeup_cause_t statusWakeCause = esp_sleep_get_wakeup_cause();
   const char* statusWakeReason =
     statusWakeCause == ESP_SLEEP_WAKEUP_TIMER ? "timer" :
@@ -883,7 +889,7 @@ static bool fetchAndRenderExplicit(
   // Manual Update is an intentional user action. Give immediate physical
   // acknowledgement before the slower config/content fetches begin. Power Save
   // never reaches this path for routine sleeping updates.
-  if (!g_powerSaverMode) {
+  if (interactiveModeEnabled(pwr.usbPresent)) {
     ensureDisplay();
     Theme::set(g_cfg.theme);
     DisplayCore::drawUpdatingScreen();
@@ -1143,6 +1149,10 @@ static InteractiveModeResult runInteractiveMode(
         // Correct the one-shot power-edge status telemetry after the battery
         // policy has actually become active.
         postDeviceStatus(batt, pwr, false);
+        if (g_powerSaverMode) {
+          Serial.println("Power Saver: USB removed; returning to scheduled deep sleep");
+          return INTERACTIVE_FINISHED;
+        }
       }
     }
     if (WiFi.status() != WL_CONNECTED) {
@@ -1213,7 +1223,7 @@ static InteractiveModeResult runInteractiveMode(
         setPowerSaverMode(g_cfg.powerSaver);
       }
 
-      if (g_powerSaverMode && explicitAcked) {
+      if (g_powerSaverMode && !pwr.usbPresent && explicitAcked) {
         // Do not add a status-only network round-trip here. The update is
         // already durably acknowledged; Power Save should go straight to sleep.
         Serial.println("Power Saver: explicit update committed; leaving interactive mode for deep sleep");
@@ -1470,12 +1480,13 @@ void setup() {
     shutdownDisplay();
   }
 
-  // Normal mode uses the measured connected-idle policy as soon as saved Wi-Fi
-  // has association + DHCP, before time sync or any following backend traffic.
-  const bool startupOperationalPolicyReady = g_powerSaverMode
-    ? false
-    : WiFiManagerV2::applyOperationalPowerPolicy(pwrEarly.usbPresent, true);
-  if (!g_powerSaverMode && !pwrEarly.usbPresent && !startupOperationalPolicyReady) {
+  // Normal mode, including the USB override of Power Save, starts the
+  // source-aware policy as soon as Wi-Fi has association + DHCP.
+  const bool startupOperationalPolicyReady = interactiveModeEnabled(pwrEarly.usbPresent)
+    ? WiFiManagerV2::applyOperationalPowerPolicy(pwrEarly.usbPresent, true)
+    : false;
+  if (interactiveModeEnabled(pwrEarly.usbPresent) &&
+      !pwrEarly.usbPresent && !startupOperationalPolicyReady) {
     Serial.println("WiFi power policy: startup connected-idle unavailable; fallback remains armed");
   }
 
@@ -1566,7 +1577,7 @@ void setup() {
 
   LiveUpdateState liveState{};
   bool liveProbeOk = false;
-  if (!g_powerSaverMode) {
+  if (interactiveModeEnabled(pwrEarly.usbPresent)) {
     const uint32_t liveProbeStartedAtMs = millis();
     liveProbeOk = LiveUpdate::probe(DeviceIdentity::getToken(), liveState);
     if (liveProbeOk) {
@@ -1596,17 +1607,17 @@ void setup() {
     liveState.requestedRevision > liveState.displayedRevision &&
     liveState.requestedRevision > locallyRendered;
 
-  if (!g_powerSaverMode &&
+  if (interactiveModeEnabled(pwrEarly.usbPresent) &&
       !explicitRevisionPending && LiveUpdate::getRenderedAwaitingAck() == 0) {
     PowerSenseDebug overlayPwr = readPowerSenseDebug();
     BatteryState overlayBatt = BatteryManager::readAndUpdate(overlayPwr.usbPresent);
     refreshPowerOverlayIfNeeded(overlayBatt, overlayPwr);
   }
 
-  const bool connectedIdleReady = g_powerSaverMode
-    ? false
-    : WiFiManagerV2::applyOperationalPowerPolicy(pwrEarly.usbPresent, true);
-  if (!g_powerSaverMode &&
+  const bool connectedIdleReady = interactiveModeEnabled(pwrEarly.usbPresent)
+    ? WiFiManagerV2::applyOperationalPowerPolicy(pwrEarly.usbPresent, true)
+    : false;
+  if (interactiveModeEnabled(pwrEarly.usbPresent) &&
       !pwrEarly.usbPresent && !connectedIdleReady && !normalSyncDue && !explicitRevisionPending) {
     goToSleep(pwrEarly.usbPresent);
     return;
@@ -1646,7 +1657,7 @@ run_normal_sync:
   }
 
   if (!normalSyncDue) {
-    if (!g_powerSaverMode &&
+    if (interactiveModeEnabled(pwr.usbPresent) &&
         runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
       consumeNormalSyncPeriod();
       normalSyncDue = true;
@@ -1747,7 +1758,7 @@ run_normal_sync:
   }
 
   normalSyncDue = false;
-  if (!g_powerSaverMode &&
+  if (interactiveModeEnabled(pwr.usbPresent) &&
       runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
     consumeNormalSyncPeriod();
     normalSyncDue = true;
