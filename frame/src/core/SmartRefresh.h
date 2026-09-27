@@ -66,6 +66,8 @@ struct SmartRenderState {
   String layoutHash;
   HeapBackedArray<SmartModuleState, MAX_GRID_CELLS> modules;
   uint8_t moduleCount = 0;
+  // True only when News data was adopted from this exact render-state response.
+  bool newsSnapshotReady = false;
 };
 struct SmartDisplayPlan {
   enum Type : uint8_t { NONE, PARTIAL, FULL } type = NONE;
