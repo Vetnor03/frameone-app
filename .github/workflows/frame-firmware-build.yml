@@ -8,6 +8,14 @@ on:
   workflow_dispatch:
 
 jobs:
+  live-backend-tls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify live re-mind.no TLS using firmware CA bundle
+        run: python3 frame/tools/check_backend_tls.py
+
   firmware:
     runs-on: ubuntu-latest
     steps:
@@ -44,3 +52,11 @@ jobs:
           arduino-cli compile --verbose --warnings default --export-binaries \
             --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" \
             "$RUNNER_TEMP/frame_v2.5.1"
+      - name: Upload unflashed Alfred USB test candidate
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: alfred-v1_2-tls-usb-test-pr1314
+          path: ${{ runner.temp }}/frame_v2.5.1/
+          if-no-files-found: error
+          retention-days: 7

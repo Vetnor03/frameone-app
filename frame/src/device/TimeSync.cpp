@@ -6,8 +6,9 @@ namespace TimeSync {
 
 static bool timeValid() {
   time_t now = time(nullptr);
-  // valid if after 2024-01-01
-  return now > 1704067200;
+  // Only accept clocks at or after the 2026 release year for TLS validity.
+  // An unset clock must never trigger an insecure certificate fallback.
+  return now >= 1767225600;
 }
 
 bool ensure(uint32_t timeoutMs) {

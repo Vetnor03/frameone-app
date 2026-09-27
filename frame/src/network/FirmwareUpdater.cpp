@@ -7,6 +7,7 @@
 #include <WiFiClientSecure.h>
 
 #include "DeviceIdentity.h"
+#include "BackendTrust.h"
 
 // =========================
 // Tunables
@@ -146,9 +147,7 @@ bool FirmwareUpdater::fetchManifest(String& latestVersion, bool& updateAvailable
   }
 
   HTTPClient http;
-  WiFiClient plainClient;
   WiFiClientSecure secureClient;
-  WiFiClient* rawClient = nullptr;
 
   String url = _baseUrl;
   if (url.endsWith("/")) url.remove(url.length() - 1);
@@ -159,19 +158,19 @@ bool FirmwareUpdater::fetchManifest(String& latestVersion, bool& updateAvailable
 
   log("GET " + url);
 
-  if (isHttpsUrl(url)) {
-    secureClient.setInsecure();
-    rawClient = &secureClient;
-  } else {
-    rawClient = &plainClient;
+  if (!BackendTrust::isTrustedBackendUrl(url) || !BackendTrust::ensureClock()) {
+    log("manifest: trusted HTTPS origin or TLS clock unavailable");
+    return false;
   }
+  BackendTrust::configure(secureClient);
 
   http.setConnectTimeout(12000);
   http.setTimeout(15000);
   http.setReuse(false);
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  // A redirect must not move the manifest/credentials to an untrusted host.
+  http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
 
-  if (!http.begin(*rawClient, url)) {
+  if (!http.begin(secureClient, url)) {
     log("http.begin() failed for manifest");
     return false;
   }
@@ -229,27 +228,22 @@ bool FirmwareUpdater::installFromUrl(const String& url) {
   if (url.length() == 0) return false;
   if (!WiFi.isConnected()) return false;
 
-  HTTPClient http;
-  WiFiClient* rawClient = nullptr;
-  WiFiClient plainClient;
-  WiFiClientSecure secureClient;
-
-  if (isHttpsUrl(url)) {
-    // Production:
-    // replace setInsecure() with secureClient.setCACert(root_ca_pem)
-    // once you have your CA bundle or server cert strategy in place.
-    secureClient.setInsecure();
-    rawClient = &secureClient;
-  } else {
-    rawClient = &plainClient;
+  if (!BackendTrust::isTrustedBackendUrl(url) || !BackendTrust::ensureClock()) {
+    log("bin: trusted HTTPS origin or TLS clock unavailable");
+    return false;
   }
+
+  HTTPClient http;
+  WiFiClientSecure secureClient;
+  BackendTrust::configure(secureClient);
 
   http.setConnectTimeout(15000);
   http.setTimeout(30000);
   http.setReuse(false);
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  // Refuse redirects to unverified firmware URLs.
+  http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
 
-  if (!http.begin(*rawClient, url)) {
+  if (!http.begin(secureClient, url)) {
     log("http.begin() failed for bin");
     return false;
   }
@@ -337,10 +331,6 @@ bool FirmwareUpdater::installFromUrl(const String& url) {
 // =========================
 // Helpers
 // =========================
-bool FirmwareUpdater::isHttpsUrl(const String& url) {
-  return url.startsWith("https://");
-}
-
 bool FirmwareUpdater::isNewerVersion(const String& currentVersion, const String& latestVersion) {
   int cMaj = 0, cMin = 0, cPat = 0;
   int lMaj = 0, lMin = 0, lPat = 0;

@@ -1,4 +1,5 @@
 #include "NetClient.h"
+#include "BackendTrust.h"
 #include "WiFiManager.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -37,9 +38,10 @@ namespace {
 
   void configureHttpSession() {
     if (g_httpConfigured) return;
-    g_tlsClient.setInsecure();
+    BackendTrust::configure(g_tlsClient);
     g_http.setTimeout(HTTP_TIMEOUT_MS);
-    g_http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    // Backend API traffic must never follow redirects to another origin.
+    g_http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
     g_http.setReuse(true);
     g_httpConfigured = true;
   }
@@ -119,6 +121,10 @@ namespace {
     httpCodeOut = 0;
     bodyOut = "";
     g_lastContentLength = -1;
+    if (!BackendTrust::isTrustedBackendUrl(url)) {
+      Serial.println("NetClient: blocked non-backend or non-HTTPS URL");
+      return false;
+    }
     const String path = sanitizedPath(url);
     configureHttpSession();
 
@@ -129,6 +135,14 @@ namespace {
           delay(300 * attempt);
           continue;
         }
+      }
+
+      // A plausible RTC/NTP time is required for certificate date checks.
+      // Never retry by disabling verification or making an insecure request.
+      if (!BackendTrust::ensureClock()) {
+        Serial.println("NetClient: TLS clock unavailable; request deferred");
+        closeHttpSession();
+        return false;
       }
 
       // Re-begin on every request to update the URI while retaining the same
@@ -253,7 +267,10 @@ int NetClient::lastContentLength() {
 bool NetClient::TEMP_REFRESH_AUDIT_httpPostConnected(const String& url, const String& bearerToken, const String& jsonBody, int& httpCodeOut, String& bodyOut) {
   // TEMP_REFRESH_AUDIT uses a single direct HTTP attempt. This method is
   // permitted only as a piggyback on an existing session.
-  if (WiFi.status() != WL_CONNECTED) { httpCodeOut = 0; bodyOut = ""; return false; }
+  if (WiFi.status() != WL_CONNECTED || !BackendTrust::isTrustedBackendUrl(url) ||
+      !BackendTrust::ensureClock()) {
+    httpCodeOut = 0; bodyOut = ""; return false;
+  }
   configureHttpSession();
   if (!g_http.begin(g_tlsClient, url)) return false;
   g_http.addHeader("Accept-Encoding", "identity"); addBearerAuthHeader(bearerToken); g_http.addHeader("Content-Type", "application/json");
