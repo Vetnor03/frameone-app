@@ -30,7 +30,7 @@ test('News frame rendering uses the reminder-like list without date UI', () => {
   const firmware = read('frame/src/modules/ModuleNews.cpp')
   assert.match(firmware, /"Nyheter" : "News"/)
   assert.match(firmware, /MAX_NEWS_ITEMS = 14/)
-  assert.match(firmware, /#define NEWS_FONT_BODY \(&FreeSans12ptNO8b\)/)
+  assert.match(firmware, /#define NEWS_FONT_BODY \(&FreeSans9pt8b\)/)
   assert.match(firmware, /#define NEWS_FONT_HEADER \(&FreeSansBold12pt8b\)/)
   assert.match(firmware, /Match the Reminders module's centered list treatment/)
   assert.doesNotMatch(firmware, /ModuleDate|drawCalendar|calendar/i)
