@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "DeviceIdentity.h"
 #include "NetClient.h"
+#include "ModuleNews.h"
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <inttypes.h>
@@ -82,10 +83,17 @@ bool SmartRefresh::fetchRenderState(const String& token, const String& modules, 
   DynamicJsonDocument doc(16384);
   if (deserializeJson(doc, body)) return false;
   out.layoutHash = String((const char*)(doc["layout_hash"] | "")); out.moduleCount = 0;
+  out.newsSnapshotReady = false;
   for (JsonObject item : doc["modules"].as<JsonArray>()) {
     if (out.moduleCount >= MAX_GRID_CELLS) break;
     SmartModuleState& module = out.modules[out.moduleCount++];
     module.key = String((const char*)(item["key"] | "")); module.hash = String((const char*)(item["render_hash"] | ""));
+    if (module.key == "news" && !item["news_snapshot"].isNull()) {
+      // Adopt the same source bytes whose titles formed render_hash. Do not
+      // acknowledge a manifest if its accompanying News payload is invalid.
+      if (!ModuleNews::adoptRenderStateSnapshot(item["news_snapshot"].as<JsonVariantConst>())) return false;
+      out.newsSnapshotReady = true;
+    }
     module.weatherStableHash = String((const char*)(item["weather_stable_hash"] | ""));
     module.weatherTemperatures = "";
     module.weatherTemperatureThreshold = 0;
