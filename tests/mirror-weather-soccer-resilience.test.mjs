@@ -41,7 +41,7 @@ test('external soccer API failures are logged and returned as controlled 502 JSO
 
 test('soccer responses cache successful upstream data and expose a fixed body length', () => {
   assert.match(soccerRoute, /unstable_cache/)
-  assert.match(soccerRoute, /\['soccer-football-data-v1'\]/)
+  assert.match(soccerRoute, /\['soccer-football-data-v2'\]/)
   assert.match(soccerRoute, /revalidate: SOCCER_DATA_REVALIDATE_SECONDS/)
   assert.match(soccerRoute, /stale-while-revalidate=/)
   assert.match(soccerRoute, /'Vercel-CDN-Cache-Control': cacheControl/)
