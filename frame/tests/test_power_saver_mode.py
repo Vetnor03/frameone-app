@@ -35,10 +35,10 @@ def test_power_saver_skips_live_probe_and_interactive_listening():
     setup = source.split("void setup()", 1)[1]
 
     assert "Power Saver: live update probe skipped" in setup
-    assert "if (!g_powerSaverMode) {" in setup
+    assert "if (interactiveModeEnabled(pwrEarly.usbPresent)) {" in setup
     assert "liveProbeOk = LiveUpdate::probe" in setup
     assert setup.count("runInteractiveMode(batt, pwr, liveState)") == 2
-    assert setup.count("!g_powerSaverMode &&") >= 4
+    assert setup.count("interactiveModeEnabled(pwrEarly.usbPresent)") >= 4
 
 
 def test_power_saver_applies_current_app_setting_on_every_planned_wake():

@@ -17,7 +17,7 @@ def test_manual_update_shows_feedback_before_network_fetch():
     show = body.index("DisplayCore::drawUpdatingScreen();")
     fetch = body.index("FrameConfigApi::fetchWithStatus")
     assert show < fetch
-    assert "if (!g_powerSaverMode)" in body[:show]
+    assert "if (interactiveModeEnabled(pwr.usbPresent))" in body[:show]
 
 
 def test_updating_screen_is_not_used_by_scheduled_refresh_paths():
