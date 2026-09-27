@@ -14,6 +14,7 @@ export default function NewsModuleSettingsTab({ language }: { language: 'en' | '
   const [items, setItems] = useState<NewsRow[]>([])
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
+  const [stale, setStale] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -23,8 +24,15 @@ export default function NewsModuleSettingsTab({ language }: { language: 'en' | '
         if (!response.ok) throw new Error('news')
         const payload = await response.json()
         if (!alive) return
-        setItems(Array.isArray(payload?.items) ? payload.items : [])
-        setFailed(false)
+        if (payload?.ok !== true) {
+          setItems([])
+          setFailed(true)
+          setStale(false)
+        } else {
+          setItems(Array.isArray(payload?.items) ? payload.items : [])
+          setStale(payload?.stale === true)
+          setFailed(false)
+        }
       } catch {
         if (alive) setFailed(true)
       } finally {
@@ -45,6 +53,12 @@ export default function NewsModuleSettingsTab({ language }: { language: 'en' | '
       <div className="mt-1 text-sm text-[color:var(--fg-60)]">
         {isNo ? 'Siste overskrifter fra NRK. Trykk på en sak for å lese den hos NRK.' : 'Latest headlines from NRK. Tap a story to read it on NRK.'}
       </div>
+
+      {stale && !loading && !failed && (
+        <div className="mt-2 text-xs text-[color:var(--fg-60)]">
+          {isNo ? 'NRK er midlertidig utilgjengelig. Viser siste lagrede overskrifter.' : 'NRK is temporarily unavailable. Showing the last saved headlines.'}
+        </div>
+      )}
 
       <div className="mt-5 min-h-0 flex-1 overflow-y-auto">
         {loading ? (
