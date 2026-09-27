@@ -94,5 +94,8 @@ test('existing time-sensitive module caches remain bounded instead of treating a
   assert.match(stocks, /cache: 'no-store'/)
   assert.match(soccer, /const SOCCER_DATA_REVALIDATE_SECONDS = 5 \* 60/)
   assert.match(soccer, /const SOCCER_STALE_SECONDS = 60 \* 60/)
+  assert.match(soccer, /const fetchJsonCached = unstable_cache/)
+  assert.match(soccer, /ageMs >= SOCCER_STALE_SECONDS \* 1000/)
+  assert.match(soccer, /\['soccer-football-data-v2'\]/)
   assert.doesNotMatch(soccer, /SOCCER_STALE_SECONDS = 24 \* 60 \* 60/)
 })
