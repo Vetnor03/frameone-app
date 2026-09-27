@@ -31,7 +31,7 @@ def main() -> int:
         raise SystemExit("TLS check: BASE_URL not found")
 
     origin = urlsplit(match.group(1))
-    if (origin.scheme != "https" or not origin.hostname or origin.username or origin.password or origin.port not in (None, 443):
+    if (origin.scheme != "https" or not origin.hostname or origin.username or origin.password or origin.port not in (None, 443)):
         raise SystemExit("TLS check: backend must have a standard HTTPS origin")
 
     source = TRUST_SOURCE.read_text(encoding="utf-8")
