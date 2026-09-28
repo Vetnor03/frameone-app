@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { authenticatePhysicalDevice } from '@/app/lib/device/updateStateAuth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -34,16 +35,13 @@ function shortDateLabel(value: unknown, language: string) {
   }).format(date).replace(/\./g, '')
 }
 
-async function canReadDevice(supabase: SupabaseClient, deviceId: string, token: string) {
-  const { data: device, error: deviceError } = await supabase
-    .from('devices')
-    .select('device_id, device_token')
-    .eq('device_id', deviceId)
-    .maybeSingle()
+async function canReadDevice(supabase: SupabaseClient, req: Request, deviceId: string, token: string) {
+  const physical = await authenticatePhysicalDevice(req, deviceId)
+  if (!('error' in physical)) return true
+  if (physical.status === 500) return false
 
-  if (deviceError || !device) return false
-  if (device.device_token && device.device_token === token) return true
-
+  // This route also supports app-user sessions. Preserve that separate path,
+  // but neither a browser JWT nor a legacy token can impersonate a v2 frame.
   const { data: authData, error: authError } = await supabase.auth.getUser(token)
   if (authError || !authData.user) return false
 
@@ -73,7 +71,7 @@ export async function GET(req: Request) {
     if (!supabaseUrl || !serviceRole) return NextResponse.json({ error: 'Server configuration unavailable' }, { status: 500 })
 
     const supabase = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false, autoRefreshToken: false } })
-    if (!(await canReadDevice(supabase, deviceId, token))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!(await canReadDevice(supabase, req, deviceId, token))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data, error } = await supabase
       .from('device_settings')
