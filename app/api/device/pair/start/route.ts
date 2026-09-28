@@ -38,7 +38,7 @@ export async function GET(req: Request) {
     const row = Array.isArray(data) ? data[0] : data
 
     return NextResponse.json(row)
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Unknown error' }, { status: 500 })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Unknown error' }, { status: 500 })
   }
 }
