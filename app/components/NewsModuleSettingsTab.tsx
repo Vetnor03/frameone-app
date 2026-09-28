@@ -34,7 +34,7 @@ export default function NewsModuleSettingsTab({
     setStale(false)
     const load = async () => {
       try {
-        const response = await fetch(`/api/news?feed=${feed}&limit=20&links=1&display_profiles=standard`, { cache: 'no-store' })
+        const response = await fetch(`/api/news?feed=${feed}&limit=20&links=1&raw_titles=1`, { cache: 'no-store' })
         if (!response.ok) throw new Error('news')
         const payload = await response.json()
         if (!alive) return
