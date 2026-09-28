@@ -106,10 +106,15 @@ test('only valid dual physical proofs may begin delivery', async () => {
     { deviceId: 'frm_000000000000' },
     { sessionId: randomUUID() },
     { bootstrapProofHex: randomBytes(32).toString('hex') },
-    { pollingSecretHex: randomBytes(32).toString('hex') },
     { bootstrapProofHex: 'AB' },
   ]) assert.deepEqual(await deliver(f, extras), { ok: false, error: 'unauthorized' })
   assert.equal(f.calls.some(([kind]) => kind === 'deliver'), false)
+
+  // Polling-secret verification belongs in the atomic DB RPC; it cannot be
+  // established from the bootstrap verifier alone. The RPC must reject it.
+  assert.deepEqual(await deliver(f, { pollingSecretHex: randomBytes(32).toString('hex') }),
+    { ok: false, error: 'unauthorized' })
+  assert.equal(f.state, 'claimed')
 })
 
 test('missing or invalid AES-256 key fails before verifier lookup', async () => {
