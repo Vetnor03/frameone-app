@@ -19,7 +19,7 @@ function entry(id, time, source = 'local-events', days = 1) {
   }
 }
 
-test('standard Tomorrow prefix reserves one of four visible slots for a personal reminder', () => {
+test('standard Tomorrow prefix preserves clock order and leaves untimed personal reminders after timed events', () => {
   const items = [
     entry('event-1200', '12:00'),
     entry('event-1700', '17:00'),
@@ -31,16 +31,13 @@ test('standard Tomorrow prefix reserves one of four visible slots for a personal
   ]
 
   const prioritized = prioritizeReminderVisiblePrefix(items, ['standard'])
-  const visible = prioritized.slice(0, 4)
-
-  assert.equal(visible.some((item) => item.reminder_id === 'personal-all-day'), true)
-  assert.deepEqual(visible.map((item) => item.reminder_id), [
-    'personal-all-day', 'event-1200', 'event-1700', 'event-1800',
+  assert.deepEqual(prioritized.slice(0, 4).map((item) => item.reminder_id), [
+    'event-1200', 'event-1700', 'event-1800', 'event-1815',
   ])
+  assert.equal(prioritized.at(-1).reminder_id, 'personal-all-day')
   assert.equal(prioritized.length, items.length)
 })
-
-test('compact Tomorrow prefix reserves one of three visible slots for a personal reminder', () => {
+test('compact Tomorrow prefix does not pull a later personal reminder ahead of earlier events', () => {
   const items = [
     entry('event-1200', '12:00'),
     entry('event-1700', '17:00'),
@@ -50,11 +47,11 @@ test('compact Tomorrow prefix reserves one of three visible slots for a personal
 
   const prioritized = prioritizeReminderVisiblePrefix(items, ['compact'])
   assert.deepEqual(prioritized.slice(0, 3).map((item) => item.reminder_id), [
-    'personal-2000', 'event-1200', 'event-1700',
+    'event-1200', 'event-1700', 'event-1800',
   ])
+  assert.equal(prioritized.at(-1).reminder_id, 'personal-2000')
 })
-
-test('future buckets use the three-item renderer capacity', () => {
+test('future buckets use the three-item renderer capacity in chronological order', () => {
   const items = [
     entry('event-1200', '12:00', 'local-events', 6),
     entry('event-1700', '17:00', 'local-events', 6),
@@ -63,9 +60,10 @@ test('future buckets use the three-item renderer capacity', () => {
   ]
 
   const prioritized = prioritizeReminderVisiblePrefix(items, ['standard'])
-  assert.equal(prioritized.slice(0, 3).some((item) => item.reminder_id === 'personal-2000'), true)
+  assert.deepEqual(prioritized.slice(0, 3).map((item) => item.reminder_id), [
+    'event-1200', 'event-1700', 'event-1800',
+  ])
 })
-
 test('groups without personal reminders keep canonical chronological order', () => {
   const items = [
     entry('event-1800', '18:00'),
@@ -131,5 +129,36 @@ test('calendar meetings retain time order with earlier public events and break o
   ], ['standard'])
   assert.deepEqual(prioritized.map((item) => item.reminder_id), [
     'public-0800', 'teams-1300', 'spond-1400', 'public-1400', 'teams-1700', 'public-1700',
+  ])
+})
+
+test('personal reminders beat Teams and public events only at equal times', () => {
+  const items = [
+    entry('event-1200', '12:00'),
+    entry('teams-1300', '13:00', 'teams'),
+    entry('public-1300', '13:00'),
+    entry('personal-1300', '13:00', 'remind'),
+    entry('personal-1500', '15:00', 'remind'),
+    entry('event-1400', '14:00'),
+    entry('personal-1100', '11:00', 'remind'),
+  ]
+  const prioritized = prioritizeReminderVisiblePrefix(items, ['standard'])
+  assert.deepEqual(prioritized.map((item) => item.reminder_id), [
+    'personal-1100', 'event-1200', 'personal-1300', 'teams-1300',
+    'public-1300', 'event-1400', 'personal-1500',
+  ])
+  assert.deepEqual(prioritized.slice(0, 4).map((item) => item.reminder_id), [
+    'personal-1100', 'event-1200', 'personal-1300', 'teams-1300',
+  ])
+})
+
+test('untimed personal reminders break ties with untimed imported items without jumping ahead of timed events', () => {
+  const prioritized = prioritizeReminderVisiblePrefix([
+    entry('public-all-day', null),
+    entry('personal-all-day', null, 'remind'),
+    entry('event-1200', '12:00'),
+  ], ['standard'])
+  assert.deepEqual(prioritized.map((item) => item.reminder_id), [
+    'event-1200', 'personal-all-day', 'public-all-day',
   ])
 })
