@@ -39,8 +39,14 @@ export async function verifyPreviewSupabaseCredentials(
 
   const publicKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY
-  if (!publicKey || !serviceKey) {
-    throw new Error('Staging credential check blocked: staging keys missing.')
+  const missingKeys = [
+    ['NEXT_PUBLIC_SUPABASE_ANON_KEY', publicKey],
+    ['SUPABASE_SERVICE_ROLE_KEY', serviceKey],
+  ].filter(([, value]) => typeof value !== 'string' || !value.trim())
+    .map(([name]) => name)
+  if (missingKeys.length) {
+    // Variable NAMES only; never include credential values in build logs.
+    throw new Error(`Staging credential check blocked: missing values for ${missingKeys.join(', ')}.`)
   }
 
   async function check(path, key, role) {
