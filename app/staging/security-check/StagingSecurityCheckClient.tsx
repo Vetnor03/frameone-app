@@ -210,7 +210,7 @@ export default function StagingSecurityCheckClient() {
           </div>
         ) : null}
         <p className="mt-8 text-xs leading-5 text-[color:var(--fg-45)]">
-          These tests do not clear the known legacy pairing and device-status vulnerabilities.
+          These tests do not clear the legacy pairing risks or prove that a legitimate physical frame can report status.
           They intentionally never call the token-minting legacy pairing-status route.
           An HTTP pass is not a full security certification.
         </p>
