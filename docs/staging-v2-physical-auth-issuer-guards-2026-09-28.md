@@ -26,6 +26,18 @@ In a single rolled-back transaction use **new** synthetic IDs and ephemeral hash
 
 All five `/api/device/pair/v2/{start,claim,status,deliver,ack}` HTTP endpoints must remain hard-disabled in staging; no physical credential should be issued until protected ingress, physical firmware, the actual ESP32 positive test, and revocation lifecycle are ready.
 
+## Verified staging acceptance
+
+[PR #1331](https://github.com/Vetnor03/frameone-app/pull/1331) merged to `development` after **996/996 stable tests**, typecheck and changed-file lint passed. The separate full audit still reports previously documented debt. The initial migration attempt encountered a SQL terminator syntax error and made **no database change**: the auth RPC and new triggers were absent and the migration ledger unchanged. [PR #1332](https://github.com/Vetnor03/frameone-app/pull/1332) corrected the six copied function terminators and added a syntax regression test; CI again passed **996/996**, typecheck and changed-file lint.
+
+The corrected SQL was validated inside a rolled-back staging transaction, then applied only to Supabase project `ouwhfzjaahdipwmelzvf` as migration `20260928211944_staging_pairing_v2_physical_auth_issuer_guards_20260928`. Catalog inspection confirmed the new auth-mode RPC is SECURITY DEFINER with EXECUTE for service role only, and the three defensive triggers are installed. No v2 credentials were inserted.
+
+A separate rolled-back synthetic device test exercised the actual database: exact active v2 hash accepted; wrong hash, unactivated record, missing owner membership and unknown ID denied; all known legacy issuer functions and direct bearer/hash writes refused v2 records; a v2 owner's legacy reset and row deletion were blocked; and ordinary legacy token issuance, pair status and unowned start still worked for devices without a v2 record. A synthetic v2 member-share/claim code was also rejected.
+
+A fresh post-rollback query confirmed **zero** v2 credentials, sessions, claim buckets, disposable devices, memberships and pairing codes. Both original virtual test frames, their memberships and both tester accounts remain intact.
+
+The new auth pathway has **unit/mock and real SQL acceptance**, but has **not yet been exercised by a live physical staging device with a valid v2 bearer**. No v2 HTTP enrollment/delivery endpoints are enabled and no real frame was flashed. The old app's owner-delete/reset is intentionally blocked for any future v2-provisioned frame until a supervised revocation and tombstone flow is ready. Do not promote this state into a production rollout on its own.
+
 ## Rollback
 
 Revert the **staging app** branch to restore legacy behavior for ordinary v1 frames. Database guards may be retired through a separately reviewed staging-only migration while **zero real v2 frames** exist. Do not roll back a future activated v2 frame into a token-disclosing legacy path. Production, real hardware and firmware are explicitly out of scope.
