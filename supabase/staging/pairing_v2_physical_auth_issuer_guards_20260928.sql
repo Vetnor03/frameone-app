@@ -209,7 +209,7 @@ begin
 
   return true;
 end;
-$function$
+$function$;
 
 -- Guarded legacy function: create_member_pair_code
 CREATE OR REPLACE FUNCTION public.create_member_pair_code(p_device_id text)
@@ -274,7 +274,7 @@ begin
 
   return v_code;
 end;
-$function$
+$function$;
 
 -- Guarded legacy function: device_pair_status
 CREATE OR REPLACE FUNCTION public.device_pair_status(p_device_id text)
@@ -307,7 +307,7 @@ begin
 
   return query select true, v_token;
 end;
-$function$
+$function$;
 
 -- Guarded legacy function: ensure_device_token
 CREATE OR REPLACE FUNCTION public.ensure_device_token(p_device_id text)
@@ -343,7 +343,7 @@ begin
 
   return v_token;
 end;
-$function$
+$function$;
 
 -- Guarded legacy function: set_device_token
 CREATE OR REPLACE FUNCTION public.set_device_token(p_device_id text)
@@ -376,7 +376,7 @@ begin
 
   return query select v_token;
 end;
-$function$
+$function$;
 
 -- Guarded legacy function: start_pairing
 CREATE OR REPLACE FUNCTION public.start_pairing(p_device_id text)
@@ -433,4 +433,4 @@ begin
 
   return query select code, exp;
 end;
-$function$
+$function$;
