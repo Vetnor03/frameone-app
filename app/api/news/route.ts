@@ -5,7 +5,13 @@ import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type 
 
 export const runtime = 'nodejs'
 
-const DEFAULT_RSS_URL = 'https://www.nrk.no/toppsaker.rss'
+const TOP_STORIES_RSS_URL = 'https://www.nrk.no/toppsaker.rss'
+const LATEST_NEWS_RSS_URL = 'https://www.nrk.no/nyheter/siste.rss'
+type NewsFeed = 'top' | 'latest'
+
+function normalizeNewsFeed(value: string | null): NewsFeed {
+  return value === 'latest' ? 'latest' : 'top'
+}
 const FRAME_REFRESH_SECONDS = 30 * 60
 const MAX_NEWS_ITEMS = 20
 
@@ -80,12 +86,9 @@ function parseRss(xml: string): NewsItem[] {
     seen.add(id)
     items.push({ id, title, url, publishedAt, order })
   })
-  return items.sort((a, b) => {
-    const aTime = a.publishedAt ? Date.parse(a.publishedAt) : NaN
-    const bTime = b.publishedAt ? Date.parse(b.publishedAt) : NaN
-    if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) return bTime - aTime
-    return a.order - b.order
-  })
+  // The feed's order is authoritative. Do not replace NRK's Top Stories
+  // editorial order with a publication-time sort.
+  return items
 }
 
 type NewsSnapshot = {
@@ -101,12 +104,10 @@ type NewsFeedCacheRow = {
   checked_at: string | null
 }
 
-async function loadNrkNews(): Promise<NewsSnapshot> {
-  const configured = String(process.env.NRK_NEWS_RSS_URL || '').trim()
-  const feedUrl = configured || DEFAULT_RSS_URL
+async function loadNrkNews(feed: NewsFeed): Promise<NewsSnapshot> {
+  // Only these two official NRK feeds may be requested by clients.
+  const feedUrl = feed === 'latest' ? LATEST_NEWS_RSS_URL : TOP_STORIES_RSS_URL
   const parsedFeed = new URL(feedUrl)
-  const host = parsedFeed.hostname.toLowerCase()
-  if (host !== 'nrk.no' && !host.endsWith('.nrk.no')) throw new Error('NRK_NEWS_RSS_URL must point to nrk.no')
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -127,6 +128,9 @@ async function loadNrkNews(): Promise<NewsSnapshot> {
       typeof item.title === 'string' && item.title.length > 0 &&
       typeof item.url === 'string' && Boolean(nrkArticleUrl(item.url)))
     : []
+  // The old Top Stories cache contained the correct source index but had been
+  // returned in date order. Restore NRK's order even before the next refetch.
+  oldItems.sort((a, b) => a.order - b.order)
   const decision = newsCacheDecision({
     refreshedAt: stored?.refreshed_at,
     checkedAt: stored?.checked_at,
@@ -193,15 +197,16 @@ export async function GET(req: Request) {
   try {
     const requestUrl = new URL(req.url)
     const limit = normalizeLimit(requestUrl.searchParams.get('limit'))
+    const feed = normalizeNewsFeed(requestUrl.searchParams.get('feed'))
     const includeLinks = requestUrl.searchParams.get('links') !== '0'
     const profiles = requestedProfiles(requestUrl.searchParams.get('display_profiles') || requestUrl.searchParams.get('display_profile'))
-    const snapshot = await loadNrkNews()
+    const snapshot = await loadNrkNews(feed)
     const selected = snapshot.items.slice(0, limit)
     // A failed source must not turn the entire frame render-state into HTTP 500.
     // Once the two-hour safety window passes, show unavailable instead of
     // continuing to display yesterday's headlines as current.
     if (!snapshot.available) return NextResponse.json({
-      ok: false, source: 'NRK', stale: false, items: [], error: 'News temporarily unavailable',
+      ok: false, source: 'NRK', feed, stale: false, items: [], error: 'News temporarily unavailable',
     }, { headers: { 'Cache-Control': 'private, no-store' } })
 
     // The physical frame measures and wraps the original, complete RSS title.
@@ -211,6 +216,7 @@ export async function GET(req: Request) {
       return NextResponse.json({
         ok: true,
         source: 'NRK',
+        feed,
         refresh_seconds: FRAME_REFRESH_SECONDS,
         stale: snapshot.stale,
         fetched_at: snapshot.fetchedAt,
@@ -253,7 +259,7 @@ export async function GET(req: Request) {
       ...(includeLinks ? { url: item.url, published_at: item.publishedAt } : {}),
     }))
 
-    return NextResponse.json({ ok: true, source: 'NRK', refresh_seconds: FRAME_REFRESH_SECONDS,
+    return NextResponse.json({ ok: true, source: 'NRK', feed, refresh_seconds: FRAME_REFRESH_SECONDS,
       stale: snapshot.stale, fetched_at: snapshot.fetchedAt, items },
       { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
