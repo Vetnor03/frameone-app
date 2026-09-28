@@ -532,6 +532,12 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
       }
     }
 
+    // Send the per-frame News selection to the firmware's direct-fetch fallback.
+    if (isActiveBase(active, 'news')) {
+      const news = cloneObject(sourceModules.news)
+      responseModules.news = { feed: news.feed === 'latest' ? 'latest' : 'top' }
+    }
+
     // Keep any lightweight active module configs whose shape firmware already ignores/owns.
     // Do not include groceries item/history/memory data in frame-config.
     if (isActiveBase(active, 'reminders') && sourceModules.reminders != null) {
