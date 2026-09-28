@@ -216,18 +216,25 @@ void SmartRefresh::saveDisplayedRevision(uint64_t value) { prefs.begin("smart_re
 
 uint32_t SmartRefresh::secondsUntilNextWake(const SmartRenderState& state, time_t now,
                                                    time_t revisionCheckedAt,
-                                                   bool includeRevisionSafety) {
+                                                   bool includeRevisionSafety,
+                                                   bool includeNewsWake) {
   time_t next = includeRevisionSafety && revisionCheckedAt > 0
     ? revisionCheckedAt + REVISION_SAFETY_SECONDS
     : 0;
 
-  for (uint8_t i = 0; i < state.moduleCount; ++i) for (uint8_t j = 0; j < state.modules[i].deadlineCount; ++j) {
-    const SmartDeadline& deadline = state.modules[i].deadlines[j];
-    if (deadline.at <= 0) continue;
-    // A missed deadline is work due NOW, not a reason to select a later one.
-    // This matters after reconnect, light/deep sleep, and scheduler restore.
-    if (deadline.at <= now) return 1;
-    if (next == 0 || deadline.at < next) next = deadline.at; // hard is never delayed; soft establishes/coalesces this wake.
+  for (uint8_t i = 0; i < state.moduleCount; ++i) {
+    // News has a freshness floor, but in Power Save it must never schedule its
+    // own wake. Keep its deadline in the persisted state: dueModuleCsv() can
+    // still pick it up after the floor has passed on another module's wake.
+    if (!includeNewsWake && state.modules[i].key == "news") continue;
+    for (uint8_t j = 0; j < state.modules[i].deadlineCount; ++j) {
+      const SmartDeadline& deadline = state.modules[i].deadlines[j];
+      if (deadline.at <= 0) continue;
+      // A missed deadline is work due NOW, not a reason to select a later one.
+      // This matters after reconnect, light/deep sleep, and scheduler restore.
+      if (deadline.at <= now) return 1;
+      if (next == 0 || deadline.at < next) next = deadline.at; // hard is never delayed; soft establishes/coalesces this wake.
+    }
   }
 
   // Schedule-only mode should normally always have a real module deadline. If
