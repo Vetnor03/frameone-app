@@ -34,7 +34,7 @@ def test_news_module_is_adaptive():
 
 def test_news_wraps_complete_original_titles_before_reducing_story_count():
     assert 'wrapTextToLines' in NEWS_CPP
-    assert 'show as many newest stories as actually fit' in NEWS_CPP
+    assert 'show as many stories in feed order as actually fit' in NEWS_CPP
     assert 'if (nextH > availableH)' in NEWS_CPP
     assert 'selected[visible++] = i;' in NEWS_CPP
     assert 'for (int columns = candidateCount; columns >= 1' in NEWS_CPP
