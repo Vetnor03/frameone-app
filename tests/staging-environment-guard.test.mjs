@@ -13,8 +13,8 @@ const guard = new Function('process', source.slice(start, end + 2))
 const stagingRef = 'ouwhfzjaahdipwmelzvf'
 const staging = {
   VERCEL_ENV: 'preview',
-  VERCEL_PROJECT_ID: 'prj_staging_test_project',
-  REMIND_STAGING_VERCEL_PROJECT_ID: 'prj_staging_test_project',
+  VERCEL_PROJECT_ID: 'prj_H8CovSaYkhbYg8CCvpl4N2hjsFaR',
+  REMIND_STAGING_VERCEL_PROJECT_ID: 'prj_H8CovSaYkhbYg8CCvpl4N2hjsFaR',
   VERCEL_GIT_COMMIT_REF: 'development',
   REMIND_STAGING_SUPABASE_REF: stagingRef,
   NEXT_PUBLIC_SUPABASE_URL: `https://${stagingRef}.supabase.co`,
@@ -84,4 +84,16 @@ test('both staging targets reject original production project and unapproved pro
   assert.throws(() => check({ REMIND_STAGING_VERCEL_PROJECT_ID: undefined }), /Staging deployment blocked/)
   assert.throws(() => check({ VERCEL_PROJECT_ID: 'prj_some_other_project' }), /Staging deployment blocked/)
   assert.throws(() => check({ VERCEL_ENV: 'production', VERCEL_GIT_COMMIT_REF: 'main' }), /Staging deployment blocked/)
+})
+
+test('staging rejects an unapproved project even when its matching ID was set in both env variables', () => {
+  assert.throws(() => check({
+    VERCEL_PROJECT_ID: 'prj_wrong_project',
+    REMIND_STAGING_VERCEL_PROJECT_ID: 'prj_wrong_project',
+  }), /Staging deployment blocked/)
+  assert.throws(() => check({
+    VERCEL_ENV: 'production',
+    VERCEL_PROJECT_ID: 'prj_wrong_project',
+    REMIND_STAGING_VERCEL_PROJECT_ID: 'prj_wrong_project',
+  }), /Staging deployment blocked/)
 })
