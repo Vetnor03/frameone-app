@@ -1,6 +1,6 @@
 # RE:MIND: separated production and staging
 
-**Current state (2026-09-28):** production Vercel project is healthy; separate Supabase staging schema and permission parity are prepared. The separate `frameone-staging` Vercel project has been created; the first successful deployment and branch tracking remain pending. The previous plan to share the live Vercel project's Preview settings was superseded; do not edit live environment variables further.
+**Current state (2026-09-28):** production Vercel project is healthy; separate Supabase staging schema and permission parity are prepared. The isolated `frameone-staging` project has the five required environment-variable names scoped to Production and Preview, as verified in its dashboard; key ownership is still unverified until the build check runs. The first successful deployment and branch tracking remain pending. Do not edit the live Vercel project.
 
 ## Architecture
 
