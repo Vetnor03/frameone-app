@@ -6171,16 +6171,83 @@ function MirrorNewsCard({
   const header = language === 'no' ? 'Nyheter' : 'News'
   const sourceItems = Array.isArray(detail.newsItems) ? detail.newsItems : []
   const capacity = size === 'small' ? 3 : size === 'medium' ? 6 : full ? 14 : 12
-  const useCompact = size === 'small'
-  const titles = sourceItems.slice(0, capacity).map((item) =>
-    String((useCompact ? item.compactTitle : item.standardTitle) || item.title || '').trim()
-  ).filter(Boolean)
+  // The mirror receives raw titles too; never trade a complete headline for a
+  // clipped "compact" variant that cannot appear on the physical frame.
+  const titles = sourceItems.slice(0, capacity).map((item) => String(item.title || '').trim()).filter(Boolean)
+  const titleKey = titles.join('\u0001')
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const rulerRef = useRef<HTMLDivElement>(null)
+  const [visibleIndices, setVisibleIndices] = useState<number[]>([])
 
+  useLayoutEffect(() => {
+    const body = bodyRef.current
+    const ruler = rulerRef.current
+    if (!body || !ruler) {
+      setVisibleIndices([])
+      return
+    }
+    let alive = true
+    const measure = () => {
+      if (!alive) return
+      const available = body.clientHeight
+      if (available <= 0) return
+      const rows = Array.from(ruler.children) as HTMLElement[]
+      let selected: number[] = []
+      if (size === 'small') {
+        // Measure the actual wrapped headline height at each column width;
+        // fewer columns means more width per headline, not an ellipsis.
+        for (let columns = Math.min(3, rows.length); columns >= 1; --columns) {
+          ruler.style.gridTemplateColumns = 'repeat(' + columns + ', minmax(0, 1fr))'
+          rows.forEach((row, index) => { row.style.display = index < columns ? 'flex' : 'none' })
+          if (ruler.getBoundingClientRect().height <= available + 0.5) {
+            selected = Array.from({ length: columns }, (_, index) => index)
+            break
+          }
+        }
+        if (!selected.length) {
+          ruler.style.gridTemplateColumns = 'minmax(0, 1fr)'
+          // A pathological first headline must not hide the next one that fits.
+          for (let index = 0; index < rows.length; ++index) {
+            rows.forEach((row, current) => { row.style.display = current === index ? 'flex' : 'none' })
+            if (ruler.getBoundingClientRect().height <= available + 0.5) {
+              selected = [index]
+              break
+            }
+          }
+        }
+      } else {
+        const gap = Number.parseFloat(window.getComputedStyle(ruler).rowGap) || 0
+        let usedHeight = 0
+        for (let index = 0; index < rows.length; ++index) {
+          const height = rows[index].getBoundingClientRect().height
+          const nextHeight = usedHeight + (selected.length ? gap : 0) + height
+          if (nextHeight > available + 0.5) {
+            if (selected.length) break
+            continue
+          }
+          selected.push(index)
+          usedHeight = nextHeight
+        }
+      }
+      setVisibleIndices(previous =>
+        previous.length === selected.length && previous.every((index, position) => index === selected[position])
+          ? previous : selected
+      )
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(body)
+    measure()
+    // Custom fonts can change wrapping after the first layout measurement.
+    void document.fonts?.ready.then(measure)
+    return () => { alive = false; observer.disconnect() }
+  }, [size, titleKey])
+
+  const visibleTitles = visibleIndices.map((index) => titles[index]).filter(Boolean)
   if (titles.length <= 0) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.26rem,0.72vw,0.46rem)] px-[clamp(0.45rem,1.2vw,0.8rem)] py-[clamp(0.35rem,0.9vw,0.55rem)] text-center leading-none">
         <MirrorModuleHeader title={header} />
-        <div className="max-w-full truncate text-[clamp(0.68rem,1.55vw,0.92rem)] font-medium tracking-[0.05em]" style={{ color: mutedColor }}>
+        <div className="max-w-full text-[clamp(0.68rem,1.55vw,0.92rem)] font-medium tracking-[0.05em]" style={{ color: mutedColor }}>
           {language === 'no' ? 'Ingen nyheter akkurat nå' : 'No news right now'}
         </div>
       </div>
@@ -6191,12 +6258,19 @@ function MirrorNewsCard({
     return (
       <div className="relative flex h-full w-full flex-col overflow-hidden px-[clamp(0.45rem,1.2vw,0.8rem)] pb-[clamp(0.25rem,0.7vw,0.45rem)] pt-[clamp(0.65rem,1.7vw,1rem)] text-center leading-none">
         <div className="flex shrink-0 justify-center"><MirrorModuleHeader title={header} /></div>
-        <div className="relative mt-[clamp(0.52rem,1.28vw,0.78rem)] min-h-0 w-full flex-1">
-          {titles.length > 1 && Array.from({ length: titles.length - 1 }).map((_, index) => (
-            <div key={index} className="pointer-events-none absolute top-[12%] h-[76%] w-px" style={{ left: String(((index + 1) * 100) / titles.length) + '%', backgroundColor: borderColor }} aria-hidden="true" />
-          ))}
-          <div className="grid h-full w-full items-center" style={{ gridTemplateColumns: 'repeat(' + titles.length + ', minmax(0, 1fr))' }}>
+        <div ref={bodyRef} className="relative mt-[clamp(0.52rem,1.28vw,0.78rem)] min-h-0 w-full flex-1">
+          <div ref={rulerRef} className="pointer-events-none invisible absolute left-0 top-0 grid w-full" aria-hidden="true">
             {titles.map((title, index) => (
+              <div key={title + '-ruler-' + index} className="flex min-w-0 items-center justify-center px-[clamp(0.32rem,0.9vw,0.58rem)] text-[clamp(0.68rem,1.6vw,0.96rem)] font-medium tracking-[0.04em]">
+                <span className="block max-w-full whitespace-normal break-words text-center leading-tight">{title}</span>
+              </div>
+            ))}
+          </div>
+          {visibleTitles.length > 1 && Array.from({ length: visibleTitles.length - 1 }).map((_, index) => (
+            <div key={index} className="pointer-events-none absolute top-[12%] h-[76%] w-px" style={{ left: String(((index + 1) * 100) / visibleTitles.length) + '%', backgroundColor: borderColor }} aria-hidden="true" />
+          ))}
+          <div className="grid h-full w-full items-center" style={{ gridTemplateColumns: 'repeat(' + Math.max(1, visibleTitles.length) + ', minmax(0, 1fr))' }}>
+            {visibleTitles.map((title, index) => (
               <div key={title + '-' + index} className="flex min-w-0 items-center justify-center px-[clamp(0.32rem,0.9vw,0.58rem)] text-[clamp(0.68rem,1.6vw,0.96rem)] font-medium tracking-[0.04em]" title={title}>
                 <span className="block max-w-full whitespace-normal break-words text-center leading-tight">{title}</span>
               </div>
@@ -6210,13 +6284,23 @@ function MirrorNewsCard({
   return (
     <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.65rem,1.7vw,1.15rem)] pb-[clamp(0.45rem,1.05vw,0.72rem)] pt-[clamp(0.8rem,1.95vw,1.2rem)] leading-none">
       <div className="flex shrink-0 justify-center"><MirrorModuleHeader title={header} /></div>
-      <div className="mt-[clamp(0.48rem,1.2vw,0.8rem)] grid min-h-0 flex-1 content-center gap-y-[clamp(0.28rem,0.72vw,0.5rem)]" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
-        {titles.map((title, index) => (
-          <div key={title + '-' + index} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.38rem,0.9vw,0.62rem)]">
-            <span className="h-[clamp(0.22rem,0.48vw,0.32rem)] w-[clamp(0.22rem,0.48vw,0.32rem)] rounded-full bg-current" aria-hidden="true" />
-            <span className="min-w-0 whitespace-normal break-words text-[clamp(0.62rem,1.34vw,0.9rem)] font-medium leading-tight tracking-[0.035em]" title={title}>{title}</span>
-          </div>
-        ))}
+      <div ref={bodyRef} className="relative mt-[clamp(0.48rem,1.2vw,0.8rem)] min-h-0 flex-1 overflow-hidden">
+        <div ref={rulerRef} className="pointer-events-none invisible absolute left-0 top-0 grid w-full gap-y-[clamp(0.28rem,0.72vw,0.5rem)]" aria-hidden="true">
+          {titles.map((title, index) => (
+            <div key={title + '-ruler-' + index} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.38rem,0.9vw,0.62rem)]">
+              <span className="h-[clamp(0.22rem,0.48vw,0.32rem)] w-[clamp(0.22rem,0.48vw,0.32rem)] rounded-full bg-current" />
+              <span className="min-w-0 whitespace-normal break-words text-[clamp(0.62rem,1.34vw,0.9rem)] font-medium leading-tight tracking-[0.035em]">{title}</span>
+            </div>
+          ))}
+        </div>
+        <div className="grid h-full min-h-0 w-full content-center gap-y-[clamp(0.28rem,0.72vw,0.5rem)]" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
+          {visibleTitles.map((title, index) => (
+            <div key={title + '-' + index} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.38rem,0.9vw,0.62rem)]">
+              <span className="h-[clamp(0.22rem,0.48vw,0.32rem)] w-[clamp(0.22rem,0.48vw,0.32rem)] rounded-full bg-current" aria-hidden="true" />
+              <span className="min-w-0 whitespace-normal break-words text-[clamp(0.62rem,1.34vw,0.9rem)] font-medium leading-tight tracking-[0.035em]" title={title}>{title}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )

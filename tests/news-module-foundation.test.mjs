@@ -53,7 +53,7 @@ test('News frame rendering uses the reminder-like list without date UI', () => {
 
 test('News preserves complete physical headlines while the app retains semantic optimization', () => {
   const optimizer = read('app/lib/frameContentOptimizer.ts')
-  assert.match(optimizer, /NEWS_TITLE_OPTIMIZER_VERSION = 'news-v2'/)
+  assert.match(optimizer, /NEWS_TITLE_OPTIMIZER_VERSION = 'news-v3'/)
   assert.match(optimizer, /complete, natural headline/)
   assert.match(optimizer, /rephrase it shorter when needed instead of returning a clipped or unfinished fragment/)
 
@@ -90,4 +90,25 @@ test('News freshness is independent from cheap wakeups and unrelated redraws', (
   const schedule = firmware.slice(firmware.indexOf('ContentRevisionState revisionState;'))
   assert.match(schedule, /desired\.modules\[i\]\.key == "news" && displayPlan\.dirty\[i\]/)
   assert.doesNotMatch(schedule, /ModuleNews::invalidateScheduled/)
+})
+
+test('News tab and mirror use complete source headlines and measure before showing them', () => {
+  const tab = read('app/components/NewsModuleSettingsTab.tsx')
+  const mirror = read('app/api/device/mirror-snapshot/base.ts')
+  const home = read('app/HomePageClient.tsx')
+  const newsCard = home.slice(home.indexOf('function MirrorNewsCard('), home.indexOf('function splitMirrorSoccerKickoff('))
+  const optimizer = read('app/lib/frameContentOptimizer.ts')
+
+  assert.match(tab, /raw_titles=1/)
+  assert.match(mirror, /url\.searchParams\.set\('raw_titles', '1'\)/)
+  assert.match(newsCard, /useLayoutEffect\(/)
+  assert.match(newsCard, /new ResizeObserver\(measure\)/)
+  assert.match(newsCard, /rows\[index\]\.getBoundingClientRect\(\)\.height/)
+  assert.match(newsCard, /if \(nextHeight > available \+ 0\.5\)/)
+  assert.match(newsCard, /visibleIndices\.map\(\(index\) => titles\[index\]\)/)
+  assert.doesNotMatch(newsCard, /\btruncate\b|line-clamp/)
+  // Other optimized News callers must also fall back to a complete source
+  // title instead of clipping the last word when AI is unavailable.
+  assert.match(optimizer, /item\.contentType === 'news' \? item\.title : fallbackTitle/)
+  assert.match(optimizer, /kindById\.get\(i\.id\) === 'news'/)
 })
