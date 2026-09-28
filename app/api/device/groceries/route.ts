@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { authenticatePhysicalDevice } from '@/app/lib/device/updateStateAuth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -51,12 +52,6 @@ type StoredRecipeSuggestion = {
   missing: string[]
   score: number
   updatedAt: string
-}
-
-function getBearerToken(req: Request) {
-  const h = req.headers.get('authorization') || ''
-  const m = h.match(/^Bearer\s+(.+)$/i)
-  return m ? m[1] : null
 }
 
 function asString(value: unknown, def = '') {
@@ -702,25 +697,20 @@ export async function GET(req: Request) {
       return jsonErrorResponse({ error: 'Missing device_id' }, { status: 400 })
     }
 
-    const token = getBearerToken(req)
-    if (!token) {
-      return jsonErrorResponse({ error: 'Missing bearer token' }, { status: 401 })
+    const auth = await authenticatePhysicalDevice(req, device_id)
+    if ('error' in auth) {
+      return jsonErrorResponse({ error: auth.error }, { status: auth.status })
     }
-
-    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    const supabase = auth.supabase
 
     const { data: device, error: deviceError } = await supabase
       .from('devices')
-      .select('id, device_id, device_token')
+      .select('id, device_id')
       .eq('device_id', device_id)
       .maybeSingle()
 
-    if (deviceError) {
-      console.error('/api/device/groceries devices query failed', { device_id, error: deviceError })
-    }
-
-    if (deviceError || !device || device.device_token !== token) {
-      return jsonErrorResponse({ error: 'Unauthorized' }, { status: 401 })
+    if (deviceError || !device) {
+      return jsonErrorResponse({ error: 'internal_error' }, { status: 500 })
     }
 
     const appStorageDeviceId = String((device as Record<string, unknown>).id ?? '').trim()
