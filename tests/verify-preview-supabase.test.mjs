@@ -41,8 +41,10 @@ test('preview rejects missing or wrong staging configuration before fetch', asyn
   const noFetch = () => { throw new Error('Should never reach network') }
   await assert.rejects(verifyPreviewSupabaseCredentials({ ...env, REMIND_STAGING_SUPABASE_REF: 'bzkqyllgccswrfudmexm' }, noFetch), /wrong staging project/)
   await assert.rejects(verifyPreviewSupabaseCredentials({ ...env, NEXT_PUBLIC_SUPABASE_URL: 'https:\/\/bzkqyllgccswrfudmexm.supabase.co' }, noFetch), /wrong staging project/)
-  await assert.rejects(verifyPreviewSupabaseCredentials({ ...env, SUPABASE_SERVICE_ROLE_KEY: undefined }, noFetch), /keys missing/)
-  await assert.rejects(verifyPreviewSupabaseCredentials({ ...env, NEXT_PUBLIC_SUPABASE_ANON_KEY: undefined }, noFetch), /keys missing/)
+  await assert.rejects(verifyPreviewSupabaseCredentials({ ...env, SUPABASE_SERVICE_ROLE_KEY: undefined }, noFetch), /missing values for SUPABASE_SERVICE_ROLE_KEY/)
+  await assert.rejects(verifyPreviewSupabaseCredentials({ ...env, NEXT_PUBLIC_SUPABASE_ANON_KEY: undefined }, noFetch), /missing values for NEXT_PUBLIC_SUPABASE_ANON_KEY/)
+  await assert.rejects(verifyPreviewSupabaseCredentials({ ...env, NEXT_PUBLIC_SUPABASE_ANON_KEY: '   ' }, noFetch), /missing values for NEXT_PUBLIC_SUPABASE_ANON_KEY/)
+  await assert.rejects(verifyPreviewSupabaseCredentials({ ...env, NEXT_PUBLIC_SUPABASE_ANON_KEY: undefined, SUPABASE_SERVICE_ROLE_KEY: undefined }, noFetch), /missing values for NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY/)
 })
 
 test('preview aborts when either key is rejected or endpoint is unavailable', async () => {
