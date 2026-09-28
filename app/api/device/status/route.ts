@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { authenticatePhysicalDevice, authenticateUserForDevice, deviceIdFrom } from '@/app/lib/device/updateStateAuth'
 
 export const runtime = 'nodejs'
 
@@ -61,18 +61,19 @@ function parseSmallInt(value: unknown): number | null {
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
-    const device_id = url.searchParams.get('device_id')
+    const device_id = deviceIdFrom(url.searchParams.get('device_id'))
 
     if (!device_id) {
-      return NextResponse.json({ error: 'Missing device_id' }, { status: 400 })
+      return NextResponse.json({ error: 'missing_device_id' }, { status: 400 })
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    // The browser supplies a real Supabase user JWT. The device ID alone is
+    // never authorization; enforce exact device membership before service-role
+    // telemetry access. Physical firmware only POSTs to this endpoint.
+    const auth = await authenticateUserForDevice(req, device_id)
+    if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
-    const { data, error } = await supabase
+    const { data, error } = await auth.supabase
       .from('device_status')
       .select(
         'current_version, battery_percent, battery_voltage, is_charging, is_usb_present, pwr_sense_raw, pwr_sense_stable, power_mode, wake_reason, last_seen_at, last_render_at, last_refresh_at'
@@ -81,7 +82,7 @@ export async function GET(req: Request) {
       .maybeSingle()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ error: 'internal_error' }, { status: 500 })
     }
 
     return NextResponse.json({
@@ -97,12 +98,9 @@ export async function GET(req: Request) {
       wake_reason: data?.wake_reason ?? null,
       last_seen_at: data?.last_seen_at ?? data?.last_refresh_at ?? null,
       last_render_at: data?.last_render_at ?? data?.last_refresh_at ?? null,
-    })
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message ?? 'Unknown error' },
-      { status: 500 }
-    )
+    }, { headers: { 'Cache-Control': 'private, no-store, max-age=0' } })
+  } catch {
+    return NextResponse.json({ error: 'internal_error' }, { status: 500 })
   }
 }
 
@@ -110,7 +108,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as StatusPostBody
 
-    const device_id = String(body?.device_id ?? '').trim()
+    const device_id = deviceIdFrom(body?.device_id)
     const current_versionRaw = String(body?.current_version ?? '').trim()
     const current_version = current_versionRaw || null
     const battery_percent = parseBatteryPercent(body?.battery_percent)
@@ -125,13 +123,13 @@ export async function POST(req: Request) {
     const wake_reason = String(body?.wake_reason ?? '').trim() || null
 
     if (!device_id) {
-      return NextResponse.json({ error: 'Missing device_id' }, { status: 400 })
+      return NextResponse.json({ error: 'missing_device_id' }, { status: 400 })
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    // Existing firmware already sends its own bearer with this POST.
+    // Reject missing, forged or wrong-device tokens BEFORE writing telemetry.
+    const auth = await authenticatePhysicalDevice(req, device_id)
+    if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
     const nowIso = new Date().toISOString()
 
@@ -155,7 +153,7 @@ export async function POST(req: Request) {
       payload.last_refresh_at = nowIso
     }
 
-    const { error } = await supabase
+    const { error } = await auth.supabase
       .from('device_status')
       .upsert(payload, { onConflict: 'device_id' })
 
@@ -179,10 +177,7 @@ export async function POST(req: Request) {
       last_seen_at: nowIso,
       last_render_at: did_render === true ? nowIso : null,
     })
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message ?? 'Unknown error' },
-      { status: 500 }
-    )
+  } catch {
+    return NextResponse.json({ error: 'internal_error' }, { status: 500 })
   }
 }
