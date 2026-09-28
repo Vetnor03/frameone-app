@@ -7,6 +7,9 @@ const routeSource = readFileSync(new URL('../app/api/device/status/route.ts', im
 const appSource = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 const firmwareSource = readFileSync(new URL('../frame/src/frame_v2.5.1.ino', import.meta.url), 'utf8')
 
+process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://status-test.invalid'
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'status-test-public-key'
+
 function harness({ userId = 'user-A', physicalToken = 'device-A-secret', dbError = false } = {}) {
   const calls = []
   const membership = {
