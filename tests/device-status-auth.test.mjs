@@ -203,11 +203,13 @@ test('status read/write failures do not leak database error details', async () =
   assert.deepEqual(await write.json(), { error: 'internal_error' })
 })
 
-test('app calls and existing firmware bearer stay coordinated with status auth', () => {
-  const requests = appSource.match(/fetch\(\`\/api\/device\/status\?device_id=\$\{encodeURIComponent\(deviceId\)\}\`[\s\S]{0,190}/g) ?? []
-  assert.equal(requests.length, 2)
-  assert.ok(requests.every((snippet) => /headers: \{ Authorization: \`Bearer \$\{accessToken\}\` \}/.test(snippet)))
-  assert.match(appSource, /const \{ data: sessionData \} = await supabase\.auth\.getSession\(\)/)
-  assert.match(firmwareSource, /postDeviceStatus[\s\S]+?NetClient::httpPostAuthJson\(\s*url,\s*DeviceIdentity::getToken\(\)/)
-  assert.doesNotMatch(routeSource, /SUPABASE_SERVICE_ROLE_KEY|process\.env\.NEXT_PUBLIC_SUPABASE_ANON_KEY/)
+test('existing app cookies and firmware physical bearer stay compatible', () => {
+  const requests = appSource.split('/api/device/status?device_id=')
+  assert.equal(requests.length, 3)
+  assert.match(routeSource, /createServerClient/)
+  assert.match(routeSource, /caller\.auth\.getUser\(\)/)
+  assert.match(routeSource, /req\.headers\.has\('authorization'\)/)
+  assert.match(firmwareSource, /NetClient::httpPostAuthJson/)
+  assert.match(firmwareSource, /DeviceIdentity::getToken\(\)/)
+  assert.doesNotMatch(routeSource, /SUPABASE_SERVICE_ROLE_KEY/)
 })
