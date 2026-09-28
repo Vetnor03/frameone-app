@@ -8,7 +8,8 @@ Status: **read-only review; no production or staging runtime change in this bran
 - Read-only queries impersonating each `authenticated` JWT subject show only that account's device, membership, settings and reminder.
 - In separate rolled-back transactions, attempts by A to update B's reminder/settings, and B to update A's, each affected zero rows. A final read check showed both fixtures unchanged. **These are DB/RLS tests only; they do not establish real HTTP authorization.**
 - **Browser smoke test confirmed by user on 2026-09-28:** both synthetic accounts can sign in, and user-created data appears separate in the app for A and B. This validates the normal UI path only, not adversarial cross-user API access. Keep both fixtures for further testing.
-- Deliberate signed-in cross-user HTTP/API requests and unauthenticated endpoint tests remain pending. Do not remove fixtures yet.
+- **Tester A read-only HTTP check (user-run on staging, 2026-09-28): 7/7 PASS.** The observed results were own frame list 200 (no B frame), own display revision 200, B display revision 403, B mirror/configuration 403, B physical-frame config impersonation 401, B physical hardware revision impersonation 401, and missing-bearer user display status 401. These are user-reported browser results, not independently obtained connector requests.
+- **Tester B read-only HTTP check pending.** Negative write tests over real HTTP, unauthenticated legacy device-status routes, and pairing-v2 remediation remain outstanding. Do not remove fixtures yet.
 
 ## Route inventory and concrete findings
 
