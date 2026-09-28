@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
+import { createHash } from 'node:crypto'
 
 function loadModule(path, imports) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -79,6 +80,8 @@ function harness(options = {}) {
   }
 
   const auth = loadModule('../app/lib/device/updateStateAuth.ts', {
+    'node:crypto': { createHash },
+    '@/app/lib/device/pairingRollout': { legacyPairingQuarantined: () => false },
     '@/app/lib/supabase/serviceClient': {
       createServiceClient: () => supabase,
     },
