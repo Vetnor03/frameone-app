@@ -24,6 +24,16 @@ The RPC is allowed to receive an expected verifier **hash**, never the plaintext
 
 **Do not turn on the HTTP start endpoint after SQL acceptance.** The physical provisioning, protected Vercel device ingress, independent server HMAC key and source rate limit must be designed, tested and reviewed first. Pairing claim, bounded token delivery/ACK, v2-only token verification across *all* firmware endpoints and safe recovery remain separate slices. Keep the legacy pairing paths quarantined in staging and preserve existing production firmware unchanged.
 
+## Verified staging result
+
+The merged start core and its isolated RPC script are in `development` ([PR #1327](https://github.com/Vetnor03/frameone-app/pull/1327)). CI: **966/966 stable tests**, typecheck and changed-file lint passed; the separate full-audit jobs retain existing debt.
+
+Applied only to staging Supabase project `ouwhfzjaahdipwmelzvf` as migration `20260928201440_staging_pairing_v2_proof_start_20260928`. Catalog verification: both new SECURITY DEFINER RPCs grant EXECUTE **only** to `service_role`; neither `anon` nor `authenticated` can execute them. The existing private tables still have no app/service Data API grants.
+
+A transaction-scoped, synthetic disposable device and ephemeral verifier exercised the **actual PostgreSQL RPCs**: unknown/wrong verifier rejected, correct verifier created one session, repeated start rejected, expired session was explicitly closed and replaced, and revoked bootstrap credential prevented further verifier lookup and starts. The whole test transaction was rolled back. A subsequent independent query confirmed **zero** disposable devices, **zero** private credential/session rows, and both original tester frames and both tester accounts intact.
+
+This verifies backend session-start invariants only. There is still no provisioned physical secret, no live server HMAC key, no active HTTP v2 start, no user-code claim, no poll/delivery/ACK or physical staging frame. Do not construe these tests as end-to-end enrollment.
+
 ## Rollback
 
 The route stays disabled throughout. Revert the new code on `development` to stop using the service module. If applied, the two new RPCs remain service-only and inert with no credential/session rows; retire them through a separately reviewed staging-only migration, not a destructive blind rollback. Do not roll back a future activated v2 frame into the token-disclosing legacy path.
