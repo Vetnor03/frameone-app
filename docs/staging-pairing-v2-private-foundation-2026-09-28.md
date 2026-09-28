@@ -20,6 +20,16 @@ Only verifiers and explicitly encrypted temporary delivery material have columns
 
 An active-session uniqueness constraint refuses another live session or display-code collision until the earlier one is explicitly closed/expired. An expiration timestamp alone does not alter DB state; later code must expire stale sessions transactionally. Delivery plaintext cannot be stored without an encryption implementation and server-side key. The schema itself does not make stolen firmware secret storage safe.
 
+## Actual staging application and verification
+
+Applied the reviewed, additive SQL **only** to Supabase project `ouwhfzjaahdipwmelzvf`, migration `20260928194216_staging_pairing_v2_private_foundation_20260928`. The exact staging migration is recorded separately from the existing snapshot/ACL baseline; no `db push` or reset was used.
+
+Post-migration catalog checks: the private schema exists, its `anon`, `authenticated` and `service_role` USAGE privileges are all **false**. Both tables have RLS enabled, zero policies, and zero DML grants to those roles. Both contain **zero records**. The two required live-session uniqueness indexes exist; there are zero v2 database functions and zero listed API grants. Both original tester frames, memberships and user accounts remain in place.
+
+The Supabase security advisor reports `rls_enabled_no_policy` INFO for both private tables. This is intentional: without grants or policies they are deny-by-default, not user-owned Data API tables. It also reports existing security findings elsewhere in the baseline; they are a separate audit and not cleared by this slice. [RLS no policy advisor](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
+
+**Outstanding:** no bootstrap credential provisioned, no physical session created, no approved privileged RPC, no encryption/HMAC key deployed, no tested v2 client or firmware, and no production rollout. The v2 HTTP start endpoint stays disabled even though the staging schema exists.
+
 ## Acceptance before any v2 issuer is enabled
 
 1. Verify CI tests and apply only the reviewed staging script through an explicitly selected staging project migration. Check every table, constraint, grant, RLS flag and zero row counts. The migration should not touch existing `public` data.
