@@ -76,3 +76,43 @@ test('groups without personal reminders keep canonical chronological order', () 
   const prioritized = prioritizeReminderVisiblePrefix(items, ['standard'])
   assert.deepEqual(prioritized.map((item) => item.reminder_id), ['event-1200', 'event-1700', 'event-1800'])
 })
+
+test('connected Teams meeting is visible ahead of optional public events on a crowded day', () => {
+  const entries = [
+    entry('public-1200', '12:00'),
+    entry('teams-1300', '13:00', 'teams'),
+    entry('public-1300', '13:00'),
+    entry('public-1700', '17:00'),
+    entry('personal-0800', '08:00', 'remind'),
+  ]
+
+  // The actual production failure: Teams was third, while compact layouts can
+  // fit only a prefix. Keep the personal reminder first, then the meeting.
+  const prioritized = prioritizeReminderVisiblePrefix(entries, ['compact'])
+  assert.deepEqual(prioritized.slice(0, 2).map((item) => item.reminder_id), [
+    'personal-0800', 'teams-1300',
+  ])
+  assert.equal(prioritized.length, entries.length)
+})
+
+test('connected calendar commitments outrank public events even when a limited feed is capped', () => {
+  const entries = [
+    ...Array.from({ length: 14 }, (_, i) => entry(`public-${i}`, `${String(8 + i).padStart(2, '0')}:00`)),
+    entry('teams-1700', '17:00', 'teams'),
+  ]
+  const selected = prioritizeReminderVisiblePrefix(entries, ['compact']).slice(0, 10)
+  assert.equal(selected[0].reminder_id, 'teams-1700')
+  assert.equal(selected.length, 10)
+})
+
+test('calendar meetings retain time order within their priority group', () => {
+  const prioritized = prioritizeReminderVisiblePrefix([
+    entry('teams-1700', '17:00', 'teams'),
+    entry('spond-1400', '14:00', 'spond'),
+    entry('teams-1300', '13:00', 'teams'),
+    entry('public-0800', '08:00'),
+  ], ['standard'])
+  assert.deepEqual(prioritized.map((item) => item.reminder_id), [
+    'teams-1300', 'spond-1400', 'teams-1700', 'public-0800',
+  ])
+})
