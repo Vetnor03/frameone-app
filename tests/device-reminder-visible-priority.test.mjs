@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { prioritizeReminderVisiblePrefix } from '../app/lib/device/remindersFeed.ts'
+import { prioritizeReminderVisiblePrefix, selectReminderDisplayGroups } from '../app/lib/device/remindersFeed.ts'
 
 function entry(id, time, source = 'local-events', days = 1) {
   return {
@@ -100,7 +100,7 @@ test('connected calendar commitments outrank public events even when a limited f
     ...Array.from({ length: 14 }, (_, i) => entry(`public-${i}`, `${String(8 + i).padStart(2, '0')}:00`)),
     entry('teams-1700', '17:00', 'teams'),
   ]
-  const selected = prioritizeReminderVisiblePrefix(entries, ['compact']).slice(0, 10)
+  const selected = prioritizeReminderVisiblePrefix(selectReminderDisplayGroups(entries, 10), ['compact'])
   assert.equal(selected[0].reminder_id, 'teams-1700')
   assert.equal(selected.length, 10)
 })
