@@ -424,9 +424,8 @@ function visibleReminderCapacity(item: DeviceReminderItem, profiles: readonly Re
 
 /**
  * The firmware keeps API order inside each date bucket and then renders only a
- * prefix of that bucket. Canonical feed order already puts personal reminders
- * first within each date, so retaining it gives every geometry the same visible
- * prefix while leaving overflow behind it for an accurate +N count.
+ * prefix of that bucket. Retain the canonical chronological order in every
+ * geometry while leaving overflow behind it for an accurate +N count.
  */
 export function prioritizeReminderVisiblePrefix(
   items: readonly DeviceReminderItem[],
@@ -460,13 +459,8 @@ export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderIte
   if (a.occurrence_date < b.occurrence_date) return -1
   if (a.occurrence_date > b.occurrence_date) return 1
 
-  // Preserve the existing user-created reminder priority within a date.
-  // All other sources follow local clock time; Teams/Spond only win ties
-  // against optional public events, never an earlier event.
-  const ap = isUserCreatedReminder(a)
-  const bp = isUserCreatedReminder(b)
-  if (ap !== bp) return ap ? -1 : 1
-
+  // Local clock time wins for every source, including personal reminders.
+  // Source priority only breaks exact time ties (or pairs of untimed items).
   const at = normalizedSortTime(a.display_time || a.due_time)
   const bt = normalizedSortTime(b.display_time || b.due_time)
   // Preserve the existing timed-before-all-day behavior while ensuring an
