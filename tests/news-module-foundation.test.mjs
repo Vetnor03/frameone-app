@@ -10,6 +10,10 @@ test('News is a first-class frame module backed by NRK RSS', () => {
 
   const api = read('app/api/news/route.ts')
   assert.match(api, /https:\/\/www\.nrk\.no\/toppsaker\.rss/)
+  assert.match(api, /https:\/\/www\.nrk\.no\/nyheter\/siste\.rss/)
+  assert.match(api, /return items/)
+  assert.doesNotMatch(api, /return items\.sort/)
+  assert.match(api, /oldItems\.sort\(\(a, b\) => a\.order - b\.order\)/)
   assert.match(api, /contentType: 'news'/)
   assert.match(api, /profile_titles/)
   assert.match(api, /nrkArticleUrl/)
@@ -55,7 +59,7 @@ test('News preserves complete physical headlines while the app retains semantic 
 
   const firmware = read('frame/src/modules/ModuleNews.cpp')
   assert.match(firmware, /wrapTextToLines/)
-  assert.match(firmware, /show as many newest stories as actually fit/)
+  assert.match(firmware, /show as many stories in feed order as actually fit/)
   assert.match(firmware, /if \(nextH > availableH\)/)
   assert.match(firmware, /raw_titles=1/)
   assert.match(firmware, /selected\[visible\+\+\] = i/)
