@@ -96,6 +96,11 @@ function harness(options = {}) {
       createServiceClient: () => supabase,
     },
     '@/app/lib/device/updateStateAuth': auth,
+    // Existing tests exercise legacy firmware compatibility, not isolated staging.
+    '@/app/lib/device/pairingRollout': {
+      legacyPairingQuarantined: () => false,
+      LEGACY_PAIRING_DISABLED_RESPONSE: { error: 'legacy_pairing_disabled' },
+    },
     './builder': {
       async deviceHasOwnerAccessLink() {
         calls.push('ownership')
