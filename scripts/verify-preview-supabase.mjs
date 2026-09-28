@@ -21,11 +21,10 @@ export async function verifyPreviewSupabaseCredentials(
     (env.VERCEL_ENV === 'production' && !isLiveProduction)
   if (!isStagingDeployment) return { skipped: true }
 
+  const pinnedStagingProjectId = 'prj_H8CovSaYkhbYg8CCvpl4N2hjsFaR'
   if (
-    !env.VERCEL_PROJECT_ID ||
-    env.VERCEL_PROJECT_ID === liveProductionProjectId ||
-    !env.REMIND_STAGING_VERCEL_PROJECT_ID ||
-    env.VERCEL_PROJECT_ID !== env.REMIND_STAGING_VERCEL_PROJECT_ID
+    env.VERCEL_PROJECT_ID !== pinnedStagingProjectId ||
+    env.REMIND_STAGING_VERCEL_PROJECT_ID !== pinnedStagingProjectId
   ) {
     throw new Error('Staging credential check blocked: unapproved Vercel project.')
   }
