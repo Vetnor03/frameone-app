@@ -1,69 +1,54 @@
-# RE:MIND environments and release gate
+# RE:MIND: separated production and staging
 
-Status: staging database baseline restored and ACL parity verified. Vercel Preview activation, API-level security testing and production migration-history reconciliation remain pending.
+**Current state (2026-09-28):** production Vercel project is healthy; separate Supabase staging schema and permission parity are prepared. The second Vercel project has **not** been created yet. The previous plan to share the live Vercel project's Preview settings was superseded; do not edit live environment variables further.
 
-## Inventory (2026-09-28)
+## Architecture
 
-- GitHub source of truth: `Vetnor03/frameone-app`; `main` is the current live code branch.
-- Vercel: one existing `frameone-app` project. Its production domain and production settings remain unchanged.
-- Supabase: existing `FRAME_V2` project in `eu-west-1` is production; identifier `bzkqyllgccswrfudmexm`. Do not alter its data or migration ledger to create staging.
-- Staging Supabase: `RE:MIND STAGING` (`ouwhfzjaahdipwmelzvf`) in `eu-west-1`; URL `https://ouwhfzjaahdipwmelzvf.supabase.co`. Verified active and healthy. The schema was restored on 2026-09-28; no real user/device data was copied, and there are no scheduled jobs.
-- IMRPlanner (`iwyhhvahtqwftcasvvel`) is now `INACTIVE` after a successful pause on 2026-09-28, freeing the Free-plan slot; do not delete it. Its application is unavailable while paused and can be restored later, subject to provider retention rules.
-- Organization `Vetnor03's Org` remains Free; the project-creation cost check returned $0/month.
-- The existing GitHub `main` branch has no branch protection at this snapshot. Protection must be enabled before treating the release process as enforced.
-- Repository is currently public. Do not commit .env files, project API secrets, OTA signing secrets, database exports, real device tokens or real user data.
-
-## Target wiring
-
-| Component | Development / staging | Production |
+| | Production | Staging |
 | --- | --- | --- |
-| Git | `development` and short-lived feature branches | `main` |
-| Vercel | Preview deployment from `development` | Existing production deployment |
-| Supabase | `RE:MIND STAGING` (`ouwhfzjaahdipwmelzvf`) | Existing `FRAME_V2` |
-| Users/data | Synthetic accounts, test devices, synthetic data | Customer accounts and devices |
-| Domain | Vercel preview URL initially; staging domain only after isolation is proven | `re-mind.no` |
+| GitHub repository | `Vetnor03/frameone-app` | Same repository |
+| Git branch | `main` | `development` |
+| Vercel project | Existing `frameone-app` (`prj_boLzA3f5Ntu4r4Ei0AeqYCPhNgv0`) | New `frameone-staging` (ID supplied by Vercel after creation) |
+| Vercel deployment target | Production | **Production in the staging project** |
+| Supabase ref | `bzkqyllgccswrfudmexm` | `ouwhfzjaahdipwmelzvf` |
+| Domain | `re-mind.no` | New project-generated `.vercel.app` domain only |
+| Records and devices | Real | Synthetic only |
 
-Do not create a second live Vercel *production* project from the development branch: its `VERCEL_ENV=production` would bypass the preview-specific build gate. Use the existing project's **Preview** environment.
+The existing Vercel project and its environment variables are frozen. Production's live app and frame were smoke-tested on 2026-09-28. Do not create new production credentials or overwrite production variables to set up staging. No automatic database schema push or firmware flash is authorized.
 
-## Preview build is fail closed
+## How the staged build is protected
 
-`next.config.ts` aborts any Vercel Preview build unless ALL of the following are configured:
+The `development` branch runs two checks during staging builds:
+- `scripts/verify-preview-supabase.mjs` runs as npm `prebuild` and confirms **both keys actually authenticate with staging Supabase**. It neither lists user data in logs nor writes records. The historical filename remains for compatibility.
+- `next.config.ts` checks the actual `VERCEL_PROJECT_ID`, an explicitly supplied `REMIND_STAGING_VERCEL_PROJECT_ID`, branch `development` for the new project's production target, exact staging Supabase ref/URL, and absence of known live external-integration secrets or direct database URLs.
 
-1. `REMIND_STAGING_SUPABASE_REF` is the exact 20-character ref of a separate staging project, not `bzkqyllgccswrfudmexm`.
-2. `NEXT_PUBLIC_SUPABASE_URL` resolves exactly to `https://<staging-ref>.supabase.co`.
-3. `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are present. `npm run build` first executes `scripts/verify-preview-supabase.mjs`, which checks the public key at staging Auth settings and the server key at staging Auth's admin endpoint. Credentials and response bodies are never logged. The build fails closed on mismatched/unavailable credentials.
-4. `SUPABASE_URL`, if supplied as a fallback, matches the staging URL. Direct database connection variables (`DATABASE_URL`, `DIRECT_URL`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`) are forbidden in Preview.
-5. Vendor secrets enabling email, external integrations, cron, AI, push and commerce are absent in Preview. The build displays offending variable names only, never values. The current staging setup intentionally tests core app behavior, not those integrations.
+The primary deployment of the separate staging project is `VERCEL_ENV=production`; its **project ID**, not that label, separates it from live production. Live `main` is not changed. If the system project ID is unavailable or the approved ID does not match, the staging build fails closed.
 
-This blocks **new builds**, not older preview deployments that may already exist. Audit/revoke old previews that can access production. Do not visit/use any preview with production credentials.
+## Exact Vercel project creation hand-off
 
-## Staging activation: in order
+The connected Vercel action can inspect projects and deployments, but cannot create a **Git-linked** project or edit its credentials. The user must do the following in the Vercel dashboard. Do not use direct-file deployment: it would not provide the requested Git-linked setup.
 
-1. **Done:** isolated `RE:MIND STAGING` project created in `eu-west-1` after $0/month cost confirmation. Database schema is now restored, but the staging app is not yet deployed.
-2. **Staging-only restore done:** use the validated 2026-09-26 schema-only export (checksum below) as a candidate fresh-install baseline, apply the subsequent News cache migration, then repair effective ACL differences caused by new-project default grants. Staging's migration ledger has 34 staging-only entries, NOT the historical production ledger. The old 92-file migration chain remains unreconciled, so automated `db push` is not enabled. **Do not** run `supabase db push` or `db reset` against production. See `docs/migration-reconciliation.md` and `docs/security-rollback-playbook.md`. Do not copy live user/auth tables or tokens into staging.
-3. Populate test data, review exposed-schema RLS/grants, and run two-account negative authorization checks.
-4. In Vercel `frameone-app` project's **Preview** environment, set `REMIND_STAGING_SUPABASE_REF=ouwhfzjaahdipwmelzvf`, `NEXT_PUBLIC_SUPABASE_URL=https://ouwhfzjaahdipwmelzvf.supabase.co`, the **staging project's** legacy `anon` key as `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and its **staging** service-role key as `SUPABASE_SERVICE_ROLE_KEY`. Find both on staging's API Keys screen; never paste a secret into Git, a support chat, a browser console, or project documentation. The connected Vercel integration cannot edit secrets, so this remains a dashboard step.
-5. Configure staging-safe values for every side-effecting integration: auth site URL and callback redirects, email sender/recipient, Teams/Spond OAuth, payments/Shopify, OpenAI, push notifications, cron secrets and any external synchronization. Disable unnecessary jobs, payments, notifications and live provider writes until separately tested.
-6. Redeploy the `development` preview. Verify the build gate passes, the app creates only synthetic staging data, and the staging app cannot modify the live Supabase project. Check both server and browser configurations.
-7. Only then point a **spare test frame** at the staging origin using an explicitly separate firmware build/configuration. Do not reuse production device credentials or flash a production pilot frame with a staging firmware URL.
+1. Create a **new project** in the same Vercel team; import **the existing** GitHub repo `Vetnor03/frameone-app`. Do not create/fork a GitHub repository, import environment variables from `frameone-app`, or add `re-mind.no`.
+2. Project name: `frameone-staging`, root directory: repository root, framework: Next.js. Set the new project's **Production Branch = development** under **Settings → Git**. If Vercel makes an initial deployment before the branch and secrets are set, a failed deployment is expected; do not try to fix it by copying production secrets.
+3. Record the new project's `prj_...` identifier from its Settings → General page. In its own Environment Variables, add only these five under **Production** (and Preview later if desired):
+   - `REMIND_STAGING_VERCEL_PROJECT_ID` = exact new Vercel project ID (Config).
+   - `REMIND_STAGING_SUPABASE_REF` = `ouwhfzjaahdipwmelzvf` (Config).
+   - `NEXT_PUBLIC_SUPABASE_URL` = `https://ouwhfzjaahdipwmelzvf.supabase.co` (Config).
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = **staging** legacy anon key (Config; public in browser).
+   - `SUPABASE_SERVICE_ROLE_KEY` = **staging** service-role key (Secret; never public).
+4. Enable **System Environment Variables** in the new project, so Vercel supplies `VERCEL_PROJECT_ID` and `VERCEL_GIT_COMMIT_REF`; never manually set or override these.
+5. Do **not** add live `OPENAI_API_KEY`, `RESEND_API_KEY`, `CRON_SECRET`, Teams/Spond credentials, Shopify, private push keys, direct Postgres URLs or any production-domain aliases. An inherited integration secret intentionally blocks the build. The repository still has a scheduled cron definition; without `CRON_SECRET`, its route returns unauthorized and cannot run the sync logic. Review whether to disable cron separately.
+6. Redeploy from **development** to this new Vercel project. Check that its deployment `target=production`, `Git ref=development`, successful Supabase key validation and actual staging URL. The staging project must not contain customer accounts or production device tokens. Keep Preview/deployment access protected while testing.
+7. Configure **staging Supabase Auth** Site URL and permitted redirect URLs only for the new project domain before testing email OTP. Do not send real customer emails; run synthetic tests first. Test backend and browser environment, actual two-account API isolation, pairing/recovery and a spare frame with a separate staged firmware target.
 
-Staging readiness requires a successful build, two-user isolation test, pairing/reset/manual-update smoke test, and proof that live production remains unchanged. A green frontend build alone is insufficient.
+**Never ask the user to paste API keys into chat or GitHub.** The existing production project's previously added Preview Supabase variables can be left alone during this transition; do not use or redeploy its old previews. Protect/revoke older previews that might have embedded older production variables when safe.
 
-## Change promotion
+## Release gate and further work
 
-- Branch from `development`, open a pull request into `development`, pass app/firmware checks and staging tests.
-- Promote the exact tested changes through a reviewed pull request from `development` to `main`, preferably in small release batches. Re-run required tests against the merge commit.
-- Migrations must be independently reviewed and applied forward-only; a Git merge does not automatically authorize production database changes.
-- Release firmware separately after physical acceptance, with explicit version and rollback plan. A web deployment is not a firmware flash.
-- Production credentials must remain production-only; a failed preview isolation check is a blocking failure, never a reason to turn off the guard.
-
-## GitHub protection required (repository Settings)
-
-Configure a ruleset or branch protection on `main`: require a pull request and successful `Stable test gate`, `Typecheck and frame layouts` and `No new lint debt` checks; include firmware checks for firmware changes. Set up `development` with the same required app checks as appropriate. Avoid a mandatory second reviewer if a solo-owner account cannot satisfy it. Rules must apply to the repository owner too, rather than silently permitting direct pushes to production. Verify rules in the GitHub UI; the connected GitHub tool cannot change branch protection.
-
-## Exit criteria before pilot expansion
-
-Pairing v2 replaces the public ID-only/token-return legacy flow; migrated tokens are rotated; RLS/API isolation passes for two independent users; staging database reproduction is documented; real spare hardware completes pairing/recovery tests; production release checks and rollback are exercised.
+- Two-user SQL RLS smoke test has passed and test data was rolled back. This is NOT an API security acceptance test.
+- Production's older migration history is not reconciled. Staging uses 34 staging-only migration entries. Do not run `db push`, `db reset` or blind migration replay against production.
+- Review 21 authenticated-callable security-definer function warnings, auth/token and pairing v2 hardening, live two-user API isolation, cron and third-party side effects.
+- Merge changes through reviewed PRs only, require CI on `main`, and verify physical firmware separately. Production is not a testing target.
 
 ## Staging schema restore evidence (2026-09-28)
 
@@ -75,19 +60,3 @@ Pairing v2 replaces the public ID-only/token-return legacy flow; migrated tokens
 - Two synthetic authenticated accounts and devices were inserted inside a transaction, each role's JWT subject was simulated, and reciprocal row-isolation checks for devices, memberships, settings, reminders, countdowns and groceries passed. Cross-device reminder writes and grocery deletes were blocked. The transaction was rolled back; afterward staging had zero auth users, devices, memberships, reminders, countdowns, groceries, settings and cron jobs.
 - Supabase security advisor: the temporary 69 anonymous SECURITY DEFINER findings caused by initial grants disappeared after ACL parity repair. Remaining findings include 34 INFO no-policy server-only/RLS tables and 21 WARN authenticated-callable SECURITY DEFINER functions. They require a separate behavior and privilege audit; an identical permission matrix is not proof of safe function behavior. Relevant advisor: https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable .
 - The baseline is **staging-only** and not an approved future production migration. Existing broad default privileges still need a deliberate reviewed cleanup on both environments. Do not connect Vercel Preview or customer hardware until its own secrets, email/OAuth/payment/cron side effects and real two-account API tests are configured and verified.
-
-## Vercel dashboard hand-off: Preview only (2026-09-28)
-
-**Not yet done.** A healthy Supabase project or passing GitHub CI run is not a connected preview deployment.
-Vercel: https://vercel.com/vetle-norstads-projects/frameone-app/settings/environment-variables
-Staging API keys: https://supabase.com/dashboard/project/ouwhfzjaahdipwmelzvf/settings/api-keys
-
-1. Open the existing frameone-app Vercel Environment Variables. If production Supabase variables are currently scoped to BOTH Production and Preview, edit the scopes so their original values remain Production only. Add separate Preview-only values below. Do not change the Production deployment or domain.
-2. Add Preview-only REMIND_STAGING_SUPABASE_REF = ouwhfzjaahdipwmelzvf, and NEXT_PUBLIC_SUPABASE_URL = https://ouwhfzjaahdipwmelzvf.supabase.co.
-3. Add Preview-only NEXT_PUBLIC_SUPABASE_ANON_KEY from staging's legacy anon key, and SUPABASE_SERVICE_ROLE_KEY from staging's service_role key. The latter is server-only and must NEVER use the NEXT_PUBLIC_ prefix. Do not copy production keys or send key values in chat.
-4. Remove Preview scope from inherited RESEND_API_KEY, CRON_SECRET, MINRENOVASJON_APP_KEY, MICROSOFT_CLIENT_SECRET, INTEGRATION_CREDENTIALS_KEY, SPOND_CREDENTIALS_KEY, OPENAI_API_KEY, VAPID_PRIVATE_KEY, WEB_PUSH_PRIVATE_KEY, SHOPIFY_ADMIN_ACCESS_TOKEN, SHOPIFY_STOREFRONT_ACCESS_TOKEN and direct Postgres URLs. Preserve the existing Production scopes. If SUPABASE_URL exists in Preview, change it to the staging URL or remove Preview scope.
-5. Configure staging Supabase Auth Site URL / allowed redirect URLs for the eventual Vercel Preview URL. Do not edit production Auth URLs. Limit staging logins to controlled test inboxes until email configuration is reviewed.
-6. Secure or remove OLDER Vercel Preview deployments that predate the new safeguards. Environment variable changes do NOT rewrite existing deployments that may have production settings baked into browser bundles. Use Vercel Deployment Protection or revoke old preview URLs.
-7. Redeploy development as a Preview. The prebuild verifier checks both keys against staging Auth without logging user or key data; next.config.ts then checks project ID, URL and disabled external integrations. Do not override failing safeguards merely to make a preview green.
-
-External integration tests, user isolation through real authenticated APIs, and physical frame tests are separate release gates. The connected Vercel integration is read-only for environment settings, so those dashboard changes are not yet applied.
