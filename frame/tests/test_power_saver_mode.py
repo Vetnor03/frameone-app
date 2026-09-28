@@ -70,3 +70,21 @@ def test_ten_minute_normal_sync_counter_is_disabled_in_power_saver():
     setup = source.split("void setup()", 1)[1]
     assert "wakeCause == ESP_SLEEP_WAKEUP_TIMER && !g_powerSaverMode" in setup
     assert "!g_powerSaverMode && normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS" in setup
+
+
+def test_power_saver_news_piggybacks_on_another_module_wake():
+    header = read("src/core/SmartRefresh.h")
+    scheduler = read("src/core/SmartRefresh.cpp")
+    firmware = read("src/frame_v2.5.1.ino")
+
+    # Normal mode still includes the News wake; Power Save filters only wake
+    # selection, not the persisted freshness deadline or the due-work list.
+    assert "bool includeNewsWake = true" in header
+    selection = scheduler.split("uint32_t SmartRefresh::secondsUntilNextWake", 1)[1].split("String SmartRefresh::dueModuleCsv", 1)[0]
+    due = scheduler.split("String SmartRefresh::dueModuleCsv", 1)[1].split("String SmartRefresh::unionModuleCsv", 1)[0]
+    assert 'if (!includeNewsWake && state.modules[i].key == "news") continue;' in selection
+    assert 'const bool newsFreshness = state.modules[i].key == "news";' in due
+    assert "if (d.at <= now ||" in due
+    assert "!newsFreshness" in due
+    assert firmware.count("!g_powerSaverMode, !g_powerSaverMode);") == 6
+    assert "if (next == 0) next = now + 24 * 60 * 60;" in selection

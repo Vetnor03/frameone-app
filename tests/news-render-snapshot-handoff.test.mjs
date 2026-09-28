@@ -55,3 +55,21 @@ test('render-state hands the authoritative snapshot to firmware on due/manual re
   assert.match(read('frame/src/core/SmartRefresh.h'), /bool newsSnapshotReady = false;/)
   assert.doesNotMatch(read('app/api/device/content-revision/route.ts'), /news_snapshot/)
 })
+
+
+test('Power Save keeps a one-hour News freshness floor but cannot wake solely for News', () => {
+  const base = { cells: [cell], modules: {} }
+  const normal = physicalRenderManifest({ settings: { ...base, powerSaver: false }, sources: {}, now })[0]
+  const saver = physicalRenderManifest({ settings: { ...base, powerSaver: true }, sources: {}, now })[0]
+  assert.equal(normal.deadlines[0].at, now + 30 * 60_000)
+  assert.equal(saver.deadlines[0].at, now + 60 * 60_000)
+  assert.equal(saver.deadlines[0].type, 'soft')
+  const header = read('frame/src/core/SmartRefresh.h')
+  const scheduler = read('frame/src/core/SmartRefresh.cpp')
+  const sketch = read('frame/src/frame_v2.5.1.ino')
+  assert.match(header, /bool includeNewsWake = true/)
+  assert.match(scheduler, /if \(!includeNewsWake && state\.modules\[i\]\.key == "news"\) continue;/)
+  assert.match(scheduler, /const bool newsFreshness = state\.modules\[i\]\.key == "news";/)
+  assert.match(scheduler, /d\.at <= now \|\|[\s\S]*!newsFreshness/)
+  assert.equal((sketch.match(/!g_powerSaverMode, !g_powerSaverMode\);/g) ?? []).length, 6)
+})

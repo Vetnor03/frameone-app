@@ -105,7 +105,8 @@ namespace SmartRefresh {
   void saveDisplayedRevision(uint64_t revision);
   uint32_t secondsUntilNextWake(const SmartRenderState& state, time_t now,
                                 time_t revisionCheckedAt,
-                                bool includeRevisionSafety = true);
+                                bool includeRevisionSafety = true,
+                                bool includeNewsWake = true);
   String dueModuleCsv(const SmartRenderState& state, time_t now);
   bool loadScheduler(SmartRenderState& out, time_t& revisionCheckedAt);
   bool saveScheduler(const SmartRenderState& state, time_t revisionCheckedAt);
