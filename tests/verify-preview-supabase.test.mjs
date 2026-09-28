@@ -6,8 +6,8 @@ const ref = 'ouwhfzjaahdipwmelzvf'
 const url = `https://${ref}.supabase.co`
 const env = {
   VERCEL_ENV: 'preview',
-  VERCEL_PROJECT_ID: 'prj_staging_test_project',
-  REMIND_STAGING_VERCEL_PROJECT_ID: 'prj_staging_test_project',
+  VERCEL_PROJECT_ID: 'prj_H8CovSaYkhbYg8CCvpl4N2hjsFaR',
+  REMIND_STAGING_VERCEL_PROJECT_ID: 'prj_H8CovSaYkhbYg8CCvpl4N2hjsFaR',
   VERCEL_GIT_COMMIT_REF: 'development',
   REMIND_STAGING_SUPABASE_REF: ref,
   NEXT_PUBLIC_SUPABASE_URL: url,
@@ -87,6 +87,18 @@ test('staging credential check refuses absent or different staging project ID', 
   )
   await assert.rejects(
     verifyPreviewSupabaseCredentials({ ...env, VERCEL_PROJECT_ID: 'prj_some_other_project' }, noFetch),
+    /unapproved Vercel project/,
+  )
+})
+
+test('matching arbitrary Vercel env values cannot impersonate staging', async () => {
+  const noFetch = () => { throw new Error('Should never fetch') }
+  await assert.rejects(
+    verifyPreviewSupabaseCredentials({
+      ...env,
+      VERCEL_PROJECT_ID: 'prj_wrong_project',
+      REMIND_STAGING_VERCEL_PROJECT_ID: 'prj_wrong_project',
+    }, noFetch),
     /unapproved Vercel project/,
   )
 })
