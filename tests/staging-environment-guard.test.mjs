@@ -10,7 +10,7 @@ const end = source.indexOf('\n}\n\nconst nextConfig', start)
 assert.ok(start >= 0 && end > start, 'preview build guard must exist')
 
 const guard = new Function('process', source.slice(start, end + 2))
-const stagingRef = 'abcdefghijklmnopqrst'
+const stagingRef = 'ouwhfzjaahdipwmelzvf'
 const staging = {
   VERCEL_ENV: 'preview',
   REMIND_STAGING_SUPABASE_REF: stagingRef,
@@ -33,6 +33,7 @@ test('preview fails closed before staging is configured', () => {
   assert.throws(() => check({ REMIND_STAGING_SUPABASE_REF: 'bzkqyllgccswrfudmexm', NEXT_PUBLIC_SUPABASE_URL: 'https:\/\/bzkqyllgccswrfudmexm.supabase.co' }), /Preview deployment blocked/)
   assert.throws(() => check({ NEXT_PUBLIC_SUPABASE_URL: 'https:\/\/bzkqyllgccswrfudmexm.supabase.co' }), /Preview deployment blocked/)
   assert.throws(() => check({ NEXT_PUBLIC_SUPABASE_URL: undefined }), /Preview deployment blocked/)
+  assert.throws(() => check({ REMIND_STAGING_SUPABASE_REF: 'abcdefghijklmnopqrst', NEXT_PUBLIC_SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co' }), /Preview deployment blocked/)
 })
 
 test('preview requires both app and server credentials', () => {
@@ -44,4 +45,26 @@ test('preview accepts only the exact configured staging project URL', () => {
   assert.doesNotThrow(() => check())
   assert.doesNotThrow(() => check({ NEXT_PUBLIC_SUPABASE_URL: `https://${stagingRef}.supabase.co/` }))
   assert.throws(() => check({ NEXT_PUBLIC_SUPABASE_URL: 'https:\/\/example.supabase.co' }), /Preview deployment blocked/)
+})
+
+
+test('preview blocks independent or direct production database connections', () => {
+  assert.doesNotThrow(() => check({ SUPABASE_URL: `https://${stagingRef}.supabase.co/` }))
+  assert.throws(() => check({ SUPABASE_URL: 'https://bzkqyllgccswrfudmexm.supabase.co' }), /Preview deployment blocked/)
+  for (const name of ['DATABASE_URL', 'DIRECT_URL', 'POSTGRES_URL', 'POSTGRES_PRISMA_URL']) {
+    assert.throws(() => check({ [name]: 'postgres://synthetic-test-credentials@localhost/test' }), /Preview deployment blocked/)
+  }
+})
+
+test('preview cannot inherit live third-party credentials that send emails or run jobs', () => {
+  const prohibited = [
+    'RESEND_API_KEY', 'CRON_SECRET', 'MINRENOVASJON_APP_KEY',
+    'MICROSOFT_CLIENT_SECRET', 'INTEGRATION_CREDENTIALS_KEY',
+    'SPOND_CREDENTIALS_KEY', 'OPENAI_API_KEY', 'VAPID_PRIVATE_KEY',
+    'WEB_PUSH_PRIVATE_KEY', 'SHOPIFY_ADMIN_ACCESS_TOKEN',
+    'SHOPIFY_STOREFRONT_ACCESS_TOKEN',
+  ]
+  for (const name of prohibited) {
+    assert.throws(() => check({ [name]: 'synthetic-test-value' }), /Preview deployment blocked/)
+  }
 })
