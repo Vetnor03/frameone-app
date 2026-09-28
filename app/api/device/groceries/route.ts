@@ -699,7 +699,7 @@ export async function GET(req: Request) {
 
     const auth = await authenticatePhysicalDevice(req, device_id)
     if ('error' in auth) {
-      return jsonErrorResponse({ error: auth.error }, { status: auth.status })
+      return jsonErrorResponse({ error: auth.error ?? 'Unauthorized' }, { status: auth.status ?? 401 })
     }
     const supabase = auth.supabase
 
