@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server'
-import { authenticatePhysicalDevice, authenticateUserForDevice, deviceIdFrom } from '@/app/lib/device/updateStateAuth'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import {
+  authenticatePhysicalDevice,
+  authenticateUserForDevice,
+  createServiceClient,
+  deviceIdFrom,
+} from '@/app/lib/device/updateStateAuth'
 
 export const runtime = 'nodejs'
 
@@ -58,6 +65,42 @@ function parseSmallInt(value: unknown): number | null {
   return Math.round(n)
 }
 
+// Browser callers already have Supabase's SSR session cookies. Explicit
+// Authorization headers take precedence and must never silently fall back to
+// a cookie if the supplied bearer is invalid.
+async function authenticateStatusReader(req: Request, deviceId: string) {
+  if (req.headers.has('authorization')) {
+    return authenticateUserForDevice(req, deviceId)
+  }
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !anonKey) return { error: 'internal_error' as const, status: 500 as const }
+
+  const cookieStore = await cookies()
+  const caller = createServerClient(url, anonKey, {
+    cookies: {
+      getAll() { return cookieStore.getAll() },
+      setAll(changes) {
+        for (const { name, value, options } of changes) cookieStore.set(name, value, options)
+      },
+    },
+  })
+  // getUser verifies the session instead of trusting a client-controlled cookie.
+  const { data, error } = await caller.auth.getUser()
+  if (error || !data.user) return { error: 'missing_auth_token' as const, status: 401 as const }
+
+  const { data: member, error: memberError } = await caller
+    .from('device_members')
+    .select('device_id')
+    .eq('device_id', deviceId)
+    .eq('user_id', data.user.id)
+    .maybeSingle()
+  if (memberError) return { error: 'internal_error' as const, status: 500 as const }
+  if (!member) return { error: 'forbidden' as const, status: 403 as const }
+  return { supabase: createServiceClient(), userId: data.user.id }
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
@@ -67,10 +110,9 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'missing_device_id' }, { status: 400 })
     }
 
-    // The browser supplies a real Supabase user JWT. The device ID alone is
-    // never authorization; enforce exact device membership before service-role
-    // telemetry access. Physical firmware only POSTs to this endpoint.
-    const auth = await authenticateUserForDevice(req, device_id)
+    // The verified user bearer or SSR cookie identifies a current member.
+    // A bare device ID never authorizes a service-role telemetry read.
+    const auth = await authenticateStatusReader(req, device_id)
     if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
     const { data, error } = await auth.supabase
