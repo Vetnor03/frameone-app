@@ -132,7 +132,7 @@ static void setPowerSaverMode(bool enabled) {
   const time_t now = time(nullptr);
   if (now >= 1000000000 && g_smartState.moduleCount > 0) {
     g_nextScheduledWake = now + SmartRefresh::secondsUntilNextWake(
-      g_smartState, now, g_revisionCheckedAt, !g_powerSaverMode);
+      g_smartState, now, g_revisionCheckedAt, !g_powerSaverMode, !g_powerSaverMode);
   }
 
   Serial.println(g_powerSaverMode
@@ -367,7 +367,7 @@ static uint64_t nextDeepSleepDurationUs() {
   const time_t now = time(nullptr);
   const time_t checkedAt = g_revisionCheckedAt > 0 ? g_revisionCheckedAt : now;
   uint32_t seconds = SmartRefresh::secondsUntilNextWake(
-    g_smartState, now, checkedAt, !g_powerSaverMode);
+    g_smartState, now, checkedAt, !g_powerSaverMode, !g_powerSaverMode);
   if (seconds <= 1 && g_revisionRetryNotBefore > now)
     seconds = (uint32_t)(g_revisionRetryNotBefore - now);
   // Invalid/unset wall time or scheduler state falls back to the revision
@@ -957,7 +957,7 @@ static bool fetchAndRenderExplicit(
   SmartRefresh::mergeScheduler(g_smartState, desired, true);
   g_revisionCheckedAt = time(nullptr);
   g_nextScheduledWake = g_revisionCheckedAt + SmartRefresh::secondsUntilNextWake(
-    g_smartState, g_revisionCheckedAt, g_revisionCheckedAt, !g_powerSaverMode);
+    g_smartState, g_revisionCheckedAt, g_revisionCheckedAt, !g_powerSaverMode, !g_powerSaverMode);
   SmartRefresh::saveScheduler(g_smartState, g_revisionCheckedAt);
   ContentRevisionState contentRevision;
   if (SmartRefresh::probeRevision(DeviceIdentity::getToken(), SmartRefresh::displayedRevision(), contentRevision))
@@ -1494,7 +1494,7 @@ void setup() {
   if (SmartRefresh::loadScheduler(g_smartState, g_revisionCheckedAt)) {
     const time_t restoredNow = time(nullptr);
     g_nextScheduledWake = restoredNow + SmartRefresh::secondsUntilNextWake(
-      g_smartState, restoredNow, g_revisionCheckedAt, !g_powerSaverMode);
+      g_smartState, restoredNow, g_revisionCheckedAt, !g_powerSaverMode, !g_powerSaverMode);
     // A failed network refresh must not cause immediate retries after a sleep
     // or reconnect just because its original source deadline is overdue.
     if (g_revisionRetryNotBefore > restoredNow &&
@@ -1679,7 +1679,7 @@ run_normal_sync:
     g_revisionRetryNotBefore = 0;
     g_revisionCheckedAt = time(nullptr);
     g_nextScheduledWake = g_revisionCheckedAt + SmartRefresh::secondsUntilNextWake(
-      g_smartState, g_revisionCheckedAt, g_revisionCheckedAt, !g_powerSaverMode);
+      g_smartState, g_revisionCheckedAt, g_revisionCheckedAt, !g_powerSaverMode, !g_powerSaverMode);
     SmartRefresh::saveScheduler(g_smartState, g_revisionCheckedAt);
     Serial.println("Revision unchanged; no config, source, or display work");
 #if TEMP_REFRESH_AUDIT_ENABLED
@@ -1744,7 +1744,7 @@ run_normal_sync:
           if (batt.percent >= 0) UpdateChecker::saveBatteryPercent(batt.percent);
           g_revisionCheckedAt = time(nullptr);
           g_nextScheduledWake = time(nullptr) + SmartRefresh::secondsUntilNextWake(
-            g_smartState, time(nullptr), g_revisionCheckedAt, !g_powerSaverMode);
+            g_smartState, time(nullptr), g_revisionCheckedAt, !g_powerSaverMode, !g_powerSaverMode);
           SmartRefresh::saveScheduler(g_smartState, g_revisionCheckedAt);
           postDeviceStatus(batt, pwr, displayPlan.type != SmartDisplayPlan::NONE);
           Serial.println(displayPlan.type == SmartDisplayPlan::NONE
