@@ -85,6 +85,58 @@ create trigger pairing_v2_reject_legacy_token_update
 before update of device_token,device_token_hash on public.devices
 for each row execute function pairing_v2.reject_legacy_token_write();
 
+-- Do not silently remove/reassign an activated (or provisioned) v2 frame
+-- through the old app delete/reassign path. A reviewed v2 revocation and
+-- tombstone lifecycle must be implemented before physical activation.
+create function pairing_v2.reject_unreviewed_ownership_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+begin
+  if old.owner_user_id is not null
+     and new.owner_user_id is distinct from old.owner_user_id
+     and exists (
+       select 1 from pairing_v2.device_credentials c
+       where c.device_id = new.device_id
+     )
+  then
+    raise exception 'v2_device_revocation_required' using errcode='42501';
+  end if;
+  return new;
+end;
+$function$;
+revoke all on function pairing_v2.reject_unreviewed_ownership_change()
+  from public, anon, authenticated, service_role;
+
+create trigger pairing_v2_reject_owner_reset
+before update of owner_user_id on public.devices
+for each row execute function pairing_v2.reject_unreviewed_ownership_change();
+
+create function pairing_v2.reject_unreviewed_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+begin
+  if exists (
+    select 1 from pairing_v2.device_credentials c
+    where c.device_id = old.device_id
+  ) then
+    raise exception 'v2_device_revocation_required' using errcode='42501';
+  end if;
+  return old;
+end;
+$function$;
+revoke all on function pairing_v2.reject_unreviewed_delete()
+  from public, anon, authenticated, service_role;
+
+create trigger pairing_v2_reject_cascade_delete
+before delete on public.devices
+for each row execute function pairing_v2.reject_unreviewed_delete();
+
 -- The following existing functions are recreated with their exact existing
 -- behavior and grants, plus a fail-closed guard for a v2 credential record.
 
