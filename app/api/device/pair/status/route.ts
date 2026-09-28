@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     // So: we try one, then the other, with a friendly error if neither exists.
 
     // Try function 1: pair_status (common name)
-    let data: any = null
+    let data: unknown = null
     let errorMsg: string | null = null
 
     {
@@ -71,7 +71,7 @@ export async function GET(req: Request) {
     const row = Array.isArray(data) ? data[0] : data
 
     return NextResponse.json(row)
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Unknown error' }, { status: 500 })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Unknown error' }, { status: 500 })
   }
 }
