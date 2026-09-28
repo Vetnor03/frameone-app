@@ -77,11 +77,11 @@ export default function StagingSecurityCheckClient() {
         label: string,
         path: string,
         expectedStatus: number,
-        bearer = true,
+        bearer: boolean | 'invalid' = true,
         predicate: (body: JsonRecord) => boolean = () => true,
       ) => {
         try {
-          const response = await probe(path, bearer ? token : undefined)
+          const response = await probe(path, bearer === 'invalid' ? 'staging-invalid-bearer' : bearer ? token : undefined)
           const ok = response.status === expectedStatus && predicate(response.body)
           add(label, ok, 'HTTP ' + response.status + (ok ? ' — expected result' : ' — unexpected result'))
         } catch {
@@ -139,6 +139,27 @@ export default function StagingSecurityCheckClient() {
       )
 
       await examine(
+        'My device telemetry is accessible as a member',
+        '/api/device/status?device_id=' + encodeURIComponent(fixture.own),
+        200,
+        true,
+        (body) => body.device_id === fixture.own,
+      )
+
+      await examine(
+        'Other tester’s device telemetry is forbidden',
+        '/api/device/status?device_id=' + encodeURIComponent(fixture.other),
+        403,
+      )
+
+      await examine(
+        'Invalid bearer cannot fall back to browser cookie for device telemetry',
+        '/api/device/status?device_id=' + encodeURIComponent(fixture.own),
+        401,
+        'invalid',
+      )
+
+      await examine(
         'Missing bearer is rejected on user display-revision status',
         '/api/device/update-state/status?device_id=' + encodeURIComponent(fixture.own),
         401,
@@ -163,7 +184,7 @@ export default function StagingSecurityCheckClient() {
         <p className="text-xs font-semibold tracking-[0.18em] text-[#2aa3ff]">RE:MIND · STAGING ONLY</p>
         <h1 className="mt-3 text-2xl font-semibold">API security checks</h1>
         <p className="mt-4 text-sm leading-6 text-[color:var(--fg-60)]">
-          Use your existing Tester A or B session. This performs seven read-only requests to
+          Use your existing Tester A or B session. This performs ten read-only requests to
           the staging app. It does not modify settings, reminders, devices or pairing credentials.
         </p>
         <div className="mt-6 rounded-xl border border-[color:var(--bd-20)] p-4">
