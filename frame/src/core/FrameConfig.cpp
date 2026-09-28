@@ -176,6 +176,7 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
   out.theme = THEME_DARK;
   out.powerSaver = false;
   strlcpy(out.language, "en", sizeof(out.language));
+  strlcpy(out.newsFeed, "top", sizeof(out.newsFeed));
   resetCustomLayout(out);
 
   out.assignCount = 0;
@@ -302,6 +303,12 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
   // ===== modules.* =====
   JsonObject modules = settings["modules"].as<JsonObject>();
   if (!modules.isNull()) {
+
+    // ===== modules.news =====
+    JsonObject news = modules["news"].as<JsonObject>();
+    const char* newsFeed = news["feed"] | "top";
+    if (strcmp(newsFeed, "latest") == 0)
+      strlcpy(out.newsFeed, "latest", sizeof(out.newsFeed));
 
     // ===== modules.date =====
     JsonObject date = modules["date"].as<JsonObject>();
