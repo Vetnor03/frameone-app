@@ -44,5 +44,5 @@ test('test plan includes own and foreign account HTTP authorization, not just UI
   assert.match(client, /ids\.includes\(fixture\.own\) && !ids\.includes\(fixture\.other\)/)
   assert.match(client, /other tester’s mirror\/configuration is forbidden/i)
   assert.match(client, /Other tester’s device telemetry is forbidden/)
-  assert.match(client, /Missing bearer cannot read device telemetry/)
+  assert.match(client, /Invalid bearer cannot fall back to browser cookie for device telemetry/)
 })
