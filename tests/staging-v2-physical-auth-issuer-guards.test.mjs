@@ -148,6 +148,7 @@ test('legacy token issuers and direct credential writes deny ALL v2 rows', () =>
   assert.match(sql, /create trigger pairing_v2_reject_cascade_delete/)
   assert.match(sql, /raise exception 'v2_device_revocation_required'/)
   assert.doesNotMatch(sql, /\btruncate\b|\bdrop\s+(?:schema|table)\b/i)
+  assert.doesNotMatch(sql, /^\$function\$/m, 'Every copied legacy function must end with a statement terminator')
   assert.doesNotMatch(sql, /insert into pairing_v2\.device_credentials/)
 })
 
