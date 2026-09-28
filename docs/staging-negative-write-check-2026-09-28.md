@@ -25,6 +25,7 @@ The page is server-gated to both exact project IDs, then the browser preflights 
 | A/B rename other disposable frame | 403 `frame_owner_required` |
 | A/B request other disposable frame revision | 403 `forbidden` |
 | A/B heartbeat other disposable frame | 403 `forbidden` |
+| A/B browser user JWT cannot forge physical frame telemetry POST | 401 `unauthorized` |
 | A/B delete/reset other disposable frame | 404 `frame_not_found` |
 
 The last operation is potentially destructive **if authorization is broken**, which is why it targets only disposable frames, runs last, and immediately stops on failure.
@@ -32,7 +33,7 @@ The last operation is potentially destructive **if authorization is broken**, wh
 ## Acceptance
 
 1. Deploy the page to staging only after CI passes. Test as A and B at `/staging/security-check/writes`; screenshot results without passwords/tokens.
-2. Confirm all 14 expected statuses across both users, with no unexpected response.
+2. Confirm all 16 expected statuses across both users, with no unexpected response.
 3. Query staging directly to confirm both disposable devices retain their original names, owner memberships, settings markers, original reminders, null device credentials, and no unauthorised revision or activity changes. Do not claim unchanged state from HTTP statuses alone.
 4. Only after acceptance, remove exact disposable fixture rows (and any dependent entries) from staging, taking care not to delete the original two virtual frames or user-generated data. Keep the original read-only checker and audit trail.
 
