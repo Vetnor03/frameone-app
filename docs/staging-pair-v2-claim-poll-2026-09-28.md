@@ -27,4 +27,16 @@ Every RPC is SECURITY DEFINER with an empty fixed search path. PostgreSQL PUBLIC
 3. Confirm all synthetic rows are absent after rollback, both original virtual frames and tester accounts remain, and no v2 session/credential has been persisted.
 4. Before enabling anything: implement trusted physical provisioning + TLS and protected staging ingress; source validation, rate-limit expiry cleanup, keys, secure user JWT verification, authenticated start, claim/poll HTTP wiring, and the bounded encrypted delivery/ACK path. Enforce v2-only credential checks across every physical endpoint. A user-code claim by itself is **not** frame authentication.
 
+## Verified staging result
+
+Merged [PR #1328](https://github.com/Vetnor03/frameone-app/pull/1328) into `development`; CI passed **977/977 stable tests**, typecheck and changed-file lint. The separate full audit continues to report known pre-existing debt.
+
+The reviewed additive SQL was applied to **only** staging Supabase project `ouwhfzjaahdipwmelzvf` as migration `20260928204011_staging_pairing_v2_claim_poll_20260928`. All three new SECURITY DEFINER RPCs are executable by `service_role` only, not by `anon` or `authenticated`. The new claim-attempt table and the prior two v2 tables have RLS enabled, zero policies and no Data API role DML grants. The RLS-no-policy INFO advisory is intentional for this private deny-all design; the existing 21 signed-in SECURITY DEFINER warnings in other public functions are still a separate audit.
+
+A single **rolled-back staging transaction** exercised actual database calls with two synthetic devices and ephemeral verifiers: unknown code rejected; correct code atomically set owner, owner membership and claimed session without setting a device token; replay rejected; correct dual-proof poll reported pending before claim and claimed after claim; wrong bootstrap and polling verifier rejected; expired session was closed; account quota denied attempt six and network quota denied attempt 31. No real frame/session credentials or HMAC keys were created.
+
+A separate post-test query confirmed **zero** v2 credentials, sessions and throttle records, **zero** synthetic devices/memberships, and both original tester frames and accounts intact.
+
+**Still pending:** real JWT/ingress wiring, physical provisioning, trusted network-source derivation, server-side HMAC keys, abuse monitoring, retention cleanup, authenticated device start/poll HTTP, encrypted token delivery and ACK, v2-only auth across all physical API routes, physical firmware migration. Claim/poll HTTP endpoints remain hard-disabled; do not expose them to testers yet.
+
 **Rollback:** remove dormant code through a separate reversible `development` PR. Already-applied service-role-only RPCs and the private empty rate table are inert until a separately reviewed staging-only retirement. No automated destructive schema rollback and no production/firmware change.
