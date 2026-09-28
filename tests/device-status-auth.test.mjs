@@ -163,6 +163,15 @@ test('GET rejects no-session and foreign-user requests before status read', asyn
   assert.equal(h.calls.some(([operation]) => operation === 'from'), false)
 })
 
+test('verified browser cookie authorizes only its own device and cannot override an invalid bearer', async () => {
+  const h = harness({ cookieUser: 'user-A' })
+  const own = await h.get('frm_A', null)
+  assert.equal(own.status, 200)
+  assert.equal((await own.json()).device_id, 'frm_A')
+  assert.equal((await h.get('frm_B', null)).status, 403)
+  assert.equal((await h.get('frm_A', 'forged')).status, 401)
+})
+
 test('GET returns only member telemetry with private no-store cache policy', async () => {
   const a = harness()
   const own = await a.get()
