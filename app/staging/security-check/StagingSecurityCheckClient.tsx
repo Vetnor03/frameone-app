@@ -77,11 +77,11 @@ export default function StagingSecurityCheckClient() {
         label: string,
         path: string,
         expectedStatus: number,
-        bearer = true,
+        bearer: boolean | 'invalid' = true,
         predicate: (body: JsonRecord) => boolean = () => true,
       ) => {
         try {
-          const response = await probe(path, bearer ? token : undefined)
+          const response = await probe(path, bearer === 'invalid' ? 'staging-invalid-bearer' : bearer ? token : undefined)
           const ok = response.status === expectedStatus && predicate(response.body)
           add(label, ok, 'HTTP ' + response.status + (ok ? ' — expected result' : ' — unexpected result'))
         } catch {
@@ -153,10 +153,10 @@ export default function StagingSecurityCheckClient() {
       )
 
       await examine(
-        'Missing bearer cannot read device telemetry',
+        'Invalid bearer cannot fall back to browser cookie for device telemetry',
         '/api/device/status?device_id=' + encodeURIComponent(fixture.own),
         401,
-        false,
+        'invalid',
       )
 
       await examine(
