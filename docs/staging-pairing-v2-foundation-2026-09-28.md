@@ -26,6 +26,10 @@ An **owned** frame's `frame-config` path remains available but demands its exist
 - Existing firmware token-loss recovery remains insecure until physical v2 migration. Do not widen the pilot or merge the quarantine to `main` as a stand-alone "fix" for production.
 - Do not call a legacy token issuer as a manual smoke test. The automated tests verify that the staging guard returns before the client/RPC; they also exercise legacy compatibility with mocked clients only.
 
+## Staging database grant check
+
+Read-only metadata verification on 2026-09-28 found `start_pairing(p_device_id text)`, `device_pair_status(p_device_id text)`, and `ensure_device_token(p_device_id text)` as SECURITY DEFINER functions. Their EXECUTE grants are **service-role-only** (neither `anon` nor `authenticated` can invoke them directly). `get_pair_status` and `get_or_create_device_token` are absent in this staging database. The previously exposed path was a public Next.js service-role wrapper; the staging quarantine prevents it from invoking these RPCs. The live deployment is not modified by this check.
+
 ## Next small independently testable slices
 
 1. Decide the supervised staging-frame enrollment path. Use an **explicit test-only physical frame** and independently provision a unique, high-entropy bootstrap secret. Preserve its existing Wi-Fi when practical, but prevent production token/key crossover with isolated NVS storage or separate hardware. No user password, physical secret, or device bearer in chat.
