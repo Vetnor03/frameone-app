@@ -136,6 +136,12 @@ export default function StagingWriteCheckClient() {
           bearer: true, expected: 403, error: 'forbidden',
         },
         {
+          label: 'App session cannot forge other frame’s battery report',
+          endpoint: '/api/device/status',
+          body: { device_id: other, battery_percent: 17, did_render: true },
+          bearer: true, expected: 401, error: 'unauthorized',
+        },
+        {
           label: 'Cannot reset/delete other tester’s disposable frame',
           endpoint: '/api/frame/delete',
           body: { device_id: other },
@@ -160,7 +166,7 @@ export default function StagingWriteCheckClient() {
           return
         }
       }
-      setMessage('All seven negative-write checks passed for ' + fixture.label +
+      setMessage('All eight negative-write checks passed for ' + fixture.label +
         '. Switch testers and repeat. The disposable records will be verified directly in staging afterward.')
     } catch {
       setMessage('Checks stopped due to an error. Send a screenshot; do not rerun yet.')
@@ -175,7 +181,7 @@ export default function StagingWriteCheckClient() {
         <p className="text-xs font-semibold tracking-[0.18em] text-[#2aa3ff]">RE:MIND · STAGING ONLY</p>
         <h1 className="mt-3 text-2xl font-semibold">Cross-user write checks</h1>
         <p className="mt-4 text-sm leading-6 text-[color:var(--fg-60)]">
-          Seven deliberate POST requests will try to change the OTHER tester’s disposable
+          Eight deliberate POST requests will try to change the OTHER tester’s disposable
           security-test frame. They never target either original virtual frame or a physical
           device. If authorization unexpectedly succeeds, the run stops immediately.
         </p>
