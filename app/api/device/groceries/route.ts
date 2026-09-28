@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { authenticatePhysicalDevice } from '@/app/lib/device/updateStateAuth'
 
 export const runtime = 'nodejs'
