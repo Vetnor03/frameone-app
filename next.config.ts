@@ -17,12 +17,11 @@ const isStagingDeployment =
 
 if (isStagingDeployment) {
   const actualProjectId = process.env.VERCEL_PROJECT_ID;
+  const pinnedStagingProjectId = "prj_H8CovSaYkhbYg8CCvpl4N2hjsFaR";
   const approvedStagingProjectId = process.env.REMIND_STAGING_VERCEL_PROJECT_ID?.trim();
   if (
-    !actualProjectId ||
-    actualProjectId === liveProductionProjectId ||
-    !approvedStagingProjectId ||
-    actualProjectId !== approvedStagingProjectId
+    actualProjectId !== pinnedStagingProjectId ||
+    approvedStagingProjectId !== pinnedStagingProjectId
   ) {
     throw new Error(
       "Staging deployment blocked: use a separate, explicitly approved Vercel staging project."
@@ -88,7 +87,7 @@ if (isStagingDeployment) {
   );
   if (configuredIntegrations.length > 0) {
     throw new Error(
-      `Staging deployment blocked: remove production-capable integrations from Preview: ${configuredIntegrations.join(", ")}.`,
+      `Staging deployment blocked: remove production-capable integrations from staging: ${configuredIntegrations.join(", ")}.`,
     );
   }
 }
