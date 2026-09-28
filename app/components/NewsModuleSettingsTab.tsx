@@ -9,7 +9,17 @@ type NewsRow = {
   published_at?: string | null
 }
 
-export default function NewsModuleSettingsTab({ language }: { language: 'en' | 'no' }) {
+type NewsFeed = 'top' | 'latest'
+
+export default function NewsModuleSettingsTab({
+  language,
+  feed,
+  onFeedChange,
+}: {
+  language: 'en' | 'no'
+  feed: NewsFeed
+  onFeedChange: (feed: NewsFeed) => void
+}) {
   const isNo = language === 'no'
   const [items, setItems] = useState<NewsRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -18,9 +28,13 @@ export default function NewsModuleSettingsTab({ language }: { language: 'en' | '
 
   useEffect(() => {
     let alive = true
+    setItems([])
+    setLoading(true)
+    setFailed(false)
+    setStale(false)
     const load = async () => {
       try {
-        const response = await fetch('/api/news?limit=20&links=1&display_profiles=standard', { cache: 'no-store' })
+        const response = await fetch(`/api/news?feed=${feed}&limit=20&links=1&display_profiles=standard`, { cache: 'no-store' })
         if (!response.ok) throw new Error('news')
         const payload = await response.json()
         if (!alive) return
@@ -34,7 +48,10 @@ export default function NewsModuleSettingsTab({ language }: { language: 'en' | '
           setFailed(false)
         }
       } catch {
-        if (alive) setFailed(true)
+        if (alive) {
+          setItems([])
+          setFailed(true)
+        }
       } finally {
         if (alive) setLoading(false)
       }
@@ -45,13 +62,33 @@ export default function NewsModuleSettingsTab({ language }: { language: 'en' | '
       alive = false
       window.clearInterval(timer)
     }
-  }, [])
+  }, [feed])
 
   return (
     <div className="h-full min-h-0 flex flex-col">
       <div className="mt-2 text-xl font-semibold tracking-widest">{isNo ? 'NYHETER' : 'NEWS'}</div>
       <div className="mt-1 text-sm text-[color:var(--fg-60)]">
-        {isNo ? 'Siste overskrifter fra NRK. Trykk på en sak for å lese den hos NRK.' : 'Latest headlines from NRK. Tap a story to read it on NRK.'}
+        {isNo ? 'Velg hvilke nyheter som vises i appen og på rammen.' : 'Choose which stories appear in the app and on your frame.'}
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2" role="group" aria-label={isNo ? 'Nyhetskilde' : 'News feed'}>
+        {(['top', 'latest'] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={feed === option}
+            onClick={() => onFeedChange(option)}
+            className={`rounded-xl border px-3 py-3 text-sm font-medium transition ${feed === option
+              ? 'border-[#2aa3ff] text-[#2aa3ff] bg-[#2aa3ff]/10'
+              : 'border-[color:var(--bd-20)] text-[color:var(--fg-70)]'}`}
+          >
+            {option === 'top' ? (isNo ? 'Toppsaker' : 'Top Stories') : (isNo ? 'Siste nytt' : 'Latest News')}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 text-xs text-[color:var(--fg-60)]">
+        {feed === 'top'
+          ? (isNo ? 'NRKs utvalgte hovedsaker, i NRKs rekkefølge.' : 'NRK’s selected top stories, in NRK’s order.')
+          : (isNo ? 'De siste nyhetsoppdateringene fra NRK.' : 'The latest news updates from NRK.')}
       </div>
 
       {stale && !loading && !failed && (
