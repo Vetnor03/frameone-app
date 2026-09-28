@@ -8,6 +8,20 @@ import { supabase } from '../lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * UI-only shortcut for the isolated test database. Both accounts still need
+ * ordinary Supabase passwords and receive real, RLS-scoped auth sessions.
+ * Never add passwords, service-role credentials or a bypass token to the app.
+ */
+const STAGING_TEST_URL = 'https://ouwhfzjaahdipwmelzvf.supabase.co'
+const isStagingTestLogin = process.env.NEXT_PUBLIC_SUPABASE_URL === STAGING_TEST_URL
+const testAccounts = {
+  a: { label: 'Tester A', email: 'tester-a@re-mind.test' },
+  b: { label: 'Tester B', email: 'tester-b@re-mind.test' },
+} as const
+
+type TestAccount = keyof typeof testAccounts
+
 function getSafeNextPath() {
   if (typeof window === 'undefined') return '/'
 
@@ -379,6 +393,11 @@ export default function LoginPage() {
   const [verifyError, setVerifyError] = useState('')
   const [verifyDiagnostic, setVerifyDiagnostic] = useState('')
   const [lastRequestedEmail, setLastRequestedEmail] = useState('')
+  const [testAccount, setTestAccount] = useState<TestAccount>('a')
+  const [testPassword, setTestPassword] = useState('')
+  const [testLoginBusy, setTestLoginBusy] = useState(false)
+  const [testLoginError, setTestLoginError] = useState('')
+
   const inFlightSendRequestRef = useRef(false)
   const sendAttemptCountRef = useRef(0)
   const OTP_LENGTH = 8
@@ -389,9 +408,36 @@ export default function LoginPage() {
   useEffect(() => {
     ;(async () => {
       const { data } = await supabase.auth.getSession()
-      if (data.session) router.replace(nextPath)
+      // /login?tester=1 is a convenient staging-only account switcher.
+      const switchingTester = isStagingTestLogin &&
+        new URLSearchParams(window.location.search).get('tester') === '1'
+      if (data.session && !switchingTester) router.replace(nextPath)
     })()
   }, [router, nextPath])
+
+  async function signInTestAccount() {
+    if (!isStagingTestLogin || testLoginBusy || !testPassword) return
+    setTestLoginBusy(true)
+    setTestLoginError('')
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: testAccounts[testAccount].email,
+        password: testPassword,
+      })
+      if (error) {
+        // Avoid echoing any credentials or provider internals into the UI.
+        setTestLoginError('Could not sign in. Check that the test user exists and the password matches.')
+        return
+      }
+      setTestPassword('')
+      router.replace(nextPath)
+      router.refresh()
+    } catch {
+      setTestLoginError('Could not sign in. Please try again.')
+    } finally {
+      setTestLoginBusy(false)
+    }
+  }
 
   async function sendCode() {
     const normalizedEmail = email.trim().toLowerCase()
@@ -521,9 +567,66 @@ export default function LoginPage() {
         </header>
 
         <section className="flex flex-1 flex-col justify-center pb-14 pt-8">
-          <h1 className="text-center text-2xl font-semibold tracking-widest">LOGIN</h1>
+          <h1 className="text-center text-2xl font-semibold tracking-widest">{isStagingTestLogin ? 'STAGING LOGIN' : 'LOGIN'}</h1>
 
-          {step === 'email' ? (
+          {isStagingTestLogin ? (
+            <div className="mt-5">
+              <p className="text-center text-xs text-[color:var(--fg-45)]">
+                Test accounts only. No email codes and no production data.
+              </p>
+              <div className="mt-7 grid grid-cols-2 gap-3">
+                {(Object.keys(testAccounts) as TestAccount[]).map((account) => (
+                  <button
+                    key={account}
+                    type="button"
+                    aria-pressed={testAccount === account}
+                    onClick={() => {
+                      setTestAccount(account)
+                      setTestLoginError('')
+                    }}
+                    disabled={testLoginBusy}
+                    className={`h-12 rounded-xl border text-sm font-medium transition ${
+                      testAccount === account
+                        ? 'border-[#2aa3ff] text-[#2aa3ff]'
+                        : 'border-[color:var(--bd-20)] text-[color:var(--fg-55)]'
+                    }`}
+                  >
+                    {testAccounts[account].label}
+                  </button>
+                ))}
+              </div>
+              <form onSubmit={(event) => {
+                event.preventDefault()
+                void signInTestAccount()
+              }}>
+                <label htmlFor="staging-test-password" className="mt-6 block text-xs text-[color:var(--fg-55)]">
+                  Test password
+                </label>
+                <input
+                  id="staging-test-password"
+                  type="password"
+                  value={testPassword}
+                  onChange={(event) => setTestPassword(event.target.value)}
+                  autoComplete="current-password"
+                  required
+                  className="mt-2 h-12 w-full rounded-xl border border-[color:var(--bd-20)] bg-[color:var(--input-bg)] px-4 outline-none"
+                />
+                {testLoginError ? (
+                  <p role="alert" className="mt-4 text-center text-xs text-[#ff8b8b]">{testLoginError}</p>
+                ) : null}
+                <button
+                  type="submit"
+                  disabled={testLoginBusy || !testPassword}
+                  className="mt-6 h-12 w-full rounded-xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest disabled:opacity-50"
+                >
+                  {testLoginBusy ? 'SIGNING IN...' : `LOG IN AS ${testAccounts[testAccount].label.toUpperCase()}`}
+                </button>
+              </form>
+              <p className="mt-5 text-center text-[11px] text-[color:var(--fg-35)]">
+                To switch accounts later, revisit /login?tester=1.
+              </p>
+            </div>
+          ) : step === 'email' ? (
             <div className="relative">
               <p className="mt-2 text-center text-sm text-[color:var(--fg-50)]">We’ll send you an 8-digit code</p>
               <p className="mt-1 text-center text-xs text-[color:var(--fg-35)]">Use the email with the code to log in.</p>
