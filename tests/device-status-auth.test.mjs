@@ -60,6 +60,7 @@ function harness({ userId = 'user-A', physicalToken = 'device-A-secret', dbError
     },
   }
   const fakeAuth = {
+    createServiceClient: () => db,
     deviceIdFrom(value) {
       if (typeof value !== 'string') return ''
       const id = value.trim()
@@ -90,6 +91,10 @@ function harness({ userId = 'user-A', physicalToken = 'device-A-secret', dbError
   const mod = { exports: {} }
   const imports = {
     'next/server': { NextResponse: { json: (value, init = {}) => Response.json(value, init) } },
+    'next/headers': { cookies: async () => ({ getAll: () => [], set() {} }) },
+    '@supabase/ssr': { createServerClient: () => ({
+      auth: { getUser: async () => ({ data: { user: null }, error: null }) },
+    }) },
     '@/app/lib/device/updateStateAuth': fakeAuth,
   }
   new Function('require', 'module', 'exports', transpiled)(
