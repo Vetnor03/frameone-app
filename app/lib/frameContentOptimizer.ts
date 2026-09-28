@@ -32,7 +32,7 @@ type OpenAIResponsePayload = { output?: Array<{ type?: string; content?: Array<{
 type StructuredOptimizerResponse = { items?: Array<{ id?: unknown; title?: unknown }> }
 
 export const FRAME_TITLE_OPTIMIZER_VERSION = 'v1'
-const NEWS_TITLE_OPTIMIZER_VERSION = 'news-v2'
+const NEWS_TITLE_OPTIMIZER_VERSION = 'news-v3'
 const DEFAULT_MODEL = 'gpt-6-luna'
 const MAX_CACHE_ENTRIES = 1000
 export const PHYSICAL_AI_TIMEOUT_MS = 250
@@ -132,7 +132,18 @@ async function requestTitles(items: FrameContentInput[], model: string, profile:
     const payload = await response.json() as OpenAIResponsePayload
     await completeReservedOpenAICall(reservation.id, payload)
     const parsed = JSON.parse(extract(payload) || '{}') as StructuredOptimizerResponse
-    return new Map((parsed.items || []).flatMap(i => typeof i.id === 'string' && typeof i.title === 'string' ? [[i.id, fallbackTitle(i.title, constraints.maxTitleChars)] as const] : []))
+    const kindById = new Map(items.map(item => [item.id, item.contentType]))
+    return new Map((parsed.items || []).flatMap(i => {
+      if (typeof i.id !== 'string' || typeof i.title !== 'string') return []
+      const title = normalizeText(i.title)
+      if (!title) return []
+      // Never truncate an AI News rewrite into a fragment. Reject responses
+      // that do not fit and fall back to the complete source headline.
+      if (kindById.get(i.id) === 'news') {
+        return title.length <= constraints.maxTitleChars ? [[i.id, title] as const] : []
+      }
+      return [[i.id, fallbackTitle(title, constraints.maxTitleChars)] as const]
+    }))
   } catch (error) {
     await completeReservedOpenAICall(reservation.id, null, 'error', controller.signal.aborted ? 'timeout' : 'request_failed')
     throw error
@@ -171,7 +182,7 @@ export async function optimizeFrameContent(items: FrameContentInput[], options: 
   // Physical title generation is only useful when it can become durable. A
   // missing/broken cache must never cause repeatedly changing AI wording.
   if (!persistentReadSucceeded) {
-    return normalized.map(item => ({ id: item.id, title: fallbackTitle(item.title, maxChars) }))
+    return normalized.map(item => ({ id: item.id, title: item.contentType === 'news' ? item.title : fallbackTitle(item.title, maxChars) }))
   }
 
   // De-duplicate identical source/profile variants before the single batched AI request.
@@ -209,5 +220,5 @@ export async function optimizeFrameContent(items: FrameContentInput[], options: 
     normalized.forEach((item, index) => { const hit = titleCache.get(keys[index]); if (hit) results.set(item.id, hit) })
   }
 
-  return normalized.map(item => ({ id: item.id, title: results.get(item.id) || fallbackTitle(item.title, maxChars) }))
+  return normalized.map(item => ({ id: item.id, title: results.get(item.id) || (item.contentType === 'news' ? item.title : fallbackTitle(item.title, maxChars)) }))
 }
