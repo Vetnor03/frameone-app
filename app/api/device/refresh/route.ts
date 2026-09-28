@@ -1,13 +1,7 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { authenticatePhysicalDevice } from '@/app/lib/device/updateStateAuth'
 
 export const runtime = 'nodejs'
-
-function getBearerToken(req: Request) {
-  const h = req.headers.get('authorization') || ''
-  const m = h.match(/^Bearer\s+(.+)$/i)
-  return m ? m[1] : null
-}
 
 export async function POST(req: Request) {
   try {
@@ -18,26 +12,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing device_id' }, { status: 400 })
     }
 
-    const token = getBearerToken(req)
-    if (!token) {
-      return NextResponse.json({ error: 'Missing bearer token' }, { status: 401 })
+    const auth = await authenticatePhysicalDevice(req, device_id)
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status })
     }
-
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-
-    // 🔒 Validate device token
-    const { data: device, error: deviceError } = await supabase
-      .from('devices')
-      .select('device_id, device_token')
-      .eq('device_id', device_id)
-      .maybeSingle()
-
-    if (deviceError || !device || device.device_token !== token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const supabase = auth.supabase
 
     // ✅ Upsert refresh time
     const { error } = await supabase
@@ -55,9 +34,9 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ ok: true })
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { error: e?.message ?? 'Unknown error' },
+      { error: e instanceof Error ? e.message : 'Unknown error' },
       { status: 500 }
     )
   }

@@ -1,22 +1,19 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { authenticatePhysicalDevice, deviceIdFrom } from '@/app/lib/device/updateStateAuth'
 import { compactAiAssistantDeviceItem, loadAiAssistantDeviceData } from '@/app/lib/device/aiAssistantDeviceData'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-function bearer(req: Request) { return (req.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i)?.[1] || '' }
 function response(payload: unknown, status = 200) { return NextResponse.json(payload, { status, headers: { 'Cache-Control': 'private, no-store, max-age=0' } }) }
 
 export async function GET(req: Request) {
-  const deviceId = new URL(req.url).searchParams.get('device_id')?.trim() || ''
-  const token = bearer(req)
+  const deviceId = deviceIdFrom(new URL(req.url).searchParams.get('device_id'))
   if (!deviceId) return response({ error: 'Missing device_id' }, 400)
-  if (!token) return response({ error: 'Missing bearer token' }, 401)
+  const auth = await authenticatePhysicalDevice(req, deviceId)
+  if ('error' in auth) return response({ error: auth.error }, auth.status)
   try {
-    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-    const { data: device, error } = await supabase.from('devices').select('device_token').eq('device_id', deviceId).maybeSingle()
-    if (error || !device || device.device_token !== token) return response({ error: 'Unauthorized' }, 401)
+    const supabase = auth.supabase
     const [data, settingsResult] = await Promise.all([
       loadAiAssistantDeviceData(supabase, deviceId),
       supabase.from('device_settings').select('settings_json').eq('device_id', deviceId).maybeSingle(),

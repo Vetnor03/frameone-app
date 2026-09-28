@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { authenticatePhysicalDevice } from '@/app/lib/device/updateStateAuth'
 import { resolveStockBaselinePrice } from '@/app/lib/stocks/baseline'
 
 export const runtime = 'nodejs'
@@ -54,12 +54,6 @@ const SERIES_CAPS: Record<StockChartRange, number> = {
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object') return null
   return value as Record<string, unknown>
-}
-
-function getBearerToken(req: Request) {
-  const h = req.headers.get('authorization') || ''
-  const m = h.match(/^Bearer\s+(.+)$/i)
-  return m ? m[1] : null
 }
 
 function toNumber(v: unknown) {
@@ -372,22 +366,11 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
     }
 
-    const token = getBearerToken(req)
-    if (!token) {
-      return NextResponse.json({ error: 'Missing bearer token' }, { status: 401 })
+    const auth = await authenticatePhysicalDevice(req, device_id)
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status })
     }
-
-    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-
-    const { data: device, error: deviceError } = await supabase
-      .from('devices')
-      .select('device_id, device_token')
-      .eq('device_id', device_id)
-      .maybeSingle()
-
-    if (deviceError || !device || device.device_token !== token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const supabase = auth.supabase
 
     const { data, error } = await supabase
       .from('device_settings')
