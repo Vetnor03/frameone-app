@@ -27,7 +27,7 @@ if (process.env.VERCEL_ENV === "preview") {
   }
 
   // A server-side fallback or direct database URL must never point at production.
-  const optionalSupabaseUrl = process.env.SUPABASE_URL?.replace(/\\/$/, "");
+  const optionalSupabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, "");
   if (optionalSupabaseUrl && optionalSupabaseUrl !== suppliedUrl) {
     throw new Error("Preview deployment blocked: SUPABASE_URL does not match staging.");
   }
