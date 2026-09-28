@@ -6,6 +6,9 @@ const ref = 'ouwhfzjaahdipwmelzvf'
 const url = `https://${ref}.supabase.co`
 const env = {
   VERCEL_ENV: 'preview',
+  VERCEL_PROJECT_ID: 'prj_staging_test_project',
+  REMIND_STAGING_VERCEL_PROJECT_ID: 'prj_staging_test_project',
+  VERCEL_GIT_COMMIT_REF: 'development',
   REMIND_STAGING_SUPABASE_REF: ref,
   NEXT_PUBLIC_SUPABASE_URL: url,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: 'synthetic-staging-public',
@@ -14,7 +17,7 @@ const env = {
 
 test('local and production builds do not contact staging', async () => {
   const noFetch = () => { throw new Error('Should never reach network') }
-  assert.deepEqual(await verifyPreviewSupabaseCredentials({ ...env, VERCEL_ENV: 'production' }, noFetch), { skipped: true })
+  assert.deepEqual(await verifyPreviewSupabaseCredentials({ ...env, VERCEL_ENV: 'production', VERCEL_PROJECT_ID: 'prj_boLzA3f5Ntu4r4Ei0AeqYCPhNgv0', VERCEL_GIT_COMMIT_REF: 'main' }, noFetch), { skipped: true })
   assert.deepEqual(await verifyPreviewSupabaseCredentials({ ...env, VERCEL_ENV: undefined }, noFetch), { skipped: true })
 })
 
@@ -56,4 +59,34 @@ test('preview aborts when either key is rejected or endpoint is unavailable', as
     /server key was not accepted/,
   )
   await assert.rejects(verifyPreviewSupabaseCredentials(env, async () => { throw new Error('Network down') }), /verification unavailable/)
+})
+
+test('staging production build verifies both keys and refuses original project', async () => {
+  const calls = []
+  const fakeFetch = async (target) => {
+    calls.push(target)
+    return { ok: true, status: 200 }
+  }
+  assert.deepEqual(await verifyPreviewSupabaseCredentials({ ...env, VERCEL_ENV: 'production' }, fakeFetch), { verified: true })
+  assert.equal(calls.length, 2)
+  await assert.rejects(
+    verifyPreviewSupabaseCredentials({ ...env, VERCEL_ENV: 'production', VERCEL_PROJECT_ID: 'prj_boLzA3f5Ntu4r4Ei0AeqYCPhNgv0' }, fakeFetch),
+    /unapproved Vercel project/,
+  )
+  await assert.rejects(
+    verifyPreviewSupabaseCredentials({ ...env, VERCEL_ENV: 'production', VERCEL_GIT_COMMIT_REF: 'main' }, fakeFetch),
+    /production branch must be development/,
+  )
+})
+
+test('staging credential check refuses absent or different staging project ID', async () => {
+  const noFetch = () => { throw new Error('Should never fetch') }
+  await assert.rejects(
+    verifyPreviewSupabaseCredentials({ ...env, REMIND_STAGING_VERCEL_PROJECT_ID: undefined }, noFetch),
+    /unapproved Vercel project/,
+  )
+  await assert.rejects(
+    verifyPreviewSupabaseCredentials({ ...env, VERCEL_PROJECT_ID: 'prj_some_other_project' }, noFetch),
+    /unapproved Vercel project/,
+  )
 })
