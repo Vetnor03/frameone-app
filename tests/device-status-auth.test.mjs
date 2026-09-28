@@ -10,7 +10,7 @@ const firmwareSource = readFileSync(new URL('../frame/src/frame_v2.5.1.ino', imp
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://status-test.invalid'
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'status-test-public-key'
 
-function harness({ userId = 'user-A', physicalToken = 'device-A-secret', dbError = false } = {}) {
+function harness({ userId = 'user-A', physicalToken = 'device-A-secret', dbError = false, cookieUser = null } = {}) {
   const calls = []
   const membership = {
     'user-A': 'frm_A',
@@ -96,7 +96,24 @@ function harness({ userId = 'user-A', physicalToken = 'device-A-secret', dbError
     'next/server': { NextResponse: { json: (value, init = {}) => Response.json(value, init) } },
     'next/headers': { cookies: async () => ({ getAll: () => [], set() {} }) },
     '@supabase/ssr': { createServerClient: () => ({
-      auth: { getUser: async () => ({ data: { user: null }, error: null }) },
+      auth: { getUser: async () => ({ data: { user: cookieUser ? { id: cookieUser } : null }, error: null }) },
+      from(table) {
+        assert.equal(table, 'device_members')
+        let selectedDevice = ''
+        let selectedUser = ''
+        return {
+          select() { return this },
+          eq(column, value) {
+            if (column === 'device_id') selectedDevice = value
+            if (column === 'user_id') selectedUser = value
+            return this
+          },
+          async maybeSingle() {
+            assert.equal(selectedUser, cookieUser)
+            return { data: membership[cookieUser] === selectedDevice ? { device_id: selectedDevice } : null, error: null }
+          },
+        }
+      },
     }) },
     '@/app/lib/device/updateStateAuth': fakeAuth,
   }
