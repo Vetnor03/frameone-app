@@ -24,6 +24,20 @@ The frame first persists the delivered token locally, then proves possession of 
 4. Query again after rollback: zero private credentials/sessions/claim buckets and zero disposable frames, both original test frames and their users preserved. These SQL tests do **not** test AES-GCM; separate Node crypto unit tests cover encryption/AAD/tamper.
 5. Before enabling any HTTP route: physical supervised provisioning, independent secret/key management and rotation, protected staging device ingress, verified user JWT, source rate limits, all physical routes accepting hash-only v2 credentials, DB-level v1 issuer guards and an actual ESP32 frame positive test are mandatory.
 
+## Verified staging acceptance
+
+Merged [PR #1329](https://github.com/Vetnor03/frameone-app/pull/1329) into `development` after **987/987 stable tests**, typecheck, and changed-file lint passed. The separate full test/lint audit still reports previously documented debt. The private SQL was applied only to project `ouwhfzjaahdipwmelzvf` as migration `20260928205305_staging_pairing_v2_delivery_ack_20260928`.
+
+Catalog verification confirmed all three new SECURITY DEFINER functions are executable by `service_role` only, not `anon` or `authenticated`.
+
+One rolled-back staging SQL transaction used two synthetic devices and only ephemeral dummy token hashes/envelopes. It verified unknown/wrong polling and bootstrap proofs reject before delivery; first delivery succeeds; two retries preserve the first ciphertext and token hash even when later candidates differ; the fourth attempt is denied; wrong ACK is rejected; correct ACK atomically stores only an active hash, marks the session acknowledged, revokes bootstrap and scrubs temporary ciphertext; repeated ACK returns only `already_acknowledged`; post-ACK delivery is rejected; and expired ciphertext is erased and cannot be acknowledged.
+
+Separate Node tests cover actual AES-GCM encryption/decryption, authenticated associated-data binding, wrong-key and tampered-ciphertext failure; the SQL fixture uses deliberately synthetic envelope bytes, not a deployed encryption key.
+
+A fresh post-rollback query confirmed **zero** v2 credentials, sessions, throttling records and disposable frames/memberships. Both original virtual frames, their memberships and tester accounts remain intact. All five v2 HTTP endpoints are still disabled.
+
+**This is not physical acceptance.** No real credentials were issued, a real frame has not connected to staging, and hash-only v2 authorization across the rest of the physical API plus legacy issuer guards must be completed **before enabling delivery/ACK for hardware**.
+
 **Rollback:** the dormant Next.js modules may be reverted from `development` without affecting production. Applied private service-only functions are inert while no credentials exist; retire them through a separate staging-only reviewed migration rather than destructive automatic rollback.
 
 **Production:** `main`, production Supabase, physical firmware and the currently working frame are out of scope.
