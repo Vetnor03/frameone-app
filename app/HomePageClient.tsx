@@ -678,10 +678,19 @@ async function fetchStatusMapFromApi(deviceIds: string[]): Promise<Map<string, D
   const map = new Map<string, DeviceStatusMeta>()
   if (deviceIds.length === 0) return map
 
+  // Match /api/device/status user membership authentication. Read the local
+  // session once per batch, not once per frame; never put tokens in the URL.
+  const { data: sessionData } = await supabase.auth.getSession()
+  const accessToken = sessionData.session?.access_token
+  if (!accessToken) return map
+
   const results = await Promise.all(
     deviceIds.map(async (deviceId) => {
       try {
-        const resp = await fetch(`/api/device/status?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
+        const resp = await fetch(`/api/device/status?device_id=${encodeURIComponent(deviceId)}`, {
+          cache: 'no-store',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
         if (!resp.ok) return null
 
         const data = await resp.json()
@@ -1842,7 +1851,13 @@ export default function HomePage() {
 
   async function loadDeviceStatus(deviceId: string): Promise<string | null> {
     try {
-      const resp = await fetch(`/api/device/status?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (!accessToken) return null
+      const resp = await fetch(`/api/device/status?device_id=${encodeURIComponent(deviceId)}`, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
       if (!resp.ok) {
         return null
       }
