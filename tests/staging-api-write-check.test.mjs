@@ -35,11 +35,13 @@ test('foreign frame write probes include settings, rename, update request, heart
     '/api/device/save-settings', '/api/frame/rename',
     '/api/device/update-state/request', '/api/device/update-state/activity',
     '/api/frame/delete',
+    '/api/device/status',
   ]) assert.ok(client.includes(endpoint), 'Missing API negative test: ' + endpoint)
   assert.match(client, /expected: 403, error: 'forbidden'/)
   assert.match(client, /expected: 403, error: 'frame_owner_required'/)
   assert.match(client, /expected: 404, error: 'frame_not_found'/)
   assert.match(client, /expected: 401, error: 'missing_auth_token'/)
+  assert.match(client, /expected: 401, error: 'unauthorized'/)
 })
 
 test('stop on first mismatch and do not leak credentials in results or call token-minting pairing route', () => {
