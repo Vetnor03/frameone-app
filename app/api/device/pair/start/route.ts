@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { legacyPairingQuarantined, LEGACY_PAIRING_DISABLED_RESPONSE } from '@/app/lib/device/pairingRollout'
 
 export const runtime = 'nodejs'
 
 // TEMP: using GET so you can test in browser easily
 export async function GET(req: Request) {
+  // Staging must not mint/return a legacy bearer or create an ID-only claim
+  // session. Guard before any service-role client or RPC is touched.
+  if (legacyPairingQuarantined()) {
+    return NextResponse.json(LEGACY_PAIRING_DISABLED_RESPONSE, {
+      status: 410,
+      headers: { 'Cache-Control': 'no-store' },
+    })
+  }
   try {
     const url = new URL(req.url)
     const device_id = url.searchParams.get('device_id')
@@ -29,7 +38,7 @@ export async function GET(req: Request) {
     const row = Array.isArray(data) ? data[0] : data
 
     return NextResponse.json(row)
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Unknown error' }, { status: 500 })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Unknown error' }, { status: 500 })
   }
 }

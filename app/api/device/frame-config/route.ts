@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/app/lib/supabase/serviceClient'
 import { authenticatePhysicalDevice } from '@/app/lib/device/updateStateAuth'
+import { legacyPairingQuarantined, LEGACY_PAIRING_DISABLED_RESPONSE } from '@/app/lib/device/pairingRollout'
 import { buildFrameConfigPayload, deviceHasOwnerAccessLink, pairRequiredPayload } from './builder'
 
 export const runtime = 'nodejs'
@@ -48,6 +49,14 @@ export async function GET(req: Request) {
     const hasOwnerAccessLink = await deviceHasOwnerAccessLink(supabase, device_id)
 
     if (!hasOwnerAccessLink) {
+      // Legacy firmware cannot bootstrap trust from an ID in staging.
+      // Keep the authenticated paired branch below unchanged.
+      if (legacyPairingQuarantined()) {
+        return NextResponse.json(LEGACY_PAIRING_DISABLED_RESPONSE, {
+          status: 410,
+          headers: { 'Cache-Control': 'no-store' },
+        })
+      }
       phase = 'start_pairing'
       const payload = await startPairingPayload(
         supabase as unknown as PairingRpcClient,

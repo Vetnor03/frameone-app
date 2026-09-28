@@ -1,9 +1,18 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { legacyPairingQuarantined, LEGACY_PAIRING_DISABLED_RESPONSE } from '@/app/lib/device/pairingRollout'
 
 export const runtime = 'nodejs'
 
 export async function GET(req: Request) {
+  // Staging must not mint/return a legacy bearer or create an ID-only claim
+  // session. Guard before any service-role client or RPC is touched.
+  if (legacyPairingQuarantined()) {
+    return NextResponse.json(LEGACY_PAIRING_DISABLED_RESPONSE, {
+      status: 410,
+      headers: { 'Cache-Control': 'no-store' },
+    })
+  }
   try {
     const url = new URL(req.url)
     const device_id = url.searchParams.get('device_id')
@@ -23,7 +32,7 @@ export async function GET(req: Request) {
     // So: we try one, then the other, with a friendly error if neither exists.
 
     // Try function 1: pair_status (common name)
-    let data: any = null
+    let data: unknown = null
     let errorMsg: string | null = null
 
     {
@@ -62,7 +71,7 @@ export async function GET(req: Request) {
     const row = Array.isArray(data) ? data[0] : data
 
     return NextResponse.json(row)
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Unknown error' }, { status: 500 })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Unknown error' }, { status: 500 })
   }
 }
