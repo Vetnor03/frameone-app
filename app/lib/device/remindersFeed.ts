@@ -389,18 +389,6 @@ function isUserCreatedReminder(item: DeviceReminderItem) {
   return item.source === 'remind' && item.is_user_created !== false
 }
 
-/**
- * Limited physical displays must not hide a connected calendar meeting behind
- * optional public Local Events. Prioritize personal reminders, then personal
- * calendar sources, then background/public sources within the same date.
- * Keep chronological order within each priority group.
- */
-function reminderVisibilityRank(item: DeviceReminderItem) {
-  if (isUserCreatedReminder(item)) return 0
-  if (item.source === 'teams' || item.source === 'spond') return 1
-  return 2
-}
-
 export function reminderSortTimestamp(item: Pick<DeviceReminderItem, 'occurrence_date' | 'display_time' | 'due_time'>) {
   return `${item.occurrence_date} ${normalizedSortTime(item.display_time || item.due_time) || '99:99'}`
 }
@@ -472,12 +460,12 @@ export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderIte
   if (a.occurrence_date < b.occurrence_date) return -1
   if (a.occurrence_date > b.occurrence_date) return 1
 
-  // A frame may only fit one or two items. Show personal reminders and
-  // connected calendar commitments before optional public Local Events.
-  // Dates still win, and each priority group remains chronological.
-  const ap = reminderVisibilityRank(a)
-  const bp = reminderVisibilityRank(b)
-  if (ap !== bp) return ap - bp
+  // Preserve the existing user-created reminder priority within a date.
+  // All other sources follow local clock time; Teams/Spond only win ties
+  // against optional public events, never an earlier event.
+  const ap = isUserCreatedReminder(a)
+  const bp = isUserCreatedReminder(b)
+  if (ap !== bp) return ap ? -1 : 1
 
   const at = normalizedSortTime(a.display_time || a.due_time)
   const bt = normalizedSortTime(b.display_time || b.due_time)
