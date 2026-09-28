@@ -1,13 +1,13 @@
 # RE:MIND environments and release gate
 
-Status: foundation in the `development` branch. This document does not mean staging is deployed or production migration history is repaired.
+Status: staging Supabase project created, Vercel Preview activation and database baseline still pending. This document does not mean staging is deployed or production migration history is repaired.
 
 ## Inventory (2026-09-28)
 
 - GitHub source of truth: `Vetnor03/frameone-app`; `main` is the current live code branch.
 - Vercel: one existing `frameone-app` project. Its production domain and production settings remain unchanged.
 - Supabase: existing `FRAME_V2` project in `eu-west-1` is production; identifier `bzkqyllgccswrfudmexm`. Do not alter its data or migration ledger to create staging.
-- There is no second RE:MIND Supabase project yet. IMRPlanner is unrelated and must not be used.
+- Staging Supabase: `RE:MIND STAGING` (`ouwhfzjaahdipwmelzvf`) in `eu-west-1`; URL `https://ouwhfzjaahdipwmelzvf.supabase.co`. Verified active and healthy, with no public tables or migration ledger entries yet. Keep empty until a fresh-install baseline has been verified with synthetic data.\n- IMRPlanner (`iwyhhvahtqwftcasvvel`) was asked to pause on 2026-09-28 to free the Free-plan slot; do not delete it. Its application is unavailable while paused and can be restored later, subject to provider retention rules. Confirm PAUSED status before relying on the slot.\n- Organization `Vetnor03's Org` remains Free; the project-creation cost check returned $0/month.
 - The existing GitHub `main` branch has no branch protection at this snapshot. Protection must be enabled before treating the release process as enforced.
 - Repository is currently public. Do not commit .env files, project API secrets, OTA signing secrets, database exports, real device tokens or real user data.
 
@@ -17,7 +17,7 @@ Status: foundation in the `development` branch. This document does not mean stag
 | --- | --- | --- |
 | Git | `development` and short-lived feature branches | `main` |
 | Vercel | Preview deployment from `development` | Existing production deployment |
-| Supabase | New separate RE:MIND staging project | Existing `FRAME_V2` |
+| Supabase | `RE:MIND STAGING` (`ouwhfzjaahdipwmelzvf`) | Existing `FRAME_V2` |
 | Users/data | Synthetic accounts, test devices, synthetic data | Customer accounts and devices |
 | Domain | Vercel preview URL initially; staging domain only after isolation is proven | `re-mind.no` |
 
@@ -35,10 +35,10 @@ This blocks **new builds**, not older preview deployments that may already exist
 
 ## Staging activation: in order
 
-1. Confirm the intended Supabase organization and pricing for an additional project; create an isolated project in the intended region.
+1. **Done:** isolated `RE:MIND STAGING` project created in `eu-west-1` after $0/month cost confirmation. The project is currently empty; do not mistake its existence for a functioning staging app.
 2. Reconcile schema migration history in an isolated disposable database first. **Do not** run `supabase db push` or `db reset` against production. See `docs/migration-reconciliation.md` and `docs/security-rollback-playbook.md`. Do not copy live user/auth tables or tokens into staging.
 3. Populate test data, review exposed-schema RLS/grants, and run two-account negative authorization checks.
-4. In Vercel project's Preview environment, configure the staging project's **own** URL, anon/publishable key, service-role key and `REMIND_STAGING_SUPABASE_REF`. Make sure preview variables are not shared from production. Do not print secrets in CI or PR logs.
+4. In Vercel `frameone-app` project's Preview environment, configure `REMIND_STAGING_SUPABASE_REF=ouwhfzjaahdipwmelzvf`, `NEXT_PUBLIC_SUPABASE_URL=https://ouwhfzjaahdipwmelzvf.supabase.co`, and the **staging project's own** `NEXT_PUBLIC_SUPABASE_ANON_KEY` (legacy anon key, or update app's key handling before using a publishable key) and `SUPABASE_SERVICE_ROLE_KEY`. Read these keys from **staging** Supabase API settings; never commit, print or copy production keys. Restrict preview settings to Preview, not Production. The connected Vercel integration is read-only for these settings; update them through the Vercel dashboard.
 5. Configure staging-safe values for every side-effecting integration: auth site URL and callback redirects, email sender/recipient, Teams/Spond OAuth, payments/Shopify, OpenAI, push notifications, cron secrets and any external synchronization. Disable unnecessary jobs, payments, notifications and live provider writes until separately tested.
 6. Redeploy the `development` preview. Verify the build gate passes, the app creates only synthetic staging data, and the staging app cannot modify the live Supabase project. Check both server and browser configurations.
 7. Only then point a **spare test frame** at the staging origin using an explicitly separate firmware build/configuration. Do not reuse production device credentials or flash a production pilot frame with a staging firmware URL.
