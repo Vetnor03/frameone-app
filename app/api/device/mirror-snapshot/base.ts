@@ -1961,17 +1961,14 @@ async function newsDetail(origin: string, language: string, feed: 'top' | 'lates
   url.searchParams.set('feed', feed)
   url.searchParams.set('limit', '14')
   url.searchParams.set('links', '0')
-  url.searchParams.set('display_profiles', 'compact,standard')
+  // The mirror must preview the same complete RSS headlines as the physical
+  // frame, rather than the optimizer's potentially shortened app variant.
+  url.searchParams.set('raw_titles', '1')
   const data = asRecord(await fetchJson(url.toString()))
   const rows = Array.isArray(data.items) ? data.items.map(asRecord) : []
   const newsItems = rows.map((row) => {
-    const profiles = asRecord(row.profile_titles)
     const title = asString(row.title).trim()
-    return {
-      title,
-      compactTitle: asString(profiles.compact, title).trim() || title,
-      standardTitle: asString(profiles.standard, title).trim() || title,
-    }
+    return { title }
   }).filter((item) => item.title)
   return {
     module: 'news',
