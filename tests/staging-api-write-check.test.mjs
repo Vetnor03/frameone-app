@@ -44,7 +44,7 @@ test('foreign frame write probes include settings, rename, update request, heart
 
 test('stop on first mismatch and do not leak credentials in results or call token-minting pairing route', () => {
   assert.match(client, /if \(!ok\) \{[\s\S]*?return\s*\n\s*\}/)
-  assert.match(client, /if \(testCase\.bearer \?/)
+  assert.match(client, /testCase\.bearer \? \{ Authorization:/)
   assert.doesNotMatch(client, /console\.(log|info|warn)|localStorage\.setItem/)
   assert.doesNotMatch(client, /\/api\/device\/pair\/status|\/api\/device\/pair\/start/)
   assert.doesNotMatch(client, /password:|service_role|Bearer \${token}/)
