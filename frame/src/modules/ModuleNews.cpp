@@ -234,7 +234,8 @@ static int drawHeader(const Cell& c) {
 static bool fetchNews() {
   if (!ensureCacheAllocated()) return false;
   clearCache();
-  String url = String(BASE_URL) + "/api/news?limit=14&links=0&raw_titles=1";
+  const char* feed = g_cfg && strcmp(g_cfg->newsFeed, "latest") == 0 ? "latest" : "top";
+  String url = String(BASE_URL) + "/api/news?feed=" + feed + "&limit=14&links=0&raw_titles=1";
   int code = 0;
   String body;
   const bool httpOk = NetClient::httpGetAuth(url, DeviceIdentity::getToken(), code, body);
@@ -377,7 +378,7 @@ static void renderList(const Cell& c) {
   if (g_cache->count <= 0) { drawEmpty(c); return; }
 
   // Match the Reminders module's centered list treatment. Wrap complete
-  // original headlines and show as many newest stories as actually fit in the
+  // original headlines and show as many stories in feed order as actually fit in the
   // available height. Never draw a partial sentence or append ellipses.
   const int dotR = 3;
   const int gap = 10;

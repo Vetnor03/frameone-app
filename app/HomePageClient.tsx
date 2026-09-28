@@ -10430,7 +10430,20 @@ function ModuleSettingsTab({
   }
 
   if (module === 'news') {
-    return <NewsModuleSettingsTab language={language} />
+    const savedFeed = modulesJson.news && typeof modulesJson.news === 'object' && !Array.isArray(modulesJson.news)
+      ? modulesJson.news
+      : {}
+    const feed = savedFeed.feed === 'latest' ? 'latest' : 'top'
+    return <NewsModuleSettingsTab
+      language={language}
+      feed={feed}
+      onFeedChange={(nextFeed) => {
+        if (nextFeed === feed) return
+        const nextModules = { ...modulesJson, news: { ...savedFeed, feed: nextFeed } }
+        setModulesJson(nextModules)
+        markDirty({ modulesJson: nextModules })
+      }}
+    />
   }
 
   if (module === 'countdown') {

@@ -108,6 +108,7 @@ struct FrameConfig {
   ThemeKey theme = THEME_DARK;
   bool powerSaver = false;
   char language[4] = {'e', 'n', '\0', '\0'};
+  char newsFeed[8] = "top"; // "top" (default) or "latest"
 
   SlotModule assigns[MAX_FRAME_ASSIGNMENTS];
   int assignCount = 0;

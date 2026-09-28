@@ -1956,8 +1956,9 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, limi
 }
 
 
-async function newsDetail(origin: string, language: string): Promise<Detail> {
+async function newsDetail(origin: string, language: string, feed: 'top' | 'latest'): Promise<Detail> {
   const url = new URL('/api/news', origin)
+  url.searchParams.set('feed', feed)
   url.searchParams.set('limit', '14')
   url.searchParams.set('links', '0')
   url.searchParams.set('display_profiles', 'compact,standard')
@@ -2191,7 +2192,7 @@ export async function GET(req: Request) {
         else if (parsed.base === 'soccer') detailsBySlot[String(slot)] = await soccerDetail(origin, cfg, language)
         else if (parsed.base === 'stocks' && deviceToken) detailsBySlot[String(slot)] = await stocksDetail(origin, deviceId, deviceToken, parsed.id, cfg)
         else if (parsed.base === 'reminders' && deviceToken) detailsBySlot[String(slot)] = await remindersDetail(origin, deviceId, deviceToken, language)
-        else if (parsed.base === 'news') detailsBySlot[String(slot)] = await newsDetail(origin, language)
+        else if (parsed.base === 'news') detailsBySlot[String(slot)] = await newsDetail(origin, language, asRecord(modules.news).feed === 'latest' ? 'latest' : 'top')
         else if (parsed.base === 'assistant') detailsBySlot[String(slot)] = await aiAssistantDetail(supabase, deviceId)
         else if (parsed.base === 'groceries') detailsBySlot[String(slot)] = await groceriesDetail(supabase, mirrorScope.storageDeviceIds, mirrorScope.ownerId, language)
         else if (parsed.base === 'countdown') detailsBySlot[String(slot)] = await countdownDetail(supabase, mirrorScope.storageDeviceIds, language)
