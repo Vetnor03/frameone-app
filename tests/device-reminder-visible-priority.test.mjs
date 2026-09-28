@@ -112,11 +112,11 @@ test('the limited feed keeps a same-time Teams meeting ahead of later public eve
 test('an earlier public event stays ahead of a later calendar meeting even when the feed is capped', () => {
   const entries = [
     ...Array.from({ length: 14 }, (_, i) => entry(`public-${i}`, `${String(8 + i).padStart(2, '0')}:00`)),
-    entry('teams-1700', '17:00', 'teams'),
+    entry('teams-2000', '20:00', 'teams'),
   ]
   const selected = prioritizeReminderVisiblePrefix(selectReminderDisplayGroups(entries, 10), ['compact'])
   assert.equal(selected[0].reminder_id, 'public-0')
-  assert.equal(selected.includes(entries.at(-1)), false)
+  assert.equal(selected.some((item) => item.reminder_id === 'teams-2000'), false)
   assert.equal(selected.length, 10)
 })
 
