@@ -124,3 +124,14 @@ test('the server rejects blank Annet explanations and stores only genuine Annet 
   assert.match(otherMigration, /add column if not exists use_case_other text/)
   assert.doesNotMatch(otherMigration, /update public\.pilot_applications/)
 })
+
+test('one email can create only one pilot application, regardless of capitalization or whitespace', () => {
+  const uniqueMigration = readFileSync(new URL('../supabase/migrations/20260929163805_pilot_email_normalized_uniqueness.sql', import.meta.url), 'utf8')
+  assert.match(uniqueMigration, /create unique index if not exists pilot_applications_email_normalized_unique_idx/)
+  assert.match(uniqueMigration, /lower\(btrim\(email\)\)/)
+  assert.match(route, /field\(body\.email, 200\)\?\.toLowerCase\(\)/)
+  assert.match(route, /error\.code !== '23505'/)
+  assert.match(route, /if \(!error && data\) \{/)
+  assert.match(route, /sendPilotApplicationConfirmation/)
+  assert.match(route, /Same public response for new and existing emails/)
+})
