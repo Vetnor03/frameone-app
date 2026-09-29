@@ -23,10 +23,12 @@ test('the application accurately discloses prototype, return, feedback and disco
 })
 
 test('the application API validates acknowledgements and does not expose duplicate emails', () => {
-  for (const name of ['ageConfirmed', 'prototypeAcknowledged', 'returnAcknowledged', 'feedbackAcknowledged']) {
+  for (const name of ['prototypeAcknowledged', 'returnAcknowledged', 'feedbackAcknowledged']) {
     assert.match(route, new RegExp('body\\.' + name + ' !== true'))
   }
-  assert.match(route, /error\.code !== '23505'/)
+  assert.doesNotMatch(route, /ageConfirmed !== true/)
+  assert.ok(route.includes("follow_up_interview_opt_in: body.followUpInterviewOptIn === true"))
+  assert.ok(route.includes("error.code !== '23505'"))
   assert.match(route, /SUPABASE_SERVICE_ROLE_KEY/)
   assert.doesNotMatch(route, /NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY/)
 })
@@ -35,4 +37,22 @@ test('private applicant table has RLS and no anon or authenticated grants', () =
   assert.match(migration, /enable row level security/)
   assert.match(migration, /revoke all on table public\.pilot_applications from public, anon, authenticated/)
   assert.match(migration, /grant all on table public\.pilot_applications to service_role/)
+})
+
+test('the new headline and checkbox requirements match the server contract', () => {
+  assert.match(page, /Vil du bli den første til å teste RE:MIND\?/)
+  assert.doesNotMatch(page, /name="ageConfirmed"/)
+  for (const name of ['prototypeAcknowledged', 'returnAcknowledged', 'feedbackAcknowledged']) {
+    assert.match(page, new RegExp('name="' + name + '" required'))
+  }
+  assert.match(page, /name="followUpInterviewOptIn" className/)
+  assert.match(page, /Valgfritt/)
+  assert.match(page, /Må godtas for å sende inn/)
+})
+
+test('new migration preserves historic age data and provides optional follow-up storage', () => {
+  const followUpMigration = readFileSync(new URL('../supabase/migrations/20260929134451_pilot_optional_followup_and_later_age_check.sql', import.meta.url), 'utf8')
+  assert.match(followUpMigration, /age_confirmed drop not null/)
+  assert.match(followUpMigration, /follow_up_interview_opt_in boolean not null default false/)
+  assert.doesNotMatch(followUpMigration, /drop column age_confirmed/)
 })
