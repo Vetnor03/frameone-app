@@ -48,12 +48,14 @@ export async function POST(request: Request) {
   const platform = field(body.platform, 32)
   const homeWifi = field(body.homeWifi, 32)
   const useCase = field(body.useCase, 32)
+  const useCaseOther = field(body.useCaseOther, 300)
   const note = field(body.note, 400)
   if (!fullName || !email || !emailPattern.test(email) || !city ||
       !household || !households.has(household) ||
       !platform || !platforms.has(platform) ||
       !homeWifi || !wifiOptions.has(homeWifi) ||
-      !useCase || !useCases.has(useCase) || note === null ||
+      !useCase || !useCases.has(useCase) ||
+      (useCase === 'other' && !useCaseOther) || note === null ||
       body.prototypeAcknowledged !== true ||
       body.returnAcknowledged !== true ||
       body.pilotContactAcknowledged !== true) {
@@ -73,7 +75,8 @@ export async function POST(request: Request) {
   }
   const { data, error } = await supabase.from('pilot_applications').insert({
     full_name: fullName, email, city, household, platform, home_wifi: homeWifi,
-    use_case: useCase, note: note || null, terms_version: '2026-09-29-v3',
+    use_case: useCase, use_case_other: useCase === 'other' ? useCaseOther : null,
+    note: note || null, terms_version: '2026-09-29-v3',
     prototype_acknowledged_at: acknowledgedAt,
     return_acknowledged_at: acknowledgedAt,
     feedback_acknowledged_at: acknowledgedAt,

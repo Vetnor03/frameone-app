@@ -107,3 +107,20 @@ test('confirmation mail is sent only after a successful database insert and trac
   assert.ok(page.includes('påmeldingen likevel registrert'))
   assert.ok(route.includes('Same public response for new and existing emails'))
 })
+
+test('Annet shows a required conditional explanation and sends it with the application', () => {
+  assert.match(page, /const \[useCase, setUseCase\] = useState\(''\)/)
+  assert.match(page, /name="useCase" required value=\{useCase\} onChange=/)
+  assert.match(page, /\{useCase === 'other' \? \(/)
+  assert.match(page, /name="useCaseOther" required maxLength=\{300\}/)
+  assert.match(page, /useCaseOther: useCase === 'other' \? String\(form\.get\('useCaseOther'\) \|\| ''\) : ''/)
+})
+
+test('the server rejects blank Annet explanations and stores only genuine Annet text', () => {
+  assert.match(route, /const useCaseOther = field\(body\.useCaseOther, 300\)/)
+  assert.match(route, /\(useCase === 'other' && !useCaseOther\)/)
+  assert.match(route, /use_case_other: useCase === 'other' \? useCaseOther : null/)
+  const otherMigration = readFileSync(new URL('../supabase/migrations/20260929153605_pilot_other_use_case_description.sql', import.meta.url), 'utf8')
+  assert.match(otherMigration, /add column if not exists use_case_other text/)
+  assert.doesNotMatch(otherMigration, /update public\.pilot_applications/)
+})
