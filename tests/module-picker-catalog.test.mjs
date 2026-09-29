@@ -57,7 +57,7 @@ test('single More Modules disclosure groups and scrolls without nested dropdowns
   assert.match(picker, /groups\.map\(\(group\) =>/)
   assert.match(picker, /group\.modules\.map\(\(module\) =>/)
   assert.doesNotMatch(picker, /setCategoryOpen|categoryExpanded|<details/)
-  assert.match(picker, /onClick=\{\(\) => onPick\(module\)\}/)
+  assert.match(picker, /onClick=\{\(\) => onPick\(moduleKey\)\}/)
   assert.match(picker, /onClick=\{onClear\}/)
   assert.match(home, /selectWidget: 'VELG MODUL'/)
 })
