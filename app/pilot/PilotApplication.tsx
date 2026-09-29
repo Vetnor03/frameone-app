@@ -10,7 +10,6 @@ export default function PilotApplication() {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [closed, setClosed] = useState(false)
-  const [confirmationSent, setConfirmationSent] = useState(false)
   const [error, setError] = useState('')
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -44,8 +43,6 @@ export default function PilotApplication() {
         return
       }
       if (!response.ok) throw new Error('Kunne ikke lagre påmeldingen. Prøv igjen.')
-      const result = await response.json().catch(() => null)
-      setConfirmationSent(result?.confirmationSent === true)
       setSent(true)
     } catch {
       setError('Noe gikk galt. Prøv igjen eller kontakt vetlecn@live.no.')
@@ -94,7 +91,7 @@ export default function PilotApplication() {
               <p className="mt-6 text-[11px] font-semibold uppercase tracking-[.17em] text-black/40">Påmeldingen er mottatt</p>
               <h2 className="mt-3 text-[30px] font-medium leading-tight tracking-[-.04em]">Takk for interessen!</h2>
               <p className="mt-4 text-[14px] leading-6 text-black/55">Søknaden din er lagret. Du hører fra oss når vi nærmer oss pilottesten. Påmeldingen er ikke en bestilling eller en avtale om å motta en testpakke.</p>
-              <p className="mt-3 text-[13px] leading-6 text-black/50">{confirmationSent ? 'Vi har også sendt deg en bekreftelse på e-post.' : 'Vi har mottatt påmeldingen, men kunne ikke bekrefte at e-posten ble sendt. Du trenger ikke sende inn skjemaet på nytt.'}</p>
+              <p className="mt-3 text-[13px] leading-6 text-black/50">Vi sender en bekreftelse på e-post. Dersom du ikke mottar den, er påmeldingen likevel registrert. Du trenger ikke sende inn skjemaet på nytt.</p>
             </div>
           ) : (
             <form onSubmit={submit} className="grid gap-4">
