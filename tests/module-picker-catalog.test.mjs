@@ -55,7 +55,7 @@ test('single More Modules disclosure groups and scrolls without nested dropdowns
   assert.match(picker, /id="picker-more-modules"/)
   assert.match(picker, /max-h-\[min\(36dvh,260px\)\] overflow-y-auto/)
   assert.match(picker, /groups\.map\(\(group\) =>/)
-  assert.match(picker, /group\.modules\.map\(\(module\) =>/)
+  assert.match(picker, /group\.modules\.map\(\(moduleKey\) =>/)
   assert.doesNotMatch(picker, /setCategoryOpen|categoryExpanded|<details/)
   assert.match(picker, /onClick=\{\(\) => onPick\(moduleKey\)\}/)
   assert.match(picker, /onClick=\{onClear\}/)
