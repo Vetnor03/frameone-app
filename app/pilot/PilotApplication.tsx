@@ -25,10 +25,10 @@ export default function PilotApplication() {
       homeWifi: String(form.get('homeWifi') || ''),
       useCase: String(form.get('useCase') || ''),
       note: String(form.get('note') || ''),
-      ageConfirmed: form.get('ageConfirmed') === 'on',
       prototypeAcknowledged: form.get('prototypeAcknowledged') === 'on',
       returnAcknowledged: form.get('returnAcknowledged') === 'on',
       feedbackAcknowledged: form.get('feedbackAcknowledged') === 'on',
+      followUpInterviewOptIn: form.get('followUpInterviewOptIn') === 'on',
       website: String(form.get('website') || ''),
     }
     try {
@@ -56,7 +56,7 @@ export default function PilotApplication() {
       <div className="mx-auto grid max-w-[1080px] gap-9 pt-10 lg:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)] lg:items-start lg:gap-14 lg:pt-20">
         <section className="lg:sticky lg:top-12">
           <p className="mb-4 text-[11px] font-semibold uppercase tracking-[.22em] text-[#76786e]">En liten invitasjon</p>
-          <h1 className="max-w-xl text-[clamp(38px,5vw,61px)] font-medium leading-[1.06] tracking-[-.055em]">Vil du teste<br />RE:MIND først?</h1>
+          <h1 className="max-w-xl text-[clamp(36px,4.3vw,55px)] font-medium leading-[1.06] tracking-[-.055em]">Vil du bli den første til å teste RE:MIND?</h1>
           <p className="mt-6 max-w-[460px] text-[15px] leading-7 text-[#5e6159]">Vi nærmer oss vår første test i ekte hjem. Vi søker fem personer som vil låne en tidlig RE:MIND, bruke den i hverdagen og fortelle oss hva som fungerer — og hva som bør bli bedre.</p>
           <div className="mt-7 grid grid-cols-3 gap-2">
             {[['05', 'testere'], ['03', 'uker'], ['50 %', 'takk for hjelpen']].map(([number, caption]) => (
@@ -113,10 +113,14 @@ export default function PilotApplication() {
                 <textarea className="min-h-[76px] w-full resize-y rounded-xl border border-[#d9d7d1] bg-white p-3.5 text-[14px] outline-none focus:border-[#33352f] focus:ring-2 focus:ring-[#33352f]/10" name="note" maxLength={400} placeholder="For eksempel hvordan du ser for deg å bruke rammen." />
               </label>
               <div className="mt-1 space-y-3 border-t border-black/10 pt-5 text-[12px] leading-5">
-                <label className="flex items-start gap-3"><input type="checkbox" name="ageConfirmed" required className="mt-1 h-4 w-4 shrink-0 accent-[#242522]" /><span>Jeg er 18 år eller eldre.</span></label>
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-[.13em] text-black/50">Må godtas for å sende inn</p>
                 <label className="flex items-start gap-3"><input type="checkbox" name="prototypeAcknowledged" required className="mt-1 h-4 w-4 shrink-0 accent-[#242522]" /><span>Jeg forstår at dette er en uferdig utviklingsprototype som ikke er CE-merket eller ferdig samsvarsvurdert, og at påmelding ikke garanterer deltakelse. Endelige testvilkår og sikkerhetsinstrukser gis før et eventuelt utlån.</span></label>
                 <label className="flex items-start gap-3"><input type="checkbox" name="returnAcknowledged" required className="mt-1 h-4 w-4 shrink-0 accent-[#242522]" /><span>Jeg forstår at testen varer omtrent tre uker, at enheten tilhører RE:MIND og at den skal returneres etter testperioden eller dersom testen avbrytes.</span></label>
                 <label className="flex items-start gap-3"><input type="checkbox" name="feedbackAcknowledged" required className="mt-1 h-4 w-4 shrink-0 accent-[#242522]" /><span>Jeg kan gi ærlige tilbakemeldinger underveis og svare på et kort spørreskjema etter testen.</span></label>
+              </div>
+              <div className="rounded-xl border border-black/10 bg-white px-4 py-3 text-[12px] leading-5">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[.13em] text-black/50">Valgfritt</p>
+                <label className="flex items-start gap-3"><input type="checkbox" name="followUpInterviewOptIn" className="mt-1 h-4 w-4 shrink-0 accent-[#242522]" /><span>Jeg kan også kontaktes om en kort oppfølgingssamtale om opplevelsen min. Jeg kan si nei senere, og dette påvirker ikke påmeldingen.</span></label>
               </div>
               <p className="rounded-xl bg-[#f0eee8] px-4 py-3 text-[11px] leading-5 text-black/55">Som takk for en gjennomført test, tilbakemeldinger og retur av låneenheten får du tilbud om <strong>50 % rabatt på én ferdig RE:MIND ved lansering</strong>. Ingen kjøpsplikt. Rabatt gjelder sluttproduktet, ikke prototypen.</p>
               <p className="text-[11px] leading-5 text-black/45">Vi bruker opplysningene til å vurdere søknader og kontakte deltakere om piloten, ikke til å melde deg på markedsføring. Du kan be om innsyn eller sletting via <a className="underline underline-offset-2" href="mailto:support@re-mind.no">support@re-mind.no</a>. Se <a className="underline underline-offset-2" href="/privacy?lang=no">personvernerklæringen</a>.</p>
