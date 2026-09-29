@@ -26,9 +26,9 @@ test('the application API validates acknowledgements and does not expose duplica
   for (const name of ['prototypeAcknowledged', 'returnAcknowledged', 'feedbackAcknowledged']) {
     assert.match(route, new RegExp('body\\.' + name + ' !== true'))
   }
-  assert.doesNotMatch(route, /body\\.ageConfirmed !== true/)
-  assert.match(route, /follow_up_interview_opt_in: body\\.followUpInterviewOptIn === true/)
-  assert.match(route, /error\\.code !== '23505'/)
+  assert.doesNotMatch(route, /ageConfirmed !== true/)
+  assert.ok(route.includes("follow_up_interview_opt_in: body.followUpInterviewOptIn === true"))
+  assert.ok(route.includes("error.code !== '23505'"))
   assert.match(route, /SUPABASE_SERVICE_ROLE_KEY/)
   assert.doesNotMatch(route, /NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY/)
 })
