@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
-import { PILOT_DEADLINE_LABEL } from '@/app/lib/pilotApplicationDeadline'
+import { useEffect, useState, type FormEvent } from 'react'
+import { PILOT_CLOSES_AT_MS, PILOT_DEADLINE_LABEL, isPilotApplicationClosed } from '@/app/lib/pilotApplicationDeadline'
 
 const inputClass = 'h-11 w-full rounded-xl border border-[#d9d7d1] bg-white px-3.5 text-[16px] text-[#242522] outline-none transition focus:border-[#33352f] focus:ring-2 focus:ring-[#33352f]/10'
 const labelClass = 'grid gap-1.5 text-[12px] font-medium text-[#4d5149]'
@@ -11,6 +11,19 @@ export default function PilotApplication() {
   const [sent, setSent] = useState(false)
   const [closed, setClosed] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>
+    function checkDeadline() {
+      if (isPilotApplicationClosed()) {
+        setClosed(true)
+        return
+      }
+      timer = setTimeout(checkDeadline, Math.min(60_000, PILOT_CLOSES_AT_MS - Date.now()))
+    }
+    checkDeadline()
+    return () => clearTimeout(timer)
+  }, [])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
