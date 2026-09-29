@@ -15,7 +15,7 @@ test('public pilot is an application, while selected configurator is preserved',
 })
 
 test('the application accurately discloses prototype, return, feedback and discount', () => {
-  for (const term of ['ikke CE-merket', 'tre uker', '50 %', 'returneres', 'feedbackAcknowledged']) {
+  for (const term of ['ikke CE-merket', 'tre uker', '50 %', 'returneres', 'pilotContactAcknowledged']) {
     assert.ok(page.includes(term), term)
   }
   assert.match(page, /Leveringsadresse spør vi først/)
@@ -23,11 +23,13 @@ test('the application accurately discloses prototype, return, feedback and disco
 })
 
 test('the application API validates acknowledgements and does not expose duplicate emails', () => {
-  for (const name of ['prototypeAcknowledged', 'returnAcknowledged', 'feedbackAcknowledged']) {
+  for (const name of ['prototypeAcknowledged', 'returnAcknowledged', 'pilotContactAcknowledged']) {
     assert.match(route, new RegExp('body\\.' + name + ' !== true'))
   }
   assert.doesNotMatch(route, /ageConfirmed !== true/)
-  assert.ok(route.includes("follow_up_interview_opt_in: body.followUpInterviewOptIn === true"))
+  assert.match(route, /pilot_contact_acknowledged_at: acknowledgedAt/)
+  assert.match(route, /terms_version: '2026-09-29-v3'/)
+  assert.doesNotMatch(route, /followUpInterviewOptIn/)
   assert.ok(route.includes("error.code !== '23505'"))
   assert.match(route, /SUPABASE_SERVICE_ROLE_KEY/)
   assert.doesNotMatch(route, /NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY/)
@@ -42,11 +44,13 @@ test('private applicant table has RLS and no anon or authenticated grants', () =
 test('the new headline and checkbox requirements match the server contract', () => {
   assert.match(page, /Vil du bli den første til å teste RE:MIND\?/)
   assert.doesNotMatch(page, /name="ageConfirmed"/)
-  for (const name of ['prototypeAcknowledged', 'returnAcknowledged', 'feedbackAcknowledged']) {
+  for (const name of ['prototypeAcknowledged', 'returnAcknowledged', 'pilotContactAcknowledged']) {
     assert.match(page, new RegExp('name="' + name + '" required'))
   }
-  assert.match(page, /name="followUpInterviewOptIn" className/)
-  assert.match(page, /Valgfritt/)
+  assert.doesNotMatch(page, /name="followUpInterviewOptIn"/)
+  assert.doesNotMatch(page, />Valgfritt<\/p>/)
+  assert.match(page, /mailto:vetlecn@live\.no/)
+  assert.match(page, /kontakter meg på e-post underveis og etter testperioden/)
   assert.match(page, /Må godtas for å sende inn/)
 })
 
@@ -55,4 +59,14 @@ test('new migration preserves historic age data and provides optional follow-up 
   assert.match(followUpMigration, /age_confirmed drop not null/)
   assert.match(followUpMigration, /follow_up_interview_opt_in boolean not null default false/)
   assert.doesNotMatch(followUpMigration, /drop column age_confirmed/)
+})
+
+
+test('explicit pilot contact consent is stored separately without inferring it for prior applicants', () => {
+  const contactMigration = readFileSync(new URL('../supabase/migrations/20260929144909_pilot_required_contact_acknowledgement.sql', import.meta.url), 'utf8')
+  assert.match(contactMigration, /add column if not exists pilot_contact_acknowledged_at timestamptz/)
+  assert.doesNotMatch(contactMigration, /pilot_contact_acknowledged_at timestamptz not null/)
+  assert.doesNotMatch(contactMigration, /update public\.pilot_applications/)
+  assert.match(page, /name="pilotContactAcknowledged" required/)
+  assert.match(route, /body\.pilotContactAcknowledged !== true/)
 })
