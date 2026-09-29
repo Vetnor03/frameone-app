@@ -27,8 +27,7 @@ export default function PilotApplication() {
       note: String(form.get('note') || ''),
       prototypeAcknowledged: form.get('prototypeAcknowledged') === 'on',
       returnAcknowledged: form.get('returnAcknowledged') === 'on',
-      feedbackAcknowledged: form.get('feedbackAcknowledged') === 'on',
-      followUpInterviewOptIn: form.get('followUpInterviewOptIn') === 'on',
+      pilotContactAcknowledged: form.get('pilotContactAcknowledged') === 'on',
       website: String(form.get('website') || ''),
     }
     try {
@@ -40,7 +39,7 @@ export default function PilotApplication() {
       if (!response.ok) throw new Error('Kunne ikke lagre påmeldingen. Prøv igjen.')
       setSent(true)
     } catch {
-      setError('Noe gikk galt. Prøv igjen eller kontakt support@re-mind.no.')
+      setError('Noe gikk galt. Prøv igjen eller kontakt vetlecn@live.no.')
     } finally {
       setSending(false)
     }
@@ -116,14 +115,10 @@ export default function PilotApplication() {
                 <p className="mb-1 text-[11px] font-semibold uppercase tracking-[.13em] text-black/50">Må godtas for å sende inn</p>
                 <label className="flex items-start gap-3"><input type="checkbox" name="prototypeAcknowledged" required className="mt-1 h-4 w-4 shrink-0 accent-[#242522]" /><span>Jeg forstår at dette er en uferdig utviklingsprototype som ikke er CE-merket eller ferdig samsvarsvurdert, og at påmelding ikke garanterer deltakelse. Endelige testvilkår og sikkerhetsinstrukser gis før et eventuelt utlån.</span></label>
                 <label className="flex items-start gap-3"><input type="checkbox" name="returnAcknowledged" required className="mt-1 h-4 w-4 shrink-0 accent-[#242522]" /><span>Jeg forstår at testen varer omtrent tre uker, at enheten tilhører RE:MIND og at den skal returneres etter testperioden eller dersom testen avbrytes.</span></label>
-                <label className="flex items-start gap-3"><input type="checkbox" name="feedbackAcknowledged" required className="mt-1 h-4 w-4 shrink-0 accent-[#242522]" /><span>Jeg kan gi ærlige tilbakemeldinger underveis og svare på et kort spørreskjema etter testen.</span></label>
-              </div>
-              <div className="rounded-xl border border-black/10 bg-white px-4 py-3 text-[12px] leading-5">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[.13em] text-black/50">Valgfritt</p>
-                <label className="flex items-start gap-3"><input type="checkbox" name="followUpInterviewOptIn" className="mt-1 h-4 w-4 shrink-0 accent-[#242522]" /><span>Jeg kan også kontaktes om en kort oppfølgingssamtale om opplevelsen min. Jeg kan si nei senere, og dette påvirker ikke påmeldingen.</span></label>
+                <label className="flex items-start gap-3"><input type="checkbox" name="pilotContactAcknowledged" required className="mt-1 h-4 w-4 shrink-0 accent-[#242522]" /><span>Jeg godtar at RE:MIND kontakter meg på e-post underveis og etter testperioden for spørsmål og tilbakemeldinger om pilottesten, og at jeg svarer på et kort spørreskjema etter testen.</span></label>
               </div>
               <p className="rounded-xl bg-[#f0eee8] px-4 py-3 text-[11px] leading-5 text-black/55">Som takk for en gjennomført test, tilbakemeldinger og retur av låneenheten får du tilbud om <strong>50 % rabatt på én ferdig RE:MIND ved lansering</strong>. Ingen kjøpsplikt. Rabatt gjelder sluttproduktet, ikke prototypen.</p>
-              <p className="text-[11px] leading-5 text-black/45">Vi bruker opplysningene til å vurdere søknader og kontakte deltakere om piloten, ikke til å melde deg på markedsføring. Du kan be om innsyn eller sletting via <a className="underline underline-offset-2" href="mailto:support@re-mind.no">support@re-mind.no</a>. Se <a className="underline underline-offset-2" href="/privacy?lang=no">personvernerklæringen</a>.</p>
+              <p className="text-[11px] leading-5 text-black/45">Vi bruker opplysningene til å vurdere søknader og kontakte deltakere om piloten, ikke til å melde deg på markedsføring. Du kan be om innsyn eller sletting via <a className="underline underline-offset-2" href="mailto:vetlecn@live.no">vetlecn@live.no</a>. Se <a className="underline underline-offset-2" href="/privacy?lang=no">personvernerklæringen</a>.</p>
               <label className="absolute -left-[10000px] top-auto h-px w-px overflow-hidden" aria-hidden="true">Website<input name="website" tabIndex={-1} autoComplete="off" /></label>
               {error && <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-[12px] text-red-800">{error}</p>}
               <button type="submit" disabled={sending} className="mt-1 h-12 rounded-xl bg-[#242522] px-5 text-[13px] font-semibold text-white transition hover:bg-black disabled:opacity-50">{sending ? 'Sender påmelding…' : 'Meld meg som testbruker →'}</button>
