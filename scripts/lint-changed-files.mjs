@@ -44,7 +44,10 @@ function findingsBySignature(result, source) {
     // Keep unchanged findings stable when preceding code shifts line numbers.
     // The occurrence count prevents identical old findings from hiding extras.
     const sourceLine = (lines[(message.line || 1) - 1] || '').trim().replace(/\s+/g, ' ')
-    const signature = JSON.stringify([message.severity, message.ruleId, message.message, sourceLine])
+    // React Hooks diagnostics include generated code frames and absolute line numbers;
+    // compare the stable headline so an earlier insert does not look like new debt.
+    const headline = message.message.split(/\r?\n/, 1)[0].replace(/\bline\s+\d+\b/g, 'line #')
+    const signature = JSON.stringify([message.severity, message.ruleId, headline, sourceLine])
     const previous = findings.get(signature)
     findings.set(signature, { count: (previous?.count || 0) + 1, message })
   }
