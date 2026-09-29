@@ -1,6 +1,9 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { ESLint } from 'eslint'
 
+// This is a no-NEW-debt gate. Large legacy files already have findings; merely
+// touching them must not force an unrelated whole-file cleanup or mask new debt.
 const baseSha = process.env.BASE_SHA?.trim()
 if (!baseSha) {
   console.error('BASE_SHA is required')
@@ -9,15 +12,14 @@ if (!baseSha) {
 
 const diff = spawnSync('git', ['diff', '--name-only', '--diff-filter=ACMR', baseSha, 'HEAD'], {
   encoding: 'utf8',
+  maxBuffer: 16 * 1024 * 1024,
 })
-
 if (diff.status !== 0) {
   process.stderr.write(diff.stderr || '')
   process.exit(diff.status ?? 1)
 }
 
-const lintable = diff.stdout
-  .split(/\r?\n/)
+const lintable = diff.stdout.split(/\r?\n/)
   .map((line) => line.trim())
   .filter(Boolean)
   .filter((file) => /\.(?:[cm]?[jt]sx?)$/.test(file))
@@ -28,17 +30,51 @@ if (lintable.length === 0) {
   process.exit(0)
 }
 
-console.log('Linting changed files:')
+console.log('Checking for introduced lint findings in:')
 for (const file of lintable) console.log(`  - ${file}`)
 
-const result = spawnSync(
-  process.platform === 'win32' ? 'npx.cmd' : 'npx',
-  ['eslint', ...lintable],
-  { stdio: 'inherit' }
-)
+const eslint = new ESLint()
+let introduced = 0
+let existing = 0
 
-if (result.error) {
-  console.error(result.error)
-  process.exit(1)
+function findingsBySignature(result, source) {
+  const lines = source.split(/\r?\n/)
+  const findings = new Map()
+  for (const message of result.messages) {
+    // Keep unchanged findings stable when preceding code shifts line numbers.
+    // The occurrence count prevents identical old findings from hiding extras.
+    const sourceLine = (lines[(message.line || 1) - 1] || '').trim().replace(/\s+/g, ' ')
+    const signature = JSON.stringify([message.severity, message.ruleId, message.message, sourceLine])
+    const previous = findings.get(signature)
+    findings.set(signature, { count: (previous?.count || 0) + 1, message })
+  }
+  return findings
 }
-process.exit(result.status ?? 1)
+
+for (const file of lintable) {
+  const source = readFileSync(file, 'utf8')
+  const [current] = await eslint.lintText(source, { filePath: file })
+  const original = spawnSync('git', ['show', `${baseSha}:${file}`], {
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+  })
+  const originalSource = original.status === 0 ? original.stdout : null
+  const baseline = originalSource === null
+    ? new Map()
+    : findingsBySignature((await eslint.lintText(originalSource, { filePath: file }))[0], originalSource)
+  const currentFindings = findingsBySignature(current, source)
+
+  for (const [signature, value] of currentFindings) {
+    const oldCount = baseline.get(signature)?.count || 0
+    existing += Math.min(value.count, oldCount)
+    const extra = value.count - oldCount
+    if (extra <= 0) continue
+    introduced += extra
+    const { message } = value
+    console.error(`${file}:${message.line}:${message.column} ${message.ruleId || 'parser'}: ${message.message} (+${extra})`)
+  }
+}
+
+console.log(`Existing baseline findings unchanged: ${existing}; introduced: ${introduced}.`)
+if (introduced > 0) process.exit(1)
+console.log('No new lint debt.')
