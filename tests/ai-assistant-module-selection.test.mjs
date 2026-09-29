@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 const assistant = readFileSync(new URL('../app/components/AIAssistantTab.tsx', import.meta.url), 'utf8')
+const pickerCatalog = readFileSync(new URL('../app/lib/modulePickerCatalog.mjs', import.meta.url), 'utf8')
 
 test('AI Follow implementation remains intact behind the release UI switch', () => {
   assert.match(home, /type CoreTabKey = 'frame' \| 'settings'/)
@@ -26,7 +27,8 @@ test('AI Follow tab stays hidden while the lightweight RE:MIND helper remains av
 })
 
 test('AI Follow module is hidden but helper and Tips & Tricks settings remain visible', () => {
-  assert.match(home, /const options: ModuleKey\[] = \['assistant', 'reminders', 'news', 'date', 'weather', 'countdown', 'surf', 'ski', 'soccer', 'groceries', 'stocks'\][\s\S]*filter\(\(module\): module is ModuleKey => SHOW_AI_FOLLOW_UI \|\| module !== 'assistant'\)/)
+  assert.match(home, /additionalModuleGroups\(language, \(moduleKey\) => moduleLabel\(language, moduleKey\), SHOW_AI_FOLLOW_UI\)/)
+  assert.match(pickerCatalog, /\.filter\(\(module\) => showAiFollow \|\| module !== 'assistant'\)/)
   assert.match(home, /ASSISTANT & TIPS/)
   assert.match(home, /Show RE:MIND Assistant/)
   assert.match(home, /Tips & Tricks/)

@@ -44,6 +44,7 @@ import { projectSlotMemoryIntoBuiltInLayout, sanitizeLayoutModuleMemory as sanit
 import { AddLayoutCard, CustomLayoutPreview, InlineCustomLayoutEditor, editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
 import type { EditorCell } from './lib/frameLayoutEditor.mjs'
 import { MAX_FRAME_NAME_LENGTH, normalizeFrameName } from './lib/frameName.mjs'
+import { recommendedModuleKeys, additionalModuleGroups } from './lib/modulePickerCatalog.mjs'
 
 type CoreTabKey = 'frame' | 'settings'
 type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'ski' | 'reminders' | 'news' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
@@ -232,7 +233,7 @@ const UI = {
     update: 'OPPDATER',
     loadingFrame: 'LASTER FRAME…',
 
-    selectWidget: 'CHOOSE MODULE',
+    selectWidget: 'VELG MODUL',
     clearCell: 'TØM FELT',
 
     themeTitle: 'TEMA',
@@ -8465,34 +8466,86 @@ function PickerModal({
   onClear: () => void
   language: AppLanguage
 }) {
-  const options: ModuleKey[] = ['assistant', 'reminders', 'news', 'date', 'weather', 'countdown', 'surf', 'ski', 'soccer', 'groceries', 'stocks']
-    .filter((module): module is ModuleKey => SHOW_AI_FOLLOW_UI || module !== 'assistant')
+  const [moreOpen, setMoreOpen] = useState(false)
   const t = tx(language)
+  const groups = additionalModuleGroups(language, (moduleKey) => moduleLabel(language, moduleKey), SHOW_AI_FOLLOW_UI)
+  const moreCount = groups.reduce((sum, group) => sum + group.modules.length, 0)
+  const isNo = language === 'no'
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
-      <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-6">
-        <div className="flex items-center justify-between">
-          <div className="tracking-widest text-sm text-[color:var(--fg-70)]">{t.selectWidget}</div>
-          <button onClick={onClose} className="text-[color:var(--fg-60)] text-xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t.selectWidget}
+        className="flex max-h-[calc(100dvh-12px)] w-full max-w-[420px] flex-col rounded-t-3xl border-t border-[color:var(--bd-10)] bg-[color:var(--sheet-bg)] px-5 pt-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+      >
+        <div className="flex shrink-0 items-center justify-between">
+          <div className="text-sm tracking-widest text-[color:var(--fg-70)]">{t.selectWidget}</div>
+          <button type="button" onClick={onClose} aria-label={isNo ? 'Lukk modulvelger' : 'Close module picker'} className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-[color:var(--fg-60)] transition hover:text-[color:var(--fg)]">
             ✕
           </button>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          {options.map((m) => (
-            <button
-              key={m}
-              onClick={() => onPick(m)}
-              className="h-11 rounded-2xl border border-[color:var(--bd-10)] text-sm text-[color:var(--fg-80)] tracking-widest transition hover:border-[color:var(--bd-30)] hover:text-[color:var(--fg)]"
-            >
-              {moduleLabel(language, m)}
-            </button>
-          ))}
+        <div className="mt-4 min-h-0 overflow-y-auto overscroll-contain">
+          <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.2em] text-[color:var(--fg-50)]">
+            {isNo ? 'Anbefalt' : 'Recommended'}
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            {recommendedModuleKeys.map((moduleKey) => (
+              <button
+                key={moduleKey}
+                type="button"
+                onClick={() => onPick(moduleKey)}
+                className="min-h-11 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-2 py-3 text-sm tracking-widest text-[color:var(--fg-80)] transition hover:border-[color:var(--bd-30)] hover:text-[color:var(--fg)]"
+              >
+                {moduleLabel(language, moduleKey)}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            aria-expanded={moreOpen}
+            aria-controls="picker-more-modules"
+            onClick={() => setMoreOpen((open) => !open)}
+            className="mt-5 flex min-h-11 w-full items-center justify-between rounded-xl border border-[color:var(--bd-10)] px-3.5 text-left text-xs font-medium tracking-[0.12em] text-[color:var(--fg-75)] transition hover:border-[color:var(--bd-30)]"
+          >
+            <span>{isNo ? 'FLERE MODULER' : 'MORE MODULES'}</span>
+            <span className="flex items-center gap-2.5 text-[color:var(--fg-55)]">
+              <span className="text-[11px] tabular-nums">{moreCount}</span>
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={`h-4 w-4 transition-transform ${moreOpen ? 'rotate-180' : ''}`}>
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </span>
+          </button>
+
+          {moreOpen && (
+            <div id="picker-more-modules" className="mt-3 max-h-[min(36dvh,260px)] overflow-y-auto overscroll-contain pr-1 [scrollbar-width:thin]">
+              {groups.map((group) => (
+                <section key={group.key} className="mb-4 last:mb-0" aria-label={group.label}>
+                  <h3 className="mb-2 text-[10px] font-medium uppercase tracking-[0.17em] text-[color:var(--fg-50)]">{group.label}</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {group.modules.map((moduleKey) => (
+                      <button
+                        key={moduleKey}
+                        type="button"
+                        onClick={() => onPick(moduleKey)}
+                        className="min-h-11 rounded-xl border border-[color:var(--bd-10)] bg-[color:var(--panel-03)] px-2 py-2 text-xs tracking-[0.12em] text-[color:var(--fg-75)] transition hover:border-[color:var(--bd-30)] hover:text-[color:var(--fg)]"
+                      >
+                        {moduleLabel(language, moduleKey)}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="mt-5 flex justify-center">
+        <div className="mt-4 flex shrink-0 justify-center border-t border-[color:var(--bd-10)] pt-3">
           <button
+            type="button"
             onClick={onClear}
             className="px-3 py-2 text-[11px] tracking-[0.24em] text-red-500/70 transition hover:text-red-500"
           >
