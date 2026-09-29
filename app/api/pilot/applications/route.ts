@@ -49,10 +49,10 @@ export async function POST(request: Request) {
       !platform || !platforms.has(platform) ||
       !homeWifi || !wifiOptions.has(homeWifi) ||
       !useCase || !useCases.has(useCase) || note === null ||
-      body.ageConfirmed !== true ||
       body.prototypeAcknowledged !== true ||
       body.returnAcknowledged !== true ||
-      body.feedbackAcknowledged !== true) {
+      body.feedbackAcknowledged !== true ||
+      (body.followUpInterviewOptIn !== undefined && typeof body.followUpInterviewOptIn !== 'boolean')) {
     return NextResponse.json({ error: 'Please complete the application and required acknowledgements.' }, { status: 400 })
   }
 
@@ -64,11 +64,11 @@ export async function POST(request: Request) {
   const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
   const { error } = await supabase.from('pilot_applications').insert({
     full_name: fullName, email, city, household, platform, home_wifi: homeWifi,
-    use_case: useCase, note: note || null, terms_version: '2026-09-29-v1',
+    use_case: useCase, note: note || null, terms_version: '2026-09-29-v2',
     prototype_acknowledged_at: new Date().toISOString(),
     return_acknowledged_at: new Date().toISOString(),
     feedback_acknowledged_at: new Date().toISOString(),
-    age_confirmed: true,
+    follow_up_interview_opt_in: body.followUpInterviewOptIn === true,
     source: 'pilot-public-application',
   })
   // Never disclose whether an email is already registered.
