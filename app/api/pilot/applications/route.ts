@@ -51,8 +51,7 @@ export async function POST(request: Request) {
       !useCase || !useCases.has(useCase) || note === null ||
       body.prototypeAcknowledged !== true ||
       body.returnAcknowledged !== true ||
-      body.feedbackAcknowledged !== true ||
-      (body.followUpInterviewOptIn !== undefined && typeof body.followUpInterviewOptIn !== 'boolean')) {
+      body.pilotContactAcknowledged !== true) {
     return NextResponse.json({ error: 'Please complete the application and required acknowledgements.' }, { status: 400 })
   }
 
@@ -62,13 +61,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Registration is unavailable.' }, { status: 503 })
   }
   const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
+  const acknowledgedAt = new Date().toISOString()
   const { error } = await supabase.from('pilot_applications').insert({
     full_name: fullName, email, city, household, platform, home_wifi: homeWifi,
-    use_case: useCase, note: note || null, terms_version: '2026-09-29-v2',
-    prototype_acknowledged_at: new Date().toISOString(),
-    return_acknowledged_at: new Date().toISOString(),
-    feedback_acknowledged_at: new Date().toISOString(),
-    follow_up_interview_opt_in: body.followUpInterviewOptIn === true,
+    use_case: useCase, note: note || null, terms_version: '2026-09-29-v3',
+    prototype_acknowledged_at: acknowledgedAt,
+    return_acknowledged_at: acknowledgedAt,
+    feedback_acknowledged_at: acknowledgedAt,
+    pilot_contact_acknowledged_at: acknowledgedAt,
     source: 'pilot-public-application',
   })
   // Never disclose whether an email is already registered.
