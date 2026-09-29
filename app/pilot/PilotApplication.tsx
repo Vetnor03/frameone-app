@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { PILOT_CLOSES_AT_MS, PILOT_DEADLINE_LABEL, isPilotApplicationClosed } from '@/app/lib/pilotApplicationDeadline'
 
 const inputClass = 'h-11 w-full rounded-xl border border-[#d9d7d1] bg-white px-3.5 text-[16px] text-[#242522] outline-none transition focus:border-[#33352f] focus:ring-2 focus:ring-[#33352f]/10'
 const labelClass = 'grid gap-1.5 text-[12px] font-medium text-[#4d5149]'
@@ -8,7 +9,21 @@ const labelClass = 'grid gap-1.5 text-[12px] font-medium text-[#4d5149]'
 export default function PilotApplication() {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  const [closed, setClosed] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>
+    function checkDeadline() {
+      if (isPilotApplicationClosed()) {
+        setClosed(true)
+        return
+      }
+      timer = setTimeout(checkDeadline, Math.min(60_000, PILOT_CLOSES_AT_MS - Date.now()))
+    }
+    checkDeadline()
+    return () => clearTimeout(timer)
+  }, [])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -36,6 +51,10 @@ export default function PilotApplication() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
+      if (response.status === 410) {
+        setClosed(true)
+        return
+      }
       if (!response.ok) throw new Error('Kunne ikke lagre påmeldingen. Prøv igjen.')
       setSent(true)
     } catch {
@@ -57,7 +76,8 @@ export default function PilotApplication() {
           <p className="mb-4 text-[11px] font-semibold uppercase tracking-[.22em] text-[#76786e]">En liten invitasjon</p>
           <h1 className="max-w-xl text-[clamp(36px,4.3vw,55px)] font-medium leading-[1.06] tracking-[-.055em]">Vil du bli den første til å teste RE:MIND?</h1>
           <p className="mt-6 max-w-[460px] text-[15px] leading-7 text-[#5e6159]">Vi nærmer oss vår første test i ekte hjem. Vi søker fem personer som vil låne en tidlig RE:MIND, bruke den i hverdagen og fortelle oss hva som fungerer — og hva som bør bli bedre.</p>
-          <div className="mt-7 grid grid-cols-3 gap-2">
+          <p className="mt-5 text-[12px] font-semibold uppercase tracking-[.12em] text-[#696e5e]">Svarfrist: {PILOT_DEADLINE_LABEL}</p>
+          <div className="mt-5 grid grid-cols-3 gap-2">
             {[['05', 'testere'], ['03', 'uker'], ['50 %', 'takk for hjelpen']].map(([number, caption]) => (
               <div key={number} className="rounded-xl border border-black/10 bg-white/55 px-3 py-4">
                 <p className="text-[27px] font-medium tracking-[-.06em]">{number}</p>
@@ -72,13 +92,19 @@ export default function PilotApplication() {
         </section>
 
         <section className="rounded-[22px] border border-black/10 bg-[#fcfbf8] p-5 shadow-[0_16px_50px_rgba(40,38,33,.045)] sm:p-8">
-          {sent ? (
+          {closed ? (
+            <div className="flex min-h-[350px] flex-col justify-center">
+              <p className="text-[11px] font-semibold uppercase tracking-[.17em] text-black/40">Første pilottest</p>
+              <h2 className="mt-3 text-[30px] font-medium leading-tight tracking-[-.04em]">Påmeldingen er avsluttet.</h2>
+              <p className="mt-4 text-[14px] leading-6 text-black/55">Svarfristen var 1. november 2026. Takk til alle som meldte interesse!</p>
+            </div>
+          ) : sent ? (
             <div className="flex min-h-[480px] flex-col justify-center">
               <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#242522] text-xl text-white">✓</div>
               <p className="mt-6 text-[11px] font-semibold uppercase tracking-[.17em] text-black/40">Påmeldingen er mottatt</p>
               <h2 className="mt-3 text-[30px] font-medium leading-tight tracking-[-.04em]">Takk for interessen!</h2>
-              <p className="mt-4 text-[14px] leading-6 text-black/55">Vi tar kontakt på e-post hvis du blir valgt ut. Påmeldingen er ikke en bestilling eller en avtale om å motta en testpakke.</p>
-              <a href="https://re-mind.no" className="mt-8 self-start rounded-xl bg-[#242522] px-5 py-3 text-[13px] font-medium text-white">Tilbake til RE:MIND</a>
+              <p className="mt-4 text-[14px] leading-6 text-black/55">Søknaden din er lagret. Du hører fra oss når vi nærmer oss pilottesten. Påmeldingen er ikke en bestilling eller en avtale om å motta en testpakke.</p>
+              <p className="mt-3 text-[13px] leading-6 text-black/50">Vi sender en bekreftelse på e-post. Dersom du ikke mottar den, er påmeldingen likevel registrert. Du trenger ikke sende inn skjemaet på nytt.</p>
             </div>
           ) : (
             <form onSubmit={submit} className="grid gap-4">
@@ -86,6 +112,7 @@ export default function PilotApplication() {
                 <p className="text-[10px] font-semibold uppercase tracking-[.17em] text-black/40">Påmelding · omtrent 2 minutter</p>
                 <h2 className="mt-2 text-[27px] font-medium tracking-[-.04em]">Fortell oss litt om deg</h2>
                 <p className="mt-1.5 text-[12px] leading-5 text-black/50">Vi trenger bare noen få opplysninger nå. Leveringsadresse spør vi først om dersom du blir valgt.</p>
+                <p className="mt-2 text-[12px] font-semibold text-[#696e5e]">Svarfrist: {PILOT_DEADLINE_LABEL}</p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className={labelClass}>Navn <input className={inputClass} name="fullName" autoComplete="name" required maxLength={100} placeholder="Fullt navn" /></label>
