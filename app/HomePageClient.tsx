@@ -8468,7 +8468,7 @@ function PickerModal({
 }) {
   const [moreOpen, setMoreOpen] = useState(false)
   const t = tx(language)
-  const groups = additionalModuleGroups(language, (module) => moduleLabel(language, module), SHOW_AI_FOLLOW_UI)
+  const groups = additionalModuleGroups(language, (moduleKey) => moduleLabel(language, moduleKey), SHOW_AI_FOLLOW_UI)
   const moreCount = groups.reduce((sum, group) => sum + group.modules.length, 0)
   const isNo = language === 'no'
 
@@ -8492,14 +8492,14 @@ function PickerModal({
             {isNo ? 'Anbefalt' : 'Recommended'}
           </p>
           <div className="grid grid-cols-2 gap-3">
-            {recommendedModuleKeys.map((module) => (
+            {recommendedModuleKeys.map((moduleKey) => (
               <button
-                key={module}
+                key={moduleKey}
                 type="button"
-                onClick={() => onPick(module)}
+                onClick={() => onPick(moduleKey)}
                 className="min-h-11 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-2 py-3 text-sm tracking-widest text-[color:var(--fg-80)] transition hover:border-[color:var(--bd-30)] hover:text-[color:var(--fg)]"
               >
-                {moduleLabel(language, module)}
+                {moduleLabel(language, moduleKey)}
               </button>
             ))}
           </div>
@@ -8526,14 +8526,14 @@ function PickerModal({
                 <section key={group.key} className="mb-4 last:mb-0" aria-label={group.label}>
                   <h3 className="mb-2 text-[10px] font-medium uppercase tracking-[0.17em] text-[color:var(--fg-50)]">{group.label}</h3>
                   <div className="grid grid-cols-2 gap-2">
-                    {group.modules.map((module) => (
+                    {group.modules.map((moduleKey) => (
                       <button
-                        key={module}
+                        key={moduleKey}
                         type="button"
-                        onClick={() => onPick(module)}
+                        onClick={() => onPick(moduleKey)}
                         className="min-h-11 rounded-xl border border-[color:var(--bd-10)] bg-[color:var(--panel-03)] px-2 py-2 text-xs tracking-[0.12em] text-[color:var(--fg-75)] transition hover:border-[color:var(--bd-30)] hover:text-[color:var(--fg)]"
                       >
-                        {moduleLabel(language, module)}
+                        {moduleLabel(language, moduleKey)}
                       </button>
                     ))}
                   </div>
