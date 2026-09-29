@@ -10,6 +10,7 @@ export default function PilotApplication() {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [closed, setClosed] = useState(false)
+  const [useCase, setUseCase] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -39,6 +40,7 @@ export default function PilotApplication() {
       platform: String(form.get('platform') || ''),
       homeWifi: String(form.get('homeWifi') || ''),
       useCase: String(form.get('useCase') || ''),
+      useCaseOther: useCase === 'other' ? String(form.get('useCaseOther') || '') : '',
       note: String(form.get('note') || ''),
       prototypeAcknowledged: form.get('prototypeAcknowledged') === 'on',
       returnAcknowledged: form.get('returnAcknowledged') === 'on',
@@ -132,9 +134,14 @@ export default function PilotApplication() {
                   <select className={inputClass} name="homeWifi" required defaultValue=""><option value="" disabled>Velg</option><option value="yes">Ja</option><option value="no">Nei</option><option value="unsure">Usikker</option></select>
                 </label>
                 <label className={labelClass}>Hva vil du helst bruke RE:MIND til?
-                  <select className={inputClass} name="useCase" required defaultValue=""><option value="" disabled>Velg</option><option value="reminders">Påminnelser</option><option value="calendar">Kalender og avtaler</option><option value="weather_news">Vær og nyheter</option><option value="mixed">Litt av alt</option><option value="other">Annet</option></select>
+                  <select className={inputClass} name="useCase" required value={useCase} onChange={(event) => setUseCase(event.target.value)}><option value="" disabled>Velg</option><option value="reminders">Påminnelser</option><option value="calendar">Kalender og avtaler</option><option value="weather_news">Vær og nyheter</option><option value="mixed">Litt av alt</option><option value="other">Annet</option></select>
                 </label>
               </div>
+              {useCase === 'other' ? (
+                <label className={labelClass}>Hva vil du bruke RE:MIND til? <span className="font-normal text-black/40">(obligatorisk)</span>
+                  <input className={inputClass} type="text" name="useCaseOther" required maxLength={300} placeholder="Beskriv hva du ønsker å bruke rammen til" />
+                </label>
+              ) : null}
               <label className={labelClass}>Noe annet vi bør vite? <span className="font-normal text-black/40">(valgfritt)</span>
                 <textarea className="min-h-[76px] w-full resize-y rounded-xl border border-[#d9d7d1] bg-white p-3.5 text-[14px] outline-none focus:border-[#33352f] focus:ring-2 focus:ring-[#33352f]/10" name="note" maxLength={400} placeholder="For eksempel hvordan du ser for deg å bruke rammen." />
               </label>
