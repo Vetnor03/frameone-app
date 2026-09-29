@@ -1,11 +1,11 @@
 import type { Metadata } from 'next'
-import PilotConfigurator from './PilotConfigurator'
+import PilotApplication from './PilotApplication'
 
 export const metadata: Metadata = {
-  title: 'Pilot order | RE:MIND',
-  description: 'Choose your RE:MIND pilot frame and matte.',
+  title: 'Bli testbruker | RE:MIND',
+  description: 'Søk om å bli en av fem testbrukere av RE:MIND. Tre ukers pilottest i hjemmet.',
 }
 
 export default function PilotPage() {
-  return <PilotConfigurator />
+  return <PilotApplication />
 }
