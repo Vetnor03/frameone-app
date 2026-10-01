@@ -2198,44 +2198,20 @@ struct AdaptiveReminderDensity {
 };
 
 // Reminder body text has one physical size: regular 9pt, matching News.
-// A 46px row leaves room for up to two complete 9pt lines (21px advance)
-// before another reminder is admitted.
+// Reserve up to four complete 9pt lines (21px advance) for a reminder;
+// if that prevents the next item from fitting, the next item stays hidden.
 static AdaptiveReminderDensity adaptiveReminderDensity(int availablePixels, int requiredRows) {
   (void)availablePixels;
   (void)requiredRows;
-  return {FONT_B9, 46, 5, 48};
-}
-
-static int adaptiveEstimatedTextWidth(const char* value, bool dense) {
-  int units = 0;
-  for (const uint8_t* p = (const uint8_t*)value; p && *p;) {
-    const uint8_t lead = *p;
-    // Decode only far enough to advance exactly one Unicode code point. The
-    // weighting model distinguishes ASCII classes; every non-ASCII code point
-    // intentionally receives the same six units as Studio.
-    uint32_t codepoint = lead;
-    int advance = 1;
-    if ((lead & 0xE0) == 0xC0 && (p[1]&0xC0)==0x80) { codepoint=((lead&0x1F)<<6)|(p[1]&0x3F);advance=2; }
-    else if ((lead & 0xF0) == 0xE0 && (p[1]&0xC0)==0x80 && (p[2]&0xC0)==0x80) { codepoint=((lead&0x0F)<<12)|((p[1]&0x3F)<<6)|(p[2]&0x3F);advance=3; }
-    else if ((lead & 0xF8) == 0xF0 && (p[1]&0xC0)==0x80 && (p[2]&0xC0)==0x80 && (p[3]&0xC0)==0x80) { codepoint=((lead&7)<<18)|((p[1]&0x3F)<<12)|((p[2]&0x3F)<<6)|(p[3]&0x3F);advance=4; }
-    p += advance;
-    if (codepoint > 0x7F) { units += 6; continue; }
-    const char ch = (char)codepoint;
-    if (ch == ' ') units += 3;
-    else if (strchr("ilI1.,:;!'|", ch)) units += 3;
-    else if (strchr("MW@%&", ch)) units += 9;
-    else if ((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) units += 7;
-    else units += 6;
-  }
-  return (units * (dense ? 108 : 142) + 99) / 100;
+  return {FONT_B9, 88, 5, 48};
 }
 
 static bool adaptiveTitleFits(const ReminderItem& item, int width) {
   if (width < 24) return false;
-  char lines[2][128] = {{0}};
+  char lines[4][128] = {{0}};
   bool complete = false;
   const int lineCount = wrapTextToLines(
-    item.title, lines, 2, width, FONT_B9, complete
+    item.title, lines, 4, width, FONT_B9, complete
   );
   return complete && lineCount > 0;
 }
@@ -2271,7 +2247,7 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
 
   const int totalCount = todayCount + tomorrowCount;
   const int headingH = out.showHeading ? 30 : 0;
-  const int footerH = 24, rowH = 46, rowGap = 5, sectionGap = 10;
+  const int footerH = 24, rowH = 88, rowGap = 5, sectionGap = 10;
   if (shallow) {
     const int initial = FrameLayout::rowCapacity(usable.width, 142, 12);
     const bool canFitFooter = usable.width >= 142 + 12 + 42;
@@ -2297,7 +2273,7 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
     int bestMinimum = -1, bestAverage = -1, bestFont = -1, bestToday = -1, bestCount = -1;
     const int splitPercents[] = {35, 40, 45, 50, 55, 60, 65};
     for (int dense = 1; dense <= 1; dense++) for (int vertical = 0; vertical <= 1; vertical++) {
-      const AdaptiveReminderDensity density = {FONT_B9,46,5,48};
+      const AdaptiveReminderDensity density = {FONT_B9,88,5,48};
       const int ratioCount = vertical ? 1 : 7;
       for (int ratioIndex = 0; ratioIndex < ratioCount; ratioIndex++) {
         const int ratioPercent = vertical ? 100 : splitPercents[ratioIndex];
@@ -2336,12 +2312,15 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
     if (bestCount < 0) {
       // Extremely long text may fail every fit threshold. Never render a blank
       // module: use the widest dense vertical fallback and preserve chronology.
-      const AdaptiveReminderDensity density = {FONT_B9,46,5,48};
+      const AdaptiveReminderDensity density = {FONT_B9,88,5,48};
       const int sections = (todayCount && tomorrowCount) ? 2 : 1;
       const int rowsSpace = usable.height - sections * headingH - (sections > 1 ? 10 : 0) - footerH;
       const bool twoSections = sections == 2 && 2 * density.rowH <= rowsSpace;
+      const int titleW = max(1, usable.width - density.timeW - 11);
       out.family=REM_VERTICAL_LIST;out.denseFont=true;out.splitPercent=100;
-      out.todayItems=todayCount?1:0;out.tomorrowItems=tomorrowCount&&(!todayCount||twoSections)?1:0;
+      out.todayItems=(todayCount && adaptivePrefixFits(today, 1, titleW)) ? 1 : 0;
+      out.tomorrowItems=(tomorrowCount && (!todayCount || twoSections) &&
+                         adaptivePrefixFits(tomorrow, 1, titleW)) ? 1 : 0;
     }
   } else {
     out.showTomorrow = tomorrowCount > 0;
@@ -2491,7 +2470,7 @@ static void renderAdaptiveFallbackBucket(const Cell& c, const ReminderBucket& bu
   const bool shallow = c.h <= 150 && c.w > c.h;
   const int capacity = shallow
     ? FrameLayout::rowCapacity(inner.w, 142, 12)
-    : FrameLayout::rowCapacity(inner.h - min(30, max(20, inner.h / 4)), 46, 5);
+    : FrameLayout::rowCapacity(inner.h - min(30, max(20, inner.h / 4)), 88, 5);
   int visible = min(bucket.count, capacity);
   const int fallbackTitleW = max(1, inner.w - 48 - 11);
   while (visible > 0 && !adaptivePrefixFits(&bucket, visible, fallbackTitleW)) --visible;
@@ -2535,6 +2514,10 @@ static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets
   const AdaptiveReminderComposition comp = adaptiveComposition(c, today, tomorrow);
   const int pad = max(9, min(18, (int)lroundf(min(c.w, c.h) * .08f)));
   ReminderRect inner = {c.x + pad, c.y + pad, max(1, c.w - pad * 2), max(1, c.h - pad * 2)};
+  if (comp.todayItems + comp.tomorrowItems <= 0) {
+    drawAdaptiveOverflow(inner, todayCount + tomorrowCount);
+    return;
+  }
   if (comp.family == REM_SPLIT_SECTIONS) {
     const bool hasToday = comp.todayItems > 0, hasTomorrow = comp.tomorrowItems > 0;
     const int gap = hasToday && hasTomorrow ? 18 : 0;
@@ -2542,7 +2525,7 @@ static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets
       ((inner.w - gap) * comp.splitPercent + 50) / 100;
     ReminderRect left = {inner.x, inner.y, todayWidth, inner.h};
     ReminderRect right = {inner.x + todayWidth + gap, inner.y, max(0, inner.w - todayWidth - gap), inner.h};
-    const AdaptiveReminderDensity selected = {FONT_B9,46,5,48};
+    const AdaptiveReminderDensity selected = {FONT_B9,88,5,48};
     drawAdaptiveSection(today, comp.todayItems, comp.todayOverflow, left, comp.showHeading, false, "Today", true, &selected);
     drawAdaptiveSection(tomorrow, comp.tomorrowItems, comp.tomorrowOverflow, right, comp.showHeading, false, "Tomorrow", true, &selected);
     return;
@@ -2573,7 +2556,7 @@ static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets
   const int sectionGap = sectionCount > 1 ? 10 : 0;
   const int totalRows = comp.todayItems + comp.tomorrowItems;
   const int rowsAvailable = max(1, contentH - sectionCount * headingH - sectionGap);
-  const AdaptiveReminderDensity density = {FONT_B9,46,5,48};
+  const AdaptiveReminderDensity density = {FONT_B9,88,5,48};
   const int sharedRowH = min(density.rowH,
     max(1, (rowsAvailable - max(0, totalRows - sectionCount) * density.rowGap) / totalRows));
   const int todayH = comp.todayItems
