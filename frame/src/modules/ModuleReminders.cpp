@@ -2267,12 +2267,12 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
     out.tomorrowItems = out.showTomorrow ? chosen : 0;
   } else if (split) {
     out.showTomorrow = tomorrowCount > 0;
-    // Evaluate both orientations, both permitted item fonts and deterministic
-    // width splits using the real titles. A technically fitting row with only
-    // a one-word prefix is rejected rather than rewarded as another item.
-    int bestMinimum = -1, bestAverage = -1, bestFont = -1, bestToday = -1, bestCount = -1;
+    // Evaluate both orientations and deterministic width splits using the real
+    // titles. Body typography is fixed at B9; only complete wrapped items count.
+    int bestMinimum = -1, bestAverage = -1, bestToday = -1, bestCount = -1;
     const int splitPercents[] = {35, 40, 45, 50, 55, 60, 65};
-    for (int dense = 1; dense <= 1; dense++) for (int vertical = 0; vertical <= 1; vertical++) {
+    const int dense = 1;
+    for (int vertical = 0; vertical <= 1; vertical++) {
       const AdaptiveReminderDensity density = {FONT_B9,88,5,48};
       const int ratioCount = vertical ? 1 : 7;
       for (int ratioIndex = 0; ratioIndex < ratioCount; ratioIndex++) {
@@ -2297,21 +2297,19 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
           for (int i = 0; i < ti; i++) { const int s = adaptiveUsefulTitleScore(g_cache->items[today->itemIdx[i]], todayTitleW, dense); useful &= s > 0; minimum=min(minimum,s); readable += s; }
           for (int i = 0; i < mi; i++) { const int s = adaptiveUsefulTitleScore(g_cache->items[tomorrow->itemIdx[i]], tomorrowTitleW, dense); useful &= s > 0; minimum=min(minimum,s); readable += s; }
           if (!useful) continue;
-          const int fontRank = 0, count = ti + mi, average = readable / max(1,count);
-          const int informationRank = count;
-          const int bestInformationRank = bestCount;
-          const bool better = informationRank > bestInformationRank || (informationRank == bestInformationRank &&
-            (count > bestCount || (count == bestCount && (minimum > bestMinimum || (minimum == bestMinimum &&
-            (average > bestAverage || (average == bestAverage && ti > bestToday)))))));
-          if (better) { bestMinimum=minimum;bestAverage=average;bestFont=fontRank;bestToday=ti;bestCount=count;
+          const int count = ti + mi, average = readable / max(1,count);
+          const bool better = count > bestCount || (count == bestCount &&
+            (minimum > bestMinimum || (minimum == bestMinimum &&
+            (average > bestAverage || (average == bestAverage && ti > bestToday)))));
+          if (better) { bestMinimum=minimum;bestAverage=average;bestToday=ti;bestCount=count;
             out.family=vertical?REM_VERTICAL_LIST:REM_SPLIT_SECTIONS;out.splitPercent=ratioPercent;out.denseFont=dense;
             out.todayItems=ti;out.tomorrowItems=mi;out.readabilityScore=readable; }
         }
       }
     }
     if (bestCount < 0) {
-      // Extremely long text may fail every fit threshold. Never render a blank
-      // module: use the widest dense vertical fallback and preserve chronology.
+      // Extremely long text may fail every candidate. Try the widest vertical
+      // fallback, but only when the earliest item itself wraps completely.
       const AdaptiveReminderDensity density = {FONT_B9,88,5,48};
       const int sections = (todayCount && tomorrowCount) ? 2 : 1;
       const int rowsSpace = usable.height - sections * headingH - (sections > 1 ? 10 : 0) - footerH;
