@@ -28,7 +28,7 @@
 #define FONT_B12 (&FreeSansBold12pt8b)
 #define FONT_B18 (&FreeSansBold18pt8b)
 
-static const GFXfont* REMINDER_CONTENT_FONT = FONT_B12;
+static const GFXfont* REMINDER_CONTENT_FONT = FONT_B9;
 
 #define REMINDERS_DEBUG 1
 
@@ -233,29 +233,6 @@ static void fitTextToWidth(const char* src, char* dst, size_t dstSize, int maxWi
   }
 
   safeCopy(dst, dstSize, ell);
-}
-
-// Adaptive cells use word-safe fitting. Keep the legacy character fitter above
-// untouched because the four handmade anchor renderers are deliberately frozen.
-static void fitAdaptiveText(const char* src, char* dst, size_t dstSize,
-                            int maxWidth, const GFXfont* font) {
-  if (!dst || dstSize == 0) return;
-  dst[0] = '\0';
-  if (!src || !src[0] || maxWidth <= 0) return;
-  if (textWidth(src, font) <= maxWidth) { safeCopy(dst, dstSize, src); return; }
-  const char* ellipsis = "...";
-  if (textWidth(ellipsis, font) > maxWidth) return;
-  size_t limit = strlen(src);
-  if (limit > dstSize - 4) limit = dstSize - 4;
-  while (limit > 0) {
-    while (limit > 0 && src[limit] != ' ' && src[limit - 1] != ' ') limit--;
-    while (limit > 0 && src[limit - 1] == ' ') limit--;
-    if (limit == 0) break;
-    memcpy(dst, src, limit); dst[limit] = '\0'; strlcat(dst, ellipsis, dstSize);
-    if (textWidth(dst, font) <= maxWidth) return;
-    limit--;
-  }
-  safeCopy(dst, dstSize, ellipsis);
 }
 
 static void buildRelativeDateText(int daysUntil, bool isOverdue, char* out, size_t outSize) {
@@ -1013,8 +990,8 @@ static int measuredTextHeight(const char* text, const GFXfont* font) {
 }
 
 static int smartLineStep(const GFXfont* font) {
-  if (font == FONT_B12) return 21;
-  if (font == FONT_B9) return 16;
+  if (font == FONT_B9) return 21;
+  if (font == FONT_B12) return 25;
   return fontLineHeight(font) + 3;
 }
 
@@ -1035,8 +1012,10 @@ static int wrapTextToLines(const char* src,
                            char lines[][128],
                            int maxLines,
                            int maxWidth,
-                           const GFXfont* font) {
-  if (!lines || maxLines <= 0) return 0;
+                           const GFXfont* font,
+                           bool& complete) {
+  complete = false;
+  if (!lines || maxLines <= 0 || maxWidth <= 0) return 0;
   for (int i = 0; i < maxLines; i++) lines[i][0] = '\0';
   if (!src || !src[0]) return 0;
 
@@ -1050,34 +1029,37 @@ static int wrapTextToLines(const char* src,
   char* word = strtok_r(work, " ", &save);
   while (word) {
     char candidate[128];
-    if (current[0]) snprintf(candidate, sizeof(candidate), "%s %s", current, word);
-    else safeCopy(candidate, sizeof(candidate), word);
+    int written = current[0]
+      ? snprintf(candidate, sizeof(candidate), "%s %s", current, word)
+      : snprintf(candidate, sizeof(candidate), "%s", word);
 
-    if (textWidth(candidate, font) <= maxWidth) {
+    if (written >= 0 && written < (int)sizeof(candidate) &&
+        textWidth(candidate, font) <= maxWidth) {
       safeCopy(current, sizeof(current), candidate);
     } else {
       if (current[0]) {
+        if (lineCount >= maxLines) return lineCount;
         safeCopy(lines[lineCount++], 128, current);
         current[0] = '\0';
-        if (lineCount >= maxLines) break;
       }
 
       if (textWidth(word, font) <= maxWidth) {
         safeCopy(current, sizeof(current), word);
       } else {
-        fitTextToWidth(word, lines[lineCount++], 128, maxWidth, font);
-        current[0] = '\0';
-        if (lineCount >= maxLines) break;
+        // Never ellipsis-truncate an individual reminder word.
+        return 0;
       }
     }
 
     word = strtok_r(nullptr, " ", &save);
   }
 
-  if (lineCount < maxLines && current[0]) {
+  if (current[0]) {
+    if (lineCount >= maxLines) return lineCount;
     safeCopy(lines[lineCount++], 128, current);
   }
 
+  complete = true;
   return lineCount;
 }
 
@@ -1177,8 +1159,9 @@ static bool buildSmartReminderLayout(const ReminderBucket& bucket,
       if (lineW > maxLineW) maxLineW = lineW;
       totalH += measuredTextHeight(item.lines[0], font);
     } else {
-      item.lineCount = wrapTextToLines(item.oneLine, item.lines, 5, maxTextW, font);
-      if (item.lineCount <= 0) return false;
+      bool complete = false;
+      item.lineCount = wrapTextToLines(item.oneLine, item.lines, 5, maxTextW, font, complete);
+      if (!complete || item.lineCount <= 0) return false;
       for (int line = 0; line < item.lineCount; line++) {
         int lineW = textWidth(item.lines[line], font);
         if (lineW > maxLineW) maxLineW = lineW;
@@ -1239,19 +1222,22 @@ static bool buildEmergencyReminderLayout(const ReminderBucket& bucket,
   SmartReminderLine& item = out.items[0];
   item.itemIdx = itemIdx;
   buildReminderTitleWithTime(g_cache->items[itemIdx], item.title, sizeof(item.title));
-  fitTextToWidth(item.title, item.lines[0], sizeof(item.lines[0]), maxTextW, FONT_B9);
-  item.lineCount = item.lines[0][0] ? 1 : 0;
-  if (item.lineCount <= 0) return false;
+  bool complete = false;
+  item.lineCount = wrapTextToLines(item.title, item.lines, 5, maxTextW, FONT_B9, complete);
+  if (!complete || item.lineCount <= 0) return false;
 
-  out.blockH = measuredTextHeight(item.lines[0], FONT_B9);
+  out.wrapped = item.lineCount > 1;
+  out.blockH = item.lineCount * out.lineStep;
   if (out.blockH > maxH) return false;
 
-  out.maxLineW = textWidth(item.lines[0], FONT_B9);
+  for (int line = 0; line < item.lineCount; ++line) {
+    out.maxLineW = max(out.maxLineW, textWidth(item.lines[line], FONT_B9));
+  }
   out.fits = true;
   return true;
 }
 
-static void drawBucketLinesCentered(const Cell& c,
+static int drawBucketLinesCentered(const Cell& c,
                                     const ReminderBucket& bucket,
                                     int visibleCount,
                                     int yTop,
@@ -1259,18 +1245,18 @@ static void drawBucketLinesCentered(const Cell& c,
                                     const GFXfont* lineFont) {
   logMemoryStats("before_smart_layout");
   (void)lineFont;
-  if (visibleCount <= 0 || bucket.count <= 0 || totalH <= 0) return;
+  if (visibleCount <= 0 || bucket.count <= 0 || totalH <= 0) return 0;
 
   const int dotR = 3;
   const int gap = 10;
   const int sidePad = 18;
   const int multiItemMaxTextW = c.w - sidePad * 2 - dotR * 2 - gap;
   const int singleItemMaxTextW = c.w - sidePad * 2;
-  if (multiItemMaxTextW <= 20 || singleItemMaxTextW <= 20) return;
+  if (multiItemMaxTextW <= 20 || singleItemMaxTextW <= 20) return 0;
 
   if (!ensureSmartReminderLayoutScratch()) {
     REM_LOGLN("smart reminder rendering skipped: no heap scratch");
-    return;
+    return 0;
   }
 
   char label[32];
@@ -1282,7 +1268,7 @@ static void drawBucketLinesCentered(const Cell& c,
   const int initialMaxTextW = (desiredCount == 1) ? singleItemMaxTextW : multiItemMaxTextW;
   if (!findSmartReminderLayout(bucket, desiredCount, initialMaxTextW, totalH, label, layout)) {
     if (!buildEmergencyReminderLayout(bucket, singleItemMaxTextW, totalH, layout)) {
-      return;
+      return 0;
     }
   }
 
@@ -1331,6 +1317,8 @@ static void drawBucketLinesCentered(const Cell& c,
                                : measuredTextHeight(item.lines[0], layout.font);
     y += itemH + layout.itemGap;
   }
+
+  return layout.count;
 }
 
 // =========================================================
@@ -1635,27 +1623,47 @@ static void drawNextRemindersList(int x, int y, int w, int h,
   auto& d = DisplayCore::get();
   const uint16_t ink = Theme::ink();
 
-  const int lineH = 32;
-  const int padL  = 26;
-  const int padB  = 24;
-  const int gap   = 16;
-
-  int blockH = pickedCount * lineH;
+  const int lineStep = 21;
+  const int itemGap = 7;
+  const int padL = 26;
+  const int padB = 18;
 
   int16_t dx1, dy1; uint16_t dtw, dth;
   measureText("00.00", REMINDER_CONTENT_FONT, dx1, dy1, dtw, dth);
-  int dateColW = (int)dtw;
+  const int dateColW = (int)dtw;
+  const int maxNameW = max(60, w - padL - dateColW - 16 - 12);
+  const int availableH = max(1, h - padB - 8);
 
-  int maxNameW = w - padL - dateColW - gap - 12;
-  if (maxNameW < 60) maxNameW = 60;
-
-  int startX = x + padL;
-  int startY = y + h - padB - blockH;
-
-  for (int i = 0; i < pickedCount; i++) {
+  int visibleCount = 0;
+  int usedH = 0;
+  for (int i = 0; i < pickedCount; ++i) {
     const OccurrenceRef& occ = picked[i];
-    if (occ.itemIdx < 0 || occ.itemIdx >= g_cache->count) continue;
+    if (occ.itemIdx < 0 || occ.itemIdx >= g_cache->count) break;
 
+    char fullBuf[128];
+    buildReminderTitleWithTime(g_cache->items[occ.itemIdx], fullBuf, sizeof(fullBuf));
+    char lines[5][128] = {{0}};
+    bool complete = false;
+    const int lineCount = wrapTextToLines(
+      fullBuf, lines, 5, maxNameW, REMINDER_CONTENT_FONT, complete
+    );
+    if (!complete || lineCount <= 0) break;
+
+    const int itemH = lineCount * lineStep;
+    const int nextH = usedH + (visibleCount > 0 ? itemGap : 0) + itemH;
+    if (nextH > availableH) break;
+
+    usedH = nextH;
+    ++visibleCount;
+  }
+
+  if (visibleCount <= 0) return;
+
+  const int startX = x + padL;
+  int rowY = y + h - padB - usedH;
+
+  for (int i = 0; i < visibleCount; ++i) {
+    const OccurrenceRef& occ = picked[i];
     const ReminderItem& r = g_cache->items[occ.itemIdx];
 
     char dateStr[8];
@@ -1663,28 +1671,37 @@ static void drawNextRemindersList(int x, int y, int w, int h,
 
     char fullBuf[128];
     buildReminderTitleWithTime(r, fullBuf, sizeof(fullBuf));
+    char lines[5][128] = {{0}};
+    bool complete = false;
+    const int lineCount = wrapTextToLines(
+      fullBuf, lines, 5, maxNameW, REMINDER_CONTENT_FONT, complete
+    );
+    if (!complete || lineCount <= 0) break;
 
-    char titleBuf[128];
-    fitTextToWidth(fullBuf, titleBuf, sizeof(titleBuf), maxNameW, REMINDER_CONTENT_FONT);
-
-    int rowY = startY + i * lineH;
-    int baselineY = rowY + lineH / 2;
+    if (i > 0) rowY += itemGap;
 
     int16_t tx1, ty1; uint16_t tw, th;
     measureText(dateStr, REMINDER_CONTENT_FONT, tx1, ty1, tw, th);
-
-    int dateX = startX + (dateColW - (int)tw);
+    const int dateX = startX + (dateColW - (int)tw);
+    const int firstCenterY = rowY + lineStep / 2;
+    const int dateBaseline = firstCenterY - (int)th / 2 - ty1;
 
     d.setFont(REMINDER_CONTENT_FONT);
     d.setTextColor(ink);
-    d.setCursor(dateX - tx1, baselineY);
+    d.setCursor(dateX - tx1, dateBaseline);
     d.print(dateStr);
 
-    int nameX = startX + dateColW + gap;
-    d.setFont(REMINDER_CONTENT_FONT);
-    d.setTextColor(ink);
-    d.setCursor(nameX, baselineY);
-    d.print(titleBuf);
+    const int nameX = startX + dateColW + 16;
+    for (int line = 0; line < lineCount; ++line) {
+      int16_t lx1, ly1; uint16_t lw, lh;
+      measureText(lines[line], REMINDER_CONTENT_FONT, lx1, ly1, lw, lh);
+      const int centerY = rowY + line * lineStep + lineStep / 2;
+      const int baseline = centerY - (int)lh / 2 - ly1;
+      d.setCursor(nameX - lx1, baseline);
+      d.print(lines[line]);
+    }
+
+    rowY += lineCount * lineStep;
   }
 
   d.setFont(nullptr);
@@ -1763,14 +1780,6 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
   int underlineX = c.x + c.w / 2 - (int)hw / 2;
   d.fillRect(underlineX, underlineY, (int)hw, underlineH, ink);
 
-  const int visibleCount = min(bucket.count, 3);
-
-  if (bucket.count > visibleCount) {
-    char moreBuf[24];
-    snprintf(moreBuf, sizeof(moreBuf), "+%d more", bucket.count - visibleCount);
-    drawTopRightSmallNote(c, moreBuf, c.y + 12);
-  }
-
   const bool showTomorrowNote = headerIsToday && isEveningHour();
   if (showTomorrowNote) {
     int tomorrowIdx = findBucketByDaysUntil(buckets, bucketCount, 1);
@@ -1786,53 +1795,87 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
   const int contentH = contentBottom - contentTop;
   if (contentH <= 8) return;
 
+  const int lineStep = 21;
+  const int maxLines = min(5, max(1, contentH / lineStep));
+  const int visibleCount = min(bucket.count, 3);
+  const int candidateCount = visibleCount;
+  int selectedCount = 0;
+
+  // Prefer the original three-column treatment, but only when every visible
+  // reminder can be drawn in full. Otherwise use one fewer item and give the
+  // remaining reminders more width, matching News' complete-text policy.
+  for (int columns = candidateCount; columns >= 1 && selectedCount == 0; --columns) {
+    bool allFit = true;
+    for (int i = 0; i < columns; ++i) {
+      const int itemIdx = bucket.itemIdx[i];
+      if (itemIdx < 0 || itemIdx >= g_cache->count) { allFit = false; break; }
+
+      const int secX0 = c.x + (c.w * i) / columns;
+      const int secX1 = c.x + (c.w * (i + 1)) / columns;
+      const int maxTextW = max(24, secX1 - secX0 - 20);
+
+      char fullBuf[128];
+      buildReminderTitleWithTime(g_cache->items[itemIdx], fullBuf, sizeof(fullBuf));
+      char lines[5][128] = {{0}};
+      bool complete = false;
+      const int lineCount = wrapTextToLines(
+        fullBuf, lines, maxLines, maxTextW, REMINDER_CONTENT_FONT, complete
+      );
+      if (!complete || lineCount <= 0 || lineCount * lineStep > contentH) {
+        allFit = false;
+        break;
+      }
+    }
+    if (allFit) selectedCount = columns;
+  }
+
+  if (selectedCount <= 0) return;
+
+  if (bucket.count > selectedCount) {
+    char moreBuf[24];
+    snprintf(moreBuf, sizeof(moreBuf), "+%d more", bucket.count - selectedCount);
+    drawTopRightSmallNote(c, moreBuf, c.y + 12);
+  }
+
   const int dividerInsetTop = showTomorrowNote ? 4 : 8;
   const int dividerInsetBottom = showTomorrowNote ? 4 : 8;
   const int dividerY = contentTop + dividerInsetTop;
   const int dividerH = max(8, contentH - dividerInsetTop - dividerInsetBottom);
 
-  if (visibleCount == 2) {
-    int divX = c.x + c.w / 2;
+  for (int i = 1; i < selectedCount; ++i) {
+    const int divX = c.x + (c.w * i) / selectedCount;
     d.drawFastVLine(divX, dividerY, dividerH, ink);
-  } else if (visibleCount == 3) {
-    int div1X = c.x + c.w / 3;
-    int div2X = c.x + (c.w * 2) / 3;
-    d.drawFastVLine(div1X, dividerY, dividerH, ink);
-    d.drawFastVLine(div2X, dividerY, dividerH, ink);
   }
 
-  const int textPadX = 8;
-
-  for (int i = 0; i < visibleCount; i++) {
-    int itemIdx = bucket.itemIdx[i];
+  for (int i = 0; i < selectedCount; ++i) {
+    const int itemIdx = bucket.itemIdx[i];
     if (itemIdx < 0 || itemIdx >= g_cache->count) continue;
 
-    int secX0 = c.x + (c.w * i) / visibleCount;
-    int secX1 = c.x + (c.w * (i + 1)) / visibleCount;
-    int secW = secX1 - secX0;
+    const int secX0 = c.x + (c.w * i) / selectedCount;
+    const int secX1 = c.x + (c.w * (i + 1)) / selectedCount;
+    const int secW = secX1 - secX0;
+    const int maxTextW = max(24, secW - 20);
 
     char fullBuf[128];
     buildReminderTitleWithTime(g_cache->items[itemIdx], fullBuf, sizeof(fullBuf));
+    char lines[5][128] = {{0}};
+    bool complete = false;
+    const int lineCount = wrapTextToLines(
+      fullBuf, lines, maxLines, maxTextW, REMINDER_CONTENT_FONT, complete
+    );
+    if (!complete || lineCount <= 0) continue;
 
-    char titleBuf[128];
-    fitTextToWidth(fullBuf,
-                   titleBuf,
-                   sizeof(titleBuf),
-                   secW - textPadX * 2 - 4,
-                   REMINDER_CONTENT_FONT);
-
-    int16_t tx1, ty1;
-    uint16_t tw, th;
-    measureText(titleBuf, REMINDER_CONTENT_FONT, tx1, ty1, tw, th);
-
-    int cx = secX0 + secW / 2;
-    int baselineY = contentTop + (contentH - (int)th) / 2 - ty1;
-
-    d.setFont(REMINDER_CONTENT_FONT);
-    d.setTextColor(ink);
-    d.setCursor(cx - (int)tw / 2 - tx1, baselineY);
-    d.print(titleBuf);
-    d.setFont(nullptr);
+    const int blockH = lineCount * lineStep;
+    const int startY = contentTop + max(0, (contentH - blockH) / 2);
+    for (int line = 0; line < lineCount; ++line) {
+      int16_t tx1, ty1;
+      uint16_t tw, th;
+      measureText(lines[line], REMINDER_CONTENT_FONT, tx1, ty1, tw, th);
+      const int centerY = startY + line * lineStep + lineStep / 2;
+      const int baseline = centerY - (int)th / 2 - ty1;
+      drawLeft(secX0 + (secW - (int)tw) / 2 - tx1,
+               baseline, lines[line], REMINDER_CONTENT_FONT, ink);
+    }
   }
 }
 
@@ -1909,12 +1952,6 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
 
   const int visibleCount = min(bucket.count, isTodayOrTomorrow ? 4 : 3);
 
-  if (bucket.count > visibleCount) {
-    char moreBuf[24];
-    snprintf(moreBuf, sizeof(moreBuf), "+%d more", bucket.count - visibleCount);
-    drawTopRightSmallNote(c, moreBuf, c.y + 14);
-  }
-
   const bool showTomorrowNote = headerIsToday && isEveningHour();
 
   if (showTomorrowNote) {
@@ -1970,8 +2007,17 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
 
   const int contentH = contentBottom - contentTop;
 
+  int drawnCount = 0;
   if (contentH > 10 && visibleCount > 0) {
-    drawBucketLinesCentered(c, bucket, visibleCount, contentTop, contentH, REMINDER_CONTENT_FONT);
+    drawnCount = drawBucketLinesCentered(
+      c, bucket, visibleCount, contentTop, contentH, REMINDER_CONTENT_FONT
+    );
+  }
+
+  if (bucket.count > drawnCount) {
+    char moreBuf[24];
+    snprintf(moreBuf, sizeof(moreBuf), "+%d more", bucket.count - drawnCount);
+    drawTopRightSmallNote(c, moreBuf, c.y + 14);
   }
 }
 
@@ -2152,44 +2198,38 @@ struct AdaptiveReminderDensity {
   int timeW;
 };
 
-// Keep these pixel thresholds and metrics in sync with reminderDensity() in
-// app/lib/remindersResponsive.mjs. B9 is the readability floor, not default.
+// Reminder body text has one physical size: regular 9pt, matching News.
+// Reserve up to four complete 9pt lines (21px advance) for a reminder;
+// if that prevents the next item from fitting, the next item stays hidden.
 static AdaptiveReminderDensity adaptiveReminderDensity(int availablePixels, int requiredRows) {
-  const int pixelsPerRow = requiredRows > 0 ? availablePixels / requiredRows : availablePixels;
-  if (pixelsPerRow >= 44) return {FONT_B12, 42, 5, 62};
-  return {FONT_B9, 34, 4, 48};
+  (void)availablePixels;
+  (void)requiredRows;
+  return {FONT_B9, 88, 5, 48};
 }
 
-static int adaptiveEstimatedTextWidth(const char* value, bool dense) {
-  int units = 0;
-  for (const uint8_t* p = (const uint8_t*)value; p && *p;) {
-    const uint8_t lead = *p;
-    // Decode only far enough to advance exactly one Unicode code point. The
-    // weighting model distinguishes ASCII classes; every non-ASCII code point
-    // intentionally receives the same six units as Studio.
-    uint32_t codepoint = lead;
-    int advance = 1;
-    if ((lead & 0xE0) == 0xC0 && (p[1]&0xC0)==0x80) { codepoint=((lead&0x1F)<<6)|(p[1]&0x3F);advance=2; }
-    else if ((lead & 0xF0) == 0xE0 && (p[1]&0xC0)==0x80 && (p[2]&0xC0)==0x80) { codepoint=((lead&0x0F)<<12)|((p[1]&0x3F)<<6)|(p[2]&0x3F);advance=3; }
-    else if ((lead & 0xF8) == 0xF0 && (p[1]&0xC0)==0x80 && (p[2]&0xC0)==0x80 && (p[3]&0xC0)==0x80) { codepoint=((lead&7)<<18)|((p[1]&0x3F)<<12)|((p[2]&0x3F)<<6)|(p[3]&0x3F);advance=4; }
-    p += advance;
-    if (codepoint > 0x7F) { units += 6; continue; }
-    const char ch = (char)codepoint;
-    if (ch == ' ') units += 3;
-    else if (strchr("ilI1.,:;!'|", ch)) units += 3;
-    else if (strchr("MW@%&", ch)) units += 9;
-    else if ((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) units += 7;
-    else units += 6;
+static bool adaptiveTitleFits(const ReminderItem& item, int width) {
+  if (width < 24) return false;
+  char lines[4][128] = {{0}};
+  bool complete = false;
+  const int lineCount = wrapTextToLines(
+    item.title, lines, 4, width, FONT_B9, complete
+  );
+  return complete && lineCount > 0;
+}
+
+static bool adaptivePrefixFits(const ReminderBucket* bucket, int count, int width) {
+  if (!bucket || count <= 0) return count <= 0;
+  for (int i = 0; i < count; ++i) {
+    const int itemIdx = bucket->itemIdx[i];
+    if (itemIdx < 0 || itemIdx >= g_cache->count) return false;
+    if (!adaptiveTitleFits(g_cache->items[itemIdx], width)) return false;
   }
-  return (units * (dense ? 108 : 142) + 99) / 100;
+  return true;
 }
 
 static int adaptiveUsefulTitleScore(const ReminderItem& item, int width, bool dense) {
-  const int full = adaptiveEstimatedTextWidth(item.title, dense);
-  if (width < 54 || full <= 0) return 0;
-  const int fraction = min(100, (width * 100) / full);
-  if (fraction < 28) return 0;
-  return fraction < 42 ? (fraction * 35) / 100 : fraction;
+  (void)dense;
+  return adaptiveTitleFits(item, width) ? 100 : 0;
 }
 
 static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const ReminderBucket* today,
@@ -2208,25 +2248,33 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
 
   const int totalCount = todayCount + tomorrowCount;
   const int headingH = out.showHeading ? 30 : 0;
-  const int footerH = 24, rowH = 38, rowGap = 4, sectionGap = 10;
+  const int footerH = 24, rowH = 88, rowGap = 5, sectionGap = 10;
   if (shallow) {
     const int initial = FrameLayout::rowCapacity(usable.width, 142, 12);
     const bool canFitFooter = usable.width >= 142 + 12 + 42;
     const int contentWidth = usable.width - (totalCount > initial && canFitFooter ? 66 : 0);
     const int capacity = FrameLayout::rowCapacity(contentWidth, 142, 12);
     out.showTomorrow = todayCount == 0 && tomorrowCount > 0;
-    out.todayItems = min(todayCount, capacity);
-    out.tomorrowItems = out.showTomorrow ? min(tomorrowCount, capacity - out.todayItems) : 0;
+    const ReminderBucket* source = todayCount > 0 ? today : tomorrow;
+    const int sourceCount = todayCount > 0 ? todayCount : tomorrowCount;
+    int chosen = min(sourceCount, capacity);
+    while (chosen > 0) {
+      const int itemW = max(1, contentWidth / chosen - (chosen > 1 ? 12 : 0));
+      const int titleW = max(1, itemW - 48 - 11);
+      if (adaptivePrefixFits(source, chosen, titleW)) break;
+      --chosen;
+    }
+    out.todayItems = todayCount > 0 ? chosen : 0;
+    out.tomorrowItems = out.showTomorrow ? chosen : 0;
   } else if (split) {
     out.showTomorrow = tomorrowCount > 0;
-    // Evaluate both orientations, both permitted item fonts and deterministic
-    // width splits using the real titles. A technically fitting row with only
-    // a one-word prefix is rejected rather than rewarded as another item.
-    int bestMinimum = -1, bestAverage = -1, bestFont = -1, bestToday = -1, bestCount = -1;
+    // Evaluate both orientations and deterministic width splits using the real
+    // titles. Body typography is fixed at B9; only complete wrapped items count.
+    int bestMinimum = -1, bestAverage = -1, bestToday = -1, bestCount = -1;
     const int splitPercents[] = {35, 40, 45, 50, 55, 60, 65};
-    for (int dense = 0; dense <= 1; dense++) for (int vertical = 0; vertical <= 1; vertical++) {
-      const AdaptiveReminderDensity density = dense ? AdaptiveReminderDensity{FONT_B9,34,4,48}
-                                                     : AdaptiveReminderDensity{FONT_B12,42,5,62};
+    const int dense = 1;
+    for (int vertical = 0; vertical <= 1; vertical++) {
+      const AdaptiveReminderDensity density = {FONT_B9,88,5,48};
       const int ratioCount = vertical ? 1 : 7;
       for (int ratioIndex = 0; ratioIndex < ratioCount; ratioIndex++) {
         const int ratioPercent = vertical ? 100 : splitPercents[ratioIndex];
@@ -2250,30 +2298,28 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
           for (int i = 0; i < ti; i++) { const int s = adaptiveUsefulTitleScore(g_cache->items[today->itemIdx[i]], todayTitleW, dense); useful &= s > 0; minimum=min(minimum,s); readable += s; }
           for (int i = 0; i < mi; i++) { const int s = adaptiveUsefulTitleScore(g_cache->items[tomorrow->itemIdx[i]], tomorrowTitleW, dense); useful &= s > 0; minimum=min(minimum,s); readable += s; }
           if (!useful) continue;
-          const int fontRank = dense ? 0 : 1, count = ti + mi, average = readable / max(1,count);
-          // B12 receives a one-item calmness bonus. Dense B9 wins only when it
-          // exposes at least two more useful reminders than the best B12 option.
-          const int informationRank = count + fontRank;
-          const int bestInformationRank = bestCount + bestFont;
-          const bool better = informationRank > bestInformationRank || (informationRank == bestInformationRank &&
-            (fontRank > bestFont || (fontRank == bestFont && (count > bestCount ||
-            (count == bestCount && (minimum > bestMinimum || (minimum == bestMinimum &&
-            (average > bestAverage || (average == bestAverage && ti > bestToday)))))))));
-          if (better) { bestMinimum=minimum;bestAverage=average;bestFont=fontRank;bestToday=ti;bestCount=count;
+          const int count = ti + mi, average = readable / max(1,count);
+          const bool better = count > bestCount || (count == bestCount &&
+            (minimum > bestMinimum || (minimum == bestMinimum &&
+            (average > bestAverage || (average == bestAverage && ti > bestToday)))));
+          if (better) { bestMinimum=minimum;bestAverage=average;bestToday=ti;bestCount=count;
             out.family=vertical?REM_VERTICAL_LIST:REM_SPLIT_SECTIONS;out.splitPercent=ratioPercent;out.denseFont=dense;
             out.todayItems=ti;out.tomorrowItems=mi;out.readabilityScore=readable; }
         }
       }
     }
     if (bestCount < 0) {
-      // Extremely long text may fail every fit threshold. Never render a blank
-      // module: use the widest dense vertical fallback and preserve chronology.
-      const AdaptiveReminderDensity density = {FONT_B9,34,4,48};
+      // Extremely long text may fail every candidate. Try the widest vertical
+      // fallback, but only when the earliest item itself wraps completely.
+      const AdaptiveReminderDensity density = {FONT_B9,88,5,48};
       const int sections = (todayCount && tomorrowCount) ? 2 : 1;
       const int rowsSpace = usable.height - sections * headingH - (sections > 1 ? 10 : 0) - footerH;
       const bool twoSections = sections == 2 && 2 * density.rowH <= rowsSpace;
+      const int titleW = max(1, usable.width - density.timeW - 11);
       out.family=REM_VERTICAL_LIST;out.denseFont=true;out.splitPercent=100;
-      out.todayItems=todayCount?1:0;out.tomorrowItems=tomorrowCount&&(!todayCount||twoSections)?1:0;
+      out.todayItems=(todayCount && adaptivePrefixFits(today, 1, titleW)) ? 1 : 0;
+      out.tomorrowItems=(tomorrowCount && (!todayCount || twoSections) &&
+                         adaptivePrefixFits(tomorrow, 1, titleW)) ? 1 : 0;
     }
   } else {
     out.showTomorrow = tomorrowCount > 0;
@@ -2305,6 +2351,10 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
       }
       if (!spent) break;
     }
+
+    const int titleW = max(1, usable.width - 48 - 11);
+    while (out.todayItems > 0 && !adaptivePrefixFits(today, out.todayItems, titleW)) --out.todayItems;
+    while (out.tomorrowItems > 0 && !adaptivePrefixFits(tomorrow, out.tomorrowItems, titleW)) --out.tomorrowItems;
   }
   out.todayOverflow = max(0, todayCount - out.todayItems);
   out.tomorrowOverflow = max(0, tomorrowCount - out.tomorrowItems);
@@ -2320,22 +2370,38 @@ static void drawAdaptiveLabel(const ReminderRect& rect, const char* label, const
 
 static void drawAdaptiveItem(const ReminderItem& item, const ReminderRect& row, bool stacked,
                              const AdaptiveReminderDensity& density) {
+  (void)stacked;
   if (row.w < 1 || row.h < 1) return;
   const int inset = 2, x = row.x + inset, y = row.y + inset;
   const int w = max(1, row.w - inset * 2), h = max(1, row.h - inset * 2);
-  ReminderRect timeRect, titleRect;
-  if (stacked) {
-    const int timeH = min(18, max(1, (h * 38) / 100));
-    timeRect = {x, y, w, timeH}; titleRect = {x, y + timeH, w, max(1, h - timeH)};
-  } else {
-    // timeW covers HH:MM at this profile's font; adaptive non-stacked cells
-    // retain the remaining width for the fitted title.
-    const int timeW = density.timeW, gap = 7;
-    timeRect = {x, y, timeW, h}; titleRect = {x + timeW + gap, y, max(1, w - timeW - gap), h};
+  const int timeW = min(density.timeW, w);
+  const int gap = 7;
+  const ReminderRect timeRect = {x, y, timeW, h};
+  const ReminderRect titleRect = {
+    x + timeW + gap, y,
+    max(1, w - timeW - gap), h
+  };
+
+  if (item.time[0]) drawAdaptiveLabel(timeRect, item.time, FONT_B9);
+
+  const int lineStep = 21;
+  const int maxLines = min(5, max(1, titleRect.h / lineStep));
+  char lines[5][128] = {{0}};
+  bool complete = false;
+  const int lineCount = wrapTextToLines(
+    item.title, lines, maxLines, titleRect.w, FONT_B9, complete
+  );
+  if (!complete || lineCount <= 0) return;
+
+  const int blockH = lineCount * lineStep;
+  const int startY = titleRect.y + max(0, (titleRect.h - blockH) / 2);
+  for (int line = 0; line < lineCount; ++line) {
+    int16_t x1, y1; uint16_t tw, th;
+    measureText(lines[line], FONT_B9, x1, y1, tw, th);
+    const int centerY = startY + line * lineStep + lineStep / 2;
+    const int baseline = centerY - (int)th / 2 - y1;
+    drawLeft(titleRect.x - x1, baseline, lines[line], FONT_B9, Theme::ink());
   }
-  if (item.time[0]) drawAdaptiveLabel(timeRect, item.time, density.font);
-  char fitted[96]; fitAdaptiveText(item.title, fitted, sizeof(fitted), titleRect.w, density.font);
-  drawAdaptiveLabel(titleRect, fitted, density.font);
 }
 
 static void drawAdaptiveOverflow(const ReminderRect& rect, int count) {
@@ -2403,8 +2469,11 @@ static void renderAdaptiveFallbackBucket(const Cell& c, const ReminderBucket& bu
   const bool shallow = c.h <= 150 && c.w > c.h;
   const int capacity = shallow
     ? FrameLayout::rowCapacity(inner.w, 142, 12)
-    : FrameLayout::rowCapacity(inner.h - min(30, max(20, inner.h / 4)), 38, 4);
-  const int visible = min(bucket.count, capacity), overflow = max(0, bucket.count - visible);
+    : FrameLayout::rowCapacity(inner.h - min(30, max(20, inner.h / 4)), 88, 5);
+  int visible = min(bucket.count, capacity);
+  const int fallbackTitleW = max(1, inner.w - 48 - 11);
+  while (visible > 0 && !adaptivePrefixFits(&bucket, visible, fallbackTitleW)) --visible;
+  const int overflow = max(0, bucket.count - visible);
   const int headingH = min(30, max(20, inner.h / 4));
   char heading[40]; buildAdaptiveFallbackHeading(bucket, heading, sizeof(heading));
   drawAdaptiveLabel({inner.x, inner.y, inner.w, headingH}, heading, FONT_B12);
@@ -2422,7 +2491,7 @@ static void renderAdaptiveFallbackBucket(const Cell& c, const ReminderBucket& bu
         drawAdaptiveItem(g_cache->items[itemIdx], {x0, content.y, x1 - x0, content.h}, false, density);
     }
   } else {
-    drawAdaptiveSection(&bucket, visible, 0, content, false, c.w < 230, heading, false);
+    drawAdaptiveSection(&bucket, visible, 0, content, false, false, heading, false);
   }
   drawAdaptiveOverflow({inner.x, inner.y + inner.h - footerH, inner.w, footerH}, overflow);
 }
@@ -2444,6 +2513,10 @@ static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets
   const AdaptiveReminderComposition comp = adaptiveComposition(c, today, tomorrow);
   const int pad = max(9, min(18, (int)lroundf(min(c.w, c.h) * .08f)));
   ReminderRect inner = {c.x + pad, c.y + pad, max(1, c.w - pad * 2), max(1, c.h - pad * 2)};
+  if (comp.todayItems + comp.tomorrowItems <= 0) {
+    drawAdaptiveOverflow(inner, todayCount + tomorrowCount);
+    return;
+  }
   if (comp.family == REM_SPLIT_SECTIONS) {
     const bool hasToday = comp.todayItems > 0, hasTomorrow = comp.tomorrowItems > 0;
     const int gap = hasToday && hasTomorrow ? 18 : 0;
@@ -2451,7 +2524,7 @@ static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets
       ((inner.w - gap) * comp.splitPercent + 50) / 100;
     ReminderRect left = {inner.x, inner.y, todayWidth, inner.h};
     ReminderRect right = {inner.x + todayWidth + gap, inner.y, max(0, inner.w - todayWidth - gap), inner.h};
-    const AdaptiveReminderDensity selected = comp.denseFont ? AdaptiveReminderDensity{FONT_B9,34,4,48} : AdaptiveReminderDensity{FONT_B12,42,5,62};
+    const AdaptiveReminderDensity selected = {FONT_B9,88,5,48};
     drawAdaptiveSection(today, comp.todayItems, comp.todayOverflow, left, comp.showHeading, false, "Today", true, &selected);
     drawAdaptiveSection(tomorrow, comp.tomorrowItems, comp.tomorrowOverflow, right, comp.showHeading, false, "Tomorrow", true, &selected);
     return;
@@ -2482,15 +2555,14 @@ static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets
   const int sectionGap = sectionCount > 1 ? 10 : 0;
   const int totalRows = comp.todayItems + comp.tomorrowItems;
   const int rowsAvailable = max(1, contentH - sectionCount * headingH - sectionGap);
-  const AdaptiveReminderDensity density = comp.denseFont ? AdaptiveReminderDensity{FONT_B9,34,4,48}
-                                                         : (comp.readabilityScore ? AdaptiveReminderDensity{FONT_B12,42,5,62} : adaptiveReminderDensity(rowsAvailable, totalRows));
+  const AdaptiveReminderDensity density = {FONT_B9,88,5,48};
   const int sharedRowH = min(density.rowH,
     max(1, (rowsAvailable - max(0, totalRows - sectionCount) * density.rowGap) / totalRows));
   const int todayH = comp.todayItems
     ? headingH + comp.todayItems * sharedRowH + max(0, comp.todayItems - 1) * density.rowGap : 0;
   const int tomorrowH = comp.tomorrowItems
     ? headingH + comp.tomorrowItems * sharedRowH + max(0, comp.tomorrowItems - 1) * density.rowGap : 0;
-  const bool stacked = c.w < 230;
+  const bool stacked = false;
   drawAdaptiveSection(today, comp.todayItems, 0, {inner.x, inner.y, inner.w, todayH}, comp.showHeading, stacked, "Today", false, &density);
   drawAdaptiveSection(tomorrow, comp.tomorrowItems, 0, {inner.x, inner.y + todayH + sectionGap, inner.w, tomorrowH}, comp.showHeading, stacked, "Tomorrow", false, &density);
   drawAdaptiveOverflow({inner.x, inner.y + inner.h - footerH, inner.w, footerH}, overflow);

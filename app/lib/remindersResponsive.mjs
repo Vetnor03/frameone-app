@@ -3,14 +3,12 @@ export const REMINDER_STUDIO_PRESET_VALUES=Object.freeze(['normal','long','extre
 
 /** Pixel-derived type and row metrics shared with the physical renderer. */
 export function reminderDensity(availablePixels,requiredRows) {
-  const pixelsPerRow=requiredRows>0?availablePixels/requiredRows:availablePixels
-  if(pixelsPerRow>=44)return Object.freeze({name:'normal',font:'B12',fontSize:17,rowHeight:42,rowGap:5,timeWidth:62})
-  return Object.freeze({name:'dense',font:'B9',fontSize:13,rowHeight:34,rowGap:4,timeWidth:48})
+  void availablePixels;void requiredRows
+  return Object.freeze({name:'body',font:'B9',fontSize:13,rowHeight:88,rowGap:5,timeWidth:48})
 }
 
 const DENSITIES=Object.freeze({
-  B12:Object.freeze({name:'normal',font:'B12',fontSize:17,rowHeight:42,rowGap:5,timeWidth:62}),
-  B9:Object.freeze({name:'dense',font:'B9',fontSize:13,rowHeight:34,rowGap:4,timeWidth:48}),
+  B9:Object.freeze({name:'body',font:'B9',fontSize:13,rowHeight:88,rowGap:5,timeWidth:48}),
 })
 
 // This deliberately uses the same cheap, integer-friendly model as firmware.
@@ -22,18 +20,35 @@ export function estimateReminderTextWidth(value,font='B12') {
 }
 
 function itemTitle(item){return item?.text?.full||item?.text?.compact||''}
+
+function wrappedLineCount(value,width,font='B9',maxLines=4) {
+  if(width<=0||maxLines<=0)return 0
+  const words=String(value||'').trim().split(/\s+/).filter(Boolean)
+  if(!words.length)return 0
+  let lines=1,current=''
+  for(const word of words) {
+    if(estimateReminderTextWidth(word,font)>width)return 0
+    const candidate=current?`${current} ${word}`:word
+    if(estimateReminderTextWidth(candidate,font)<=width){current=candidate;continue}
+    lines++;current=word
+    if(lines>maxLines)return 0
+  }
+  return lines
+}
+
 function usefulTitleScore(item,width,font) {
-  const full=estimateReminderTextWidth(itemTitle(item),font)
-  if(width<54||full<=0)return 0
-  const fraction=Math.min(100,Math.floor(width*100/full))
-  // One-word ellipses are not useful merely because a row technically fits.
-  return fraction<28?0:fraction<42?Math.floor(fraction*35/100):fraction
+  return wrappedLineCount(itemTitle(item),width,font,4)>0?100:0
+}
+
+function prefixFits(items,count,width,font='B9') {
+  for(let index=0;index<count;index++)if(!usefulTitleScore(items[index],width,font))return false
+  return true
 }
 
 function selectLandscapeCandidate(usable,state,showHeading) {
   const headingH=showHeading?30:0,gap=18,footerH=24
   const candidates=[]
-  for(const font of ['B12','B9'])for(const direction of ['split','vertical']) {
+  for(const font of ['B9'])for(const direction of ['split','vertical']) {
     const density=DENSITIES[font]
     const ratios=direction==='split'?[.35,.4,.45,.5,.55,.6,.65]:[1]
     for(const splitRatio of ratios)for(let todayItems=state.today.length;todayItems>=Math.min(1,state.today.length);todayItems--)
@@ -56,23 +71,22 @@ function selectLandscapeCandidate(usable,state,showHeading) {
         if(scores.some(x=>x===0))continue
         const readability=scores.reduce((a,b)=>a+b,0)
         const minimum=Math.min(...scores),average=Math.floor(readability/scores.length)
-        // The score above is a quality gate. B12 gets a one-item calmness bonus:
-        // B9 must reveal at least two additional useful reminders to beat it.
-        const fontRank=font==='B12'?1:0,itemCount=todayItems+tomorrowItems
+        const itemCount=todayItems+tomorrowItems
         candidates.push({direction,splitRatio,font,todayItems,tomorrowItems,readability,
-          rank:[itemCount+fontRank,fontRank,itemCount,minimum,average,todayItems]})
+          rank:[itemCount,minimum,average,todayItems]})
       }
   }
   candidates.sort((a,b)=>{for(let i=0;i<a.rank.length;i++)if(a.rank[i]!==b.rank[i])return b.rank[i]-a.rank[i];return a.direction.localeCompare(b.direction)})
   if(candidates.length)return candidates[0]
-  // Pathological titles must not make the module blank. Fall back to the
-  // widest B9 composition with one earliest item (and Tomorrow too when the
-  // vertical geometry can retain both complete sections).
+  // Fall back to the widest B9 composition, but only if the earliest item
+  // itself can be wrapped completely. An unbreakable title is never clipped.
   const density=DENSITIES.B9,sections=state.today.length&&state.tomorrow.length?2:1
   const rowsSpace=usable.height-sections*(showHeading?30:0)-(sections>1?10:0)-footerH
   const twoSections=sections===2&&2*density.rowHeight<=rowsSpace
-  return {direction:'vertical',splitRatio:1,font:'B9',todayItems:state.today.length?1:0,
-    tomorrowItems:state.tomorrow.length&&(!state.today.length||twoSections)?1:0,readability:0,rank:[]}
+  const titleWidth=Math.max(1,usable.width-density.timeWidth-11)
+  const todayItems=state.today.length&&prefixFits(state.today,1,titleWidth,'B9')?1:0
+  const tomorrowItems=state.tomorrow.length&&(!state.today.length||twoSections)&&prefixFits(state.tomorrow,1,titleWidth,'B9')?1:0
+  return {direction:'vertical',splitRatio:1,font:'B9',todayItems,tomorrowItems,readability:0,rank:[]}
 }
 
 /** Selects verbosity only after composition has allocated a real pixel width. */
@@ -117,16 +131,24 @@ export function reminderComposition(profile,state) {
   let family=shallow?'shallow-horizontal':split?'split-sections':'vertical-list'
   let direction=shallow?'horizontal':split?'split':'vertical'
   const showHeading=!shallow&&usable.height>=104
-  const headingH=showHeading?30:0,footerH=24,rowH=38,rowGap=4,sectionGap=10
+  const headingH=showHeading?30:0,footerH=24,rowH=88,rowGap=5,sectionGap=10
   const rowCapacity=(available,minimum=rowH,gap=rowGap)=>available<minimum?0:1+Math.floor((available-minimum)/(minimum+gap))
   let showTomorrow=state.tomorrow.length>0,todayItems=0,tomorrowItems=0
-  let selectedFont=null,splitRatio=null,readabilityScore=0
+  let selectedFont='B9',splitRatio=null,readabilityScore=0
   if(shallow) {
     const initial=rowCapacity(usable.width,142,12),canFitFooter=usable.width>=142+12+42
     const contentWidth=usable.width-(total>initial&&canFitFooter?66:0),capacity=rowCapacity(contentWidth,142,12)
     showTomorrow=state.today.length===0&&state.tomorrow.length>0
-    todayItems=Math.min(state.today.length,capacity)
-    tomorrowItems=showTomorrow?Math.min(state.tomorrow.length,capacity-todayItems):0
+    const source=state.today.length?state.today:state.tomorrow
+    let chosen=Math.min(source.length,capacity)
+    while(chosen>0){
+      const itemWidth=Math.max(1,contentWidth/chosen-(chosen>1?12:0))
+      const titleWidth=Math.max(1,itemWidth-DENSITIES.B9.timeWidth-11)
+      if(prefixFits(source,chosen,titleWidth,'B9'))break
+      chosen--
+    }
+    todayItems=state.today.length?chosen:0
+    tomorrowItems=showTomorrow?chosen:0
   } else if(split) {
     const selected=selectLandscapeCandidate(usable,state,showHeading)
     if(selected){
@@ -151,6 +173,9 @@ export function reminderComposition(profile,state) {
       if(showTomorrow&&tomorrowItems<state.tomorrow.length&&remaining){tomorrowItems++;remaining--;spent=true}
       if(!spent)break
     }
+    const titleWidth=Math.max(1,usable.width-DENSITIES.B9.timeWidth-11)
+    while(todayItems>0&&!prefixFits(state.today,todayItems,titleWidth,'B9'))todayItems--
+    while(tomorrowItems>0&&!prefixFits(state.tomorrow,tomorrowItems,titleWidth,'B9'))tomorrowItems--
   }
   const maxItems=todayItems+tomorrowItems
   const todayOverflow=Math.max(0,state.today.length-todayItems)
@@ -163,6 +188,7 @@ export function reminderLayout(profile,composition) {
   const pad=Math.max(9,Math.min(18,Math.round(Math.min(profile.width,profile.height)*.08)))
   const inner={x:pad,y:pad,width:Math.max(1,profile.width-pad*2),height:Math.max(1,profile.height-pad*2)}
   if(!composition.available)return Object.freeze({pad,emptyRect:inner,todayRect:null,tomorrowRect:null,footerRect:null,todayFooterRect:null,tomorrowFooterRect:null,items:Object.freeze([])})
+  if(composition.maxItems<=0)return Object.freeze({pad,emptyRect:null,todayRect:null,tomorrowRect:null,footerRect:inner,todayFooterRect:null,tomorrowFooterRect:null,items:Object.freeze([])})
   if(composition.direction==='split') {
     const gap=composition.todayItems&&composition.tomorrowItems?18:0,hasToday=composition.todayItems>0,hasTomorrow=composition.tomorrowItems>0
     const todayShare=!hasTomorrow?1:!hasToday?0:(composition.splitRatio||.5)
@@ -188,7 +214,7 @@ export function reminderLayout(profile,composition) {
   const content={x:inner.x,y:inner.y,width:Math.max(1,inner.width-footerWidth-(footerWidth?8:0)),height:Math.max(1,inner.height-footerHeight-(footerHeight?6:0))}
   if(composition.direction==='horizontal') {
     const count=Math.max(1,composition.todayItems+composition.tomorrowItems),gap=count>1?12:0,itemWidth=Math.max(1,(content.width-gap*(count-1))/count)
-    const items=Array.from({length:count},(_,index)=>itemRegions({x:content.x+index*(itemWidth+gap),y:content.y,width:itemWidth,height:content.height},true))
+    const items=Array.from({length:count},(_,index)=>itemRegions({x:content.x+index*(itemWidth+gap),y:content.y,width:itemWidth,height:content.height},false))
     return Object.freeze({pad,emptyRect:null,todayRect:content,tomorrowRect:null,footerRect,todayFooterRect:null,tomorrowFooterRect:null,items:Object.freeze(items)})
   }
   const headingHeight=composition.showHeading?30:0
@@ -203,8 +229,8 @@ export function reminderLayout(profile,composition) {
   const todayRect=composition.todayItems?{x:content.x,y:content.y,width:content.width,height:todayHeight}:null
   const tomorrowRect=composition.tomorrowItems?{x:content.x,y:content.y+todayHeight+sectionGap,width:content.width,height:tomorrowHeight}:null
   const items=[]
-  addSectionItems(items,todayRect,composition.todayItems,headingHeight,profile.width<230,0,density)
-  addSectionItems(items,tomorrowRect,composition.tomorrowItems,headingHeight,profile.width<230,0,density)
+  addSectionItems(items,todayRect,composition.todayItems,headingHeight,false,0,density)
+  addSectionItems(items,tomorrowRect,composition.tomorrowItems,headingHeight,false,0,density)
   return Object.freeze({pad,emptyRect:null,todayRect,tomorrowRect,footerRect,todayFooterRect:null,tomorrowFooterRect:null,items:Object.freeze(items)})
 }
 

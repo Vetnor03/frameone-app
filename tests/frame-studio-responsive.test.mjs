@@ -551,47 +551,42 @@ test('Reminders runtime exports have matching declarations', async () => {
   for(const name of exports)assert.match(declarations,new RegExp(`export (?:const|function) ${name}\\b`))
 })
 
-test('Reminders item typography is capped at B12 with B9 as its dense fallback', async () => {
-  assert.equal(reminderDensity(300,3).name,'normal')
-  assert.equal(reminderDensity(150,3).name,'normal')
-  assert.equal(reminderDensity(150,6).name,'dense')
-  assert.equal(reminderDensity(150,30).fontSize,13)
+test('Reminders body typography stays at B9 and uses complete multi-line rows', async () => {
+  for(const [pixels,rows] of [[300,3],[150,3],[150,6],[150,30]]){
+    const density=reminderDensity(pixels,rows)
+    assert.equal(density.name,'body');assert.equal(density.font,'B9');assert.equal(density.fontSize,13)
+    assert.equal(density.rowHeight,88);assert.equal(density.timeWidth,48)
+  }
 
   const sparseState={today:reminderStudioPresets.normal.today.slice(0,3),tomorrow:[]}
   const profile=responsiveCellProfile(2,4,392,500)
   const layout=reminderLayout(profile,reminderComposition(profile,sparseState))
-  assert.ok(layout.items.every((item)=>item.density.name==='normal'))
-  assert.ok(layout.items.every((item)=>item.itemRect.height===42))
-  assert.ok(layout.todayRect.y+layout.todayRect.height<profile.height-layout.pad)
-
-  const mixedLargeProfile=responsiveCellProfile(2,4,392,500)
-  const mixedLarge=reminderLayout(mixedLargeProfile,reminderComposition(mixedLargeProfile,reminderStudioPresets.normal))
-  assert.deepEqual(new Set(mixedLarge.items.map((item)=>item.density.name)),new Set(['normal']))
-  const todayItems=mixedLarge.items.slice(0,3),tomorrowItems=mixedLarge.items.slice(3)
-  assert.ok(todayItems.length&&tomorrowItems.length)
-  assert.ok(todayItems.every((item)=>item.density.font==='B12'))
-  assert.ok(tomorrowItems.every((item)=>item.density.font==='B12'))
+  assert.equal(layout.items.length,3)
+  assert.ok(layout.items.every((item)=>item.density.font==='B9'&&item.density.name==='body'))
+  assert.ok(layout.items.every((item)=>item.itemRect.height===88&&item.stacked===false))
 
   const mixedMediumProfile=responsiveCellProfile(2,3,392,330)
-  const mixedMedium=reminderLayout(mixedMediumProfile,reminderComposition(mixedMediumProfile,reminderStudioPresets.normal))
-  assert.deepEqual(new Set(mixedMedium.items.map((item)=>item.density.name)),new Set(['normal']))
+  const mixedMediumComposition=reminderComposition(mixedMediumProfile,reminderStudioPresets.normal)
+  const mixedMedium=reminderLayout(mixedMediumProfile,mixedMediumComposition)
+  assert.equal(mixedMediumComposition.maxItems,2)
+  assert.equal(mixedMediumComposition.overflow,2)
+  assert.ok(mixedMedium.items.every((item)=>item.density.font==='B9'&&item.itemRect.height===88))
 
   const timedState={today:[reminderStudioPresets.normal.today.find((item)=>item.time==='18:00')],tomorrow:[]}
   const timedLayout=reminderLayout(profile,reminderComposition(profile,timedState))
   const timedItem=timedLayout.items[0]
   assert.equal(timedItem.stacked,false)
-  assert.equal(timedItem.density.name,'normal')
-  assert.equal(timedItem.timeRect.width,62)
+  assert.equal(timedItem.density.font,'B9')
+  assert.equal(timedItem.timeRect.width,48)
   assert.ok(timedItem.timeRect.x+timedItem.timeRect.width<timedItem.titleRect.x)
   assert.ok(timedItem.titleRect.width>timedItem.timeRect.width)
 
   const firmware=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
-  assert.doesNotMatch(firmware,/pixelsPerRow >= 62[\s\S]*FONT_B18, 56, 6, 88/)
-  assert.match(firmware,/pixelsPerRow >= 44[\s\S]*FONT_B12, 42, 5, 62[\s\S]*FONT_B9, 34, 4, 48/)
-  assert.match(firmware,/const int timeW = density\.timeW, gap = 7/)
+  assert.match(firmware,/REMINDER_CONTENT_FONT = FONT_B9/)
+  assert.match(firmware,/return \{FONT_B9, 88, 5, 48\}/)
+  assert.doesNotMatch(firmware,/AdaptiveReminderDensity\{FONT_B12/)
+  assert.match(firmware,/wrapTextToLines\([\s\S]*bool& complete/)
   assert.match(firmware,/drawAdaptiveItem\([^)]*const AdaptiveReminderDensity& density\)/)
-  assert.doesNotMatch(firmware,/adaptiveReminderDensity\(row\.h, 1\)/)
-  assert.match(firmware,/rowsAvailable[\s\S]*adaptiveReminderDensity\(rowsAvailable, totalRows\)[\s\S]*drawAdaptiveSection\(today[\s\S]*&density\)[\s\S]*drawAdaptiveSection\(tomorrow[\s\S]*&density\)/)
 })
 
 test('Studio sample-data options keep lowercase state values separate from labels', async () => {

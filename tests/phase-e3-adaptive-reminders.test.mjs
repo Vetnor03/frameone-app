@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
 import test from 'node:test'
 import {supportsPhysicalCustomLayout,validateCustomGeometry} from '../app/lib/customLayouts.mjs'
-import {estimateReminderTextWidth,reminderComposition,reminderLayout,reminderStudioPresets} from '../app/lib/remindersResponsive.mjs'
+import {chooseReminderTextVariant,estimateReminderTextWidth,reminderComposition,reminderDensity,reminderLayout,reminderStudioPresets} from '../app/lib/remindersResponsive.mjs'
 
 const adaptive=[[1,1],[1,2],[1,3],[1,4],[2,1],[2,3],[2,4],[3,1],[3,2],[3,3],[3,4],[4,3]]
 const boundsX=[9,205,401,597,794],boundsY=[22,136,251,365,480]
@@ -37,7 +37,7 @@ test('pixel dimensions select shallow, vertical, and split Studio families',()=>
 test('Today-only, Tomorrow-only, empty, and mixed disclosure follow Studio policy',()=>{
   const today={today:reminderStudioPresets.normal.today,tomorrow:[]}
   const tomorrow={today:[],tomorrow:reminderStudioPresets.normal.tomorrow}
-  assert.equal(reminderComposition(profile(1,2),today).todayItems,3)
+  assert.equal(reminderComposition(profile(1,2),today).todayItems,1)
   const tomorrowComposition=reminderComposition(profile(1,2),tomorrow)
   assert.equal(tomorrowComposition.showTomorrow,true);assert.equal(tomorrowComposition.todayItems,0);assert.equal(tomorrowComposition.tomorrowItems,1)
   assert.equal(reminderComposition(profile(3,3),reminderStudioPresets.empty).available,false)
@@ -70,86 +70,80 @@ test('Today and Tomorrow buckets still enter the responsive composition unchange
   assert.match(reminders,/AdaptiveReminderComposition comp = adaptiveComposition\(c, today, tomorrow\)/)
 })
 
-test('physical long-title regression makes the same content-aware Studio and firmware decision',async()=>{
+
+test('Reminders body typography is fixed at regular 9pt and never falls back to B12',async()=>{
+  const reminders=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
+  const density=reminderDensity(500,1)
+  assert.equal(density.font,'B9');assert.equal(density.fontSize,13);assert.equal(density.rowHeight,88)
+  assert.match(reminders,/REMINDER_CONTENT_FONT = FONT_B9/)
+  assert.match(reminders,/return \{FONT_B9, 88, 5, 48\}/)
+  assert.doesNotMatch(reminders,/AdaptiveReminderDensity\{FONT_B12/)
+  assert.doesNotMatch(reminders,/fitAdaptiveText/)
+})
+
+test('long reminders keep complete text and reduce the visible item count instead',async()=>{
   const item=(title,time='18:00')=>({time,text:{full:title,compact:title,short:title,tiny:title},protectedFacts:[]})
   const state={today:[item('3 menn og en bobil - live // Stavangeren'),item('Discussion Evening: Prejudice Then and Now'),item('Gorrlaus at Tou in Stavanger East'),item('Torsdag på Tungenes: Bare Egil Band')],tomorrow:[item('Ice cider tasting at Sandalen gard','12:15'),item('The Talling Sisters – Live & Terrified'),item('A final particularly descriptive concert title')]}
   const p={width:776,height:343,colSpan:4,rowSpan:3,area:12,orientation:'landscape'}
   const composition=reminderComposition(p,state),layout=reminderLayout(p,composition)
-  assert.equal(composition.selectedFont,'B12');assert.notEqual(composition.splitRatio,.7)
-  assert.ok((layout.tomorrowRect?.width||0)>(p.width-layout.pad*2)*.3)
-  assert.ok(layout.items.every(row=>row.density.font!=='B18'&&row.titleRect.width>=54))
-  assert.equal(composition.maxItems,7);assert.equal(composition.overflow,0);assert.ok(composition.readabilityScore>0)
-  const visible=[...state.today.slice(0,composition.todayItems),...state.tomorrow.slice(0,composition.tomorrowItems)]
-  assert.ok(layout.items.every((row,index)=>row.titleRect.width/estimateReminderTextWidth(visible[index].text.full,'B12')>=.28))
-  const firmware=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
-  for(const token of ['adaptiveEstimatedTextWidth','adaptiveUsefulTitleScore','splitPercents[] = {35, 40, 45, 50, 55, 60, 65}','bestMinimum','comp.splitPercent'])assert.ok(firmware.includes(token),token)
-  assert.doesNotMatch(firmware,/\(inner\.w - gap\) \* 70/)
-})
-
-test('Studio and firmware width inputs count UTF-8 code points identically',async()=>{
-  const vectors=[['Torsdag på Tungenes',157,119],['Søndag',53,40],['Blåbær',49,37],['The Talling Sisters – Live & Terrified',280,213]]
-  const firmwareEstimate=(value,font)=>{const bytes=new TextEncoder().encode(value);let units=0
-    for(let index=0;index<bytes.length;){const lead=bytes[index];let codepoint=lead,advance=1
-      if((lead&0xe0)===0xc0){codepoint=((lead&0x1f)<<6)|(bytes[index+1]&0x3f);advance=2}
-      else if((lead&0xf0)===0xe0){codepoint=((lead&0x0f)<<12)|((bytes[index+1]&0x3f)<<6)|(bytes[index+2]&0x3f);advance=3}
-      else if((lead&0xf8)===0xf0){codepoint=((lead&7)<<18)|((bytes[index+1]&0x3f)<<12)|((bytes[index+2]&0x3f)<<6)|(bytes[index+3]&0x3f);advance=4}
-      index+=advance;const ch=String.fromCodePoint(codepoint);units+=codepoint>0x7f?6:ch===' '?3:/[ilI1.,:;!'|]/.test(ch)?3:/[MW@%&]/.test(ch)?9:/[A-Z0-9]/.test(ch)?7:6
-    }return Math.floor((units*(font==='B12'?142:108)+99)/100)}
-  for(const [value,b12,b9] of vectors){assert.equal(estimateReminderTextWidth(value,'B12'),b12);assert.equal(estimateReminderTextWidth(value,'B9'),b9);assert.equal(firmwareEstimate(value,'B12'),b12);assert.equal(firmwareEstimate(value,'B9'),b9)}
-  const firmware=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
-  assert.match(firmware,/const uint8_t\* p[\s\S]*codepoint > 0x7F[\s\S]*units \+= 6/)
-})
-
-test('unusable extra titles cause overflow, while the selected items remain above the quality floor',()=>{
-  const item=(title)=>({time:'18:00',text:{full:title,compact:title,short:title,tiny:title},protectedFacts:[]})
-  const state={today:[item('Readable event'),item('X'.repeat(500))],tomorrow:[item('Tomorrow event')]}
-  const p={width:500,height:190,colSpan:3,rowSpan:2,area:6,orientation:'landscape'}
-  const composition=reminderComposition(p,state),layout=reminderLayout(p,composition)
+  assert.equal(composition.selectedFont,'B9')
+  assert.ok(composition.maxItems<state.today.length+state.tomorrow.length)
   assert.ok(composition.overflow>0)
-  const omitted=state.today[composition.todayItems]
-  if(omitted){const titleWidth=layout.items[0].titleRect.width,ratio=titleWidth/estimateReminderTextWidth(omitted.text.full,composition.selectedFont);assert.ok(titleWidth<54||ratio<.28)}
+  assert.equal(layout.items.length,composition.maxItems)
+  assert.ok(layout.items.every(row=>row.density.font==='B9'&&row.itemRect.height>=84&&!row.stacked))
+  const firmware=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
+  assert.match(firmware,/wrapTextToLines\([\s\S]*bool& complete/)
+  assert.match(firmware,/if \(!complete \|\| item\.lineCount <= 0\) return false/)
+  assert.match(firmware,/for \(int columns = candidateCount; columns >= 1 && visibleCount == 0; --columns\)/)
+  assert.doesNotMatch(firmware,/fitAdaptiveText/)
 })
 
-test('split candidates can give Tomorrow more width than Today',()=>{
+test('existing semantic wording fallback remains separate from physical complete-line fitting',()=>{
+  const item={text:{full:'A reminder title that needs wrapping',compact:'A reminder title',short:'Reminder title',tiny:'Reminder'},protectedFacts:[]}
+  const selected=chooseReminderTextVariant(item,10,()=>999)
+  assert.equal(selected.variant,'fallback')
+})
+
+test('B9 width estimates remain stable for Norwegian and punctuation-heavy titles',()=>{
+  const vectors=[['Torsdag på Tungenes',119],['Søndag',40],['Blåbær',37],['The Talling Sisters – Live & Terrified',213]]
+  for(const [value,b9] of vectors)assert.equal(estimateReminderTextWidth(value,'B9'),b9)
+})
+
+test('an unbreakable pathological title is omitted rather than clipped',()=>{
+  const item=(title)=>({time:'18:00',text:{full:title,compact:title,short:title,tiny:title},protectedFacts:[]})
+  const state={today:[item('T'.repeat(1000))],tomorrow:[item('M'.repeat(1000))]}
+  const p={width:500,height:220,colSpan:3,rowSpan:2,area:6,orientation:'landscape'}
+  const composition=reminderComposition(p,state),layout=reminderLayout(p,composition)
+  assert.equal(composition.selectedFont,'B9')
+  assert.equal(composition.maxItems,0)
+  assert.equal(composition.overflow,2)
+  assert.equal(layout.items.length,0)
+  assert.ok(layout.footerRect)
+})
+
+test('narrow custom layouts show fewer complete reminders instead of squeezing them',()=>{
+  const today={today:reminderStudioPresets.normal.today,tomorrow:[]}
+  assert.equal(reminderComposition(profile(1,2),today).todayItems,1)
+  assert.equal(reminderComposition(profile(1,3),reminderStudioPresets.normal).maxItems,2)
+  assert.equal(reminderComposition(profile(1,4),reminderStudioPresets.normal).maxItems,3)
+  for(const [w,h] of [[1,2],[1,3],[1,4]]){
+    const p=profile(w,h),composition=reminderComposition(p,reminderStudioPresets.normal),layout=reminderLayout(p,composition)
+    assert.equal(layout.items.length,composition.maxItems)
+    assert.ok(layout.items.every(row=>row.density.font==='B9'&&!row.stacked))
+  }
+})
+
+test('split candidates may trade item count for enough width to keep titles complete',()=>{
   const item=(title)=>({time:'18:00',text:{full:title,compact:title,short:title,tiny:title},protectedFacts:[]})
   const state={today:Array.from({length:4},()=>item('Lunch')),tomorrow:Array.from({length:3},()=>item('Tomorrow title that needs substantially more width'))}
   const composition=reminderComposition({width:776,height:343,colSpan:4,rowSpan:3,area:12,orientation:'landscape'},state)
-  assert.equal(composition.direction,'split');assert.ok(composition.splitRatio<.5);assert.equal(composition.maxItems,7)
+  assert.equal(composition.selectedFont,'B9')
+  assert.ok(composition.maxItems<7)
+  assert.ok(composition.overflow>0)
+  assert.ok(composition.splitRatio<=.5)
 })
 
-test('pathological titles use a safe non-empty dense fallback',()=>{
-  const item=(title)=>({time:'18:00',text:{full:title,compact:title,short:title,tiny:title},protectedFacts:[]})
-  const state={today:[item('T'.repeat(1000))],tomorrow:[item('M'.repeat(1000))]}
-  const composition=reminderComposition({width:500,height:220,colSpan:3,rowSpan:2,area:6,orientation:'landscape'},state)
-  assert.equal(composition.selectedFont,'B9');assert.ok(composition.maxItems>=1);assert.equal(composition.readabilityScore,0)
-})
-
-test('B9 wins when it reveals several additional useful reminders',()=>{
-  const item=(title)=>({time:'18:00',text:{full:title,compact:title,short:title,tiny:title},protectedFacts:[]})
-  const state={today:Array.from({length:3},(_,index)=>item(`${'X'.repeat(70)}${index}`)),tomorrow:Array.from({length:3},(_,index)=>item(`${'X'.repeat(70)}${index}`))}
-  const profile={width:500,height:230,colSpan:3,rowSpan:2,area:6,orientation:'landscape'}
-  const composition=reminderComposition(profile,state)
-  assert.equal(composition.selectedFont,'B9');assert.equal(composition.maxItems,6);assert.equal(composition.overflow,0)
-  // At B12 the split title floor fails and the stacked height holds only two;
-  // B9's four-item information gain is therefore meaningful rather than marginal.
-  const usableHeight=profile.height-2*Math.max(9,Math.min(18,Math.round(Math.min(profile.width,profile.height)*.08)))
-  const b12StackedRows=usableHeight-60-10-24
-  assert.ok(2*42+5<=b12StackedRows);assert.ok(3*42+2*5>b12StackedRows)
-})
-
-test('B12 remains selected when dense typography gains only one item',()=>{
-  const item=(title)=>({time:'18:00',text:{full:title,compact:title,short:title,tiny:title},protectedFacts:[]})
-  const state={today:[item('Today')],tomorrow:Array.from({length:4},(_,index)=>item(`Tomorrow ${index}`))}
-  const composition=reminderComposition({width:500,height:230,colSpan:3,rowSpan:2,area:6,orientation:'landscape'},state)
-  assert.equal(composition.selectedFont,'B12');assert.equal(composition.maxItems,4);assert.equal(composition.overflow,1)
-})
-
-test('firmware mirrors the one-item B12 calmness bonus',async()=>{
-  const firmware=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
-  assert.match(firmware,/informationRank = count \+ fontRank[\s\S]*bestInformationRank = bestCount \+ bestFont/)
-})
-
-test('overflow owns a separate footer and never consumes a visible reminder row',()=>{
+test('overflow owns separate space and never consumes a visible reminder row',()=>{
   for(const [w,h] of [[1,1],[1,3],[3,2]]){const p=profile(w,h),composition=reminderComposition(p,reminderStudioPresets.extreme),layout=reminderLayout(p,composition)
     assert.ok(composition.overflow>0)
     assert.equal(layout.items.length,composition.maxItems)
@@ -158,41 +152,36 @@ test('overflow owns a separate footer and never consumes a visible reminder row'
   }
 })
 
-test('large vertical Today and Tomorrow sections preserve every geometry floor',()=>{
+test('large vertical Today and Tomorrow sections preserve the complete-text row floor',()=>{
   const p={...profile(2,4),width:300,height:500,orientation:'portrait'}
   const source=reminderStudioPresets.extreme
   const state={today:[...source.today,...source.today],tomorrow:[...source.tomorrow,...source.tomorrow]}
   const composition=reminderComposition(p,state),layout=reminderLayout(p,composition)
   assert.equal(composition.family,'vertical-list')
-  assert.ok(composition.todayItems>1&&composition.tomorrowItems>1&&layout.footerRect)
+  assert.ok(composition.todayItems>=1&&composition.tomorrowItems>=1&&layout.footerRect)
   assert.ok(layout.todayRect&&layout.tomorrowRect)
   assert.ok(layout.todayRect.y+layout.todayRect.height+10<=layout.tomorrowRect.y)
   assert.ok(layout.tomorrowRect.y+layout.tomorrowRect.height+6<=layout.footerRect.y)
-  assert.ok(layout.todayRect.height>=30+composition.todayItems*38+(composition.todayItems-1)*4)
-  assert.ok(layout.tomorrowRect.height>=30+composition.tomorrowItems*38+(composition.tomorrowItems-1)*4)
-    for(const item of layout.items)assert.ok(item.itemRect.height>=34)
-  for(let i=1;i<layout.items.length;i++) {
-    const previous=layout.items[i-1].itemRect,current=layout.items[i].itemRect
-    if(previous.y<current.y&&previous.y+previous.height<=current.y)assert.ok(current.y-(previous.y+previous.height)>=4)
-  }
+  for(const item of layout.items){assert.equal(item.density.font,'B9');assert.ok(item.itemRect.height>=84)}
 })
 
-test('allocated time and long-title regions are bounded and disjoint',()=>{
+test('allocated time and title regions are bounded and disjoint',()=>{
   for(const [w,h] of adaptive){const p=profile(w,h),composition=reminderComposition(p,reminderStudioPresets.extreme),layout=reminderLayout(p,composition)
     for(const item of layout.items){
       for(const rect of [item.timeRect,item.titleRect]){assert.ok(rect.x>=0&&rect.y>=0);assert.ok(rect.x+rect.width<=p.width);assert.ok(rect.y+rect.height<=p.height)}
-      if(item.stacked)assert.ok(item.timeRect.y+item.timeRect.height<=item.titleRect.y)
-      else assert.ok(item.timeRect.x+item.timeRect.width<=item.titleRect.x)
+      assert.equal(item.stacked,false)
+      assert.ok(item.timeRect.x+item.timeRect.width<=item.titleRect.x)
     }
   }
 })
 
-test('firmware adds adaptive routing while leaving all handmade anchors intact',async()=>{
+test('firmware keeps adaptive routing and complete-text rules across all anchor sizes',async()=>{
   const [reminders,renderer]=await Promise.all(['frame/src/modules/ModuleReminders.cpp','frame/src/modules/ModuleRenderer.cpp'].map(path=>readFile(new URL(`../${path}`,import.meta.url),'utf8')))
   assert.match(reminders,/app\/lib\/remindersResponsive\.mjs/)
   assert.match(reminders,/aspectRatio|ratio = c\.h > 0[\s\S]*1\.12f/)
   assert.match(reminders,/REM_SHALLOW_HORIZONTAL[\s\S]*REM_SPLIT_SECTIONS[\s\S]*REM_VERTICAL_LIST/)
-  assert.match(reminders,/fitAdaptiveText[\s\S]*textWidth\(dst, font\)/)
+  assert.match(reminders,/wrapTextToLines[\s\S]*complete/)
+  assert.doesNotMatch(reminders,/fitAdaptiveText/)
   assert.match(reminders,/timeRect[\s\S]*titleRect/)
   const dispatch=reminders.match(/void render\(const Cell& c,[\s\S]*?\n}/)[0]
   assert.ok(dispatch.indexOf('CELL_ADAPTIVE')<dispatch.indexOf('CELL_SMALL'))
