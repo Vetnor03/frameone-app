@@ -1797,13 +1797,14 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
 
   const int lineStep = 21;
   const int maxLines = min(5, max(1, contentH / lineStep));
-  const int candidateCount = min(bucket.count, 3);
-  int visibleCount = 0;
+  const int visibleCount = min(bucket.count, 3);
+  const int candidateCount = visibleCount;
+  int selectedCount = 0;
 
   // Prefer the original three-column treatment, but only when every visible
   // reminder can be drawn in full. Otherwise use one fewer item and give the
   // remaining reminders more width, matching News' complete-text policy.
-  for (int columns = candidateCount; columns >= 1 && visibleCount == 0; --columns) {
+  for (int columns = candidateCount; columns >= 1 && selectedCount == 0; --columns) {
     bool allFit = true;
     for (int i = 0; i < columns; ++i) {
       const int itemIdx = bucket.itemIdx[i];
@@ -1825,14 +1826,14 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
         break;
       }
     }
-    if (allFit) visibleCount = columns;
+    if (allFit) selectedCount = columns;
   }
 
-  if (visibleCount <= 0) return;
+  if (selectedCount <= 0) return;
 
-  if (bucket.count > visibleCount) {
+  if (bucket.count > selectedCount) {
     char moreBuf[24];
-    snprintf(moreBuf, sizeof(moreBuf), "+%d more", bucket.count - visibleCount);
+    snprintf(moreBuf, sizeof(moreBuf), "+%d more", bucket.count - selectedCount);
     drawTopRightSmallNote(c, moreBuf, c.y + 12);
   }
 
@@ -1841,17 +1842,17 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
   const int dividerY = contentTop + dividerInsetTop;
   const int dividerH = max(8, contentH - dividerInsetTop - dividerInsetBottom);
 
-  for (int i = 1; i < visibleCount; ++i) {
-    const int divX = c.x + (c.w * i) / visibleCount;
+  for (int i = 1; i < selectedCount; ++i) {
+    const int divX = c.x + (c.w * i) / selectedCount;
     d.drawFastVLine(divX, dividerY, dividerH, ink);
   }
 
-  for (int i = 0; i < visibleCount; ++i) {
+  for (int i = 0; i < selectedCount; ++i) {
     const int itemIdx = bucket.itemIdx[i];
     if (itemIdx < 0 || itemIdx >= g_cache->count) continue;
 
-    const int secX0 = c.x + (c.w * i) / visibleCount;
-    const int secX1 = c.x + (c.w * (i + 1)) / visibleCount;
+    const int secX0 = c.x + (c.w * i) / selectedCount;
+    const int secX1 = c.x + (c.w * (i + 1)) / selectedCount;
     const int secW = secX1 - secX0;
     const int maxTextW = max(24, secW - 20);
 
