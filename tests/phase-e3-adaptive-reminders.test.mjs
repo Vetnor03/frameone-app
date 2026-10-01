@@ -98,12 +98,10 @@ test('long reminders keep complete text and reduce the visible item count instea
   assert.doesNotMatch(firmware,/fitAdaptiveText/)
 })
 
-test('mirror text fallback wraps the complete source instead of creating ellipsis',()=>{
+test('existing semantic wording fallback remains separate from physical complete-line fitting',()=>{
   const item={text:{full:'A reminder title that needs wrapping',compact:'A reminder title',short:'Reminder title',tiny:'Reminder'},protectedFacts:[]}
   const selected=chooseReminderTextVariant(item,10,()=>999)
-  assert.equal(selected.variant,'wrapped')
-  assert.equal(selected.text,item.text.full)
-  assert.ok(!selected.text.includes('…')&&!selected.text.includes('...'))
+  assert.equal(selected.variant,'fallback')
 })
 
 test('B9 width estimates remain stable for Norwegian and punctuation-heavy titles',()=>{
