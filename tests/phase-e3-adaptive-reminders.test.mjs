@@ -178,7 +178,7 @@ test('allocated time and title regions are bounded and disjoint',()=>{
 })
 
 test('firmware keeps adaptive routing and complete-text rules across all anchor sizes',async()=>{
-  const [reminders,renderer]=await Promise.all(['frame/src/modules/ModuleReminders.cpp','frame/src/modules/ModuleRenderer.cpp'].map(path=>readFile(new URL(\`../\${path}\`,import.meta.url),'utf8')))
+  const [reminders,renderer]=await Promise.all(['frame/src/modules/ModuleReminders.cpp','frame/src/modules/ModuleRenderer.cpp'].map(path=>readFile(new URL(`../${path}`,import.meta.url),'utf8')))
   assert.match(reminders,/app\/lib\/remindersResponsive\.mjs/)
   assert.match(reminders,/aspectRatio|ratio = c\.h > 0[\s\S]*1\.12f/)
   assert.match(reminders,/REM_SHALLOW_HORIZONTAL[\s\S]*REM_SPLIT_SECTIONS[\s\S]*REM_VERTICAL_LIST/)
