@@ -4,11 +4,11 @@ export const REMINDER_STUDIO_PRESET_VALUES=Object.freeze(['normal','long','extre
 /** Pixel-derived type and row metrics shared with the physical renderer. */
 export function reminderDensity(availablePixels,requiredRows) {
   void availablePixels;void requiredRows
-  return Object.freeze({name:'body',font:'B9',fontSize:13,rowHeight:46,rowGap:5,timeWidth:48})
+  return Object.freeze({name:'body',font:'B9',fontSize:13,rowHeight:88,rowGap:5,timeWidth:48})
 }
 
 const DENSITIES=Object.freeze({
-  B9:Object.freeze({name:'body',font:'B9',fontSize:13,rowHeight:46,rowGap:5,timeWidth:48}),
+  B9:Object.freeze({name:'body',font:'B9',fontSize:13,rowHeight:88,rowGap:5,timeWidth:48}),
 })
 
 // This deliberately uses the same cheap, integer-friendly model as firmware.
@@ -21,7 +21,7 @@ export function estimateReminderTextWidth(value,font='B12') {
 
 function itemTitle(item){return item?.text?.full||item?.text?.compact||''}
 
-function wrappedLineCount(value,width,font='B9',maxLines=2) {
+function wrappedLineCount(value,width,font='B9',maxLines=4) {
   if(width<=0||maxLines<=0)return 0
   const words=String(value||'').trim().split(/\s+/).filter(Boolean)
   if(!words.length)return 0
@@ -37,7 +37,7 @@ function wrappedLineCount(value,width,font='B9',maxLines=2) {
 }
 
 function usefulTitleScore(item,width,font) {
-  return wrappedLineCount(itemTitle(item),width,font,2)>0?100:0
+  return wrappedLineCount(itemTitle(item),width,font,4)>0?100:0
 }
 
 function prefixFits(items,count,width,font='B9') {
@@ -78,12 +78,15 @@ function selectLandscapeCandidate(usable,state,showHeading) {
   }
   candidates.sort((a,b)=>{for(let i=0;i<a.rank.length;i++)if(a.rank[i]!==b.rank[i])return b.rank[i]-a.rank[i];return a.direction.localeCompare(b.direction)})
   if(candidates.length)return candidates[0]
-  // Fall back to the widest B9 composition with the earliest complete item.
+  // Fall back to the widest B9 composition, but only if the earliest item
+  // itself can be wrapped completely. An unbreakable title is never clipped.
   const density=DENSITIES.B9,sections=state.today.length&&state.tomorrow.length?2:1
   const rowsSpace=usable.height-sections*(showHeading?30:0)-(sections>1?10:0)-footerH
   const twoSections=sections===2&&2*density.rowHeight<=rowsSpace
-  return {direction:'vertical',splitRatio:1,font:'B9',todayItems:state.today.length?1:0,
-    tomorrowItems:state.tomorrow.length&&(!state.today.length||twoSections)?1:0,readability:0,rank:[]}
+  const titleWidth=Math.max(1,usable.width-density.timeWidth-11)
+  const todayItems=state.today.length&&prefixFits(state.today,1,titleWidth,'B9')?1:0
+  const tomorrowItems=state.tomorrow.length&&(!state.today.length||twoSections)&&prefixFits(state.tomorrow,1,titleWidth,'B9')?1:0
+  return {direction:'vertical',splitRatio:1,font:'B9',todayItems,tomorrowItems,readability:0,rank:[]}
 }
 
 /** Selects verbosity only after composition has allocated a real pixel width. */
@@ -109,7 +112,7 @@ export function reminderComposition(profile,state) {
   let family=shallow?'shallow-horizontal':split?'split-sections':'vertical-list'
   let direction=shallow?'horizontal':split?'split':'vertical'
   const showHeading=!shallow&&usable.height>=104
-  const headingH=showHeading?30:0,footerH=24,rowH=46,rowGap=5,sectionGap=10
+  const headingH=showHeading?30:0,footerH=24,rowH=88,rowGap=5,sectionGap=10
   const rowCapacity=(available,minimum=rowH,gap=rowGap)=>available<minimum?0:1+Math.floor((available-minimum)/(minimum+gap))
   let showTomorrow=state.tomorrow.length>0,todayItems=0,tomorrowItems=0
   let selectedFont='B9',splitRatio=null,readabilityScore=0
@@ -166,6 +169,7 @@ export function reminderLayout(profile,composition) {
   const pad=Math.max(9,Math.min(18,Math.round(Math.min(profile.width,profile.height)*.08)))
   const inner={x:pad,y:pad,width:Math.max(1,profile.width-pad*2),height:Math.max(1,profile.height-pad*2)}
   if(!composition.available)return Object.freeze({pad,emptyRect:inner,todayRect:null,tomorrowRect:null,footerRect:null,todayFooterRect:null,tomorrowFooterRect:null,items:Object.freeze([])})
+  if(composition.maxItems<=0)return Object.freeze({pad,emptyRect:null,todayRect:null,tomorrowRect:null,footerRect:inner,todayFooterRect:null,tomorrowFooterRect:null,items:Object.freeze([])})
   if(composition.direction==='split') {
     const gap=composition.todayItems&&composition.tomorrowItems?18:0,hasToday=composition.todayItems>0,hasTomorrow=composition.tomorrowItems>0
     const todayShare=!hasTomorrow?1:!hasToday?0:(composition.splitRatio||.5)
