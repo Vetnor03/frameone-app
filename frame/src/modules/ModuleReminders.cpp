@@ -28,7 +28,7 @@
 #define FONT_B12 (&FreeSansBold12pt8b)
 #define FONT_B18 (&FreeSansBold18pt8b)
 
-static const GFXfont* REMINDER_CONTENT_FONT = FONT_B12;
+static const GFXfont* REMINDER_CONTENT_FONT = FONT_B9;
 
 #define REMINDERS_DEBUG 1
 
@@ -1013,8 +1013,8 @@ static int measuredTextHeight(const char* text, const GFXfont* font) {
 }
 
 static int smartLineStep(const GFXfont* font) {
-  if (font == FONT_B12) return 21;
-  if (font == FONT_B9) return 16;
+  if (font == FONT_B9) return 21;
+  if (font == FONT_B12) return 25;
   return fontLineHeight(font) + 3;
 }
 
@@ -1035,8 +1035,10 @@ static int wrapTextToLines(const char* src,
                            char lines[][128],
                            int maxLines,
                            int maxWidth,
-                           const GFXfont* font) {
-  if (!lines || maxLines <= 0) return 0;
+                           const GFXfont* font,
+                           bool& complete) {
+  complete = false;
+  if (!lines || maxLines <= 0 || maxWidth <= 0) return 0;
   for (int i = 0; i < maxLines; i++) lines[i][0] = '\0';
   if (!src || !src[0]) return 0;
 
@@ -1050,34 +1052,37 @@ static int wrapTextToLines(const char* src,
   char* word = strtok_r(work, " ", &save);
   while (word) {
     char candidate[128];
-    if (current[0]) snprintf(candidate, sizeof(candidate), "%s %s", current, word);
-    else safeCopy(candidate, sizeof(candidate), word);
+    int written = current[0]
+      ? snprintf(candidate, sizeof(candidate), "%s %s", current, word)
+      : snprintf(candidate, sizeof(candidate), "%s", word);
 
-    if (textWidth(candidate, font) <= maxWidth) {
+    if (written >= 0 && written < (int)sizeof(candidate) &&
+        textWidth(candidate, font) <= maxWidth) {
       safeCopy(current, sizeof(current), candidate);
     } else {
       if (current[0]) {
+        if (lineCount >= maxLines) return lineCount;
         safeCopy(lines[lineCount++], 128, current);
         current[0] = '\0';
-        if (lineCount >= maxLines) break;
       }
 
       if (textWidth(word, font) <= maxWidth) {
         safeCopy(current, sizeof(current), word);
       } else {
-        fitTextToWidth(word, lines[lineCount++], 128, maxWidth, font);
-        current[0] = '\0';
-        if (lineCount >= maxLines) break;
+        // Never ellipsis-truncate an individual reminder word.
+        return 0;
       }
     }
 
     word = strtok_r(nullptr, " ", &save);
   }
 
-  if (lineCount < maxLines && current[0]) {
+  if (current[0]) {
+    if (lineCount >= maxLines) return lineCount;
     safeCopy(lines[lineCount++], 128, current);
   }
 
+  complete = true;
   return lineCount;
 }
 
@@ -1177,8 +1182,9 @@ static bool buildSmartReminderLayout(const ReminderBucket& bucket,
       if (lineW > maxLineW) maxLineW = lineW;
       totalH += measuredTextHeight(item.lines[0], font);
     } else {
-      item.lineCount = wrapTextToLines(item.oneLine, item.lines, 5, maxTextW, font);
-      if (item.lineCount <= 0) return false;
+      bool complete = false;
+      item.lineCount = wrapTextToLines(item.oneLine, item.lines, 5, maxTextW, font, complete);
+      if (!complete || item.lineCount <= 0) return false;
       for (int line = 0; line < item.lineCount; line++) {
         int lineW = textWidth(item.lines[line], font);
         if (lineW > maxLineW) maxLineW = lineW;
@@ -1239,19 +1245,22 @@ static bool buildEmergencyReminderLayout(const ReminderBucket& bucket,
   SmartReminderLine& item = out.items[0];
   item.itemIdx = itemIdx;
   buildReminderTitleWithTime(g_cache->items[itemIdx], item.title, sizeof(item.title));
-  fitTextToWidth(item.title, item.lines[0], sizeof(item.lines[0]), maxTextW, FONT_B9);
-  item.lineCount = item.lines[0][0] ? 1 : 0;
-  if (item.lineCount <= 0) return false;
+  bool complete = false;
+  item.lineCount = wrapTextToLines(item.title, item.lines, 5, maxTextW, FONT_B9, complete);
+  if (!complete || item.lineCount <= 0) return false;
 
-  out.blockH = measuredTextHeight(item.lines[0], FONT_B9);
+  out.wrapped = item.lineCount > 1;
+  out.blockH = item.lineCount * out.lineStep;
   if (out.blockH > maxH) return false;
 
-  out.maxLineW = textWidth(item.lines[0], FONT_B9);
+  for (int line = 0; line < item.lineCount; ++line) {
+    out.maxLineW = max(out.maxLineW, textWidth(item.lines[line], FONT_B9));
+  }
   out.fits = true;
   return true;
 }
 
-static void drawBucketLinesCentered(const Cell& c,
+static int drawBucketLinesCentered(const Cell& c,
                                     const ReminderBucket& bucket,
                                     int visibleCount,
                                     int yTop,
@@ -1259,18 +1268,18 @@ static void drawBucketLinesCentered(const Cell& c,
                                     const GFXfont* lineFont) {
   logMemoryStats("before_smart_layout");
   (void)lineFont;
-  if (visibleCount <= 0 || bucket.count <= 0 || totalH <= 0) return;
+  if (visibleCount <= 0 || bucket.count <= 0 || totalH <= 0) return 0;
 
   const int dotR = 3;
   const int gap = 10;
   const int sidePad = 18;
   const int multiItemMaxTextW = c.w - sidePad * 2 - dotR * 2 - gap;
   const int singleItemMaxTextW = c.w - sidePad * 2;
-  if (multiItemMaxTextW <= 20 || singleItemMaxTextW <= 20) return;
+  if (multiItemMaxTextW <= 20 || singleItemMaxTextW <= 20) return 0;
 
   if (!ensureSmartReminderLayoutScratch()) {
     REM_LOGLN("smart reminder rendering skipped: no heap scratch");
-    return;
+    return 0;
   }
 
   char label[32];
@@ -1282,7 +1291,7 @@ static void drawBucketLinesCentered(const Cell& c,
   const int initialMaxTextW = (desiredCount == 1) ? singleItemMaxTextW : multiItemMaxTextW;
   if (!findSmartReminderLayout(bucket, desiredCount, initialMaxTextW, totalH, label, layout)) {
     if (!buildEmergencyReminderLayout(bucket, singleItemMaxTextW, totalH, layout)) {
-      return;
+      return 0;
     }
   }
 
@@ -1331,6 +1340,8 @@ static void drawBucketLinesCentered(const Cell& c,
                                : measuredTextHeight(item.lines[0], layout.font);
     y += itemH + layout.itemGap;
   }
+
+  return layout.count;
 }
 
 // =========================================================
@@ -1635,27 +1646,47 @@ static void drawNextRemindersList(int x, int y, int w, int h,
   auto& d = DisplayCore::get();
   const uint16_t ink = Theme::ink();
 
-  const int lineH = 32;
-  const int padL  = 26;
-  const int padB  = 24;
-  const int gap   = 16;
-
-  int blockH = pickedCount * lineH;
+  const int lineStep = 21;
+  const int itemGap = 7;
+  const int padL = 26;
+  const int padB = 18;
 
   int16_t dx1, dy1; uint16_t dtw, dth;
   measureText("00.00", REMINDER_CONTENT_FONT, dx1, dy1, dtw, dth);
-  int dateColW = (int)dtw;
+  const int dateColW = (int)dtw;
+  const int maxNameW = max(60, w - padL - dateColW - 16 - 12);
+  const int availableH = max(1, h - padB - 8);
 
-  int maxNameW = w - padL - dateColW - gap - 12;
-  if (maxNameW < 60) maxNameW = 60;
-
-  int startX = x + padL;
-  int startY = y + h - padB - blockH;
-
-  for (int i = 0; i < pickedCount; i++) {
+  int visibleCount = 0;
+  int usedH = 0;
+  for (int i = 0; i < pickedCount; ++i) {
     const OccurrenceRef& occ = picked[i];
-    if (occ.itemIdx < 0 || occ.itemIdx >= g_cache->count) continue;
+    if (occ.itemIdx < 0 || occ.itemIdx >= g_cache->count) break;
 
+    char fullBuf[128];
+    buildReminderTitleWithTime(g_cache->items[occ.itemIdx], fullBuf, sizeof(fullBuf));
+    char lines[5][128] = {{0}};
+    bool complete = false;
+    const int lineCount = wrapTextToLines(
+      fullBuf, lines, 5, maxNameW, REMINDER_CONTENT_FONT, complete
+    );
+    if (!complete || lineCount <= 0) break;
+
+    const int itemH = lineCount * lineStep;
+    const int nextH = usedH + (visibleCount > 0 ? itemGap : 0) + itemH;
+    if (nextH > availableH) break;
+
+    usedH = nextH;
+    ++visibleCount;
+  }
+
+  if (visibleCount <= 0) return;
+
+  const int startX = x + padL;
+  int rowY = y + h - padB - usedH;
+
+  for (int i = 0; i < visibleCount; ++i) {
+    const OccurrenceRef& occ = picked[i];
     const ReminderItem& r = g_cache->items[occ.itemIdx];
 
     char dateStr[8];
@@ -1663,28 +1694,37 @@ static void drawNextRemindersList(int x, int y, int w, int h,
 
     char fullBuf[128];
     buildReminderTitleWithTime(r, fullBuf, sizeof(fullBuf));
+    char lines[5][128] = {{0}};
+    bool complete = false;
+    const int lineCount = wrapTextToLines(
+      fullBuf, lines, 5, maxNameW, REMINDER_CONTENT_FONT, complete
+    );
+    if (!complete || lineCount <= 0) break;
 
-    char titleBuf[128];
-    fitTextToWidth(fullBuf, titleBuf, sizeof(titleBuf), maxNameW, REMINDER_CONTENT_FONT);
-
-    int rowY = startY + i * lineH;
-    int baselineY = rowY + lineH / 2;
+    if (i > 0) rowY += itemGap;
 
     int16_t tx1, ty1; uint16_t tw, th;
     measureText(dateStr, REMINDER_CONTENT_FONT, tx1, ty1, tw, th);
-
-    int dateX = startX + (dateColW - (int)tw);
+    const int dateX = startX + (dateColW - (int)tw);
+    const int firstCenterY = rowY + lineStep / 2;
+    const int dateBaseline = firstCenterY - (int)th / 2 - ty1;
 
     d.setFont(REMINDER_CONTENT_FONT);
     d.setTextColor(ink);
-    d.setCursor(dateX - tx1, baselineY);
+    d.setCursor(dateX - tx1, dateBaseline);
     d.print(dateStr);
 
-    int nameX = startX + dateColW + gap;
-    d.setFont(REMINDER_CONTENT_FONT);
-    d.setTextColor(ink);
-    d.setCursor(nameX, baselineY);
-    d.print(titleBuf);
+    const int nameX = startX + dateColW + 16;
+    for (int line = 0; line < lineCount; ++line) {
+      int16_t lx1, ly1; uint16_t lw, lh;
+      measureText(lines[line], REMINDER_CONTENT_FONT, lx1, ly1, lw, lh);
+      const int centerY = rowY + line * lineStep + lineStep / 2;
+      const int baseline = centerY - (int)lh / 2 - ly1;
+      d.setCursor(nameX - lx1, baseline);
+      d.print(lines[line]);
+    }
+
+    rowY += lineCount * lineStep;
   }
 
   d.setFont(nullptr);
@@ -1763,14 +1803,6 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
   int underlineX = c.x + c.w / 2 - (int)hw / 2;
   d.fillRect(underlineX, underlineY, (int)hw, underlineH, ink);
 
-  const int visibleCount = min(bucket.count, 3);
-
-  if (bucket.count > visibleCount) {
-    char moreBuf[24];
-    snprintf(moreBuf, sizeof(moreBuf), "+%d more", bucket.count - visibleCount);
-    drawTopRightSmallNote(c, moreBuf, c.y + 12);
-  }
-
   const bool showTomorrowNote = headerIsToday && isEveningHour();
   if (showTomorrowNote) {
     int tomorrowIdx = findBucketByDaysUntil(buckets, bucketCount, 1);
@@ -1786,53 +1818,86 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
   const int contentH = contentBottom - contentTop;
   if (contentH <= 8) return;
 
+  const int lineStep = 21;
+  const int maxLines = min(5, max(1, contentH / lineStep));
+  const int candidateCount = min(bucket.count, 3);
+  int visibleCount = 0;
+
+  // Prefer the original three-column treatment, but only when every visible
+  // reminder can be drawn in full. Otherwise use one fewer item and give the
+  // remaining reminders more width, matching News' complete-text policy.
+  for (int columns = candidateCount; columns >= 1 && visibleCount == 0; --columns) {
+    bool allFit = true;
+    for (int i = 0; i < columns; ++i) {
+      const int itemIdx = bucket.itemIdx[i];
+      if (itemIdx < 0 || itemIdx >= g_cache->count) { allFit = false; break; }
+
+      const int secX0 = c.x + (c.w * i) / columns;
+      const int secX1 = c.x + (c.w * (i + 1)) / columns;
+      const int maxTextW = max(24, secX1 - secX0 - 20);
+
+      char fullBuf[128];
+      buildReminderTitleWithTime(g_cache->items[itemIdx], fullBuf, sizeof(fullBuf));
+      char lines[5][128] = {{0}};
+      bool complete = false;
+      const int lineCount = wrapTextToLines(
+        fullBuf, lines, maxLines, maxTextW, REMINDER_CONTENT_FONT, complete
+      );
+      if (!complete || lineCount <= 0 || lineCount * lineStep > contentH) {
+        allFit = false;
+        break;
+      }
+    }
+    if (allFit) visibleCount = columns;
+  }
+
+  if (visibleCount <= 0) return;
+
+  if (bucket.count > visibleCount) {
+    char moreBuf[24];
+    snprintf(moreBuf, sizeof(moreBuf), "+%d more", bucket.count - visibleCount);
+    drawTopRightSmallNote(c, moreBuf, c.y + 12);
+  }
+
   const int dividerInsetTop = showTomorrowNote ? 4 : 8;
   const int dividerInsetBottom = showTomorrowNote ? 4 : 8;
   const int dividerY = contentTop + dividerInsetTop;
   const int dividerH = max(8, contentH - dividerInsetTop - dividerInsetBottom);
 
-  if (visibleCount == 2) {
-    int divX = c.x + c.w / 2;
+  for (int i = 1; i < visibleCount; ++i) {
+    const int divX = c.x + (c.w * i) / visibleCount;
     d.drawFastVLine(divX, dividerY, dividerH, ink);
-  } else if (visibleCount == 3) {
-    int div1X = c.x + c.w / 3;
-    int div2X = c.x + (c.w * 2) / 3;
-    d.drawFastVLine(div1X, dividerY, dividerH, ink);
-    d.drawFastVLine(div2X, dividerY, dividerH, ink);
   }
 
-  const int textPadX = 8;
-
-  for (int i = 0; i < visibleCount; i++) {
-    int itemIdx = bucket.itemIdx[i];
+  for (int i = 0; i < visibleCount; ++i) {
+    const int itemIdx = bucket.itemIdx[i];
     if (itemIdx < 0 || itemIdx >= g_cache->count) continue;
 
-    int secX0 = c.x + (c.w * i) / visibleCount;
-    int secX1 = c.x + (c.w * (i + 1)) / visibleCount;
-    int secW = secX1 - secX0;
+    const int secX0 = c.x + (c.w * i) / visibleCount;
+    const int secX1 = c.x + (c.w * (i + 1)) / visibleCount;
+    const int secW = secX1 - secX0;
+    const int maxTextW = max(24, secW - 20);
 
     char fullBuf[128];
     buildReminderTitleWithTime(g_cache->items[itemIdx], fullBuf, sizeof(fullBuf));
+    char lines[5][128] = {{0}};
+    bool complete = false;
+    const int lineCount = wrapTextToLines(
+      fullBuf, lines, maxLines, maxTextW, REMINDER_CONTENT_FONT, complete
+    );
+    if (!complete || lineCount <= 0) continue;
 
-    char titleBuf[128];
-    fitTextToWidth(fullBuf,
-                   titleBuf,
-                   sizeof(titleBuf),
-                   secW - textPadX * 2 - 4,
-                   REMINDER_CONTENT_FONT);
-
-    int16_t tx1, ty1;
-    uint16_t tw, th;
-    measureText(titleBuf, REMINDER_CONTENT_FONT, tx1, ty1, tw, th);
-
-    int cx = secX0 + secW / 2;
-    int baselineY = contentTop + (contentH - (int)th) / 2 - ty1;
-
-    d.setFont(REMINDER_CONTENT_FONT);
-    d.setTextColor(ink);
-    d.setCursor(cx - (int)tw / 2 - tx1, baselineY);
-    d.print(titleBuf);
-    d.setFont(nullptr);
+    const int blockH = lineCount * lineStep;
+    const int startY = contentTop + max(0, (contentH - blockH) / 2);
+    for (int line = 0; line < lineCount; ++line) {
+      int16_t tx1, ty1;
+      uint16_t tw, th;
+      measureText(lines[line], REMINDER_CONTENT_FONT, tx1, ty1, tw, th);
+      const int centerY = startY + line * lineStep + lineStep / 2;
+      const int baseline = centerY - (int)th / 2 - ty1;
+      drawLeft(secX0 + (secW - (int)tw) / 2 - tx1,
+               baseline, lines[line], REMINDER_CONTENT_FONT, ink);
+    }
   }
 }
 
@@ -1909,12 +1974,6 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
 
   const int visibleCount = min(bucket.count, isTodayOrTomorrow ? 4 : 3);
 
-  if (bucket.count > visibleCount) {
-    char moreBuf[24];
-    snprintf(moreBuf, sizeof(moreBuf), "+%d more", bucket.count - visibleCount);
-    drawTopRightSmallNote(c, moreBuf, c.y + 14);
-  }
-
   const bool showTomorrowNote = headerIsToday && isEveningHour();
 
   if (showTomorrowNote) {
@@ -1970,8 +2029,17 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
 
   const int contentH = contentBottom - contentTop;
 
+  int drawnCount = 0;
   if (contentH > 10 && visibleCount > 0) {
-    drawBucketLinesCentered(c, bucket, visibleCount, contentTop, contentH, REMINDER_CONTENT_FONT);
+    drawnCount = drawBucketLinesCentered(
+      c, bucket, visibleCount, contentTop, contentH, REMINDER_CONTENT_FONT
+    );
+  }
+
+  if (bucket.count > drawnCount) {
+    char moreBuf[24];
+    snprintf(moreBuf, sizeof(moreBuf), "+%d more", bucket.count - drawnCount);
+    drawTopRightSmallNote(c, moreBuf, c.y + 14);
   }
 }
 
