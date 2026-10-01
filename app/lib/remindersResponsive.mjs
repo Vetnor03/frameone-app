@@ -122,11 +122,6 @@ export function reminderComposition(profile,state) {
   const total=state.today.length+state.tomorrow.length
   if(!total)return Object.freeze({available:false,direction:'vertical',family:'vertical-list',showHeading:false,showTime:false,showTomorrow:false,todayItems:0,tomorrowItems:0,todayOverflow:0,tomorrowOverflow:0,maxItems:0,overflow:0,selectedFont:null,splitRatio:null,readabilityScore:0})
   // Composition follows the rendered rectangle. Grid spans are deliberately not
-
-export function reminderComposition(profile,state) {
-  const total=state.today.length+state.tomorrow.length
-  if(!total)return Object.freeze({available:false,direction:'vertical',family:'vertical-list',showHeading:false,showTime:false,showTomorrow:false,todayItems:0,tomorrowItems:0,todayOverflow:0,tomorrowOverflow:0,maxItems:0,overflow:0,selectedFont:null,splitRatio:null,readabilityScore:0})
-  // Composition follows the rendered rectangle. Grid spans are deliberately not
   // consulted: the same logical shape can be shallow, square, or tall at runtime.
   const pad=Math.max(9,Math.min(18,Math.round(Math.min(profile.width,profile.height)*.08)))
   const usable={width:Math.max(0,profile.width-pad*2),height:Math.max(0,profile.height-pad*2)}
