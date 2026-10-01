@@ -94,10 +94,34 @@ export function chooseReminderTextVariant(item,availableWidth,measure) {
   const {text,protectedFacts=[]}=item
   const requiredFacts=protectedFacts.filter(fact=>!fact.optionalInTitle).map(fact=>fact.value)
   const eligible=REMINDER_TEXT_ORDER.filter(variant=>text[variant]&&requiredFacts.every(fact=>text[variant].includes(fact)))
-  for(const variant of eligible)if(measure(text[variant])<=availableWidth)return {variant,text:text[variant]}
-  const source=eligible.map(variant=>text[variant]).find(Boolean)||''
-  return {variant:'wrapped',text:source}
+  for(const variant of eligible) if(measure(text[variant])<=availableWidth)return {variant,text:text[variant]}
+  const source=[...eligible].reverse().map(variant=>text[variant]).find(Boolean)||''
+  if(!source)return {variant:'fallback',text:''}
+  const ellipsis='…'
+  if(measure(ellipsis)>availableWidth)return {variant:'fallback',text:''}
+  // Protected facts are atomic. The fallback may omit an optional fact, but it
+  // must never display a prefix such as "IMR 26-0…" or a partial location.
+  const atoms=atomicTextParts(source,protectedFacts.map(fact=>fact.value));let fitted=''
+  for(const atom of atoms){const candidate=fitted?`${fitted} ${atom}`:atom;if(measure(candidate+ellipsis)>availableWidth)break;fitted=candidate}
+  const fallback=fitted?fitted+ellipsis:''
+  if(requiredFacts.every(fact=>fallback.includes(fact)))return {variant:'fallback',text:fallback}
+  const factsOnly=requiredFacts.join(' ')
+  return {variant:'fallback',text:factsOnly&&measure(factsOnly)<=availableWidth?factsOnly:''}
 }
+
+function atomicTextParts(source,protectedFacts) {
+  const facts=protectedFacts.filter(fact=>source.includes(fact)).sort((a,b)=>b.length-a.length)
+  if(!facts.length)return source.split(/\s+/).filter(Boolean)
+  const pattern=new RegExp(`(${facts.map(escapeRegExp).join('|')})`,'g')
+  return source.split(pattern).flatMap(part=>facts.includes(part)?[part]:part.split(/\s+/)).filter(Boolean)
+}
+
+function escapeRegExp(value){return value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
+
+export function reminderComposition(profile,state) {
+  const total=state.today.length+state.tomorrow.length
+  if(!total)return Object.freeze({available:false,direction:'vertical',family:'vertical-list',showHeading:false,showTime:false,showTomorrow:false,todayItems:0,tomorrowItems:0,todayOverflow:0,tomorrowOverflow:0,maxItems:0,overflow:0,selectedFont:null,splitRatio:null,readabilityScore:0})
+  // Composition follows the rendered rectangle. Grid spans are deliberately not
 
 export function reminderComposition(profile,state) {
   const total=state.today.length+state.tomorrow.length
