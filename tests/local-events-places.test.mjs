@@ -138,9 +138,13 @@ test('Local Events frame feed is limited and mirror stays decoupled', () => {
   assert.doesNotMatch(mirrorRoute, /edge-of-norway|Local Events/i)
 })
 
-test('connect marks Local Events connected only after sync succeeds', () => {
+test('connect persists Local Events before refresh so temporary source failures can retry later', () => {
   const server = readFileSync(new URL('../app/lib/integrations/local-events/server.ts', import.meta.url), 'utf8')
-  assert.ok(server.indexOf('const sync = await syncLocalEventsForFrame') < server.indexOf(".from('user_integrations').upsert"))
+  const start = server.indexOf('export async function connectLocalEventsForFrame')
+  const end = server.indexOf('export async function syncAllConnectedLocalEventsFrames', start)
+  const connect = server.slice(start, end)
+  assert.ok(connect.indexOf(".from('user_integrations').upsert") < connect.indexOf('syncLocalEventsForFrame('))
+  assert.match(connect, /syncPending: true/)
 })
 
 test('failed Local Events sync cannot delete last successful data before parsing', () => {

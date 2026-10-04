@@ -12,7 +12,11 @@ function settledResult<T>(result: PromiseSettledResult<T>) {
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET
-  if (!secret || request.headers.get('authorization') !== `Bearer ${secret}`) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!secret) {
+    console.error('Integration cron is not configured: CRON_SECRET is missing')
+    return NextResponse.json({ error: 'Cron not configured' }, { status: 503 })
+  }
+  if (request.headers.get('authorization') !== `Bearer ${secret}`) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const [waste, localEvents] = await Promise.allSettled([
     syncAllWasteUsers(),
