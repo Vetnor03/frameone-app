@@ -3317,8 +3317,13 @@ function ConnectAppsScreen({
       setLocalEventsDraftArea(saved)
       setLocalEventsOpen(false)
       setLocallyDisconnectedApps((current) => ({ ...current, 'local-events': false }))
-      setStatusTone('success')
-      setStatus(json?.zeroEvents ? 'Connected. No upcoming events were found right now.' : (language === 'no' ? 'Lokale arrangementer er tilkoblet' : 'Local Events connected'))
+      if (json?.syncPending) {
+        setStatusTone('info')
+        setStatus(json?.syncError || (language === 'no' ? 'Lokale arrangementer er tilkoblet. Oppdatering prøves igjen automatisk.' : 'Local Events connected. Refresh will retry automatically.'))
+      } else {
+        setStatusTone('success')
+        setStatus(json?.zeroEvents ? 'Connected. No upcoming events were found right now.' : (language === 'no' ? 'Lokale arrangementer er tilkoblet' : 'Local Events connected'))
+      }
       window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
     } catch (error: unknown) {
       setStatusTone('error')
