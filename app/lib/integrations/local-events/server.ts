@@ -15,6 +15,7 @@ export function localEventUserMessage(error: unknown) {
   const message = error instanceof Error ? error.message : ''
   if (/permission|forbidden/i.test(message)) return 'You do not have permission to manage Local Events for this frame.'
   if (/frame/i.test(message)) return 'Select a frame before managing Local Events.'
+  if (/429|rate.?limit|too many requests/i.test(message)) return 'Local Events is temporarily rate limited. It will retry automatically.'
   if (/fetch|timeout|network/i.test(message)) return 'Could not fetch Local Events right now. Please try again.'
   if (/parse|source/i.test(message)) return 'Could not read Local Events right now. Please try again.'
   return 'Could not connect Local Events. Please try again.'
@@ -79,24 +80,49 @@ export async function syncLocalEventsForFrame(userId: string, deviceId: string, 
 }
 
 export async function connectLocalEventsForFrame(userId: string, deviceId: string, areaPreference: unknown, fetchImpl = fetch) {
-  const sync = await syncLocalEventsForFrame(userId, deviceId, areaPreference, fetchImpl)
+  const area = normalizeLocalEventAreaPreference(areaPreference) || suggestedLocalEventArea('stavanger')
+  await requireLocalEventsFrameMember(userId, deviceId, true)
+
   const supabase = getSupabaseAdmin()
-  const primary = getLocalEventPlace(sync.areaPreference.primaryPlaceId)
-  const now = new Date().toISOString()
+  const primary = getLocalEventPlace(area.primaryPlaceId)
+  const connectedAt = new Date().toISOString()
   const { data, error } = await supabase.from('user_integrations').upsert({
     user_id: userId,
     device_id: deviceId,
     provider: EDGE_OF_NORWAY_PROVIDER,
     status: 'connected',
-    encrypted_credentials: { areaPreference: sync.areaPreference, scope: 'frame' },
-    external_account_id: sync.areaPreference.primaryPlaceId,
-    external_account_label: primary?.displayName || sync.areaPreference.primaryPlaceId,
-    last_sync_at: now,
+    encrypted_credentials: { areaPreference: area, scope: 'frame' },
+    external_account_id: area.primaryPlaceId,
+    external_account_label: primary?.displayName || area.primaryPlaceId,
     last_error: null,
-    updated_at: now,
+    last_error_at: null,
+    updated_at: connectedAt,
   }, { onConflict: 'device_id,provider' }).select('provider,status,external_account_label,encrypted_credentials,last_sync_at,updated_at').single()
   if (error) throw new Error(error.message)
-  return { ...data, importedCount: sync.importedCount, zeroEvents: sync.zeroEvents, areaPreference: sync.areaPreference }
+
+  try {
+    const sync = await syncLocalEventsForFrame(userId, deviceId, area, fetchImpl)
+    const syncedAt = new Date().toISOString()
+    const { data: syncedData, error: updateError } = await supabase
+      .from('user_integrations')
+      .update({ last_sync_at: syncedAt, last_error: null, last_error_at: null, updated_at: syncedAt })
+      .eq('device_id', deviceId)
+      .eq('provider', EDGE_OF_NORWAY_PROVIDER)
+      .select('provider,status,external_account_label,encrypted_credentials,last_sync_at,updated_at')
+      .single()
+    if (updateError) throw new Error(updateError.message)
+    return { ...(syncedData || data), importedCount: sync.importedCount, zeroEvents: sync.zeroEvents, areaPreference: sync.areaPreference, syncPending: false, syncError: null }
+  } catch (syncError) {
+    const failedAt = new Date().toISOString()
+    const message = syncError instanceof Error ? syncError.message : 'Local Events sync failed'
+    const { error: updateError } = await supabase
+      .from('user_integrations')
+      .update({ last_error: message, last_error_at: failedAt, updated_at: failedAt })
+      .eq('device_id', deviceId)
+      .eq('provider', EDGE_OF_NORWAY_PROVIDER)
+    if (updateError) console.error('Could not persist Local Events sync error', { deviceId, error: updateError })
+    return { ...data, importedCount: 0, zeroEvents: false, areaPreference: area, syncPending: true, syncError: localEventUserMessage(syncError) }
+  }
 }
 
 export async function syncAllConnectedLocalEventsFrames(fetchImpl = fetch) {
