@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   if (!deviceId) return NextResponse.json({ error: 'Missing deviceId' }, { status: 400 })
   try {
     const result = await connectLocalEventsForFrame(userId, deviceId, body?.areaPreference)
-    return NextResponse.json({ connected: true, deviceId, areaPreference: result.areaPreference, importedCount: result.importedCount, zeroEvents: result.zeroEvents, account: result.external_account_label, last_sync_at: result.last_sync_at })
+    return NextResponse.json({ connected: true, deviceId, areaPreference: result.areaPreference, importedCount: result.importedCount, zeroEvents: result.zeroEvents, account: result.external_account_label, last_sync_at: result.last_sync_at, syncPending: result.syncPending, syncError: result.syncError })
   } catch (error) {
     console.error('Local Events connect failed', { userId, deviceId, error })
     return NextResponse.json({ error: localEventUserMessage(error) }, { status: 502 })
