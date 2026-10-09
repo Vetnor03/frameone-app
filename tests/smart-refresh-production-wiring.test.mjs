@@ -153,6 +153,31 @@ test('Power Save Weather and Surf share 3-hour batch windows, including boundary
   assert.ok(deadline >= first + 5 * 60 * 60_000 - 15 * 60_000)
 })
 
+test('Power Save ignores Weather daypart wording but keeps actual weather severity changes', () => {
+  const now = Date.parse('2026-10-09T10:00:00Z')
+  const cells = [{ module: 'weather:1', size: 'MEDIUM', col: 0, row: 0, w: 400, h: 240 }]
+  const modules = { weather: [{ id: 1, lat: 58.97, lon: 5.73, units: 'metric' }] }
+  const source = (insight) => ({ 'weather:1': {
+    insight, current: { time: '2026-10-09T12:00', temperature_2m: 12, weather_code: 61 },
+    daily: { temperature_2m_max: [14], temperature_2m_min: [8], weather_code: [61] },
+  } })
+  const normalSettings = { cells, modules, powerSaver: false }
+  const powerSettings = { cells, modules, powerSaver: true }
+  const normalMorning = physicalRenderManifest({ settings: normalSettings, sources: source('Rain this morning.'), now })[0]
+  const normalEvening = physicalRenderManifest({ settings: normalSettings, sources: source('Rain this evening.'), now })[0]
+  assert.notEqual(normalMorning.render_hash, normalEvening.render_hash,
+    'Normal mode may update its advisory time wording')
+
+  const savingMorning = physicalRenderManifest({ settings: powerSettings, sources: source('Rain this morning.'), now })[0]
+  const savingEvening = physicalRenderManifest({ settings: powerSettings, sources: source('Rain this evening.'), now })[0]
+  assert.equal(savingMorning.render_hash, savingEvening.render_hash,
+    'Power Save should not redraw merely to relabel the time of day')
+  assert.equal(savingMorning.weather_stable_hash, savingEvening.weather_stable_hash)
+  const savingSnow = physicalRenderManifest({ settings: powerSettings, sources: source('Snow this evening.'), now })[0]
+  assert.notEqual(savingEvening.render_hash, savingSnow.render_hash,
+    'A genuine change from rain to snow must still trigger a redraw')
+})
+
 test('physical display_time deadlines are Europe/Oslo DST-safe', () => {
   const settings = { cells: [{ module: 'reminders', col: 0, row: 0, w: 400, h: 240 }], modules: {} }
   const summer = physicalModuleDeadlines({ settings, sources: { reminders: { items: [{ occurrence_date: '2026-09-06', display_time: '10:00' }] } }, now: Date.parse('2026-09-06T00:00:00Z') })
