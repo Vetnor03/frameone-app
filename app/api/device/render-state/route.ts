@@ -55,6 +55,7 @@ export async function GET(req: Request) {
   console.info('[device/render-state] timing', {
     device_id: deviceId,
     request_kind: requested.has('all') ? 'all' : 'selective',
+    power_saver_active: settings.powerSaver === true,
     auth_ms: authMs,
     config_ms: configMs,
     sources_ms: sourcesMs,
