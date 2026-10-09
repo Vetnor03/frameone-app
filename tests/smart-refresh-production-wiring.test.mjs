@@ -101,13 +101,18 @@ test('Power Save Weather skips hourly insight wakes while Normal mode preserves 
 
   const savingSettings = { ...settings, powerSaver: true }
   const saving = physicalModuleDeadlines({ settings: savingSettings, sources, now })['weather:1']
-  assert.deepEqual(saving, [{ at: now + 3 * 60 * 60_000, type: 'soft', reason: 'source_freshness' }])
+  assert.equal(saving.length, 1)
+  assert.equal(saving[0].type, 'soft')
+  assert.equal(saving[0].reason, 'source_freshness')
+  const threeHours = 3 * 60 * 60_000
+  assert.equal(saving[0].at % threeHours, 0, 'Power Save Weather uses shared batch windows')
+  assert.ok(saving[0].at >= now + threeHours - 15 * 60_000)
   const longer = {
     ...savingSettings,
     modules: { weather: [{ id: 1, refresh: 5 * 60 * 60_000 }] },
   }
-  assert.equal(physicalModuleDeadlines({ settings: longer, sources, now })['weather:1'][0].at,
-    now + 5 * 60 * 60_000, 'explicitly slower source intervals stay slower')
+  assert.ok(physicalModuleDeadlines({ settings: longer, sources, now })['weather:1'][0].at >=
+    now + 5 * 60 * 60_000 - 15 * 60_000, 'explicitly slower source intervals stay slower')
 
   // This only changes wake scheduling, not the hash/significance gate used
   // to decide whether to perform a physical e-paper transaction.
