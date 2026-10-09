@@ -838,6 +838,9 @@ function reminderBoundaries(source, now) {
 }
 
 const WEATHER_SOURCE_FRESHNESS_MS = 2 * 60 * 60_000
+// In Power Save, avoid separate hourly weather-insight wakeups; piggyback on
+// the multi-hour source check instead. Match Surf's three-hour freshness floor.
+const WEATHER_POWER_SAVE_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
 const SURF_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
 const SKI_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
 const NEWS_SOURCE_FRESHNESS_MS = 30 * 60_000
@@ -902,13 +905,21 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
       deadlines[ref.key] = [{ at: now + SKI_SOURCE_FRESHNESS_MS, type: 'soft', reason: 'source_freshness' }]
     }
     else if (ref.base === 'weather') {
-      const local = osloParts(now), current = JSON.stringify(weatherProjection(sources[ref.key], ref.cell, configuredInstance(settings?.modules, 'weather', ref.id) ?? {}, now))
-      const candidates = Array.from({ length: 24 }, (_, offset) => osloLocalTime(local.year, local.month, local.day, local.hour + offset + 1))
-      const at = candidates.find((candidate) => candidate > now && current !== JSON.stringify(weatherProjection(sources[ref.key], ref.cell, configuredInstance(settings?.modules, 'weather', ref.id) ?? {}, candidate)))
-      // Weather source freshness is intentionally much slower than the manual
-      // Update path. Time-driven visible changes still use the exact hard
-      // weather_insight deadline above.
-      deadlines[ref.key] = [...(at ? [{ at, type: 'hard', reason: 'weather_insight' }] : []), { at: now + WEATHER_SOURCE_FRESHNESS_MS, type: 'soft', reason: 'source_freshness' }]
+      if (settings?.powerSaver) {
+        // Weather insights are advisory, not a reason to wake an otherwise
+        // sleeping frame each hour. Check alongside Surf every ~3 hours;
+        // the normal render hash still decides whether pixels need updating.
+        const configured = configuredInstance(settings?.modules, 'weather', ref.id)
+        const interval = Math.max(WEATHER_POWER_SAVE_SOURCE_FRESHNESS_MS, Number(configured?.refresh) || 0)
+        deadlines[ref.key] = [{ at: now + interval, type: 'soft', reason: 'source_freshness' }]
+      } else {
+        const local = osloParts(now), current = JSON.stringify(weatherProjection(sources[ref.key], ref.cell, configuredInstance(settings?.modules, 'weather', ref.id) ?? {}, now))
+        const candidates = Array.from({ length: 24 }, (_, offset) => osloLocalTime(local.year, local.month, local.day, local.hour + offset + 1))
+        const at = candidates.find((candidate) => candidate > now && current !== JSON.stringify(weatherProjection(sources[ref.key], ref.cell, configuredInstance(settings?.modules, 'weather', ref.id) ?? {}, candidate)))
+        // Normal mode preserves its time-driven insight changes and two-hour
+        // source freshness. Manual Update is unchanged in either mode.
+        deadlines[ref.key] = [...(at ? [{ at, type: 'hard', reason: 'weather_insight' }] : []), { at: now + WEATHER_SOURCE_FRESHNESS_MS, type: 'soft', reason: 'source_freshness' }]
+      }
     }
     else {
       const configured = ref.id == null ? null : configuredInstance(settings?.modules, ref.base, ref.id)
