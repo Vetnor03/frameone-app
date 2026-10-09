@@ -758,9 +758,21 @@ function significantSkiProjection(value) {
   return result
 }
 
-function significantBackgroundProjection(moduleKey, projection) {
+function significantBackgroundProjection(moduleKey, projection, { powerSaver = false } = {}) {
   const base = String(moduleKey).split(':')[0]
-  if (base === 'weather') return { ...projection, visible: significantWeatherProjection(projection.visible) }
+  if (base === 'weather') {
+    const visible = significantWeatherProjection(projection.visible)
+    // Advisory Weather copy can flip merely because the clock passes from
+    // morning to afternoon. In Power Save that wording alone should not
+    // trigger a physical panel refresh; rain/snow/wind/severity still matter.
+    if (powerSaver && typeof visible?.insight === 'string') {
+      return { ...projection, visible: {
+        ...visible,
+        insight: visible.insight.replace(/\\b(this morning|this afternoon|this evening|tonight)\\b/gi, 'later'),
+      } }
+    }
+    return { ...projection, visible }
+  }
   if (base === 'surf') return { ...projection, visible: significantSurfProjection(projection.visible) }
   if (base === 'ski') return { ...projection, visible: significantSkiProjection(projection.visible) }
   return projection
@@ -957,7 +969,7 @@ export function physicalRenderManifest({ settings, sources, now = Date.now() }) 
         : canonicalVisible(configuredInstance(settings?.modules, ref.base, ref.id) ?? {}),
     }
     const projection = physicalRenderProjection(ref.key, sources[ref.key] ?? null, ref.cell, config, now)
-    const automatic = significantBackgroundProjection(ref.key, projection)
+    const automatic = significantBackgroundProjection(ref.key, projection, { powerSaver: settings?.powerSaver === true })
     const weatherBaseline = ref.base === 'weather' ? weatherAutomaticBaseline(automatic) : null
     return {
       key: ref.key,
