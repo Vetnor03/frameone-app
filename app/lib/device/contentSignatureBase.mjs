@@ -758,9 +758,21 @@ function significantSkiProjection(value) {
   return result
 }
 
-function significantBackgroundProjection(moduleKey, projection) {
+function significantBackgroundProjection(moduleKey, projection, { powerSaver = false } = {}) {
   const base = String(moduleKey).split(':')[0]
-  if (base === 'weather') return { ...projection, visible: significantWeatherProjection(projection.visible) }
+  if (base === 'weather') {
+    const visible = significantWeatherProjection(projection.visible)
+    // Advisory Weather copy can flip merely because the clock passes from
+    // morning to afternoon. In Power Save that wording alone should not
+    // trigger a physical panel refresh; rain/snow/wind/severity still matter.
+    if (powerSaver && typeof visible?.insight === 'string') {
+      return { ...projection, visible: {
+        ...visible,
+        insight: visible.insight.replace(/\b(this morning|this afternoon|this evening|tonight)\b/gi, 'later'),
+      } }
+    }
+    return { ...projection, visible }
+  }
   if (base === 'surf') return { ...projection, visible: significantSurfProjection(projection.visible) }
   if (base === 'ski') return { ...projection, visible: significantSkiProjection(projection.visible) }
   return projection
@@ -846,6 +858,20 @@ const SKI_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
 const NEWS_SOURCE_FRESHNESS_MS = 30 * 60_000
 const NEWS_POWER_SAVE_FRESHNESS_MS = 60 * 60_000
 
+// Power Save sources that are checked a few minutes apart should not wake the
+// ESP32 separately at almost identical 3-hour deadlines. Snap source checks
+// to shared UTC windows with a small early-coalescing allowance; this avoids
+// splitting a 16:56/17:06 pair on opposite sides of a window boundary.
+// Source checks may run up to 15 minutes early, or be deferred to the next
+// three-hour window. Hard display deadlines and Normal mode are unaffected.
+// UTC scheduling avoids ambiguous wall-clock times during DST transitions.
+const POWER_SAVE_SOURCE_BATCH_MS = 3 * 60 * 60_000
+const POWER_SAVE_SOURCE_EARLY_MS = 15 * 60_000
+function powerSaveSourceDeadline(now, interval) {
+  const dueAt = now + interval
+  return Math.ceil((dueAt - POWER_SAVE_SOURCE_EARLY_MS) / POWER_SAVE_SOURCE_BATCH_MS) * POWER_SAVE_SOURCE_BATCH_MS
+}
+
 export function physicalModuleDeadlines({ settings, sources, now = Date.now() }) {
   const refs = activePhysicalReferences(settings)
   const midnight = nextMidnight(now)
@@ -899,7 +925,7 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
       // slower user/config interval, but never churn the source faster than the
       // production three-hour floor. Hard daypart boundaries remain exact.
       const interval = Math.max(SURF_SOURCE_FRESHNESS_MS, Number(configured?.refresh) || 0)
-      deadlines[ref.key] = [...(changes ? [{ at, type: 'hard', reason: 'surf_daypart' }] : []), { at: now + interval, type: 'soft', reason: 'source_freshness' }]
+      deadlines[ref.key] = [...(changes ? [{ at, type: 'hard', reason: 'surf_daypart' }] : []), { at: settings?.powerSaver ? powerSaveSourceDeadline(now, interval) : now + interval, type: 'soft', reason: 'source_freshness' }]
     }
     else if (ref.base === 'ski') {
       deadlines[ref.key] = [{ at: now + SKI_SOURCE_FRESHNESS_MS, type: 'soft', reason: 'source_freshness' }]
@@ -911,7 +937,7 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
         // the normal render hash still decides whether pixels need updating.
         const configured = configuredInstance(settings?.modules, 'weather', ref.id)
         const interval = Math.max(WEATHER_POWER_SAVE_SOURCE_FRESHNESS_MS, Number(configured?.refresh) || 0)
-        deadlines[ref.key] = [{ at: now + interval, type: 'soft', reason: 'source_freshness' }]
+        deadlines[ref.key] = [{ at: powerSaveSourceDeadline(now, interval), type: 'soft', reason: 'source_freshness' }]
       } else {
         const local = osloParts(now), current = JSON.stringify(weatherProjection(sources[ref.key], ref.cell, configuredInstance(settings?.modules, 'weather', ref.id) ?? {}, now))
         const candidates = Array.from({ length: 24 }, (_, offset) => osloLocalTime(local.year, local.month, local.day, local.hour + offset + 1))
@@ -943,7 +969,7 @@ export function physicalRenderManifest({ settings, sources, now = Date.now() }) 
         : canonicalVisible(configuredInstance(settings?.modules, ref.base, ref.id) ?? {}),
     }
     const projection = physicalRenderProjection(ref.key, sources[ref.key] ?? null, ref.cell, config, now)
-    const automatic = significantBackgroundProjection(ref.key, projection)
+    const automatic = significantBackgroundProjection(ref.key, projection, { powerSaver: settings?.powerSaver === true })
     const weatherBaseline = ref.base === 'weather' ? weatherAutomaticBaseline(automatic) : null
     return {
       key: ref.key,

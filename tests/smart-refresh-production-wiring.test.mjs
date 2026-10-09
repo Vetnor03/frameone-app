@@ -101,20 +101,82 @@ test('Power Save Weather skips hourly insight wakes while Normal mode preserves 
 
   const savingSettings = { ...settings, powerSaver: true }
   const saving = physicalModuleDeadlines({ settings: savingSettings, sources, now })['weather:1']
-  assert.deepEqual(saving, [{ at: now + 3 * 60 * 60_000, type: 'soft', reason: 'source_freshness' }])
+  assert.equal(saving.length, 1)
+  assert.equal(saving[0].type, 'soft')
+  assert.equal(saving[0].reason, 'source_freshness')
+  const threeHours = 3 * 60 * 60_000
+  assert.equal(saving[0].at % threeHours, 0, 'Power Save Weather uses shared batch windows')
+  assert.ok(saving[0].at >= now + threeHours - 15 * 60_000)
   const longer = {
     ...savingSettings,
     modules: { weather: [{ id: 1, refresh: 5 * 60 * 60_000 }] },
   }
-  assert.equal(physicalModuleDeadlines({ settings: longer, sources, now })['weather:1'][0].at,
-    now + 5 * 60 * 60_000, 'explicitly slower source intervals stay slower')
+  assert.ok(physicalModuleDeadlines({ settings: longer, sources, now })['weather:1'][0].at >=
+    now + 5 * 60 * 60_000 - 15 * 60_000, 'explicitly slower source intervals stay slower')
 
-  // This only changes wake scheduling, not the hash/significance gate used
-  // to decide whether to perform a physical e-paper transaction.
+  // Repeated Power Save evaluations with unchanged sources remain stable;
+  // its time-of-day-only Weather wording is intentionally less sensitive
+  // than Normal mode (covered by the dedicated insight test below).
   assert.equal(
-    physicalRenderManifest({ settings, sources, now })[0].render_hash,
+    physicalRenderManifest({ settings: savingSettings, sources, now })[0].render_hash,
     physicalRenderManifest({ settings: savingSettings, sources, now })[0].render_hash,
   )
+})
+
+test('Power Save Weather and Surf share 3-hour batch windows, including boundary crossings', () => {
+  const first = Date.parse('2026-10-09T14:56:00Z') // 16:56 Europe/Oslo
+  const second = Date.parse('2026-10-09T15:06:00Z') // 17:06 Europe/Oslo
+  const boundary = Date.parse('2026-10-09T18:00:00Z')
+  const cells = [
+    { module: 'weather:1', size: 'SMALL', col: 0, row: 0, w: 800, h: 120 },
+    { module: 'surf:1', size: 'SMALL', col: 0, row: 1, w: 800, h: 120 },
+  ]
+  const settings = { powerSaver: true, cells, modules: {
+    weather: [{ id: 1, refresh: 1_800_000 }],
+    surf: [{ id: 1, refresh: 1_800_000 }],
+  } }
+  const sources = { 'weather:1': {}, 'surf:1': {} }
+  for (const now of [first, second]) {
+    const deadlines = physicalModuleDeadlines({ settings, sources, now })
+    for (const key of ['weather:1', 'surf:1']) {
+      assert.equal(deadlines[key].find((d) => d.reason === 'source_freshness').at, boundary,
+        key + ' should coalesce onto the same 18:00 UTC wake')
+    }
+  }
+  const normal = physicalModuleDeadlines({ settings: { ...settings, powerSaver: false }, sources, now: first })
+  assert.equal(normal['weather:1'].find((d) => d.reason === 'source_freshness').at, first + 2 * 60 * 60_000)
+  assert.equal(normal['surf:1'].find((d) => d.reason === 'source_freshness').at, first + 3 * 60 * 60_000)
+
+  // Honor explicitly slower refresh settings; never accelerate by more than
+  // the documented 15-minute batching allowance.
+  const longer = { ...settings, modules: { ...settings.modules, weather: [{ id: 1, refresh: 5 * 60 * 60_000 }] } }
+  const deadline = physicalModuleDeadlines({ settings: longer, sources, now: first })['weather:1'][0].at
+  assert.ok(deadline >= first + 5 * 60 * 60_000 - 15 * 60_000)
+})
+
+test('Power Save ignores Weather daypart wording but keeps actual weather severity changes', () => {
+  const now = Date.parse('2026-10-09T10:00:00Z')
+  const cells = [{ module: 'weather:1', size: 'MEDIUM', col: 0, row: 0, w: 400, h: 240 }]
+  const modules = { weather: [{ id: 1, lat: 58.97, lon: 5.73, units: 'metric' }] }
+  const source = (insight) => ({ 'weather:1': {
+    insight, current: { time: '2026-10-09T12:00', temperature_2m: 12, weather_code: 61 },
+    daily: { temperature_2m_max: [14], temperature_2m_min: [8], weather_code: [61] },
+  } })
+  const normalSettings = { cells, modules, powerSaver: false }
+  const powerSettings = { cells, modules, powerSaver: true }
+  const normalMorning = physicalRenderManifest({ settings: normalSettings, sources: source('Rain this morning.'), now })[0]
+  const normalEvening = physicalRenderManifest({ settings: normalSettings, sources: source('Rain this evening.'), now })[0]
+  assert.notEqual(normalMorning.render_hash, normalEvening.render_hash,
+    'Normal mode may update its advisory time wording')
+
+  const savingMorning = physicalRenderManifest({ settings: powerSettings, sources: source('Rain this morning.'), now })[0]
+  const savingEvening = physicalRenderManifest({ settings: powerSettings, sources: source('Rain this evening.'), now })[0]
+  assert.equal(savingMorning.render_hash, savingEvening.render_hash,
+    'Power Save should not redraw merely to relabel the time of day')
+  assert.equal(savingMorning.weather_stable_hash, savingEvening.weather_stable_hash)
+  const savingSnow = physicalRenderManifest({ settings: powerSettings, sources: source('Snow this evening.'), now })[0]
+  assert.notEqual(savingEvening.render_hash, savingSnow.render_hash,
+    'A genuine change from rain to snow must still trigger a redraw')
 })
 
 test('physical display_time deadlines are Europe/Oslo DST-safe', () => {

@@ -163,6 +163,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    // Piggyback diagnostic data on an existing heartbeat: no additional
+    // radio wake, firmware change, SQL schema, or client request is needed.
+    // This distinguishes a panel transaction from a mere scheduled wake.
+    console.info('[device/status] heartbeat', {
+      device_id,
+      firmware: current_version,
+      power_mode,
+      wake_reason,
+      did_render: did_render === true,
+      battery_percent,
+    })
+
     return NextResponse.json({
       ok: true,
       device_id,

@@ -55,12 +55,21 @@ export async function GET(req: Request) {
   console.info('[device/render-state] timing', {
     device_id: deviceId,
     request_kind: requested.has('all') ? 'all' : 'selective',
+    power_saver_active: settings.powerSaver === true,
     auth_ms: authMs,
     config_ms: configMs,
     sources_ms: sourcesMs,
     manifest_ms: Date.now() - manifestStartedAtMs,
     total_ms: Date.now() - startedAtMs,
     module_count: modules.length,
+    // No user content or raw module payloads: enough detail to diagnose
+    // redundant source checks versus genuinely different display hashes.
+    module_keys: modules.map((module) => module.key),
+    scheduled_refresh_keys: [...refreshModules],
+    next_deadlines: modules.map((module) => ({
+      key: module.key,
+      deadlines: module.deadlines.map(({ at, type, reason }) => ({ at, type, reason })),
+    })),
   })
   return NextResponse.json({ layout_hash: layoutHash, modules },
     { headers: { 'Cache-Control': 'private, no-store, max-age=0' } })
