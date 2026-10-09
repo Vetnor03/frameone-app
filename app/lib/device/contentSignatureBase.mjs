@@ -768,7 +768,7 @@ function significantBackgroundProjection(moduleKey, projection, { powerSaver = f
     if (powerSaver && typeof visible?.insight === 'string') {
       return { ...projection, visible: {
         ...visible,
-        insight: visible.insight.replace(/\\b(this morning|this afternoon|this evening|tonight)\\b/gi, 'later'),
+        insight: visible.insight.replace(/\b(this morning|this afternoon|this evening|tonight)\b/gi, 'later'),
       } }
     }
     return { ...projection, visible }
