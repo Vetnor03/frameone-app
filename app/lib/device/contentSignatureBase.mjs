@@ -846,6 +846,16 @@ const SKI_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
 const NEWS_SOURCE_FRESHNESS_MS = 30 * 60_000
 const NEWS_POWER_SAVE_FRESHNESS_MS = 60 * 60_000
 
+// Batch Power Save source checks into shared, predictable three-hour windows.
+// The requested minimum freshness interval is never shortened: a check at
+// 16:56 and another at 17:06 will both schedule their next opportunity at the
+// same 21:00 window (Europe/Oslo in winter: 20:00). Using Unix/UTC time keeps
+// the windows unambiguous across daylight-saving clock changes.
+const POWER_SAVE_SOURCE_BATCH_MS = 3 * 60 * 60_000
+function powerSaveSourceDeadline(now, interval) {
+  return Math.ceil((now + interval) / POWER_SAVE_SOURCE_BATCH_MS) * POWER_SAVE_SOURCE_BATCH_MS
+}
+
 export function physicalModuleDeadlines({ settings, sources, now = Date.now() }) {
   const refs = activePhysicalReferences(settings)
   const midnight = nextMidnight(now)
@@ -899,7 +909,7 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
       // slower user/config interval, but never churn the source faster than the
       // production three-hour floor. Hard daypart boundaries remain exact.
       const interval = Math.max(SURF_SOURCE_FRESHNESS_MS, Number(configured?.refresh) || 0)
-      deadlines[ref.key] = [...(changes ? [{ at, type: 'hard', reason: 'surf_daypart' }] : []), { at: now + interval, type: 'soft', reason: 'source_freshness' }]
+      deadlines[ref.key] = [...(changes ? [{ at, type: 'hard', reason: 'surf_daypart' }] : []), { at: settings?.powerSaver ? powerSaveSourceDeadline(now, interval) : now + interval, type: 'soft', reason: 'source_freshness' }]
     }
     else if (ref.base === 'ski') {
       deadlines[ref.key] = [{ at: now + SKI_SOURCE_FRESHNESS_MS, type: 'soft', reason: 'source_freshness' }]
@@ -911,7 +921,7 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
         // the normal render hash still decides whether pixels need updating.
         const configured = configuredInstance(settings?.modules, 'weather', ref.id)
         const interval = Math.max(WEATHER_POWER_SAVE_SOURCE_FRESHNESS_MS, Number(configured?.refresh) || 0)
-        deadlines[ref.key] = [{ at: now + interval, type: 'soft', reason: 'source_freshness' }]
+        deadlines[ref.key] = [{ at: powerSaveSourceDeadline(now, interval), type: 'soft', reason: 'source_freshness' }]
       } else {
         const local = osloParts(now), current = JSON.stringify(weatherProjection(sources[ref.key], ref.cell, configuredInstance(settings?.modules, 'weather', ref.id) ?? {}, now))
         const candidates = Array.from({ length: 24 }, (_, offset) => osloLocalTime(local.year, local.month, local.day, local.hour + offset + 1))
