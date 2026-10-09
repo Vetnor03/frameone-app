@@ -71,6 +71,52 @@ test('Weather and Surf normal source freshness are multi-hour with no fast fallb
   }
 })
 
+test('Power Save Weather skips hourly insight wakes while Normal mode preserves them', () => {
+  // At 11:55 Oslo, the visible insight changes from "this morning" to
+  // "this afternoon" when the clock reaches 12:00. This was waking the
+  // sleeping frame even though the forecast itself had not been refreshed.
+  const now = Date.parse('2026-10-09T09:55:00Z')
+  const weather = {
+    current: { time: '2026-10-09T11:00', temperature_2m: 10, weather_code: 61, wind_speed_10m: 3 },
+    daily: {
+      time: ['2026-10-09'], temperature_2m_max: [12], temperature_2m_min: [7],
+      weather_code: [61], wind_speed_10m_max: [4], precipitation_sum: [3],
+    },
+    hourly: {
+      time: ['2026-10-09T11:00', '2026-10-09T12:00', '2026-10-09T13:00'],
+      precipitation: [1, 1, 1], precipitation_probability: [80, 80, 80],
+      wind_speed_10m: [3, 3, 3], weather_code: [61, 61, 61],
+      temperature_2m: [10, 10, 10],
+    },
+  }
+  const sources = { 'weather:1': weather }
+  const settings = {
+    cells: [{ module: 'weather:1', col: 0, row: 0, w: 400, h: 240, size: 'MEDIUM' }],
+    modules: { weather: [{ id: 1, refresh: 30 * 60_000 }] },
+  }
+  const normal = physicalModuleDeadlines({ settings, sources, now })['weather:1']
+  assert.ok(normal.some((d) => d.reason === 'weather_insight' && d.type === 'hard'),
+    'Normal mode keeps time-sensitive Weather insight updates')
+  assert.equal(normal.find((d) => d.reason === 'source_freshness').at, now + 2 * 60 * 60_000)
+
+  const savingSettings = { ...settings, powerSaver: true }
+  const saving = physicalModuleDeadlines({ settings: savingSettings, sources, now })['weather:1']
+  assert.deepEqual(saving, [{ at: now + 3 * 60 * 60_000, type: 'soft', reason: 'source_freshness' }])
+  const longer = {
+    ...savingSettings,
+    modules: { weather: [{ id: 1, refresh: 5 * 60 * 60_000 }] },
+  }
+  assert.equal(physicalModuleDeadlines({ settings: longer, sources, now })['weather:1'][0].at,
+    now + 5 * 60 * 60_000, 'explicitly slower source intervals stay slower')
+
+  // This only changes wake scheduling, not the hash/significance gate used
+  // to decide whether to perform a physical e-paper transaction.
+  assert.equal(
+    physicalRenderManifest({ settings, sources, now })[0].render_hash,
+    physicalRenderManifest({ settings: savingSettings, sources, now })[0].render_hash,
+  )
+})
+
 test('physical display_time deadlines are Europe/Oslo DST-safe', () => {
   const settings = { cells: [{ module: 'reminders', col: 0, row: 0, w: 400, h: 240 }], modules: {} }
   const summer = physicalModuleDeadlines({ settings, sources: { reminders: { items: [{ occurrence_date: '2026-09-06', display_time: '10:00' }] } }, now: Date.parse('2026-09-06T00:00:00Z') })
