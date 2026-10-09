@@ -114,10 +114,11 @@ test('Power Save Weather skips hourly insight wakes while Normal mode preserves 
   assert.ok(physicalModuleDeadlines({ settings: longer, sources, now })['weather:1'][0].at >=
     now + 5 * 60 * 60_000 - 15 * 60_000, 'explicitly slower source intervals stay slower')
 
-  // This only changes wake scheduling, not the hash/significance gate used
-  // to decide whether to perform a physical e-paper transaction.
+  // Repeated Power Save evaluations with unchanged sources remain stable;
+  // its time-of-day-only Weather wording is intentionally less sensitive
+  // than Normal mode (covered by the dedicated insight test below).
   assert.equal(
-    physicalRenderManifest({ settings, sources, now })[0].render_hash,
+    physicalRenderManifest({ settings: savingSettings, sources, now })[0].render_hash,
     physicalRenderManifest({ settings: savingSettings, sources, now })[0].render_hash,
   )
 })
