@@ -846,14 +846,18 @@ const SKI_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
 const NEWS_SOURCE_FRESHNESS_MS = 30 * 60_000
 const NEWS_POWER_SAVE_FRESHNESS_MS = 60 * 60_000
 
-// Batch Power Save source checks into shared, predictable three-hour windows.
-// The requested minimum freshness interval is never shortened: a check at
-// 16:56 and another at 17:06 will both schedule their next opportunity at the
-// same 21:00 window (Europe/Oslo in winter: 20:00). Using Unix/UTC time keeps
-// the windows unambiguous across daylight-saving clock changes.
+// Power Save sources that are checked a few minutes apart should not wake the
+// ESP32 separately at almost identical 3-hour deadlines. Snap source checks
+// to shared UTC windows with a small early-coalescing allowance; this avoids
+// splitting a 16:56/17:06 pair on opposite sides of a window boundary.
+// Source checks may run up to 15 minutes early, or be deferred to the next
+// three-hour window. Hard display deadlines and Normal mode are unaffected.
+// UTC scheduling avoids ambiguous wall-clock times during DST transitions.
 const POWER_SAVE_SOURCE_BATCH_MS = 3 * 60 * 60_000
+const POWER_SAVE_SOURCE_EARLY_MS = 15 * 60_000
 function powerSaveSourceDeadline(now, interval) {
-  return Math.ceil((now + interval) / POWER_SAVE_SOURCE_BATCH_MS) * POWER_SAVE_SOURCE_BATCH_MS
+  const dueAt = now + interval
+  return Math.ceil((dueAt - POWER_SAVE_SOURCE_EARLY_MS) / POWER_SAVE_SOURCE_BATCH_MS) * POWER_SAVE_SOURCE_BATCH_MS
 }
 
 export function physicalModuleDeadlines({ settings, sources, now = Date.now() }) {
