@@ -117,6 +117,37 @@ test('Power Save Weather skips hourly insight wakes while Normal mode preserves 
   )
 })
 
+test('Power Save Weather and Surf share 3-hour batch windows, including boundary crossings', () => {
+  const first = Date.parse('2026-10-09T14:56:00Z') // 16:56 Europe/Oslo
+  const second = Date.parse('2026-10-09T15:06:00Z') // 17:06 Europe/Oslo
+  const boundary = Date.parse('2026-10-09T18:00:00Z')
+  const cells = [
+    { module: 'weather:1', size: 'SMALL', col: 0, row: 0, w: 800, h: 120 },
+    { module: 'surf:1', size: 'SMALL', col: 0, row: 1, w: 800, h: 120 },
+  ]
+  const settings = { powerSaver: true, cells, modules: {
+    weather: [{ id: 1, refresh: 1_800_000 }],
+    surf: [{ id: 1, refresh: 1_800_000 }],
+  } }
+  const sources = { 'weather:1': {}, 'surf:1': {} }
+  for (const now of [first, second]) {
+    const deadlines = physicalModuleDeadlines({ settings, sources, now })
+    for (const key of ['weather:1', 'surf:1']) {
+      assert.equal(deadlines[key].find((d) => d.reason === 'source_freshness').at, boundary,
+        key + ' should coalesce onto the same 18:00 UTC wake')
+    }
+  }
+  const normal = physicalModuleDeadlines({ settings: { ...settings, powerSaver: false }, sources, now: first })
+  assert.equal(normal['weather:1'].find((d) => d.reason === 'source_freshness').at, first + 2 * 60 * 60_000)
+  assert.equal(normal['surf:1'].find((d) => d.reason === 'source_freshness').at, first + 3 * 60 * 60_000)
+
+  // Honor explicitly slower refresh settings; never accelerate by more than
+  // the documented 15-minute batching allowance.
+  const longer = { ...settings, modules: { ...settings.modules, weather: [{ id: 1, refresh: 5 * 60 * 60_000 }] } }
+  const deadline = physicalModuleDeadlines({ settings: longer, sources, now: first })['weather:1'][0].at
+  assert.ok(deadline >= first + 5 * 60 * 60_000 - 15 * 60_000)
+})
+
 test('physical display_time deadlines are Europe/Oslo DST-safe', () => {
   const settings = { cells: [{ module: 'reminders', col: 0, row: 0, w: 400, h: 240 }], modules: {} }
   const summer = physicalModuleDeadlines({ settings, sources: { reminders: { items: [{ occurrence_date: '2026-09-06', display_time: '10:00' }] } }, now: Date.parse('2026-09-06T00:00:00Z') })
