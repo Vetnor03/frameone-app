@@ -11,7 +11,8 @@ export function parseKartverketPlaces(payload: unknown): Place[] {
   const used = new Set<string>()
   const result: Place[] = []
   for (const entry of places) {
-    const spelling = entry?.stedsnavn?.find?.((name: any) => typeof name?.skrivemåte === 'string')?.skrivemåte
+    const spelling = (typeof entry?.stedsnavn?.skrivemåte === 'string' ? entry.stedsnavn.skrivemåte : '')
+      || entry?.stedsnavn?.find?.((name: any) => typeof name?.skrivemåte === 'string')?.skrivemåte
       || entry?.stedsnavn?.[0]?.skrivemåte
       || entry?.skrivemåte
     const location = entry?.representasjonspunkt
