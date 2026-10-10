@@ -77,7 +77,7 @@ test('format helper uses connected summary grammar', () => {
 
 test('normal Local Events UI hides diagnostics and developer area editing', () => {
   const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
-  assert.match(home, /Search for your place/)
+  assert.match(home, /Search for a town or place/)
   assert.doesNotMatch(home, /Selected place:|We also include nearby places that are close enough for spontaneous events\./)
   assert.doesNotMatch(home, /TEST LIVE EVENTS|Flight script counts|skipped counts|shadow-mode wording|Supabase wording/i)
   assert.doesNotMatch(home, /Included places|Add nearby|SAVE AREA/)
@@ -149,6 +149,6 @@ test('connect persists Local Events before refresh so temporary source failures 
 
 test('failed Local Events sync cannot delete last successful data before parsing', () => {
   const server = readFileSync(new URL('../app/lib/integrations/local-events/server.ts', import.meta.url), 'utf8')
-  assert.ok(server.indexOf('runEdgeOfNorwayShadowDiagnostic') < server.indexOf(".from('integration_items').delete()"))
-  assert.match(server, /if \(result\.error \|\| result\.diagnosticError\) throw new Error/)
+  assert.ok(server.indexOf('fetchNationwideEvents') < server.indexOf(".from('integration_items').delete()"))
+  assert.doesNotMatch(server, /runEdgeOfNorwayShadowDiagnostic/)
 })

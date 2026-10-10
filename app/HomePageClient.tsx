@@ -20,7 +20,7 @@ import { addGroceryItemsCanonical } from './lib/groceries/actions'
 import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, recipeSourceLink, scaleRecipeQuantity, selectedRecipeGroceries, type GroceryRecipeItem, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes.mjs'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
-import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
+import { DEFAULT_LOCAL_EVENT_AREA, getLocalEventPlace, normalizeLocalEventAreaPreference, nationwideLocalEventArea, type LocalEventAreaPreference } from './lib/integrations/local-events/places'
 import { INTEGRATION_CATALOGUE, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
 import WasteSetupModal from './components/WasteSetupModal'
 import NewsModuleSettingsTab from './components/NewsModuleSettingsTab'
@@ -3105,8 +3105,11 @@ function ConnectAppsScreen({
   const [wasteConnected, setWasteConnected] = useState(() => connectAppIsConnected(modulesJson, 'waste'))
   const [localEventsLoading, setLocalEventsLoading] = useState(false)
   const [localEventsSearch, setLocalEventsSearch] = useState('')
+  const [localEventsPlaceResults, setLocalEventsPlaceResults] = useState<Array<{ id: string; label: string; latitude: number; longitude: number }>>([])
+  const [localEventsPlaceSearchError, setLocalEventsPlaceSearchError] = useState('')
   const [localEventsCanManage, setLocalEventsCanManage] = useState(false)
   const [localEventsAccountConnected, setLocalEventsAccountConnected] = useState(false)
+  const [localEventsSyncIssue, setLocalEventsSyncIssue] = useState<string | null>(null)
   const [localEventsStatusResolved, setLocalEventsStatusResolved] = useState(false)
   const [localEventsStatusFailed, setLocalEventsStatusFailed] = useState(false)
   const [localEventsStatusDeviceId, setLocalEventsStatusDeviceId] = useState<string | null>(null)
@@ -3280,10 +3283,42 @@ function ConnectAppsScreen({
     setLocalEventsStatusFailed(false)
     const area = normalizeLocalEventAreaPreference(json?.areaPreference)
     setLocalEventsAccountConnected(json?.connected === true)
+    setLocalEventsSyncIssue(json?.syncPending ? (json?.syncError || (language === 'no' ? 'Arrangementskilden oppdateres ikke ennå' : 'Events source not updating yet')) : null)
     if (frameUsesIntegration(modulesJson, 'local-events')) setLocalEventsSavedArea(json?.connected === true ? area : null)
     setLocalEventsCanManage(json?.canManage === true)
     if (area) setLocalEventsDraftArea(area)
+    // A stored connection is not the same as a successful Events import.
+    // Surface the actual upstream failure on later visits, not only on connect.
+    if (json?.connected === true && json?.syncPending && typeof json?.syncError === 'string') {
+      setStatusTone('info')
+      setStatus(json.syncError)
+    }
   }
+
+  // All-Norway official place search. Debounce to avoid hammering Kartverket.
+  useEffect(() => {
+    if (!localEventsOpen || localEventsSearch.trim().length < 2) {
+      setLocalEventsPlaceResults([])
+      setLocalEventsPlaceSearchError('')
+      return
+    }
+    const controller = new AbortController()
+    const handle = window.setTimeout(async () => {
+      try {
+        const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+        if (!accessToken || controller.signal.aborted) return
+        const response = await fetch(`/api/integrations/local-events/places?q=${encodeURIComponent(localEventsSearch.trim())}`, {
+          headers: { Authorization: `Bearer ${accessToken}` }, signal: controller.signal,
+        })
+        if (!response.ok) throw new Error('Place search failed')
+        const payload = await response.json()
+        if (!controller.signal.aborted) { setLocalEventsPlaceResults(Array.isArray(payload.places) ? payload.places : []); setLocalEventsPlaceSearchError('') }
+      } catch {
+        if (!controller.signal.aborted) { setLocalEventsPlaceResults([]); setLocalEventsPlaceSearchError(language === 'no' ? 'Stedsøk er ikke tilgjengelig akkurat nå' : 'Place search is unavailable') }
+      }
+    }, 300)
+    return () => { window.clearTimeout(handle); controller.abort() }
+  }, [localEventsOpen, localEventsSearch, language])
 
   async function connectLocalEvents() {
     if (localEventsLoading) return
@@ -3301,7 +3336,8 @@ function ConnectAppsScreen({
       // Startup frames can be connected before their initial settings row is
       // complete. The production endpoint remains the authority for membership.
       if (!startup && !localEventsCanManage) throw new Error(language === 'no' ? 'Du har ikke tilgang til å administrere denne framen' : 'You do not have permission to manage this frame')
-      const areaPreference = suggestedLocalEventArea(localEventsDraftArea.primaryPlaceId)
+      const areaPreference = normalizeLocalEventAreaPreference(localEventsDraftArea)
+      if (!areaPreference || typeof areaPreference.latitude !== 'number') throw new Error(language === 'no' ? 'Velg et sted fra søkeresultatene først' : 'Select a location from the search results')
       const resp = await fetch('/api/integrations/local-events/connect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ deviceId: connectingDeviceId, areaPreference }) })
       const json = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(json?.error || 'Could not connect Local Events')
@@ -3317,6 +3353,7 @@ function ConnectAppsScreen({
       setLocalEventsDraftArea(saved)
       setLocalEventsOpen(false)
       setLocallyDisconnectedApps((current) => ({ ...current, 'local-events': false }))
+      setLocalEventsSyncIssue(json?.syncPending ? (json?.syncError || 'Awaiting event source') : null)
       if (json?.syncPending) {
         setStatusTone('info')
         setStatus(json?.syncError || (language === 'no' ? 'Lokale arrangementer er tilkoblet. Oppdatering prøves igjen automatisk.' : 'Local Events connected. Refresh will retry automatically.'))
@@ -3348,6 +3385,7 @@ function ConnectAppsScreen({
       if (!resp.ok) throw new Error(json?.error || 'Could not disconnect Local Events')
       setLocalEventsSavedArea(null)
       setLocalEventsAccountConnected(false)
+      setLocalEventsSyncIssue(null)
       changeFrameIntegration('local-events', { enabled: false })
       setLocalEventsDraftArea(DEFAULT_LOCAL_EVENT_AREA)
       setLocalEventsOpen(false)
@@ -3489,11 +3527,11 @@ function ConnectAppsScreen({
   const sortedApps = apps.map(app => ({ app, connected: getAppConnected(app) }))
 
   const renderLocalEventsModal = () => {
-    const area = suggestedLocalEventArea(localEventsDraftArea.primaryPlaceId)
-    const visiblePlaces = localEventsSearch ? searchLocalEventPlaces(localEventsSearch) : LOCAL_EVENT_PLACE_CATALOGUE
-    const choosePrimaryPlace = (id: LocalEventPlaceId) => {
-      setLocalEventsDraftArea(suggestedLocalEventArea(id))
+    const area = localEventsDraftArea
+    const choosePrimaryPlace = (place: { id: string; label: string; latitude: number; longitude: number }) => {
+      setLocalEventsDraftArea(nationwideLocalEventArea(place, area.radiusKm || 25))
       setLocalEventsSearch('')
+      setLocalEventsPlaceResults([])
     }
 
     return (
@@ -3501,31 +3539,39 @@ function ConnectAppsScreen({
         <div className="w-full max-w-sm rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] p-5 shadow-2xl">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-base font-semibold text-[color:var(--fg-90)]">{language === 'no' ? 'Velg område' : 'Choose location'}</div>
-              <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">{language === 'no' ? 'Velg stedet lokale arrangementer skal hentes fra.' : 'Select the area for your local events.'}</div>
+              <div className="text-base font-semibold text-[color:var(--fg-90)]">{language === 'no' ? 'Events i hele Norge' : 'Events across Norway'}</div>
+              <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">{language === 'no' ? 'Velg et sted og avstand. Arrangementer samles fra tilgjengelige kilder.' : 'Choose a place and distance. Events are collected from available sources.'}</div>
             </div>
             <button type="button" onClick={() => setLocalEventsOpen(false)} disabled={localEventsLoading} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-60)] disabled:opacity-60">×</button>
           </div>
-
-          <label className="mt-5 block text-[10px] tracking-widest text-[color:var(--fg-45)]" htmlFor="local-events-place-search">{language === 'no' ? 'SØK STED' : 'SEARCH LOCATION'}</label>
-          <input id="local-events-place-search" value={localEventsSearch} onChange={(e) => setLocalEventsSearch(e.target.value)} placeholder={language === 'no' ? 'Søk etter sted' : 'Search for your place'} className="mt-1 h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-3 text-sm text-[color:var(--fg-90)] outline-none focus:border-[#2aa3ff]" />
-          <div className="mt-3 max-h-64 overflow-y-auto rounded-2xl border border-[color:var(--bd-10)]">
-            {visiblePlaces.map((place) => (
-              <button key={place.id} type="button" onClick={() => choosePrimaryPlace(place.id)} aria-pressed={area.primaryPlaceId === place.id} className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm ${area.primaryPlaceId === place.id ? 'bg-[#2aa3ff]/15 text-[#2aa3ff]' : 'text-[color:var(--fg-80)]'}`}>
-                <span>{place.displayName}</span>
-                {area.primaryPlaceId === place.id ? <span className="text-[10px] uppercase tracking-widest">{language === 'no' ? 'Valgt' : 'Selected'}</span> : null}
-              </button>
-            ))}
+          <div className="mt-4 rounded-xl border border-[color:var(--bd-10)] p-3 text-xs text-[color:var(--fg-70)]">
+            {area.placeLabel ? `${language === 'no' ? 'Valgt sted' : 'Selected'}: ${area.placeLabel}` : (language === 'no' ? 'Ingen sted valgt – søk nedenfor' : 'No place selected – search below')}
           </div>
+          <label className="mt-4 block text-[10px] tracking-widest text-[color:var(--fg-45)]" htmlFor="local-events-place-search">{language === 'no' ? 'SØK STED I NORGE' : 'SEARCH ALL OF NORWAY'}</label>
+          <input id="local-events-place-search" value={localEventsSearch} onChange={(e) => setLocalEventsSearch(e.target.value)} placeholder={language === 'no' ? 'Søk etter by eller sted' : 'Search for a town or place'} className="mt-1 h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-3 text-sm text-[color:var(--fg-90)] outline-none focus:border-[#2aa3ff]" />
+          {localEventsPlaceSearchError ? <div className="mt-2 text-xs text-[#d94b4b]">{localEventsPlaceSearchError}</div> : null}
+          {localEventsSearch.trim().length >= 2 ? (
+            <div className="mt-2 max-h-40 overflow-y-auto rounded-2xl border border-[color:var(--bd-10)]">
+              {localEventsPlaceResults.length ? localEventsPlaceResults.map((place) => (
+                <button key={place.id} type="button" onClick={() => choosePrimaryPlace(place)} className="block w-full px-4 py-2.5 text-left text-sm text-[color:var(--fg-80)] hover:bg-[color:var(--panel-05)]">
+                  {place.label}
+                </button>
+              )) : <div className="p-3 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Skriv videre for å søke etter steder' : 'Keep typing to search for places'}</div>}
+            </div>
+          ) : null}
+          <label className="mt-4 block text-[10px] tracking-widest text-[color:var(--fg-45)]" htmlFor="local-events-radius">{language === 'no' ? 'AVSTAND' : 'DISTANCE'}</label>
+          <select id="local-events-radius" value={area.radiusKm || 25} onChange={(e) => setLocalEventsDraftArea((current) => ({ ...current, radiusKm: Number(e.target.value) }))} className="mt-1 h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] px-3 text-sm text-[color:var(--fg-90)]">
+            {[10, 25, 50, 100].map((km) => <option key={km} value={km}>{km} km</option>)}
+          </select>
+          <div className="mt-3 text-[10px] leading-relaxed text-[color:var(--fg-45)]">{language === 'no' ? 'Planlagte kilder: Ticketmaster, Tikkio, Billetto, Friskus og TicketCo. Kilder aktiveres når tilgang er konfigurert.' : 'Planned: Ticketmaster, Tikkio, Billetto, Friskus and TicketCo. Sources are activated once access is configured.'}</div>
           <div className="mt-5 flex gap-2">
             <button type="button" onClick={() => setLocalEventsOpen(false)} disabled={localEventsLoading} className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs tracking-widest text-[color:var(--fg-70)] disabled:opacity-60">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
-            <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading || (!startup && !localEventsCanManage) || !activeDeviceId || !area.primaryPlaceId} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]">{localEventsLoading ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}</button>
+            <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading || (!startup && !localEventsCanManage) || !activeDeviceId || !area.latitude || !area.longitude} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]">{localEventsLoading ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'LAGRE' : 'SAVE')}</button>
           </div>
         </div>
       </div>
     )
   }
-
 
   return (
     <div className="h-full min-h-0 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
@@ -3546,9 +3592,11 @@ function ConnectAppsScreen({
         <div className={`${startup ? '' : 'mt-4'} space-y-2.5`}>
           {sortedApps.map(({ app, connected }) => {
             const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : null
-            const localEventsSelectedName = localEventsSavedArea ? (getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || 'Stavanger') : null
-            const description = app.key === 'local-events' && localEventsSelectedName
-              ? (language === 'no' ? `Lokale arrangementer i ${localEventsSelectedName} valgt` : `Local Events in ${localEventsSelectedName} selected`)
+            const localEventsSelectedName = localEventsSavedArea ? (localEventsSavedArea.placeLabel || getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || '') : null
+            const description = app.key === 'local-events' && localEventsSyncIssue
+              ? (language === 'no' ? `Events valgt, men ingen synkronisering ennå: ${localEventsSyncIssue}` : `Events selected but not synced yet: ${localEventsSyncIssue}`)
+              : app.key === 'local-events' && localEventsSelectedName
+              ? (language === 'no' ? `Arrangementer nær ${localEventsSelectedName}` : `Events near ${localEventsSelectedName}`)
               : !connected && ((app.key === 'spond' && spondAccountConnected) || (app.key === 'teams' && teamsAccountConnected))
                 ? (language === 'no' ? 'Konto tilkoblet · ikke aktiv på denne framen' : 'Account connected · not enabled on this frame')
                 : app.description
@@ -10111,6 +10159,7 @@ type ReminderUiItem = {
   source?: ReminderSource
   editable?: boolean
   sourceUrl?: string | null
+  ticketLinks?: Array<{ source: string; url: string }>
   externalEventId?: string | null
   skippedOnFrame?: boolean
   starterKey?: string | null
@@ -14591,6 +14640,10 @@ const manualItems: ReminderUiItem[] = (data || [])
                 source,
                 editable: false,
                 sourceUrl: typeof row.raw?.sourceUrl === 'string' ? row.raw.sourceUrl : null,
+                ticketLinks: Array.isArray(row.raw?.sourceLinks)
+                  ? row.raw.sourceLinks.filter((link: { source?: unknown; url?: unknown } | null) => link && typeof link.source === 'string' &&
+                      typeof link.url === 'string' && /^https:\/\//i.test(link.url)).slice(0, 5)
+                  : [],
                 externalEventId: externalEventId || null,
                 skippedOnFrame: source === 'local-events' ? localEventSkippedIds.has(externalEventId) : false,
               }
@@ -15070,6 +15123,12 @@ const sortedReminders = useMemo(() => {
                       <div className="shrink-0 self-center">
                         {item.editable === false ? (
                           item.source === 'local-events' ? (
+                            <div className="flex flex-col items-end gap-1">
+                              {(item.ticketLinks?.length ? item.ticketLinks : item.sourceUrl && /^https:\/\//i.test(item.sourceUrl) ? [{ source: 'event', url: item.sourceUrl }] : []).map((link) => (
+                                <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex h-6.5 items-center rounded-lg border border-[#2aa3ff]/30 px-2 text-[10px] text-[#2aa3ff]">
+                                  {item.ticketLinks && item.ticketLinks.length > 1 ? link.source.toUpperCase() + ' ↗' : language === 'no' ? 'BILLETTER / INFO ↗' : 'TICKETS / INFO ↗'}
+                                </a>
+                              ))}
                             <button
                               type="button"
                               onClick={(e) => {
@@ -15085,6 +15144,7 @@ const sortedReminders = useMemo(() => {
                             >
                               {(item.skippedOnFrame ? (language === 'no' ? 'Hoppet over' : 'Skipped') : (language === 'no' ? 'Hopp over' : 'Skip')).toUpperCase()}
                             </button>
+                            </div>
                           ) : (
                             <span className="inline-flex h-6.5 items-center px-2.5 rounded-lg border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[10px] tracking-widest text-[#2aa3ff]">
                               {integrationReminderSourceLabel(language, item.source).toUpperCase()}
