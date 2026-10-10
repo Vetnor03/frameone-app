@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { distanceKm, encodeGeoHash, deduplicateEvents, fetchNationwideEvents, parseTicketmasterEvents, PLANNED_EVENT_SOURCES } from '../app/lib/integrations/local-events/nationwide.ts'
+import { distanceKm, encodeGeoHash, deduplicateEvents, fetchNationwideEvents, parseTicketmasterEvents, PLANNED_EVENT_SOURCES, upstreamRetryDeferred } from '../app/lib/integrations/local-events/nationwide.ts'
 import { normalizeLocalEventAreaPreference, nationwideLocalEventArea } from '../app/lib/integrations/local-events/places.ts'
 
 const stavanger = nationwideLocalEventArea({ id: 'ssr:1234', label: 'Stavanger, Stavanger', latitude: 58.969, longitude: 5.733 }, 25)
@@ -54,4 +54,12 @@ test('source adapter requires API key; never scrapes the Edge of Norway website'
   assert.equal(urls[0].searchParams.get('unit'), 'km')
   assert.ok(urls[0].searchParams.get('geoPoint'))
   assert.ok(!urls[0].toString().includes('edgeofnorway.com'))
+})
+
+test('429 source throttling defers repeated calls but expires after six hours', () => {
+  const now = Date.parse('2026-10-10T10:00:00.000Z')
+  assert.equal(upstreamRetryDeferred('Ticketmaster returned HTTP 429', '2026-10-10T09:00:00.000Z', now), true)
+  assert.equal(upstreamRetryDeferred('Ticketmaster returned HTTP 429', '2026-10-10T01:00:00.000Z', now), false)
+  assert.equal(upstreamRetryDeferred('Ticketmaster returned HTTP 500', '2026-10-10T09:00:00.000Z', now), false)
+  assert.equal(upstreamRetryDeferred(null, null, now), false)
 })
