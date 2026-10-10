@@ -540,9 +540,9 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch, areaPre
   parsingErrors.push(...parsed.parsingErrors)
   repeatedSeriesExamples.push(...parsed.repeatedSeriesExamples)
 
-  const acceptedEvents = dedupeAcceptedEvents(allAccepted).filter((event) => event.areaKeys.includes(area.primaryPlaceId) || event.areaKey === area.primaryPlaceId)
+  const acceptedEvents = dedupeAcceptedEvents(allAccepted).filter((event) => event.areaKeys.includes(area.primaryPlaceId as LocalEventAreaKey) || event.areaKey === area.primaryPlaceId)
   const developmentReport: EdgeOfNorwayDevelopmentReport = {
-    areas: [{ areaKey: area.primaryPlaceId, requestedSourceLocations: sourceLocations.map((location) => location.label), fetchedEventsPerSourceLocation, totalAfterDeduplication: acceptedEvents.length }],
+    areas: [{ areaKey: area.primaryPlaceId as LocalEventAreaKey, requestedSourceLocations: sourceLocations.map((location) => location.label), fetchedEventsPerSourceLocation, totalAfterDeduplication: acceptedEvents.length }],
     unassignedSourceLocations: Array.from(unassigned).sort(),
   }
   if (!sourceLocations.length) return emptyDiagnostic(listPageUrl, developmentReport)
