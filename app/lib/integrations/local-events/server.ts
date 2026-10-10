@@ -82,12 +82,23 @@ export async function syncLocalEventsForFrame(userId: string, deviceId: string, 
       updated_at: now,
     }
   })
+  // Preserve the last good feed when an upstream fetch fails, but remove stale future
+  // entries after a successful import (including when the selected location changes).
   if (rows.length) {
     const { error } = await supabase.from('integration_items').upsert(rows, { onConflict: 'device_id,provider,external_id' })
     if (error) throw new Error(error.message)
   }
-  const { error: expiredError } = await supabase.from('integration_items').delete().eq('device_id', deviceId).eq('provider', EDGE_OF_NORWAY_PROVIDER).lt('starts_at', now)
-  if (expiredError) throw new Error(expiredError.message)
+  const { data: previouslyStored, error: listingError } = await supabase.from('integration_items')
+    .select('external_id').eq('device_id', deviceId).eq('provider', EDGE_OF_NORWAY_PROVIDER).limit(2000)
+  if (listingError) throw new Error(listingError.message)
+  const currentIds = new Set(rows.map((row) => row.external_id))
+  const obsoleteIds = (previouslyStored || []).map((row) => row.external_id).filter((id) => !currentIds.has(id))
+  for (let index = 0; index < obsoleteIds.length; index += 200) {
+    const { error: pruneError } = await supabase.from('integration_items').delete()
+      .eq('device_id', deviceId).eq('provider', EDGE_OF_NORWAY_PROVIDER)
+      .in('external_id', obsoleteIds.slice(index, index + 200))
+    if (pruneError) throw new Error(pruneError.message)
+  }
   return { importedCount: rows.length, zeroEvents: rows.length === 0, areaPreference: area }
 }
 
