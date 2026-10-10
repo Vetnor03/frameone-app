@@ -96,7 +96,7 @@ export function normalizeLocalEventAreaPreference(value: unknown): LocalEventAre
   const longitude = Number(record.longitude)
   if (typeof record.latitude === 'number' && typeof record.longitude === 'number' &&
       Number.isFinite(latitude) && Number.isFinite(longitude) &&
-      latitude >= 57 && latitude <= 72 && longitude >= 4 && longitude <= 32 &&
+      latitude >= 57 && latitude <= 81 && longitude >= -11 && longitude <= 36 &&
       /^ssr:[0-9]+$/.test(record.primaryPlaceId) &&
       typeof record.placeLabel === 'string' && record.placeLabel.length > 0 && record.placeLabel.length <= 120) {
     const radiusKm = [10, 25, 50, 100].includes(Number(record.radiusKm)) ? Number(record.radiusKm) : 25
