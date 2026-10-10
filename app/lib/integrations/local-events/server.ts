@@ -1,4 +1,5 @@
-import { EDGE_OF_NORWAY_PROVIDER, runEdgeOfNorwayShadowDiagnostic, type EdgeOfNorwayAcceptedEvent } from './edge-of-norway-shadow'
+import { EDGE_OF_NORWAY_PROVIDER, type EdgeOfNorwayAcceptedEvent } from './edge-of-norway-shadow'
+import { fetchNationwideEvents } from './nationwide'
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
 import { localEventDisplayTitle } from './display'
 import { getLocalEventPlace, normalizeLocalEventAreaPreference, suggestedLocalEventArea, type LocalEventAreaPreference } from './places'
@@ -15,7 +16,9 @@ export function localEventUserMessage(error: unknown) {
   const message = error instanceof Error ? error.message : ''
   if (/permission|forbidden/i.test(message)) return 'You do not have permission to manage Local Events for this frame.'
   if (/frame/i.test(message)) return 'Select a frame before managing Local Events.'
-  if (/429|rate.?limit|too many requests/i.test(message)) return 'Local Events is temporarily rate limited. It will retry automatically.'
+  if (/not configured|no national event source/i.test(message)) return 'Events needs a Ticketmaster API key before national event imports can start.'
+  if (/choose a norwegian place/i.test(message)) return 'Choose a place in Norway to enable national Events.'
+  if (/429|rate.?limit|too many requests/i.test(message)) return 'Events source is temporarily rate limited. It will retry automatically.'
   if (/fetch|timeout|network/i.test(message)) return 'Could not fetch Local Events right now. Please try again.'
   if (/parse|source/i.test(message)) return 'Could not read Local Events right now. Please try again.'
   return 'Could not connect Local Events. Please try again.'
@@ -34,8 +37,7 @@ export async function requireLocalEventsFrameMember(userId: string, deviceId: st
 export async function syncLocalEventsForFrame(userId: string, deviceId: string, areaPreference: unknown, fetchImpl = fetch): Promise<LocalEventsSyncResult> {
   await requireLocalEventsFrameMember(userId, deviceId, true)
   const area = normalizeLocalEventAreaPreference(areaPreference) || suggestedLocalEventArea('stavanger')
-  const result = await runEdgeOfNorwayShadowDiagnostic(fetchImpl, area)
-  if (result.error || result.diagnosticError) throw new Error(result.error || result.diagnosticError?.message || 'Local Events sync failed')
+  const result = await fetchNationwideEvents(area, fetchImpl)
   const now = new Date().toISOString()
   const supabase = getSupabaseAdmin()
   const rows = result.acceptedEvents.map((event) => {
@@ -52,6 +54,11 @@ export async function syncLocalEventsForFrame(userId: string, deviceId: string, 
       priority: 0,
       raw: {
         provider: EDGE_OF_NORWAY_PROVIDER,
+        eventSource: 'source' in event ? event.source : 'ticketmaster',
+        venue: 'venue' in event ? event.venue : null,
+        distanceKm: 'distanceKm' in event ? event.distanceKm : null,
+        latitude: 'latitude' in event ? event.latitude : null,
+        longitude: 'longitude' in event ? event.longitude : null,
         externalId: event.externalId || event.sourceUrl,
         title: event.title,
         displayTitle,
@@ -93,7 +100,7 @@ export async function connectLocalEventsForFrame(userId: string, deviceId: strin
     status: 'connected',
     encrypted_credentials: { areaPreference: area, scope: 'frame' },
     external_account_id: area.primaryPlaceId,
-    external_account_label: primary?.displayName || area.primaryPlaceId,
+    external_account_label: area.placeLabel || primary?.displayName || area.primaryPlaceId,
     last_error: null,
     last_error_at: null,
     updated_at: connectedAt,
