@@ -22,7 +22,8 @@ export type EventCandidate = {
 export const PLANNED_EVENT_SOURCES = ['ticketmaster', 'tikkio', 'billetto', 'friskus', 'ticketco'] as const
 
 export function upstreamRetryDeferred(lastError: string | null | undefined, lastErrorAt: string | null | undefined, nowMs = Date.now()) {
-  if (!lastError || !/429|too many requests|rate.?limit/i.test(lastError)) return false
+  // Older Edge of Norway 429 errors must not delay the newly selected Ticketmaster source.
+  if (!lastError || !/ticketmaster/i.test(lastError) || !/429|too many requests|rate.?limit/i.test(lastError)) return false
   const lastAttemptMs = Date.parse(lastErrorAt || '')
   return Number.isFinite(lastAttemptMs) && nowMs >= lastAttemptMs && nowMs - lastAttemptMs < 6 * 60 * 60 * 1000
 }
