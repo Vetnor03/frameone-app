@@ -3109,6 +3109,7 @@ function ConnectAppsScreen({
   const [localEventsPlaceSearchError, setLocalEventsPlaceSearchError] = useState('')
   const [localEventsCanManage, setLocalEventsCanManage] = useState(false)
   const [localEventsAccountConnected, setLocalEventsAccountConnected] = useState(false)
+  const [localEventsSyncIssue, setLocalEventsSyncIssue] = useState<string | null>(null)
   const [localEventsStatusResolved, setLocalEventsStatusResolved] = useState(false)
   const [localEventsStatusFailed, setLocalEventsStatusFailed] = useState(false)
   const [localEventsStatusDeviceId, setLocalEventsStatusDeviceId] = useState<string | null>(null)
@@ -3282,6 +3283,7 @@ function ConnectAppsScreen({
     setLocalEventsStatusFailed(false)
     const area = normalizeLocalEventAreaPreference(json?.areaPreference)
     setLocalEventsAccountConnected(json?.connected === true)
+    setLocalEventsSyncIssue(json?.syncPending ? (json?.syncError || (language === 'no' ? 'Arrangementskilden oppdateres ikke ennå' : 'Events source not updating yet')) : null)
     if (frameUsesIntegration(modulesJson, 'local-events')) setLocalEventsSavedArea(json?.connected === true ? area : null)
     setLocalEventsCanManage(json?.canManage === true)
     if (area) setLocalEventsDraftArea(area)
@@ -3345,6 +3347,7 @@ function ConnectAppsScreen({
       setLocalEventsDraftArea(saved)
       setLocalEventsOpen(false)
       setLocallyDisconnectedApps((current) => ({ ...current, 'local-events': false }))
+      setLocalEventsSyncIssue(json?.syncPending ? (json?.syncError || 'Awaiting event source') : null)
       if (json?.syncPending) {
         setStatusTone('info')
         setStatus(json?.syncError || (language === 'no' ? 'Lokale arrangementer er tilkoblet. Oppdatering prøves igjen automatisk.' : 'Local Events connected. Refresh will retry automatically.'))
@@ -3376,6 +3379,7 @@ function ConnectAppsScreen({
       if (!resp.ok) throw new Error(json?.error || 'Could not disconnect Local Events')
       setLocalEventsSavedArea(null)
       setLocalEventsAccountConnected(false)
+      setLocalEventsSyncIssue(null)
       changeFrameIntegration('local-events', { enabled: false })
       setLocalEventsDraftArea(DEFAULT_LOCAL_EVENT_AREA)
       setLocalEventsOpen(false)
@@ -3583,8 +3587,10 @@ function ConnectAppsScreen({
           {sortedApps.map(({ app, connected }) => {
             const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : null
             const localEventsSelectedName = localEventsSavedArea ? (localEventsSavedArea.placeLabel || getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || '') : null
-            const description = app.key === 'local-events' && localEventsSelectedName
-              ? (language === 'no' ? `Lokale arrangementer i ${localEventsSelectedName} valgt` : `Local Events in ${localEventsSelectedName} selected`)
+            const description = app.key === 'local-events' && localEventsSyncIssue
+              ? (language === 'no' ? `Events valgt, men ingen synkronisering ennå: ${localEventsSyncIssue}` : `Events selected but not synced yet: ${localEventsSyncIssue}`)
+              : app.key === 'local-events' && localEventsSelectedName
+              ? (language === 'no' ? `Arrangementer nær ${localEventsSelectedName}` : `Events near ${localEventsSelectedName}`)
               : !connected && ((app.key === 'spond' && spondAccountConnected) || (app.key === 'teams' && teamsAccountConnected))
                 ? (language === 'no' ? 'Konto tilkoblet · ikke aktiv på denne framen' : 'Account connected · not enabled on this frame')
                 : app.description
