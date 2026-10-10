@@ -55,7 +55,7 @@ export function deduplicateEvents(events: EventCandidate[]) {
     .filter((event) => {
       const title = event.title.normalize('NFKC').toLocaleLowerCase('nb-NO').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
       const place = event.venue?.normalize('NFKC').toLocaleLowerCase('nb-NO').trim() || `${event.latitude.toFixed(2)}:${event.longitude.toFixed(2)}`
-      const key = [title, event.date, place].join('|')
+      const key = [title, event.date, event.startTime || 'all-day', place].join('|')
       if (seen.has(key)) return false
       seen.add(key)
       return true
