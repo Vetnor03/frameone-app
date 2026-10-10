@@ -149,6 +149,6 @@ test('connect persists Local Events before refresh so temporary source failures 
 
 test('failed Local Events sync cannot delete last successful data before parsing', () => {
   const server = readFileSync(new URL('../app/lib/integrations/local-events/server.ts', import.meta.url), 'utf8')
-  assert.ok(server.indexOf('runEdgeOfNorwayShadowDiagnostic') < server.indexOf(".from('integration_items').delete()"))
-  assert.match(server, /if \(result\.error \|\| result\.diagnosticError\) throw new Error/)
+  assert.ok(server.indexOf('fetchNationwideEvents') < server.indexOf(".from('integration_items').delete()"))
+  assert.doesNotMatch(server, /runEdgeOfNorwayShadowDiagnostic/)
 })
