@@ -14641,7 +14641,7 @@ const manualItems: ReminderUiItem[] = (data || [])
                 editable: false,
                 sourceUrl: typeof row.raw?.sourceUrl === 'string' ? row.raw.sourceUrl : null,
                 ticketLinks: Array.isArray(row.raw?.sourceLinks)
-                  ? row.raw.sourceLinks.filter((link: any) => link && typeof link.source === 'string' &&
+                  ? row.raw.sourceLinks.filter((link: { source?: unknown; url?: unknown } | null) => link && typeof link.source === 'string' &&
                       typeof link.url === 'string' && /^https:\/\//i.test(link.url)).slice(0, 5)
                   : [],
                 externalEventId: externalEventId || null,
@@ -15124,7 +15124,7 @@ const sortedReminders = useMemo(() => {
                         {item.editable === false ? (
                           item.source === 'local-events' ? (
                             <div className="flex flex-col items-end gap-1">
-                              {(item.ticketLinks?.length ? item.ticketLinks : item.sourceUrl && /^https:\/\//i.test(item.sourceUrl) ? [{ source: 'event', url: item.sourceUrl }] : []).map((link, linkIndex) => (
+                              {(item.ticketLinks?.length ? item.ticketLinks : item.sourceUrl && /^https:\/\//i.test(item.sourceUrl) ? [{ source: 'event', url: item.sourceUrl }] : []).map((link) => (
                                 <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex h-6.5 items-center rounded-lg border border-[#2aa3ff]/30 px-2 text-[10px] text-[#2aa3ff]">
                                   {item.ticketLinks && item.ticketLinks.length > 1 ? link.source.toUpperCase() + ' ↗' : language === 'no' ? 'BILLETTER / INFO ↗' : 'TICKETS / INFO ↗'}
                                 </a>
