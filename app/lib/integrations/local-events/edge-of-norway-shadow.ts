@@ -493,7 +493,7 @@ function emptyDiagnostic(listPageUrl: string, developmentReport: EdgeOfNorwayDev
 
 export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch, areaPreference?: unknown): Promise<EdgeOfNorwayDiagnosticResult> {
   const area = normalizeLocalEventAreaPreference(areaPreference) || DEFAULT_LOCAL_EVENT_AREA
-  const sourceLocations = uniqueLocalEventSourceLocationsForArea(area.primaryPlaceId)
+  const sourceLocations = uniqueLocalEventSourceLocationsForArea(area.primaryPlaceId as LocalEventAreaKey)
   const listPageUrl = buildEdgeOfNorwayEventsUrl(area)
   const fetchedEventsPerSourceLocation: Record<string, number> = {}
   const allAccepted: EdgeOfNorwayAcceptedEvent[] = []
