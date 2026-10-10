@@ -524,7 +524,7 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch, areaPre
     const sourceLocation = result.event.sourceLocation
     const sourceAreaKeys = getLocalEventAreaKeysForSourceLocation(sourceLocation)
     if (sourceLocation && sourceAreaKeys.length === 0) unassigned.add(sourceLocation)
-    const areaKeys = sourceAreaKeys.length ? sourceAreaKeys : [area.primaryPlaceId]
+    const areaKeys: LocalEventAreaKey[] = sourceAreaKeys.length ? sourceAreaKeys : [area.primaryPlaceId as LocalEventAreaKey]
     if (sourceLocation) fetchedEventsPerSourceLocation[sourceLocation] = (fetchedEventsPerSourceLocation[sourceLocation] || 0) + 1
     return { ...result.event, externalId: result.event.externalId, sourceLocation, areaKeys, areaKey: areaKeys[0] || area.primaryPlaceId }
   })
