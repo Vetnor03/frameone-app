@@ -2,8 +2,17 @@ export type LocalEventAreaKey = 'stavanger' | 'sandnes' | 'sola' | 'bryne' | 'eg
 export type LocalEventPlaceId = LocalEventAreaKey
 
 export type LocalEventAreaPreference = {
-  primaryPlaceId: LocalEventAreaKey
-  includedPlaceIds: LocalEventAreaKey[]
+  primaryPlaceId: string
+  includedPlaceIds: string[]
+  /** Nationwide search selection (WGS84). Legacy area keys remain readable. */
+  placeLabel?: string
+  latitude?: number
+  longitude?: number
+  radiusKm?: number
+}
+
+export function nationwideLocalEventArea(place: { id: string; label: string; latitude: number; longitude: number }, radiusKm = 25): LocalEventAreaPreference {
+  return { primaryPlaceId: place.id, includedPlaceIds: [place.id], placeLabel: place.label, latitude: place.latitude, longitude: place.longitude, radiusKm }
 }
 
 export type LocalEventSourceLocation = {
@@ -81,8 +90,19 @@ export function suggestedLocalEventArea(primaryPlaceId: string): LocalEventAreaP
 
 export function normalizeLocalEventAreaPreference(value: unknown): LocalEventAreaPreference | null {
   if (!value || typeof value !== 'object') return null
-  const record = value as { primaryPlaceId?: unknown }
+  const record = value as Record<string, unknown>
   if (typeof record.primaryPlaceId !== 'string') return null
+  const latitude = Number(record.latitude)
+  const longitude = Number(record.longitude)
+  if (typeof record.latitude === 'number' && typeof record.longitude === 'number' &&
+      Number.isFinite(latitude) && Number.isFinite(longitude) &&
+      latitude >= 57 && latitude <= 72 && longitude >= 4 && longitude <= 32 &&
+      /^ssr:[0-9]+$/.test(record.primaryPlaceId) &&
+      typeof record.placeLabel === 'string' && record.placeLabel.length > 0 && record.placeLabel.length <= 120) {
+    const radiusKm = [10, 25, 50, 100].includes(Number(record.radiusKm)) ? Number(record.radiusKm) : 25
+    return { primaryPlaceId: record.primaryPlaceId, includedPlaceIds: [record.primaryPlaceId],
+      placeLabel: record.placeLabel, latitude, longitude, radiusKm }
+  }
   const primary = getLocalEventPlace(record.primaryPlaceId)?.id
   if (!primary) return null
   return { primaryPlaceId: primary, includedPlaceIds: [primary] }
