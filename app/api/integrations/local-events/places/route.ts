@@ -4,6 +4,13 @@ import { getAuthenticatedUserId } from '@/app/lib/integrations/spond/server'
 export const runtime = 'nodejs'
 
 type Place = { id: string; label: string; latitude: number; longitude: number }
+type SourceName = { skrivemåte?: string }
+type SourcePlace = {
+  stednummer?: number; stedsnummer?: number; skrivemåte?: string
+  stedsnavn?: SourceName | SourceName[]
+  representasjonspunkt?: { nord?: number; øst?: number; ost?: number; lat?: number; lon?: number }
+  kommuner?: Array<{ kommunenavn?: string; navn?: string }>
+}
 type KartverketName = { skrivemåte?: string }
 type KartverketEntry = {
   stedsnavn?: KartverketName | KartverketName[]
