@@ -1,5 +1,5 @@
 import { EDGE_OF_NORWAY_PROVIDER } from './edge-of-norway-shadow'
-import { fetchNationwideEvents } from './nationwide'
+import { fetchNationwideEvents, upstreamRetryDeferred } from './nationwide'
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
 import { localEventDisplayTitle } from './display'
 import { getLocalEventPlace, normalizeLocalEventAreaPreference, suggestedLocalEventArea, type LocalEventAreaPreference } from './places'
@@ -109,6 +109,10 @@ export async function connectLocalEventsForFrame(userId: string, deviceId: strin
   const supabase = getSupabaseAdmin()
   const primary = getLocalEventPlace(area.primaryPlaceId)
   const connectedAt = new Date().toISOString()
+  const { data: previous, error: previousError } = await supabase.from('user_integrations')
+    .select('last_error,last_error_at').eq('device_id', deviceId).eq('provider', EDGE_OF_NORWAY_PROVIDER).maybeSingle()
+  if (previousError) throw new Error(previousError.message)
+  const deferSync = upstreamRetryDeferred(previous?.last_error, previous?.last_error_at)
   const { data, error } = await supabase.from('user_integrations').upsert({
     user_id: userId,
     device_id: deviceId,
@@ -117,11 +121,15 @@ export async function connectLocalEventsForFrame(userId: string, deviceId: strin
     encrypted_credentials: { areaPreference: area, scope: 'frame' },
     external_account_id: area.primaryPlaceId,
     external_account_label: area.placeLabel || primary?.displayName || area.primaryPlaceId,
-    last_error: null,
-    last_error_at: null,
+    last_error: deferSync ? previous?.last_error : null,
+    last_error_at: deferSync ? previous?.last_error_at : null,
     updated_at: connectedAt,
   }, { onConflict: 'device_id,provider' }).select('provider,status,external_account_label,encrypted_credentials,last_sync_at,updated_at').single()
   if (error) throw new Error(error.message)
+  if (deferSync) {
+    return { ...data, importedCount: 0, zeroEvents: false, areaPreference: area,
+      syncPending: true, syncError: 'Event source rate limited. Automatic retry will be delayed.' }
+  }
 
   try {
     const sync = await syncLocalEventsForFrame(userId, deviceId, area, fetchImpl)
@@ -152,7 +160,7 @@ export async function syncAllConnectedLocalEventsFrames(fetchImpl = fetch) {
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase
     .from('user_integrations')
-    .select('user_id,device_id,encrypted_credentials')
+    .select('user_id,device_id,encrypted_credentials,last_error,last_error_at')
     .eq('provider', EDGE_OF_NORWAY_PROVIDER)
     .eq('status', 'connected')
   if (error) throw new Error(error.message)
@@ -160,9 +168,14 @@ export async function syncAllConnectedLocalEventsFrames(fetchImpl = fetch) {
   const integrations = (data || []).filter((row) => typeof row.user_id === 'string' && typeof row.device_id === 'string' && row.device_id)
   let succeeded = 0
   let failed = 0
+  let deferred = 0
   let importedCount = 0
 
   for (const integration of integrations) {
+    if (upstreamRetryDeferred(integration.last_error, integration.last_error_at)) {
+      deferred += 1
+      continue
+    }
     const credentials = integration.encrypted_credentials as { areaPreference?: unknown } | null
     const areaPreference = normalizeLocalEventAreaPreference(credentials?.areaPreference)
     try {
@@ -188,7 +201,7 @@ export async function syncAllConnectedLocalEventsFrames(fetchImpl = fetch) {
     }
   }
 
-  return { processed: integrations.length, succeeded, failed, importedCount }
+  return { processed: integrations.length, succeeded, failed, deferred, importedCount }
 }
 
 export async function disconnectLocalEventsForFrame(userId: string, deviceId: string) {
