@@ -3287,6 +3287,12 @@ function ConnectAppsScreen({
     if (frameUsesIntegration(modulesJson, 'local-events')) setLocalEventsSavedArea(json?.connected === true ? area : null)
     setLocalEventsCanManage(json?.canManage === true)
     if (area) setLocalEventsDraftArea(area)
+    // A stored connection is not the same as a successful Events import.
+    // Surface the actual upstream failure on later visits, not only on connect.
+    if (json?.connected === true && json?.syncPending && typeof json?.syncError === 'string') {
+      setStatusTone('info')
+      setStatus(json.syncError)
+    }
   }
 
   // All-Norway official place search. Debounce to avoid hammering Kartverket.
