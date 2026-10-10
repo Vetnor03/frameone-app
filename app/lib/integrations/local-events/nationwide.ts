@@ -21,6 +21,12 @@ export type EventCandidate = {
 
 export const PLANNED_EVENT_SOURCES = ['ticketmaster', 'tikkio', 'billetto', 'friskus', 'ticketco'] as const
 
+export function upstreamRetryDeferred(lastError: string | null | undefined, lastErrorAt: string | null | undefined, nowMs = Date.now()) {
+  if (!lastError || !/429|too many requests|rate.?limit/i.test(lastError)) return false
+  const lastAttemptMs = Date.parse(lastErrorAt || '')
+  return Number.isFinite(lastAttemptMs) && nowMs >= lastAttemptMs && nowMs - lastAttemptMs < 6 * 60 * 60 * 1000
+}
+
 export function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const radians = Math.PI / 180
   const latDelta = (lat2 - lat1) * radians
