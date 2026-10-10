@@ -4,17 +4,26 @@ import { getAuthenticatedUserId } from '@/app/lib/integrations/spond/server'
 export const runtime = 'nodejs'
 
 type Place = { id: string; label: string; latitude: number; longitude: number }
+type KartverketName = { skrivemåte?: string }
+type KartverketEntry = {
+  stedsnavn?: KartverketName | KartverketName[]
+  skrivemåte?: string
+  representasjonspunkt?: { nord?: number; øst?: number; ost?: number; lat?: number; lon?: number }
+  stednummer?: number
+  stedsnummer?: number
+  kommuner?: Array<{ kommunenavn?: string; navn?: string }>
+}
 
 export function parseKartverketPlaces(payload: unknown): Place[] {
-  const response = payload as { navn?: any[] } | null
+  const response = payload as { navn?: KartverketEntry[] } | null
   const places = Array.isArray(response?.navn) ? response.navn : []
   const used = new Set<string>()
   const result: Place[] = []
   for (const entry of places) {
-    const spelling = (typeof entry?.stedsnavn?.skrivemåte === 'string' ? entry.stedsnavn.skrivemåte : '')
-      || entry?.stedsnavn?.find?.((name: any) => typeof name?.skrivemåte === 'string')?.skrivemåte
-      || entry?.stedsnavn?.[0]?.skrivemåte
-      || entry?.skrivemåte
+    const names = entry.stedsnavn
+    const spelling = (Array.isArray(names)
+      ? names.find((name) => typeof name?.skrivemåte === 'string')?.skrivemåte
+      : names?.skrivemåte) || entry.skrivemåte
     const location = entry?.representasjonspunkt
     const latitude = Number(location?.nord ?? location?.lat)
     const longitude = Number(location?.øst ?? location?.ost ?? location?.lon)
