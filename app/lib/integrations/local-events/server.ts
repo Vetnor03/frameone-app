@@ -9,7 +9,12 @@ export type LocalEventsSyncResult = { importedCount: number; zeroEvents: boolean
 const FRAME_MANAGER_ROLES = new Set(['owner', 'admin'])
 
 function eventStartsAt(event: { date: string; startTime: string | null }) {
-  return event.startTime ? `${event.date}T${event.startTime}:00+02:00` : `${event.date}T00:00:00+02:00`
+  // Ticketmaster returns local Norwegian wall-clock times. Respect CET/CEST transitions.
+  const noon = new Date(`${event.date}T12:00:00Z`)
+  const offset = new Intl.DateTimeFormat('en', { timeZone: 'Europe/Oslo', timeZoneName: 'shortOffset' })
+    .formatToParts(noon).find((part) => part.type === 'timeZoneName')?.value
+  const hours = Number(offset?.match(/GMT\+(\d+)/)?.[1]) === 2 ? '02' : '01'
+  return `${event.date}T${event.startTime || '00:00'}:00+${hours}:00`
 }
 
 export function localEventUserMessage(error: unknown) {
