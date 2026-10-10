@@ -27,3 +27,6 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: node --test tests/nationwide-events.test.mjs tests/local-events-places.test.mjs tests/local-events-connect-resilience.test.mjs
+      - name: Inspect live Kartverket place JSON
+        run: node scripts/events-kartverket-smoke.mjs
+        continue-on-error: true
