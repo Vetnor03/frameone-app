@@ -1,4 +1,4 @@
-import { EDGE_OF_NORWAY_PROVIDER, type EdgeOfNorwayAcceptedEvent } from './edge-of-norway-shadow'
+import { EDGE_OF_NORWAY_PROVIDER } from './edge-of-norway-shadow'
 import { fetchNationwideEvents } from './nationwide'
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
 import { localEventDisplayTitle } from './display'
@@ -8,7 +8,7 @@ export type LocalEventsSyncResult = { importedCount: number; zeroEvents: boolean
 
 const FRAME_MANAGER_ROLES = new Set(['owner', 'admin'])
 
-function eventStartsAt(event: EdgeOfNorwayAcceptedEvent) {
+function eventStartsAt(event: { date: string; startTime: string | null }) {
   return event.startTime ? `${event.date}T${event.startTime}:00+02:00` : `${event.date}T00:00:00+02:00`
 }
 
@@ -66,9 +66,9 @@ export async function syncLocalEventsForFrame(userId: string, deviceId: string, 
         date: event.date,
         startTime: event.startTime,
         allDay: event.allDay,
-        sourceLocation: event.sourceLocation,
-        areaKey: event.areaKey || area.primaryPlaceId,
-        areaKeys: event.areaKeys?.length ? event.areaKeys : [event.areaKey || area.primaryPlaceId],
+        sourceLocation: event.venue,
+        areaKey: area.primaryPlaceId,
+        areaKeys: [area.primaryPlaceId],
         primaryPlaceId: area.primaryPlaceId,
         includedPlaceIds: area.includedPlaceIds,
         type: 'local-event',
