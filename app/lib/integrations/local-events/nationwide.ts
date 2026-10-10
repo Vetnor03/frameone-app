@@ -17,6 +17,8 @@ export type EventCandidate = {
   latitude: number
   longitude: number
   distanceKm: number
+  /** All original ticket / information URLs when platforms list the same event. */
+  sourceLinks?: Array<{ source: EventCandidate['source']; url: string }>
 }
 
 export const PLANNED_EVENT_SOURCES = ['ticketmaster', 'tikkio', 'billetto', 'friskus', 'ticketco'] as const
@@ -57,16 +59,23 @@ export function encodeGeoHash(latitude: number, longitude: number, precision = 7
 }
 
 export function deduplicateEvents(events: EventCandidate[]) {
-  const seen = new Set<string>()
-  return events
-    .filter((event) => {
-      const title = event.title.normalize('NFKC').toLocaleLowerCase('nb-NO').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
-      const place = event.venue?.normalize('NFKC').toLocaleLowerCase('nb-NO').trim() || `${event.latitude.toFixed(2)}:${event.longitude.toFixed(2)}`
-      const key = [title, event.date, event.startTime || 'all-day', place].join('|')
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
+  const byEvent = new Map<string, EventCandidate>()
+  for (const event of events) {
+    const title = event.title.normalize('NFKC').toLocaleLowerCase('nb-NO').replace(/[^\\p{L}\\p{N}]+/gu, ' ').trim()
+    const place = event.venue?.normalize('NFKC').toLocaleLowerCase('nb-NO').trim() ||
+      `${event.latitude.toFixed(2)}:${event.longitude.toFixed(2)}`
+    const key = [title, event.date, event.startTime || 'all-day', place].join('|')
+    const links = event.sourceLinks?.length ? event.sourceLinks : [{ source: event.source, url: event.sourceUrl }]
+    const existing = byEvent.get(key)
+    if (!existing) {
+      byEvent.set(key, { ...event, sourceLinks: links })
+      continue
+    }
+    const combinedLinks = [...(existing.sourceLinks || []), ...links]
+      .filter((link, index, all) => all.findIndex((item) => item.url === link.url) === index)
+    byEvent.set(key, { ...existing, sourceLinks: combinedLinks })
+  }
+  return Array.from(byEvent.values())
     .sort((a, b) => (a.date + (a.startTime || '')).localeCompare(b.date + (b.startTime || '')))
 }
 
@@ -105,6 +114,7 @@ export function parseTicketmasterEvents(payload: TicketmasterResponse, latitude:
       latitude: eventLat,
       longitude: eventLon,
       distanceKm: Math.round(distance * 10) / 10,
+      sourceLinks: [{ source: 'ticketmaster', url: sourceUrl }],
     })
   }
   return result
