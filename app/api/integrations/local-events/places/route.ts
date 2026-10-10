@@ -30,7 +30,7 @@ export function parseKartverketPlaces(payload: unknown): Place[] {
     const stednummer = Number(entry?.stednummer ?? entry?.stedsnummer)
     if (!spelling || !Number.isInteger(stednummer) || stednummer <= 0 ||
         !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
-        latitude < 57 || latitude > 72 || longitude < 4 || longitude > 32) continue
+        latitude < 57 || latitude > 81 || longitude < -11 || longitude > 36) continue
     const id = 'ssr:' + stednummer
     if (used.has(id)) continue
     used.add(id)
