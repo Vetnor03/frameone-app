@@ -61,5 +61,6 @@ test('429 source throttling defers repeated calls but expires after six hours', 
   assert.equal(upstreamRetryDeferred('Ticketmaster returned HTTP 429', '2026-10-10T09:00:00.000Z', now), true)
   assert.equal(upstreamRetryDeferred('Ticketmaster returned HTTP 429', '2026-10-10T01:00:00.000Z', now), false)
   assert.equal(upstreamRetryDeferred('Ticketmaster returned HTTP 500', '2026-10-10T09:00:00.000Z', now), false)
+  assert.equal(upstreamRetryDeferred('Edge of Norway returned 429', '2026-10-10T09:00:00.000Z', now), false)
   assert.equal(upstreamRetryDeferred(null, null, now), false)
 })
