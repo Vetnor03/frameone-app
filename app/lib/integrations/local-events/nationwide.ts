@@ -119,7 +119,13 @@ export async function fetchNationwideEvents(
   base.searchParams.set('geoPoint', encodeGeoHash(area.latitude, area.longitude))
   base.searchParams.set('radius', String(radiusKm))
   base.searchParams.set('unit', 'km')
-  base.searchParams.set('startDateTime', new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'))
+  // A stable six-hour cache key allows different frames in the same geo cell to share an API response.
+  // Do not use the current second in the URL: that would defeat server-side caching.
+  const sixHourBucketMs = Math.floor(Date.now() / 21600000) * 21600000
+  const startDate = new Date(sixHourBucketMs)
+  const endDate = new Date(sixHourBucketMs + 90 * 86400000)
+  base.searchParams.set('startDateTime', startDate.toISOString().replace(/\.\d{3}Z$/, 'Z'))
+  base.searchParams.set('endDateTime', endDate.toISOString().replace(/\.\d{3}Z$/, 'Z'))
   base.searchParams.set('sort', 'date,asc')
   base.searchParams.set('size', '200')
   base.searchParams.set('locale', '*')
@@ -127,7 +133,7 @@ export async function fetchNationwideEvents(
   const all: EventCandidate[] = []
   for (let page = 0; page < 5; page += 1) {
     base.searchParams.set('page', String(page))
-    const response = await fetchImpl(base.toString(), { next: { revalidate: 21600 } } as RequestInit)
+    const response = await fetchImpl(base.toString(), { next: { revalidate: 21600 }, signal: AbortSignal.timeout(12000) } as RequestInit)
     if (!response.ok) throw new Error(`Ticketmaster returned HTTP ${response.status}`)
     const payload = await response.json() as TicketmasterResponse
     all.push(...parseTicketmasterEvents(payload, area.latitude, area.longitude, radiusKm))
