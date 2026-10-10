@@ -35,7 +35,9 @@ test('Ticketmaster parser includes nearby tickets and excludes distant events', 
 
 test('duplicate ticket sources collapse into one event', () => {
   const row = parseTicketmasterEvents({ _embedded: { events: [event('one', 'Concert', 58.97, 5.73)] } }, 58.969, 5.733, 25)[0]
-  assert.equal(deduplicateEvents([row, { ...row, source: 'billetto', externalId: 'billetto:42' }]).length, 1)
+  const joined = deduplicateEvents([row, { ...row, source: 'billetto', externalId: 'billetto:42', sourceUrl: 'https://billetto.no/e/42', sourceLinks: [{ source: 'billetto', url: 'https://billetto.no/e/42' }] }])
+  assert.equal(joined.length, 1)
+  assert.equal(joined[0].sourceLinks?.length, 2)
   assert.deepEqual(PLANNED_EVENT_SOURCES, ['ticketmaster', 'tikkio', 'billetto', 'friskus', 'ticketco'])
 })
 
