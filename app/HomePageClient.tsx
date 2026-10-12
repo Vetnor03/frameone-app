@@ -15179,7 +15179,7 @@ const ungroupedSortedReminders = useMemo(() => {
                       key={item.id}
                       role="button"
                       tabIndex={0}
-                      onClick={() => item.source === 'local-events' ? (setBookingError(null), setExpandedEventGroup(item.eventGroupKey || null)) : selectReminderDate(item.displayDate)
+                      onClick={() => { if (item.source === 'local-events') { setBookingError(null); setExpandedEventGroup(item.eventGroupKey || null) } else selectReminderDate(item.displayDate) }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
