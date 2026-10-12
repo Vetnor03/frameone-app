@@ -15252,16 +15252,23 @@ const ungroupedSortedReminders = useMemo(() => {
                             {language === 'no' ? 'FULLFØRT' : 'COMPLETED'}
                           </span>
                         ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setEditingReminder(item)
-                              setSheetOpen(true)
-                            }}
-                            className="h-6.5 px-2.5 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
-                          >
-                            {language === 'no' ? 'REDIGER' : 'EDIT'}
-                          </button>
+                          <div className="flex flex-col items-end gap-1">
+                            {item.sourceEventGroupKey && item.sourceUrl && /^https:\/\//.test(item.sourceUrl) && (
+                              <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="h-6.5 px-2.5 rounded-lg border border-[#2aa3ff]/30 text-[10px] text-[#2aa3ff] inline-flex items-center">
+                                {language === 'no' ? 'BILLETTER ↗' : 'TICKETS ↗'}
+                              </a>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setEditingReminder(item)
+                                setSheetOpen(true)
+                              }}
+                              className="h-6.5 px-2.5 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
+                            >
+                              {language === 'no' ? 'REDIGER' : 'EDIT'}
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
