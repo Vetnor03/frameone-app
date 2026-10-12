@@ -60,17 +60,6 @@ function parsedConfigs(env: NodeJS.ProcessEnv) {
       headers: optionalHeader(config.header, config.value),
     })
   }
-  // Billetto supports creating a key pair inside the user account, without requesting vendor help.
-  // Its docs show GET /api/v3/public/events on the national Billetto domain.
-  // API response and Norwegian hostname must be confirmed during live key-pair testing.
-  if (env.BILLETTO_API_KEYPAIR?.trim() && !configs.billetto.length) {
-    const pair = env.BILLETTO_API_KEYPAIR.trim()
-    if (!/^[^:\\s]+:[^:\\s]+$/.test(pair)) throw new Error('Invalid Billetto API key pair format')
-    configs.billetto.push({
-      url: validateProviderUrl('billetto', 'https://billetto.no/api/v3/public/events?limit=100'),
-      headers: { 'Api-Keypair': pair },
-    })
-  }
   if (env.FRISKUS_RSS_FEEDS_JSON?.trim()) {
     const parsed: unknown = JSON.parse(env.FRISKUS_RSS_FEEDS_JSON)
     if (!Array.isArray(parsed) || parsed.length > 12) throw new Error('Invalid Friskus RSS feed configuration')
