@@ -5919,6 +5919,7 @@ function MirrorLargeRemindersCard({
       </div>
       <div className="min-w-0 overflow-hidden pr-[clamp(0.45rem,1.15vw,0.88rem)]">
         <MirrorMonthCalendar
+          compactText
           textColor={textColor}
           language={language}
           highlightDates={mirrorReminderCalendarDates(detail)}
