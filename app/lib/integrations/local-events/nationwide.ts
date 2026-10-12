@@ -1,5 +1,5 @@
 import type { LocalEventAreaPreference } from './places'
-import { fetchAdditionalEvents } from './extra-sources'
+import { fetchAdditionalEvents } from './extra-sources.ts'
 
 /**
  * Ticketmaster Discovery adapter for the nationwide Events pilot.
