@@ -14466,6 +14466,7 @@ function RemindersModuleSettingsTab({
   const [composerDraft, setComposerDraft] = useState<ReminderUiItem | null>(null)
   const [editingReminder, setEditingReminder] = useState<ReminderUiItem | null>(null)
   const [sourceFilter, setSourceFilter] = useState<ReminderSourceFilter>('remind')
+  const [eventNowMs, setEventNowMs] = useState(() => Date.now())
   const [availableSources, setAvailableSources] = useState<ReminderSourceFilter[]>(['remind'])
 
   const [selectedDayYmd, setSelectedDayYmd] = useState<string | null>(null)
@@ -14683,6 +14684,14 @@ const manualItems: ReminderUiItem[] = (data || [])
     if (!availableSources.includes(sourceFilter)) setSourceFilter('remind')
   }, [availableSources, sourceFilter])
 
+  // Keep the first available performance correct without requiring app reload.
+  useEffect(() => {
+    if (sourceFilter !== 'local-events') return
+    setEventNowMs(Date.now())
+    const interval = window.setInterval(() => setEventNowMs(Date.now()), 60_000)
+    return () => window.clearInterval(interval)
+  }, [sourceFilter])
+
   useEffect(() => {
     const handler = () => { loadReminders() }
     window.addEventListener('remind:refresh-reminders', handler)
@@ -14737,8 +14746,16 @@ const manualItems: ReminderUiItem[] = (data || [])
   }, [viewYear, viewMonth, startWeekday])
 
   const filteredReminders = useMemo(() => {
-    return reminders.filter((item) => (item.source || 'remind') === sourceFilter)
-  }, [reminders, sourceFilter])
+    const now = new Date(eventNowMs)
+    const today = toLocalYmd(now)
+    const clock = pad2(now.getHours()) + ':' + pad2(now.getMinutes())
+    return reminders.filter((item) => {
+      if ((item.source || 'remind') !== sourceFilter) return false
+      if (item.source !== 'local-events') return true
+      const t = normalizeReminderTime(item.time)
+      return item.date > today || (item.date === today && (!t || t >= clock))
+    })
+  }, [reminders, sourceFilter, eventNowMs])
 
   const visibleOccurrences = useMemo(() => {
     return expandReminderOccurrences(filteredReminders, gridStartYmd, gridEndYmd, 180)
@@ -14887,7 +14904,7 @@ const ungroupedSortedReminders = useMemo(() => {
 
   const eventGroupPerformances = useMemo(() => {
     const groups = new Map<string, ReminderUiItem[]>()
-    for (const item of reminders) {
+    for (const item of filteredReminders) {
       if (item.source !== 'local-events' || !item.eventGroupKey || !item.externalEventId) continue
       const existing = groups.get(item.eventGroupKey) || []
       existing.push(item)
@@ -14899,7 +14916,7 @@ const ungroupedSortedReminders = useMemo(() => {
         a.id.localeCompare(b.id))
     }
     return groups
-  }, [reminders])
+  }, [filteredReminders])
 
   const sortedReminders = useMemo(() => {
     if (sourceFilter !== 'local-events') return ungroupedSortedReminders
