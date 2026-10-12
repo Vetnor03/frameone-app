@@ -21,6 +21,7 @@ import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, getLocalEventPlace, normalizeLocalEventAreaPreference, nationwideLocalEventArea, type LocalEventAreaPreference } from './lib/integrations/local-events/places'
+import { localEventGroupKeyFromRaw, groupSkipId } from './lib/integrations/local-events/grouping'
 import { INTEGRATION_CATALOGUE, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
 import WasteSetupModal from './components/WasteSetupModal'
 import NewsModuleSettingsTab from './components/NewsModuleSettingsTab'
@@ -10162,6 +10163,11 @@ type ReminderUiItem = {
   ticketLinks?: Array<{ source: string; url: string }>
   externalEventId?: string | null
   skippedOnFrame?: boolean
+  eventGroupKey?: string | null
+  venue?: string | null
+  eventSource?: string | null
+  sourceEventGroupKey?: string | null
+  alternativeCount?: number
   starterKey?: string | null
 }
 
@@ -14451,12 +14457,16 @@ function RemindersModuleSettingsTab({
   const [completedOccurrences, setCompletedOccurrences] = useState<ReminderCompletionItem[]>([])
   const [loading, setLoading] = useState(false)
   const [skipToggleError, setSkipToggleError] = useState<string | null>(null)
+  const [expandedEventGroup, setExpandedEventGroup] = useState<string | null>(null)
+  const [bookingEventId, setBookingEventId] = useState<string | null>(null)
+  const [bookingError, setBookingError] = useState<string | null>(null)
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [composerOpen, setComposerOpen] = useState(false)
   const [composerDraft, setComposerDraft] = useState<ReminderUiItem | null>(null)
   const [editingReminder, setEditingReminder] = useState<ReminderUiItem | null>(null)
   const [sourceFilter, setSourceFilter] = useState<ReminderSourceFilter>('remind')
+  const [eventNowMs, setEventNowMs] = useState(() => Date.now())
   const [availableSources, setAvailableSources] = useState<ReminderSourceFilter[]>(['remind'])
 
   const [selectedDayYmd, setSelectedDayYmd] = useState<string | null>(null)
@@ -14482,7 +14492,7 @@ function RemindersModuleSettingsTab({
 
       const { data, error } = await supabase
         .from('reminders')
-        .select('id, title, due_date, due_time, end_date, end_time, tag, repeat_type, custom_repeat_days, is_done, starter_key')
+        .select('id, title, due_date, due_time, end_date, end_time, tag, repeat_type, custom_repeat_days, is_done, starter_key, source_event_group_key, source_event_url')
         .eq('device_id', activeDeviceId)
         .eq('is_done', false)
         .order('due_date', { ascending: true })
@@ -14533,6 +14543,8 @@ const manualItems: ReminderUiItem[] = (data || [])
     source: 'remind' as const,
     editable: true,
     starterKey: row.starter_key ? String(row.starter_key) : null,
+    sourceEventGroupKey: typeof row.source_event_group_key === 'string' ? row.source_event_group_key : null,
+    sourceUrl: typeof row.source_event_url === 'string' ? row.source_event_url : null,
   }))
   .filter((x) => x.title && x.date)
 
@@ -14605,7 +14617,8 @@ const manualItems: ReminderUiItem[] = (data || [])
               .select('external_event_id, skipped, updated_at')
               .eq('device_id', activeDeviceId)
               .eq('provider', 'edge-of-norway')
-              .in('external_event_id', Array.from(new Set(localEventExternalIds)))
+              // Read both individual IDs and persistent group-skip markers.
+              .limit(2000)
             if (skipError) {
               alert(skipError.message)
             } else {
@@ -14625,7 +14638,9 @@ const manualItems: ReminderUiItem[] = (data || [])
               const source = integrationProviderToReminderSource(row.provider)
               if (!source) return null
               const externalEventId = source === 'local-events' ? String(row.external_id || '').trim() : ''
-              if (externalEventId && localEventHiddenSkippedIds.has(externalEventId)) return null
+              const groupKey = source === 'local-events' ? localEventGroupKeyFromRaw(row) : ''
+              if (source === 'local-events' && manualItems.some(item => item.sourceEventGroupKey === groupKey && groupKey)) return null
+              if (externalEventId && (localEventHiddenSkippedIds.has(externalEventId) || localEventHiddenSkippedIds.has(groupSkipId(groupKey)))) return null
               const { date, time } = integrationItemDateTime(row)
               const title = integrationReminderTitle(row, source, language)
               if (!title || !date) return null
@@ -14645,7 +14660,10 @@ const manualItems: ReminderUiItem[] = (data || [])
                       typeof link.url === 'string' && /^https:\/\//i.test(link.url)).slice(0, 5)
                   : [],
                 externalEventId: externalEventId || null,
-                skippedOnFrame: source === 'local-events' ? localEventSkippedIds.has(externalEventId) : false,
+                eventGroupKey: groupKey || null,
+                venue: typeof row.raw?.venue === 'string' ? row.raw.venue : null,
+                eventSource: typeof row.raw?.eventSource === 'string' ? row.raw.eventSource : null,
+                skippedOnFrame: source === 'local-events' ? (localEventSkippedIds.has(externalEventId) || localEventSkippedIds.has(groupSkipId(groupKey))) : false,
               }
             })
             .filter(Boolean) as ReminderUiItem[]
@@ -14665,6 +14683,14 @@ const manualItems: ReminderUiItem[] = (data || [])
   useEffect(() => {
     if (!availableSources.includes(sourceFilter)) setSourceFilter('remind')
   }, [availableSources, sourceFilter])
+
+  // Keep the first available performance correct without requiring app reload.
+  useEffect(() => {
+    if (sourceFilter !== 'local-events') return
+    setEventNowMs(Date.now())
+    const interval = window.setInterval(() => setEventNowMs(Date.now()), 60_000)
+    return () => window.clearInterval(interval)
+  }, [sourceFilter])
 
   useEffect(() => {
     const handler = () => { loadReminders() }
@@ -14720,8 +14746,15 @@ const manualItems: ReminderUiItem[] = (data || [])
   }, [viewYear, viewMonth, startWeekday])
 
   const filteredReminders = useMemo(() => {
-    return reminders.filter((item) => (item.source || 'remind') === sourceFilter)
-  }, [reminders, sourceFilter])
+    const now = new Date(eventNowMs)
+    const today = toLocalYmd(now)
+    const clock = pad2(now.getHours()) + ':' + pad2(now.getMinutes())
+    return reminders.filter((item) => (item.source || 'remind') === sourceFilter).filter((item) => {
+      if (item.source !== 'local-events') return true
+      const t = normalizeReminderTime(item.time)
+      return item.date > today || (item.date === today && (!t || t >= clock))
+    })
+  }, [reminders, sourceFilter, eventNowMs])
 
   const visibleOccurrences = useMemo(() => {
     return expandReminderOccurrences(filteredReminders, gridStartYmd, gridEndYmd, 180)
@@ -14811,7 +14844,7 @@ const manualItems: ReminderUiItem[] = (data || [])
     return occurrences[0].occurrenceDate
   }
 
-const sortedReminders = useMemo(() => {
+const ungroupedSortedReminders = useMemo(() => {
   function timeSortValue(time?: string | null) {
     const t = normalizeReminderTime(time)
     if (!t) return '99:99'
@@ -14868,13 +14901,49 @@ const sortedReminders = useMemo(() => {
     }) as Array<ReminderUiItem & { displayDate: string }>
 }, [filteredReminders, selectedDayYmd, allListOccurrences, todayYmd, listRangeEnd])
 
+  const eventGroupPerformances = useMemo(() => {
+    const groups = new Map<string, ReminderUiItem[]>()
+    for (const item of filteredReminders) {
+      if (item.source !== 'local-events' || !item.eventGroupKey || !item.externalEventId) continue
+      const existing = groups.get(item.eventGroupKey) || []
+      existing.push(item)
+      groups.set(item.eventGroupKey, existing)
+    }
+    for (const items of groups.values()) {
+      items.sort((a, b) =>
+        (a.date + ' ' + (normalizeReminderTime(a.time) || '')).localeCompare(b.date + ' ' + (normalizeReminderTime(b.time) || '')) ||
+        a.id.localeCompare(b.id))
+    }
+    return groups
+  }, [filteredReminders])
+
+  const sortedReminders = useMemo(() => {
+    if (sourceFilter !== 'local-events') return ungroupedSortedReminders
+    const seen = new Set<string>()
+    return ungroupedSortedReminders.filter((item) => {
+      if (!item.eventGroupKey) return true
+      if (seen.has(item.eventGroupKey)) return false
+      seen.add(item.eventGroupKey)
+      return true
+    }).map((item) => {
+      const performances = eventGroupPerformances.get(item.eventGroupKey || '') || []
+      const count = Math.max(0, performances.length - 1)
+      return { ...item, alternativeCount: count }
+    })
+  }, [sourceFilter, ungroupedSortedReminders, eventGroupPerformances])
+
+  const expandedEventPerformances = expandedEventGroup
+    ? (eventGroupPerformances.get(expandedEventGroup) || [])
+    : []
+
+
 
 
   async function toggleLocalEventFrameSkip(item: ReminderUiItem, nextSkipped: boolean) {
     if (!activeDeviceId || item.source !== 'local-events' || !item.externalEventId) return
     const previous = reminders
     setSkipToggleError(null)
-    setReminders((current) => current.map((x) => x.id === item.id ? { ...x, skippedOnFrame: nextSkipped } : x))
+    setReminders((current) => current.map((x) => x.source === 'local-events' && x.eventGroupKey === item.eventGroupKey ? { ...x, skippedOnFrame: nextSkipped } : x))
     try {
       const { data: sessionData } = await supabase.auth.getSession()
       const accessToken = sessionData.session?.access_token
@@ -14882,7 +14951,7 @@ const sortedReminders = useMemo(() => {
       const resp = await fetch('/api/integrations/local-events/frame-skip', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ deviceId: activeDeviceId, externalEventId: item.externalEventId, skipped: nextSkipped }),
+        body: JSON.stringify({ deviceId: activeDeviceId, externalEventId: item.externalEventId, skipped: nextSkipped, scope: 'group' }),
       })
       const json = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(json?.error || (language === 'no' ? 'Kunne ikke lagre frame-valget' : 'Could not save frame visibility'))
@@ -14891,6 +14960,30 @@ const sortedReminders = useMemo(() => {
       setReminders(previous)
       setSkipToggleError(error instanceof Error && error.message ? error.message : (language === 'no' ? 'Kunne ikke lagre frame-valget' : 'Could not save frame visibility'))
     }
+  }
+
+  async function markEventPerformanceBooked(item: ReminderUiItem) {
+    if (!activeDeviceId || !item.externalEventId || bookingEventId) return
+    setBookingError(null)
+    setBookingEventId(item.externalEventId)
+    try {
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      if (!token) throw new Error(language === 'no' ? 'Logg inn for å lagre' : 'Sign in to save')
+      const response = await fetch('/api/integrations/local-events/book', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ deviceId: activeDeviceId, externalEventId: item.externalEventId }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(result.error || 'Could not save booked event')
+      setExpandedEventGroup(null)
+      setSourceFilter('remind')
+      setSelectedDayYmd(null)
+      await loadReminders({ silent: true })
+    } catch (err) {
+      setBookingError(err instanceof Error ? err.message : 'Could not save booked event')
+    } finally { setBookingEventId(null) }
   }
 
   function toggleSelectedDay(ymd: string) {
@@ -15101,11 +15194,12 @@ const sortedReminders = useMemo(() => {
                       key={item.id}
                       role="button"
                       tabIndex={0}
-                      onClick={() => selectReminderDate(item.displayDate)}
+                      onClick={() => { if (item.source === 'local-events') { setBookingError(null); setExpandedEventGroup(item.eventGroupKey || null) } else selectReminderDate(item.displayDate) }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
-                          selectReminderDate(item.displayDate)
+                          if (item.source === 'local-events') { setBookingError(null); setExpandedEventGroup(item.eventGroupKey || null) }
+                          else selectReminderDate(item.displayDate)
                         }
                       }}
                       className="flex items-start justify-between gap-2.5 py-1.5 first:pt-0 last:pb-0 cursor-pointer"
@@ -15119,6 +15213,9 @@ const sortedReminders = useMemo(() => {
                             normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
                           } • ${item.editable === false ? integrationReminderSourceLabel(language, item.source) : reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
                         </div>
+                        {item.source === 'local-events' && (item.alternativeCount || 0) > 0 && (
+                          <div className="mt-0.5 text-[10px] text-[#2aa3ff]">+ {item.alternativeCount} {language === 'no' ? 'andre tidspunkter · trykk for å velge' : 'other performances · tap to choose'}</div>
+                        )}
                       </div>
                       <div className="shrink-0 self-center">
                         {item.editable === false ? (
@@ -15155,16 +15252,23 @@ const sortedReminders = useMemo(() => {
                             {language === 'no' ? 'FULLFØRT' : 'COMPLETED'}
                           </span>
                         ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setEditingReminder(item)
-                              setSheetOpen(true)
-                            }}
-                            className="h-6.5 px-2.5 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
-                          >
-                            {language === 'no' ? 'REDIGER' : 'EDIT'}
-                          </button>
+                          <div className="flex flex-col items-end gap-1">
+                            {item.sourceEventGroupKey && item.sourceUrl && /^https:\/\//.test(item.sourceUrl) && (
+                              <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="h-6.5 px-2.5 rounded-lg border border-[#2aa3ff]/30 text-[10px] text-[#2aa3ff] inline-flex items-center">
+                                {language === 'no' ? 'BILLETTER ↗' : 'TICKETS ↗'}
+                              </a>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setEditingReminder(item)
+                                setSheetOpen(true)
+                              }}
+                              className="h-6.5 px-2.5 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
+                            >
+                              {language === 'no' ? 'REDIGER' : 'EDIT'}
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -15195,6 +15299,38 @@ const sortedReminders = useMemo(() => {
           {language === 'no' ? 'LEGG TIL PÅMINNELSE' : 'ADD REMINDER'}
         </button>
       </div>
+
+      {expandedEventGroup && (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 px-3 pb-3 sm:items-center">
+          <div role="dialog" aria-modal="true" aria-label={language === 'no' ? 'Velg forestilling' : 'Choose a performance'} className="max-h-[85vh] w-full max-w-[430px] overflow-y-auto rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-base font-semibold text-[color:var(--fg-95)]">{expandedEventPerformances[0]?.title || 'Events'}</div>
+                <div className="mt-1 text-xs text-[color:var(--fg-50)]">{expandedEventPerformances[0]?.venue || ''}</div>
+                <div className="mt-1 text-[11px] text-[color:var(--fg-50)]">{language === 'no' ? 'Velg datoen du har bestilt billetter til' : 'Choose the date you booked tickets for'}</div>
+              </div>
+              <button onClick={() => setExpandedEventGroup(null)} type="button" className="text-xl text-[color:var(--fg-60)]">×</button>
+            </div>
+            {bookingError && <div role="alert" className="mt-3 text-xs text-red-500">{bookingError}</div>}
+            <div className="mt-4 divide-y divide-[color:var(--bd-10)]">
+              {expandedEventPerformances.map(option => (
+                <div key={option.id} className="py-3 first:pt-0">
+                  <div className="text-sm text-[color:var(--fg-95)]">{formatReminderFullDateLabel(language, option.date)}{normalizeReminderTime(option.time) ? ' · ' + normalizeReminderTime(option.time) : ''}</div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button type="button" disabled={!!bookingEventId || option.skippedOnFrame} onClick={() => markEventPerformanceBooked(option)} className="rounded-xl border border-[#2aa3ff] px-3 py-2 text-xs text-[#2aa3ff] disabled:opacity-40">
+                      {bookingEventId === option.externalEventId ? (language === 'no' ? 'LAGRER…' : 'SAVING…') : (language === 'no' ? 'BESTILT ✓' : 'BOOKED ✓')}
+                    </button>
+                    {(option.ticketLinks?.length ? option.ticketLinks : option.sourceUrl ? [{ source: 'event', url: option.sourceUrl }] : []).map(link => /^https:\/\//.test(link.url) ? (
+                      <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-[color:var(--bd-20)] px-3 py-2 text-[11px] text-[color:var(--fg-70)]">{language === 'no' ? 'BILLETTER ↗' : 'TICKETS ↗'}</a>
+                    ) : null)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button type="button" onClick={() => setExpandedEventGroup(null)} className="mt-3 h-10 w-full rounded-xl border border-[color:var(--bd-20)] text-xs text-[color:var(--fg-60)]">{language === 'no' ? 'LUKK' : 'CLOSE'}</button>
+          </div>
+        </div>
+      )}
 
       {composerOpen && activeDeviceId && (
         <NaturalReminderComposer
