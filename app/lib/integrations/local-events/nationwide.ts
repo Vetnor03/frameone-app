@@ -1,4 +1,5 @@
 import type { LocalEventAreaPreference } from './places'
+import { fetchAdditionalEvents } from './extra-sources'
 
 /**
  * Ticketmaster Discovery adapter for the nationwide Events pilot.
@@ -61,7 +62,7 @@ export function encodeGeoHash(latitude: number, longitude: number, precision = 7
 export function deduplicateEvents(events: EventCandidate[]) {
   const byEvent = new Map<string, EventCandidate>()
   for (const event of events) {
-    const title = event.title.normalize('NFKC').toLocaleLowerCase('nb-NO').replace(/[^\\p{L}\\p{N}]+/gu, ' ').trim()
+    const title = event.title.normalize('NFKC').toLocaleLowerCase('nb-NO').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
     const place = event.venue?.normalize('NFKC').toLocaleLowerCase('nb-NO').trim() ||
       `${event.latitude.toFixed(2)}:${event.longitude.toFixed(2)}`
     const key = [title, event.date, event.startTime || 'all-day', place].join('|')
@@ -120,7 +121,7 @@ export function parseTicketmasterEvents(payload: TicketmasterResponse, latitude:
   return result
 }
 
-export async function fetchNationwideEvents(
+async function fetchTicketmasterEvents(
   area: LocalEventAreaPreference,
   fetchImpl: typeof fetch = fetch,
   apiKey = process.env.TICKETMASTER_DISCOVERY_API_KEY,
@@ -160,5 +161,48 @@ export async function fetchNationwideEvents(
     acceptedEvents: deduplicateEvents(all),
     activeSources: ['ticketmaster'] as string[],
     inactiveSources: ['tikkio', 'billetto', 'friskus', 'ticketco'] as string[],
+  }
+}
+
+
+/**
+ * Every provider is independent. Never drop events from a healthy source because another
+ * source is unavailable, unconfigured or rate-limited.
+ */
+export async function fetchNationwideEvents(
+  area: LocalEventAreaPreference,
+  fetchImpl: typeof fetch = fetch,
+  apiKey = process.env.TICKETMASTER_DISCOVERY_API_KEY,
+) {
+  if (typeof area.latitude !== 'number' || typeof area.longitude !== 'number') {
+    throw new Error('Choose a Norwegian place before syncing Events.')
+  }
+  const additional = await fetchAdditionalEvents(area, fetchImpl)
+  const states: Record<EventCandidate['source'], 'ok' | 'failed' | 'not_configured'> = { ticketmaster: apiKey ? 'failed' : 'not_configured', ...additional.states }
+  const errors: Partial<Record<EventCandidate['source'], string>> = { ...additional.errors }
+  const all = [...additional.events]
+  if (apiKey) {
+    try {
+      const ticketmaster = await fetchTicketmasterEvents(area, fetchImpl, apiKey)
+      all.push(...ticketmaster.acceptedEvents)
+      states.ticketmaster = 'ok'
+    } catch (err) {
+      errors.ticketmaster = err instanceof Error ? err.message : 'Ticketmaster unavailable'
+    }
+  }
+  const successfulSources = PLANNED_EVENT_SOURCES.filter(provider => states[provider] === 'ok')
+  if (!successfulSources.length) {
+    // Do not remove last-known-good events when every source is inaccessible.
+    if (!apiKey && !additional.events.length && Object.values(additional.states).every(s => s === 'not_configured')) {
+      throw new Error('No national event source is configured.')
+    }
+    throw new Error(Object.values(errors).join('; ') || 'No Events source could be fetched')
+  }
+  return {
+    acceptedEvents: deduplicateEvents(all),
+    activeSources: successfulSources,
+    inactiveSources: PLANNED_EVENT_SOURCES.filter(provider => states[provider] !== 'ok'),
+    sourceStates: states,
+    sourceErrors: errors,
   }
 }
