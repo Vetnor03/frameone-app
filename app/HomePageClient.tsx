@@ -4495,6 +4495,18 @@ const MIRROR_PRIMARY_TEXT_CLASS = "text-[clamp(0.7rem,1.5vw,0.98rem)] font-mediu
 const MIRROR_SECONDARY_TEXT_CLASS = "text-[clamp(0.66rem,1.48vw,0.94rem)] font-medium tracking-[0.035em]"
 const MIRROR_SUBTLE_TEXT_CLASS = "text-[clamp(0.5rem,1.08vw,0.72rem)] font-medium tracking-[0.04em]"
 
+// All Reminders typography uses one preview size, independent of module size
+// and the number of entries. This follows the firmware's regular 9pt font.
+const MIRROR_REMINDER_TEXT_CLASS = "text-[clamp(0.68rem,1.55vw,0.85rem)]"
+
+function MirrorReminderHeader({ title }: { title: string }) {
+  return (
+    <div className={`max-w-full shrink-0 truncate border-b border-current px-[clamp(0.24rem,0.72vw,0.55rem)] pb-[clamp(0.06rem,0.18vw,0.12rem)] ${MIRROR_REMINDER_TEXT_CLASS} font-medium leading-none tracking-[0.12em] uppercase`} title={title}>
+      {title}
+    </div>
+  )
+}
+
 function MirrorModuleHeader({
   title,
   className = '',
@@ -4915,6 +4927,7 @@ function MirrorMonthCalendar({
   highlightDates = [],
   showMonthTitle = true,
   showWeekNumbers = false,
+  compactText = false,
 }: {
   textColor: string
   language: AppLanguage
@@ -4924,6 +4937,7 @@ function MirrorMonthCalendar({
   highlightDates?: string[]
   showMonthTitle?: boolean
   showWeekNumbers?: boolean
+  compactText?: boolean
 }) {
   const now = new Date()
   const target = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
@@ -4944,7 +4958,7 @@ function MirrorMonthCalendar({
     <div className="flex h-full w-full min-w-0 translate-y-[clamp(0.18rem,0.62vw,0.42rem)] items-center justify-center overflow-hidden px-0 py-[clamp(0.16rem,0.44vw,0.32rem)] leading-none">
       <div className="grid h-full max-h-[min(90%,11.1rem)] w-full max-w-[min(100%,15.8rem)] grid-rows-[auto_auto_1fr] gap-[clamp(0.18rem,0.5vw,0.38rem)]">
         {showMonthTitle ? (
-          <div className="min-w-0 truncate text-center text-[clamp(0.68rem,1.55vw,1rem)] font-bold tracking-[0.14em]">
+          <div className={`min-w-0 truncate text-center ${compactText ? MIRROR_REMINDER_TEXT_CLASS : 'text-[clamp(0.68rem,1.55vw,1rem)]'} font-bold tracking-[0.14em]`}>
             {monthTitle}
           </div>
         ) : (
@@ -4952,7 +4966,7 @@ function MirrorMonthCalendar({
         )}
 
         <div
-          className="grid gap-x-[clamp(0.1rem,0.5vw,0.36rem)] text-center text-[clamp(0.54rem,1.18vw,0.78rem)] font-bold tracking-[0.1em]"
+          className={`grid gap-x-[clamp(0.1rem,0.5vw,0.36rem)] text-center ${compactText ? MIRROR_REMINDER_TEXT_CLASS : 'text-[clamp(0.54rem,1.18vw,0.78rem)]'} font-bold tracking-[0.1em]`}
           style={{ gridTemplateColumns: `${showWeekNumbers ? 'minmax(1.15rem, 0.52fr) ' : ''}repeat(7, minmax(0, 1fr))` }}
         >
           {showWeekNumbers ? <div aria-hidden="true" /> : null}
@@ -4964,7 +4978,7 @@ function MirrorMonthCalendar({
         </div>
 
         <div
-          className="grid min-h-0 items-center gap-x-[clamp(0.1rem,0.5vw,0.36rem)] gap-y-[clamp(0.1rem,0.48vw,0.32rem)] text-center text-[clamp(0.72rem,1.72vw,1.12rem)] font-semibold tracking-[0.02em]"
+          className={`grid min-h-0 items-center gap-x-[clamp(0.1rem,0.5vw,0.36rem)] gap-y-[clamp(0.1rem,0.48vw,0.32rem)] text-center ${compactText ? MIRROR_REMINDER_TEXT_CLASS : 'text-[clamp(0.72rem,1.72vw,1.12rem)]'} font-semibold tracking-[0.02em]`}
           style={{
             gridTemplateColumns: `${showWeekNumbers ? 'minmax(1.15rem, 0.52fr) ' : ''}repeat(7, minmax(0, 1fr))`,
             gridTemplateRows: `repeat(${usedRows}, minmax(0, 1fr))`,
@@ -4979,7 +4993,7 @@ function MirrorMonthCalendar({
             return (
               <React.Fragment key={`calendar-row-${rowIndex}`}>
                 {showWeekNumbers ? (
-                  <div className="flex min-h-0 items-center justify-center border-r border-current pr-[clamp(0.12rem,0.34vw,0.22rem)] text-[clamp(0.52rem,1.12vw,0.74rem)] opacity-70">
+                  <div className={`flex min-h-0 items-center justify-center border-r border-current pr-[clamp(0.12rem,0.34vw,0.22rem)] ${compactText ? MIRROR_REMINDER_TEXT_CLASS : 'text-[clamp(0.52rem,1.12vw,0.74rem)]'} opacity-70`}>
                     {numberedRowDays.length > 0 ? mirrorIsoWeekNumber(year, month, sampleDay) : null}
                   </div>
                 ) : null}
@@ -5905,6 +5919,7 @@ function MirrorLargeRemindersCard({
       </div>
       <div className="min-w-0 overflow-hidden pr-[clamp(0.45rem,1.15vw,0.88rem)]">
         <MirrorMonthCalendar
+          compactText
           textColor={textColor}
           language={language}
           highlightDates={mirrorReminderCalendarDates(detail)}
@@ -5922,7 +5937,7 @@ function MirrorXLRemindersNextList({ detail, language, mutedColor }: { detail: M
 
   if (items.length <= 0) {
     return (
-      <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.8rem,2vw,1.35rem)] text-center text-[clamp(0.7rem,1.55vw,0.98rem)] font-semibold tracking-[0.06em]" style={{ color: mutedColor }}>
+      <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.8rem,2vw,1.35rem)] text-center text-[clamp(0.68rem,1.55vw,0.85rem)] font-semibold tracking-[0.06em]" style={{ color: mutedColor }}>
         {emptyLabel}
       </div>
     )
@@ -5933,10 +5948,10 @@ function MirrorXLRemindersNextList({ detail, language, mutedColor }: { detail: M
       <div className="grid w-full max-w-full gap-[clamp(0.28rem,0.82vw,0.5rem)]">
         {items.map((item, index) => (
           <div key={`${item.date}-${item.title}-${index}`} className="grid min-w-0 grid-cols-[clamp(2.1rem,5.3vw,3.15rem)_minmax(0,1fr)] items-baseline gap-[clamp(0.55rem,1.38vw,0.86rem)] text-left" title={`${formatMirrorReminderListDate(item.date)} ${item.title}`}>
-            <div className="justify-self-end text-[clamp(0.52rem,1.18vw,0.76rem)] font-semibold tracking-[0.05em]">
+            <div className="justify-self-end text-[clamp(0.68rem,1.55vw,0.85rem)] font-semibold tracking-[0.05em]">
               {formatMirrorReminderListDate(item.date)}
             </div>
-            <div className="min-w-0 truncate text-[clamp(0.66rem,1.48vw,0.96rem)] font-semibold tracking-[0.025em]">
+            <div className="min-w-0 truncate text-[clamp(0.68rem,1.55vw,0.85rem)] font-semibold tracking-[0.025em]">
               {item.title}
             </div>
           </div>
@@ -5980,10 +5995,10 @@ function MirrorXLRemindersCard({
 
       <div className="grid min-h-0 grid-rows-2 gap-y-[clamp(0.52rem,1.55vw,0.9rem)] overflow-hidden pr-[clamp(0.25rem,0.85vw,0.55rem)]">
         <div className="min-h-0 overflow-hidden">
-          <MirrorMonthCalendar textColor={textColor} language={language} highlightDates={highlightDates} showWeekNumbers />
+          <MirrorMonthCalendar compactText textColor={textColor} language={language} highlightDates={highlightDates} showWeekNumbers />
         </div>
         <div className="min-h-0 overflow-hidden">
-          <MirrorMonthCalendar textColor={textColor} language={language} monthOffset={1} highlightDates={highlightDates} showWeekNumbers />
+          <MirrorMonthCalendar compactText textColor={textColor} language={language} monthOffset={1} highlightDates={highlightDates} showWeekNumbers />
         </div>
       </div>
     </div>
@@ -6017,8 +6032,8 @@ function MirrorMediumRemindersCard({
   if (visibleItems.length <= 0) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.28rem,0.72vw,0.5rem)] px-[clamp(0.75rem,1.9vw,1.2rem)] py-[clamp(0.7rem,1.7vw,1.1rem)] text-center leading-none">
-        <MirrorModuleHeader title={header} />
-        <div className="max-w-full truncate text-[clamp(0.72rem,1.45vw,0.96rem)] font-medium tracking-[0.05em]" style={{ color: mutedColor }}>
+        <MirrorReminderHeader title={header} />
+        <div className="max-w-full truncate text-[clamp(0.68rem,1.55vw,0.85rem)] font-medium tracking-[0.05em]" style={{ color: mutedColor }}>
           {mirrorRemindersEmptyMessage(language)}
         </div>
       </div>
@@ -6028,13 +6043,13 @@ function MirrorMediumRemindersCard({
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden px-[clamp(0.75rem,1.9vw,1.2rem)] pb-[clamp(0.78rem,1.9vw,1.18rem)] pt-[clamp(0.92rem,2.3vw,1.45rem)] text-center leading-none">
       {moreLabel && (
-        <div className="absolute right-[clamp(0.55rem,1.35vw,0.92rem)] top-[clamp(0.5rem,1.25vw,0.78rem)] max-w-[34%] truncate text-[clamp(0.48rem,1vw,0.66rem)] font-medium tracking-[0.04em]" title={moreLabel}>
+        <div className="absolute right-[clamp(0.55rem,1.35vw,0.92rem)] top-[clamp(0.5rem,1.25vw,0.78rem)] max-w-[34%] truncate text-[clamp(0.68rem,1.55vw,0.85rem)] font-medium tracking-[0.04em]" title={moreLabel}>
           {moreLabel}
         </div>
       )}
 
       <div className="flex shrink-0 justify-center">
-        <MirrorModuleHeader title={header} />
+        <MirrorReminderHeader title={header} />
       </div>
 
       <div className={`flex min-h-0 flex-1 items-center justify-center ${showBottomBadge ? 'pb-[clamp(1.35rem,3vw,1.9rem)] pt-[clamp(0.55rem,1.35vw,0.9rem)]' : tomorrowLabel ? 'pb-[clamp(0.95rem,2.2vw,1.35rem)] pt-[clamp(0.62rem,1.55vw,0.98rem)]' : 'pb-[clamp(0.18rem,0.55vw,0.38rem)] pt-[clamp(0.68rem,1.65vw,1.05rem)]'}`}>
@@ -6042,20 +6057,20 @@ function MirrorMediumRemindersCard({
           {visibleItems.map((item, index) => (
             <div key={`${item}-${index}`} className="grid max-w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.42rem,1.05vw,0.68rem)]">
               <span className="h-[clamp(0.24rem,0.55vw,0.36rem)] w-[clamp(0.24rem,0.55vw,0.36rem)] rounded-full bg-current" aria-hidden="true" />
-              <span className="min-w-0 truncate text-[clamp(0.7rem,1.5vw,0.98rem)] font-medium tracking-[0.04em]" title={item}>{item}</span>
+              <span className="min-w-0 truncate text-[clamp(0.68rem,1.55vw,0.85rem)] font-medium tracking-[0.04em]" title={item}>{item}</span>
             </div>
           ))}
         </div>
       </div>
 
       {showBottomBadge && (
-        <div className="absolute bottom-[clamp(1.05rem,2.55vw,1.55rem)] left-1/2 max-w-[72%] -translate-x-1/2 truncate px-[clamp(0.55rem,1.35vw,0.88rem)] py-[clamp(0.32rem,0.8vw,0.5rem)] text-[clamp(0.5rem,1.08vw,0.72rem)] font-semibold tracking-[0.045em]" style={{ backgroundColor: '#ffffff', color: '#000000' }} title={badgeLabel}>
+        <div className="absolute bottom-[clamp(1.05rem,2.55vw,1.55rem)] left-1/2 max-w-[72%] -translate-x-1/2 truncate px-[clamp(0.55rem,1.35vw,0.88rem)] py-[clamp(0.32rem,0.8vw,0.5rem)] text-[clamp(0.68rem,1.55vw,0.85rem)] font-semibold tracking-[0.045em]" style={{ backgroundColor: '#ffffff', color: '#000000' }} title={badgeLabel}>
           {badgeLabel}
         </div>
       )}
 
       {tomorrowLabel && (
-        <div className="absolute bottom-[clamp(0.62rem,1.55vw,0.95rem)] left-1/2 max-w-[72%] -translate-x-1/2 truncate text-[clamp(0.5rem,1.08vw,0.72rem)] font-medium tracking-[0.04em]" title={tomorrowLabel}>
+        <div className="absolute bottom-[clamp(0.62rem,1.55vw,0.95rem)] left-1/2 max-w-[72%] -translate-x-1/2 truncate text-[clamp(0.68rem,1.55vw,0.85rem)] font-medium tracking-[0.04em]" title={tomorrowLabel}>
           {tomorrowLabel}
         </div>
       )}
@@ -6075,8 +6090,8 @@ function MirrorSmallRemindersCard({ detail, language, borderColor, mutedColor }:
   if (visibleItems.length <= 0) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.26rem,0.72vw,0.46rem)] px-[clamp(0.45rem,1.2vw,0.8rem)] py-[clamp(0.35rem,0.9vw,0.55rem)] text-center leading-none">
-        <MirrorModuleHeader title={header} />
-        <div className="max-w-full truncate text-[clamp(0.68rem,1.55vw,0.92rem)] font-medium tracking-[0.06em]" style={{ color: mutedColor }}>
+        <MirrorReminderHeader title={header} />
+        <div className="max-w-full truncate text-[clamp(0.68rem,1.55vw,0.85rem)] font-medium tracking-[0.06em]" style={{ color: mutedColor }}>
           {mirrorRemindersEmptyMessage(language)}
         </div>
       </div>
@@ -6086,13 +6101,13 @@ function MirrorSmallRemindersCard({ detail, language, borderColor, mutedColor }:
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden px-[clamp(0.45rem,1.2vw,0.8rem)] pb-[clamp(0.38rem,0.95vw,0.62rem)] pt-[clamp(0.65rem,1.7vw,1rem)] text-center leading-none">
       {moreLabel && (
-        <div className="absolute right-[clamp(0.45rem,1.2vw,0.8rem)] top-[clamp(0.36rem,0.95vw,0.58rem)] max-w-[38%] truncate text-[clamp(0.48rem,1.05vw,0.66rem)] font-medium tracking-[0.04em]" title={moreLabel}>
+        <div className="absolute right-[clamp(0.45rem,1.2vw,0.8rem)] top-[clamp(0.36rem,0.95vw,0.58rem)] max-w-[38%] truncate text-[clamp(0.68rem,1.55vw,0.85rem)] font-medium tracking-[0.04em]" title={moreLabel}>
           {moreLabel}
         </div>
       )}
 
       <div className="flex shrink-0 justify-center">
-        <MirrorModuleHeader title={header} />
+        <MirrorReminderHeader title={header} />
       </div>
 
       <div className={`relative min-h-0 w-full flex-1 ${showTomorrowNote ? 'mb-[clamp(0.78rem,1.75vw,1.08rem)] mt-[clamp(0.44rem,1.1vw,0.68rem)]' : 'mb-[clamp(0.12rem,0.38vw,0.28rem)] mt-[clamp(0.52rem,1.28vw,0.78rem)]'}`}>
@@ -6106,7 +6121,7 @@ function MirrorSmallRemindersCard({ detail, language, borderColor, mutedColor }:
         ))}
         <div className="grid h-full w-full items-center" style={{ gridTemplateColumns: `repeat(${visibleItems.length}, minmax(0, 1fr))` }}>
           {visibleItems.map((item, index) => (
-            <div key={`${item}-${index}`} className="flex min-w-0 items-center justify-center px-[clamp(0.32rem,0.9vw,0.58rem)] text-[clamp(0.68rem,1.6vw,0.96rem)] font-medium tracking-[0.04em]" title={item}>
+            <div key={`${item}-${index}`} className="flex min-w-0 items-center justify-center px-[clamp(0.32rem,0.9vw,0.58rem)] text-[clamp(0.68rem,1.55vw,0.85rem)] font-medium tracking-[0.04em]" title={item}>
               <span className="block max-w-full truncate">{item}</span>
             </div>
           ))}
@@ -6114,7 +6129,7 @@ function MirrorSmallRemindersCard({ detail, language, borderColor, mutedColor }:
       </div>
 
       {showTomorrowNote && (
-        <div className="absolute bottom-[clamp(0.36rem,0.95vw,0.58rem)] left-1/2 max-w-[72%] -translate-x-1/2 truncate text-[clamp(0.48rem,1.05vw,0.66rem)] font-medium tracking-[0.04em]" title={tomorrowLabel}>
+        <div className="absolute bottom-[clamp(0.36rem,0.95vw,0.58rem)] left-1/2 max-w-[72%] -translate-x-1/2 truncate text-[clamp(0.68rem,1.55vw,0.85rem)] font-medium tracking-[0.04em]" title={tomorrowLabel}>
           {tomorrowLabel}
         </div>
       )}
