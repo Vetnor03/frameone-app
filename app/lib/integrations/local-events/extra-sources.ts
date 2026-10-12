@@ -60,6 +60,19 @@ function parsedConfigs(env: NodeJS.ProcessEnv) {
       headers: optionalHeader(config.header, config.value),
     })
   }
+  // Public Event Search: documented route is /api/v3/public/events.
+  // Documentation uses billetto.dk; use the Norwegian domain for the Norwegian pilot,
+  // and allow the verified provider endpoint to be overridden in configuration.
+  // Api-Keypair value must be supplied as the complete header value provided by Billetto.
+  if (env.BILLETTO_API_KEYPAIR?.trim()) {
+    const keypair = env.BILLETTO_API_KEYPAIR.trim()
+    if (/[\r\n]/.test(keypair)) throw new Error('Invalid Billetto Api-Keypair header')
+    const url = validateProviderUrl('billetto', env.BILLETTO_PUBLIC_EVENTS_URL?.trim() || 'https://billetto.no/api/v3/public/events?limit=100')
+    configs.billetto = [{
+      url,
+      headers: { 'Api-Keypair': keypair },
+    }]
+  }
   if (env.FRISKUS_RSS_FEEDS_JSON?.trim()) {
     const parsed: unknown = JSON.parse(env.FRISKUS_RSS_FEEDS_JSON)
     if (!Array.isArray(parsed) || parsed.length > 12) throw new Error('Invalid Friskus RSS feed configuration')
@@ -156,6 +169,9 @@ export function parseSourceJson(source: ExtraSource, payload: unknown, area: Loc
     const url = validUrl(text(raw.url || raw.eventUrl || raw.event_url || raw.ticketUrl || raw.ticket_url || raw.public_url))
     const title = text(raw.title || raw.name)
     if (source === 'billetto') {
+      // The Billetto Public Event Search is scoped to a Billetto organisation / country.
+      const country = text(location.country_code || location.countryCode).toUpperCase()
+      if (country && country !== 'NO') continue
       // Billetto API terms disallow retaining public events after they have occurred.
       const state = text(raw.state).toLowerCase()
       if (state && state !== 'published') continue
