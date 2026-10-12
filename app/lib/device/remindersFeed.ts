@@ -1,4 +1,5 @@
 import { wasteCollectionDisplayTitle, type WasteDisplayLanguage } from '../integrations/waste/display.ts'
+import { localEventGroupKeyFromRaw, groupSkipId } from '../integrations/local-events/grouping.ts'
 
 const MS_PER_MINUTE = 60 * 1000
 
@@ -194,7 +195,8 @@ export function buildTeamsMeetingItems(
   todayYmd: string,
   horizonEndYmd: string,
   timeZone: string,
-  now = new Date()
+  now = new Date(),
+  bookedGroupKeys: readonly string[] = []
 ): DeviceReminderItem[] {
   return rows.flatMap((row) => {
     const title = String(row.title || '').trim()
@@ -314,12 +316,14 @@ export function buildLocalEventFrameItem(
       .filter(Boolean)
   )
 
+  const booked = new Set(bookedGroupKeys)
   const candidates = rows
     .filter((row) => row.provider === LOCAL_EVENTS_FRAME_PROVIDER)
     .filter((row) => {
       const title = String(row.title || '').trim()
       const externalId = String(row.external_id || '').trim()
-      return !!title && !!externalId && !skipped.has(externalId)
+      const groupKey = localEventGroupKeyFromRaw(row)
+      return !!title && !!externalId && !skipped.has(externalId) && !skipped.has(groupSkipId(groupKey)) && !booked.has(groupKey)
     })
 
   const timed = (candidates
@@ -355,7 +359,14 @@ export function buildLocalEventFrameItem(
       return a.titleKey.localeCompare(b.titleKey, 'nb-NO') || String(a.row.external_id).localeCompare(String(b.row.external_id))
     })
 
-  return selections.map((selection) => {
+  // Only the earliest upcoming performance represents the group on the frame.
+  const shownGroups = new Set<string>()
+  return selections.filter((selection) => {
+    const key = localEventGroupKeyFromRaw(selection.row)
+    if (!key || shownGroups.has(key)) return false
+    shownGroups.add(key)
+    return true
+  }).map((selection) => {
     const title = String(selection.row.title || '').trim()
     const allDaySelection = selection.kind === 'all-day'
     return {
