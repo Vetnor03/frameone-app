@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
 import { localEventDisplayTitle } from './display'
 import { getLocalEventPlace, normalizeLocalEventAreaPreference, suggestedLocalEventArea, type LocalEventAreaPreference } from './places'
 
-export type LocalEventsSyncResult = { importedCount: number; zeroEvents: boolean; areaPreference: LocalEventAreaPreference }
+export type LocalEventsSyncResult = { importedCount: number; zeroEvents: boolean; areaPreference: LocalEventAreaPreference; activeSources: string[]; inactiveSources: string[] }
 
 const FRAME_MANAGER_ROLES = new Set(['owner', 'admin'])
 
@@ -90,17 +90,27 @@ export async function syncLocalEventsForFrame(userId: string, deviceId: string, 
     if (error) throw new Error(error.message)
   }
   const { data: previouslyStored, error: listingError } = await supabase.from('integration_items')
-    .select('external_id').eq('device_id', deviceId).eq('provider', EDGE_OF_NORWAY_PROVIDER).limit(2000)
+    .select('external_id,raw').eq('device_id', deviceId).eq('provider', EDGE_OF_NORWAY_PROVIDER).limit(2000)
   if (listingError) throw new Error(listingError.message)
   const currentIds = new Set(rows.map((row) => row.external_id))
-  const obsoleteIds = (previouslyStored || []).map((row) => row.external_id).filter((id) => !currentIds.has(id))
+  // Prune only data from sources which responded successfully. Stale items from a
+  // failed feed remain available instead of disappearing when another feed succeeds.
+  const successfulSources = new Set<string>(result.activeSources)
+  const obsoleteIds = (previouslyStored || [])
+    .filter(row => {
+      const raw = row.raw && typeof row.raw === 'object' ? row.raw as Record<string, unknown> : {}
+      const source = typeof raw.eventSource === 'string' ? raw.eventSource : 'legacy'
+      return source === 'legacy' || successfulSources.has(source)
+    })
+    .map(row => row.external_id)
+    .filter(id => !currentIds.has(id))
   for (let index = 0; index < obsoleteIds.length; index += 200) {
     const { error: pruneError } = await supabase.from('integration_items').delete()
       .eq('device_id', deviceId).eq('provider', EDGE_OF_NORWAY_PROVIDER)
       .in('external_id', obsoleteIds.slice(index, index + 200))
     if (pruneError) throw new Error(pruneError.message)
   }
-  return { importedCount: rows.length, zeroEvents: rows.length === 0, areaPreference: area }
+  return { importedCount: rows.length, zeroEvents: rows.length === 0, areaPreference: area, activeSources: result.activeSources, inactiveSources: result.inactiveSources }
 }
 
 export async function connectLocalEventsForFrame(userId: string, deviceId: string, areaPreference: unknown, fetchImpl = fetch) {
@@ -143,7 +153,7 @@ export async function connectLocalEventsForFrame(userId: string, deviceId: strin
       .select('provider,status,external_account_label,encrypted_credentials,last_sync_at,updated_at')
       .single()
     if (updateError) throw new Error(updateError.message)
-    return { ...(syncedData || data), importedCount: sync.importedCount, zeroEvents: sync.zeroEvents, areaPreference: sync.areaPreference, syncPending: false, syncError: null }
+    return { ...(syncedData || data), importedCount: sync.importedCount, zeroEvents: sync.zeroEvents, areaPreference: sync.areaPreference, activeSources: sync.activeSources, inactiveSources: sync.inactiveSources, syncPending: false, syncError: null }
   } catch (syncError) {
     const failedAt = new Date().toISOString()
     const message = syncError instanceof Error ? syncError.message : 'Local Events sync failed'
