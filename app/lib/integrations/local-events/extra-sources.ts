@@ -1,6 +1,6 @@
 import type { EventCandidate } from './nationwide'
 import type { LocalEventAreaPreference } from './places'
-import { distanceKm } from './nationwide'
+import { distanceKm } from './nationwide.ts'
 
 export type ExtraSource = Exclude<EventCandidate['source'], 'ticketmaster'>
 export type ExtraSourceState = 'ok' | 'failed' | 'not_configured'
