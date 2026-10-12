@@ -194,7 +194,7 @@ export async function fetchNationwideEvents(
   if (!successfulSources.length) {
     // Do not remove last-known-good events when every source is inaccessible.
     if (!apiKey && !additional.events.length && Object.values(additional.states).every(s => s === 'not_configured')) {
-      throw new Error('No national event source is configured.')
+      throw new Error('Ticketmaster API key is not configured. No national event source is configured.')
     }
     throw new Error(Object.values(errors).join('; ') || 'No Events source could be fetched')
   }
