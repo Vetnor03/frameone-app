@@ -190,7 +190,7 @@ export function parseSourceJson(source: ExtraSource, payload: unknown, area: Loc
       allDay: !dateTime.time,
       sourceUrl: url,
       source,
-      venue: text(venue.name || place.name || raw.venueName || raw.locationName) || null,
+      venue: text(venue.name || location.location_name || location.city || place.name || raw.venueName || raw.locationName) || null,
       latitude: lat,
       longitude: lon,
       distanceKm: Math.round(distance * 10) / 10,
