@@ -158,8 +158,7 @@ async function fetchTicketmasterEvents(
     if (!payload._embedded?.events?.length || page + 1 >= Math.min(payload.page?.totalPages || 1, 5)) break
   }
   return {
-    // Stable Ticketmaster primary IDs when an event appears on multiple platforms.
-    acceptedEvents: deduplicateEvents([...ticketmasterEvents, ...additional.events]),
+    acceptedEvents: deduplicateEvents(all),
     activeSources: ['ticketmaster'] as string[],
     inactiveSources: ['tikkio', 'billetto', 'friskus', 'ticketco'] as string[],
   }
@@ -200,7 +199,8 @@ export async function fetchNationwideEvents(
     throw new Error(Object.values(errors).join('; ') || 'No Events source could be fetched')
   }
   return {
-    acceptedEvents: deduplicateEvents(all),
+    // Stable Ticketmaster primary IDs when an event appears on multiple platforms.
+    acceptedEvents: deduplicateEvents([...ticketmasterEvents, ...additional.events]),
     activeSources: successfulSources,
     inactiveSources: PLANNED_EVENT_SOURCES.filter(provider => states[provider] !== 'ok'),
     sourceStates: states,
