@@ -1,3 +1,4 @@
+import { localEventGroupKeyFromRaw, groupSkipId } from '@/app/lib/integrations/local-events/grouping'
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthenticatedUserId } from '@/app/lib/integrations/spond/server'
@@ -10,7 +11,8 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}))
   const deviceId = String(body?.deviceId || body?.device_id || '').trim()
-  const externalEventId = String(body?.externalEventId || body?.external_event_id || '').trim()
+  let externalEventId = String(body?.externalEventId || body?.external_event_id || '').trim()
+  const wholeGroup = body?.scope === 'group'
   const skipped = body?.skipped === true
   const provider = 'edge-of-norway'
 
@@ -28,6 +30,18 @@ export async function POST(req: Request) {
 
   if (member.error) return NextResponse.json({ error: member.error.message }, { status: 500 })
   if (!member.data) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  if (wholeGroup) {
+    // Derive the group key from a real event on this device, never from client input.
+    const { data: event, error: eventError } = await supabase.from('integration_items')
+      .select('title,raw').eq('device_id', deviceId).eq('provider', provider)
+      .eq('external_id', externalEventId).maybeSingle()
+    if (eventError) return NextResponse.json({ error: eventError.message }, { status: 500 })
+    if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    const key = localEventGroupKeyFromRaw(event)
+    if (!key) return NextResponse.json({ error: 'Invalid event group' }, { status: 400 })
+    externalEventId = groupSkipId(key)
+  }
 
   if (!skipped) {
     const deleted = await supabase
