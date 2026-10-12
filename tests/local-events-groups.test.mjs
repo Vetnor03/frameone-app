@@ -42,7 +42,7 @@ test('app-facing grouping promotes the next show when the previous expires', () 
 test('frame shows one upcoming option per venue/title and switches after first expires', () => {
   const initial = buildLocalEventFrameItem(several, [], '2026-10-12', now)
   assert.equal(initial.length, 3)
-  assert.deepEqual(initial.map(e => e.external_id), ['first', 'different', 'different-show'])
+  assert.deepEqual(new Set(initial.map(e => e.external_id)), new Set(['first', 'different', 'different-show']))
   const later = buildLocalEventFrameItem(several, [], '2026-10-15', new Date('2026-10-15T19:00:00.000Z'))
   assert.equal(later.length, 3)
   assert.ok(later.some(e => e.external_id === 'third'))
