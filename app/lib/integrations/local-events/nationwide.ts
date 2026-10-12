@@ -158,7 +158,8 @@ async function fetchTicketmasterEvents(
     if (!payload._embedded?.events?.length || page + 1 >= Math.min(payload.page?.totalPages || 1, 5)) break
   }
   return {
-    acceptedEvents: deduplicateEvents(all),
+    // Stable Ticketmaster primary IDs when an event appears on multiple platforms.
+    acceptedEvents: deduplicateEvents([...ticketmasterEvents, ...additional.events]),
     activeSources: ['ticketmaster'] as string[],
     inactiveSources: ['tikkio', 'billetto', 'friskus', 'ticketco'] as string[],
   }
@@ -180,11 +181,11 @@ export async function fetchNationwideEvents(
   const additional = await fetchAdditionalEvents(area, fetchImpl)
   const states: Record<EventCandidate['source'], 'ok' | 'failed' | 'not_configured'> = { ticketmaster: apiKey ? 'failed' : 'not_configured', ...additional.states }
   const errors: Partial<Record<EventCandidate['source'], string>> = { ...additional.errors }
-  const all = [...additional.events]
+  const ticketmasterEvents: EventCandidate[] = []
   if (apiKey) {
     try {
       const ticketmaster = await fetchTicketmasterEvents(area, fetchImpl, apiKey)
-      all.push(...ticketmaster.acceptedEvents)
+      ticketmasterEvents.push(...ticketmaster.acceptedEvents)
       states.ticketmaster = 'ok'
     } catch (err) {
       errors.ticketmaster = err instanceof Error ? err.message : 'Ticketmaster unavailable'
