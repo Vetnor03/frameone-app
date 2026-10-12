@@ -14749,8 +14749,7 @@ const manualItems: ReminderUiItem[] = (data || [])
     const now = new Date(eventNowMs)
     const today = toLocalYmd(now)
     const clock = pad2(now.getHours()) + ':' + pad2(now.getMinutes())
-    return reminders.filter((item) => {
-      if ((item.source || 'remind') !== sourceFilter) return false
+    return reminders.filter((item) => (item.source || 'remind') === sourceFilter).filter((item) => {
       if (item.source !== 'local-events') return true
       const t = normalizeReminderTime(item.time)
       return item.date > today || (item.date === today && (!t || t >= clock))
