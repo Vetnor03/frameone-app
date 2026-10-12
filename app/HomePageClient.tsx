@@ -14965,7 +14965,6 @@ const ungroupedSortedReminders = useMemo(() => {
       setSourceFilter('remind')
       setSelectedDayYmd(null)
       await loadReminders({ silent: true })
-      window.dispatchEvent(new Event('remind:refresh-reminders'))
     } catch (err) {
       setBookingError(err instanceof Error ? err.message : 'Could not save booked event')
     } finally { setBookingEventId(null) }
