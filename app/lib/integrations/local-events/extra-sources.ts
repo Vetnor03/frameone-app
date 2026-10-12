@@ -135,7 +135,7 @@ function arrayFromResponse(payload: unknown): RawItem[] {
       for (const key2 of ['events', 'results', 'items']) if (Array.isArray(inner[key2])) return (inner[key2] as unknown[]).map(obj)
     }
   }
-  return []
+  throw new Error('Unrecognized JSON event feed format')
 }
 
 /** Parse only events with a verifiable date, link, and coordinate; never assign a guessed city. */
@@ -177,6 +177,7 @@ export function parseSourceJson(source: ExtraSource, payload: unknown, area: Loc
 }
 
 export function parseFriskusRss(xml: string, area: LocalEventAreaPreference, fallback?: SourceConfiguration['coordinates']) {
+  if (!/<(?:rss|rdf:RDF|feed)(?:\s|>)/i.test(xml)) throw new Error('Unrecognized RSS feed format')
   const blocks = Array.from(xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item\s*>/gi), item => item[1]).slice(0, 500)
   const records: RawItem[] = []
   for (const block of blocks) {
@@ -210,6 +211,7 @@ export async function fetchAdditionalEvents(
         const response = await fetchImpl(feed.url, {
           headers: { Accept: source === 'friskus' ? 'application/rss+xml, application/xml' : 'application/json', ...feed.headers },
           next: { revalidate: 21600 },
+          redirect: 'error',
           signal: AbortSignal.timeout(12000),
         } as RequestInit)
         if (!response.ok) throw new Error(source + ' returned HTTP ' + response.status)
