@@ -34,6 +34,7 @@ type ReminderRow = {
   custom_repeat_days: number | null
   is_done: boolean | null
   starter_key?: string | null
+  source_event_group_key?: string | null
 }
 
 type PhysicalDeviceReminderItem = {
@@ -554,7 +555,7 @@ export async function GET(req: Request) {
     const coreReadsStartedAt = Date.now()
     const [remindersResult, completionsResult, membersResult, deviceSettingsResult] = await Promise.all([supabase
       .from('reminders')
-      .select('id, device_id, title, due_date, due_time, end_date, end_time, repeat_type, custom_repeat_days, is_done, starter_key')
+      .select('id, device_id, title, due_date, due_time, end_date, end_time, repeat_type, custom_repeat_days, is_done, starter_key, source_event_group_key')
       .in('device_id', sharedDeviceIds)
       .order('due_date', { ascending: true })
       .order('due_time', { ascending: true, nullsFirst: false })
@@ -803,7 +804,10 @@ export async function GET(req: Request) {
           ? (skipsResult.data as LocalEventSkipRow[])
           : []
 
-        localEventItems = buildLocalEventFrameItem(localEventRows, localEventSkipRows, todayYmd, now)
+        const bookedEventGroups = rows
+          .filter(row => row.device_id === device_id && !row.is_done && row.source_event_group_key)
+          .map(row => String(row.source_event_group_key))
+        localEventItems = buildLocalEventFrameItem(localEventRows, localEventSkipRows, todayYmd, now, bookedEventGroups)
         console.info('[device/reminders] local-events timing', {
           device_id,
           rows: localEventRows.length,
