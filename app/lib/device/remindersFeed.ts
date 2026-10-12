@@ -307,7 +307,8 @@ export function buildLocalEventFrameItem(
   rows: IntegrationItemRow[],
   skipRows: LocalEventSkipRow[],
   todayYmd: string,
-  now = new Date()
+  now = new Date(),
+  bookedGroupKeys: readonly string[] = []
 ): DeviceReminderItem[] {
   const skipped = new Set(
     skipRows
