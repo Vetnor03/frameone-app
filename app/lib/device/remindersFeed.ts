@@ -195,8 +195,7 @@ export function buildTeamsMeetingItems(
   todayYmd: string,
   horizonEndYmd: string,
   timeZone: string,
-  now = new Date(),
-  bookedGroupKeys: readonly string[] = []
+  now = new Date()
 ): DeviceReminderItem[] {
   return rows.flatMap((row) => {
     const title = String(row.title || '').trim()
