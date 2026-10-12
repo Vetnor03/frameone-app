@@ -21,13 +21,11 @@
 #include <freertos/task.h>
 
 #include "FreeSans9ptNO.h"
-#include "FreeSansBold12ptNO.h"
-#include "FreeSansBold18ptNO.h"
 
-#define FONT_B9  (&FreeSans9pt8b)
-#define FONT_B12 (&FreeSansBold12pt8b)
-#define FONT_B18 (&FreeSansBold18pt8b)
+#define FONT_B9 (&FreeSans9pt8b)
 
+// Keep every Reminders string at the same 9pt font: headings, calendar,
+// empty states, timestamps and reminder items, regardless of layout or count.
 static const GFXfont* REMINDER_CONTENT_FONT = FONT_B9;
 
 #define REMINDERS_DEBUG 1
@@ -165,8 +163,7 @@ static int textWidth(const char* text, const GFXfont* font) {
 }
 
 static int fontLineHeight(const GFXfont* font) {
-  if (font == FONT_B18) return 24;
-  if (font == FONT_B12) return 18;
+  (void)font;
   return 14;
 }
 
@@ -260,7 +257,7 @@ static void buildRelativeDateText(int daysUntil, bool isOverdue, char* out, size
 }
 
 static void drawEmptyState(const Cell& c, const char* line1, const char* line2) {
-  const GFXfont* f1 = FONT_B12;
+  const GFXfont* f1 = REMINDER_CONTENT_FONT;
   const GFXfont* f2 = FONT_B9;
 
   int lh1 = fontLineHeight(f1);
@@ -991,7 +988,6 @@ static int measuredTextHeight(const char* text, const GFXfont* font) {
 
 static int smartLineStep(const GFXfont* font) {
   if (font == FONT_B9) return 21;
-  if (font == FONT_B12) return 25;
   return fontLineHeight(font) + 3;
 }
 
@@ -1075,7 +1071,7 @@ struct SmartReminderLayout {
   bool fits = false;
   bool wrapped = false;
   bool includeLabel = false;
-  const GFXfont* font = FONT_B12;
+  const GFXfont* font = REMINDER_CONTENT_FONT;
   int count = 0;
   int blockH = 0;
   int maxLineW = 0;
@@ -1088,7 +1084,7 @@ static SmartReminderLayout* g_smartLayoutScratch = nullptr;
 
 static void resetSmartReminderLayout(SmartReminderLayout& layout) {
   memset(&layout, 0, sizeof(layout));
-  layout.font = FONT_B12;
+  layout.font = REMINDER_CONTENT_FONT;
 
   for (int i = 0; i < 4; i++) {
     layout.items[i].itemIdx = -1;
@@ -1375,11 +1371,11 @@ static void drawReminderMonthCalendarRows(int x, int y, int w, int h,
   if (showMonthTitle) {
     const char* mname = safeMonth(month0);
     int16_t x1, y1; uint16_t tw, th;
-    measureText(mname, FONT_B12, x1, y1, tw, th);
+    measureText(mname, REMINDER_CONTENT_FONT, x1, y1, tw, th);
     int tx = blockX + (blockW - (int)tw) / 2;
     int ty = curY + (titleH - (int)th) / 2;
     d.setTextColor(ink);
-    d.setFont(FONT_B12);
+    d.setFont(REMINDER_CONTENT_FONT);
     d.setCursor(tx - x1, ty - y1);
     d.print(mname);
     curY += titleH + titleGap;
@@ -1537,7 +1533,7 @@ static void drawNextRemindersList(int x, int y, int w, int h,
                                   int bucketCount,
                                   int primaryIdx) {
   if (!g_cache->ok || g_cache->count <= 0) {
-    drawCenteredLine(x, y, w, h, "No reminders", FONT_B12, Theme::ink());
+    drawCenteredLine(x, y, w, h, "No reminders", REMINDER_CONTENT_FONT, Theme::ink());
     return;
   }
 
@@ -1551,7 +1547,7 @@ static void drawNextRemindersList(int x, int y, int w, int h,
 
   tm nowTm;
   if (!getLocalTmQuick(nowTm)) {
-    drawCenteredLine(x, y, w, h, "No reminders", FONT_B12, Theme::ink());
+    drawCenteredLine(x, y, w, h, "No reminders", REMINDER_CONTENT_FONT, Theme::ink());
     return;
   }
 
@@ -1616,7 +1612,7 @@ static void drawNextRemindersList(int x, int y, int w, int h,
   }
 
   if (pickedCount <= 0) {
-    drawCenteredLine(x, y, w, h, "No more reminders", FONT_B12, Theme::ink());
+    drawCenteredLine(x, y, w, h, "No more reminders", REMINDER_CONTENT_FONT, Theme::ink());
     return;
   }
 
@@ -1766,11 +1762,11 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
 
   int16_t hx1, hy1;
   uint16_t hw, hh;
-  measureText(headerBuf, FONT_B12, hx1, hy1, hw, hh);
+  measureText(headerBuf, REMINDER_CONTENT_FONT, hx1, hy1, hw, hh);
 
   int titleBaseline = c.y + topPad - hy1;
 
-  d.setFont(FONT_B12);
+  d.setFont(REMINDER_CONTENT_FONT);
   d.setTextColor(ink);
   d.setCursor(c.x + c.w / 2 - (int)hw / 2 - hx1, titleBaseline);
   d.print(headerBuf);
@@ -1936,11 +1932,11 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
   const int bottomPad = 35;
 
   int16_t hx1, hy1; uint16_t hw, hh;
-  measureText(headerBuf, FONT_B12, hx1, hy1, hw, hh);
+  measureText(headerBuf, REMINDER_CONTENT_FONT, hx1, hy1, hw, hh);
 
   int titleBaseline = c.y + topPad - hy1;
 
-  d.setFont(FONT_B12);
+  d.setFont(REMINDER_CONTENT_FONT);
   d.setTextColor(ink);
   d.setCursor(c.x + c.w / 2 - (int)hw / 2 - hx1, titleBaseline);
   d.print(headerBuf);
@@ -2418,8 +2414,8 @@ static void drawAdaptiveSection(const ReminderBucket* bucket, int visible, int o
   const int headingH = heading ? 30 : 0;
   const int footerH = sectionFooter && overflow ? 24 : 0;
   if (heading) {
-    drawAdaptiveLabel({rect.x, rect.y, rect.w, headingH}, headingText, FONT_B12);
-    int16_t x1, y1; uint16_t tw, th; measureText(headingText, FONT_B12, x1, y1, tw, th);
+    drawAdaptiveLabel({rect.x, rect.y, rect.w, headingH}, headingText, REMINDER_CONTENT_FONT);
+    int16_t x1, y1; uint16_t tw, th; measureText(headingText, REMINDER_CONTENT_FONT, x1, y1, tw, th);
     const int lineW = min(rect.w, (int)tw);
     DisplayCore::get().fillRect(rect.x + (rect.w - lineW) / 2, rect.y + 22,
                                 lineW, 2, Theme::ink());
@@ -2476,7 +2472,7 @@ static void renderAdaptiveFallbackBucket(const Cell& c, const ReminderBucket& bu
   const int overflow = max(0, bucket.count - visible);
   const int headingH = min(30, max(20, inner.h / 4));
   char heading[40]; buildAdaptiveFallbackHeading(bucket, heading, sizeof(heading));
-  drawAdaptiveLabel({inner.x, inner.y, inner.w, headingH}, heading, FONT_B12);
+  drawAdaptiveLabel({inner.x, inner.y, inner.w, headingH}, heading, REMINDER_CONTENT_FONT);
   const int footerH = overflow ? 22 : 0;
   ReminderRect content = {inner.x, inner.y + headingH, inner.w,
                           max(1, inner.h - headingH - footerH - (footerH ? 4 : 0))};
