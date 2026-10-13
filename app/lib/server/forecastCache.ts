@@ -255,7 +255,7 @@ function errorCode(e: unknown) {
 // Limit outbound Open-Meteo fan-out from a single warm Vercel instance. Surf's
 // Today's Best can otherwise launch several forecast requests at once. This
 // gate is deliberately shared by both Weather and Surf, with Weather prioritized.
-const MAX_CONCURRENT_OPEN_METEO_REQUESTS = 3
+const MAX_CONCURRENT_OPEN_METEO_REQUESTS = 1
 type ForecastTransportWaiter = { priority: number; resolve: () => void }
 type ForecastTransportGate = { active: number; waiters: ForecastTransportWaiter[] }
 const transportGlobal = globalThis as typeof globalThis & {
