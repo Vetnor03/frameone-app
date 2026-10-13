@@ -308,7 +308,7 @@ test('non-transient Open-Meteo 400 error is not retried', async () => {
   assert.equal(result.error, '400')
 })
 
-test('parallel distinct forecast requests are capped at three upstream connections', async () => {
+test('parallel distinct forecast requests are sent sequentially to Open-Meteo', async () => {
   __resetForecastCacheForTests()
   let active = 0
   let peak = 0
@@ -324,7 +324,7 @@ test('parallel distinct forecast requests are capped at three upstream connectio
     url: baseUrl.replace('latitude=60.3929', `latitude=${60.3929 + index * 0.01}`),
   })))
   const results = await Promise.all(requests)
-  assert.ok(peak <= 3, `peak concurrent outbound requests was ${peak}`)
+  assert.equal(peak, 1, `peak concurrent outbound requests was ${peak}`)
   assert.equal(results.length, 9)
   assert.ok(results.every((result) => result.payload?.ok === true))
 })
