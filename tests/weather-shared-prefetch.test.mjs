@@ -11,7 +11,7 @@ const migration = readFileSync(new URL('../supabase/migrations/20261013060000_ad
 
 test('Open-Meteo requests are sequential and Surf candidates do not fan out', () => {
   assert.match(transport, /MAX_CONCURRENT_OPEN_METEO_REQUESTS = 1/)
-  assert.match(transport, /withForecastTransport\(options\.dataType/)
+  assert.match(transport, /fetchOpenMeteoWithRecovery\(options\.dataType/)
   assert.match(surf, /const CONCURRENCY = 1/)
   assert.doesNotMatch(surf, /forceRefresh: truthy1\(url\.searchParams\.get\('forceRefresh'\)\) \|\| truthy1\(url\.searchParams\.get\('refresh'\)\)/)
 })
