@@ -71,5 +71,5 @@ test('Power Save keeps a one-hour News freshness floor but cannot wake solely fo
   assert.match(scheduler, /if \(!includeNewsWake && state\.modules\[i\]\.key == "news"\) continue;/)
   assert.match(scheduler, /const bool newsFreshness = state\.modules\[i\]\.key == "news";/)
   assert.match(scheduler, /d\.at <= now \|\|[\s\S]*!newsFreshness/)
-  assert.equal((sketch.match(/!g_powerSaverMode, !g_powerSaverMode\);/g) ?? []).length, 6)
+  assert.equal((sketch.match(/false, false\);/g) ?? []).length, 6)
 })

@@ -6,8 +6,8 @@ CHECKER = Path('frame/src/network/UpdateChecker.cpp').read_text()
 SIGNATURE = Path('app/lib/device/contentSignature.mjs').read_text() + Path('app/lib/device/contentSignatureBase.mjs').read_text()
 
 def test_revision_probe_uses_source_aware_idle_cadence_and_is_cheap():
-    assert 'static const uint32_t REALTIME_UPDATE_POLL_MS = 1000;' in MAIN
-    assert 'static const uint32_t BATTERY_CONNECTED_IDLE_LOOP_MS = 10000;' in MAIN
+    assert 'static const uint32_t MANUAL_UPDATE_POLL_MS = 10000;' in MAIN
+    assert 'static const uint32_t MANUAL_RENDER_RETRY_START_MS = 1000;' in MAIN
     loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('// --------------------------------------\n// Setup')]
     assert 'remainingProbeWaitMs' in loop
     assert 'waitForInteractiveCadence(pwr.usbPresent, remainingProbeWaitMs)' in loop
@@ -32,7 +32,7 @@ def test_manual_revision_fetches_new_config_then_renders_persists_and_acks():
     explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool retryRenderedAck')]
     assert explicit.index('FrameConfigApi::fetchWithStatus') < explicit.index('SmartRefresh::fetchRenderState')
     assert explicit.index('renderSmartDashboard') < explicit.index('saveRenderedAwaitingAck')
-    retry = MAIN[MAIN.index('static bool retryRenderedAck'):MAIN.index('static void consumeNormalSyncPeriod')]
+    retry = MAIN[MAIN.index('static bool retryRenderedAck'):MAIN.index('static void deferFailedScheduledRefresh')]
     assert retry.index('getRenderedAwaitingAck') < retry.index('LiveUpdate::acknowledge')
 
 def test_renders_are_serial_and_new_layout_cannot_use_cached_config():
@@ -41,16 +41,15 @@ def test_renders_are_serial_and_new_layout_cannot_use_cached_config():
     explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool retryRenderedAck')]
     assert 'FrameConfigApi::fetchWithStatus(g_cfg' in explicit
 
-def test_revision_safety_poll_replaces_four_hour_redraw_policy():
-    assert 'MAX_REVISION_POLL_SECONDS = 10 * 60' in MAIN
-    assert 'PROBE_WAKE_SECONDS' not in MAIN
+def test_instant_mode_never_uses_fixed_interval_content_safety_poll():
+    assert 'MAX_REVISION_POLL_SECONDS' not in MAIN
+    assert 'normalSyncElapsedSeconds' not in MAIN
+    assert 'revisionSafetyDue' not in MAIN
     assert 'nextDeepSleepDurationUs()' in MAIN
-    assert 'SCHEDULED_CONTENT_CHECK_SECONDS' not in MAIN
-    assert '4 * 60 * 60' not in MAIN
-    assert 'NORMAL_SYNC_SECONDS' not in MAIN
-    assert 'WAKES_PER_REFRESH' not in MAIN
+    assert 'false, false);' in MAIN
+    assert 'MANUAL_UPDATE_POLL_MS = 10000' in MAIN
+    assert 'PROBE_WAKE_SECONDS' not in MAIN
     assert 'shouldForcePeriodicRefresh' not in MAIN
-    assert 'NORMAL_SYNC_SECONDS = 900' not in MAIN
 
 def test_signature_uses_exact_active_instances_and_physical_endpoints():
     assert "INSTANCE_BASES = new Set(['weather', 'surf', 'soccer', 'stocks'])" in SIGNATURE
@@ -69,9 +68,9 @@ def test_unchanged_revision_is_cheap_and_changed_content_uses_display_policy():
 
 def test_revision_and_render_state_failures_preserve_display():
     scheduled = MAIN[MAIN.index('ContentRevisionState revisionState;'):]
-    assert 'Revision safety poll unavailable; preserving display and sources' in scheduled
+    assert 'Scheduled revision check unavailable; preserving display and sources' in scheduled
     assert 'deferFailedScheduledRefresh("revision probe unavailable")' in scheduled
-    retry = MAIN[MAIN.index('static void deferFailedScheduledRefresh'):MAIN.index('static void consumeNormalSyncPeriod')]
+    retry = MAIN[MAIN.index('static void deferFailedScheduledRefresh'):MAIN.index('static void refreshPowerOverlayIfNeeded')]
     assert 'const uint32_t retrySeconds = g_powerSaverMode ? 30UL * 60UL : 60UL' in retry
     assert 'g_revisionRetryNotBefore = time(nullptr) + retrySeconds' in retry
     assert 'g_nextScheduledWake = g_revisionRetryNotBefore' in retry
@@ -130,7 +129,7 @@ def test_manual_timing_diagnostics_and_safe_request_paths_are_present():
 def test_firmware_version_change_redraws_once_and_success_persists_version():
     checker = Path('frame/src/network/UpdateChecker.cpp').read_text()
     assert 'prefs.getString("fw_ver", "") != String(fwVer)' in checker
-    maintenance = MAIN[MAIN.index('static void runFirmwareMaintenanceIfNeeded'):MAIN.index('static InteractiveModeResult finishInteractiveMode')]
+    maintenance = MAIN[MAIN.index('static void runFirmwareMaintenanceIfNeeded'):MAIN.index('static void deferFailedScheduledRefresh')]
     assert maintenance.index('shouldForceRedrawForFirmware') < maintenance.index('forceNextFullRefresh(true)')
     assert maintenance.index('renderLoadedDashboard') < maintenance.index('saveFirmwareVersion(FW_VER)')
     assert maintenance.count('saveFirmwareVersion(FW_VER)') == 1
@@ -194,7 +193,9 @@ def test_charger_events_do_not_trigger_or_reset_content_clock():
     due = scheduler[scheduler.index('bool normalSyncDue'):scheduler.index('if (normalSyncDue)')]
     assert 'chargerStateChanged' not in due
     assert 'wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED' in due
-    assert 'normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS' in due
+    assert 'normalSyncElapsedSeconds' not in due
+    assert 'MAX_REVISION_POLL_SECONDS' not in due
+    assert 'g_nextScheduledWake' in due
 
 def test_unchanged_revision_persists_successful_poll_and_rebased_wake_without_display():
     scheduled = MAIN[MAIN.index('} else if (!revisionState.changed'):MAIN.index('} else {', MAIN.index('} else if (!revisionState.changed'))]

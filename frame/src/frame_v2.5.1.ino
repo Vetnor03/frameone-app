@@ -41,27 +41,21 @@
 #include <inttypes.h>
 
 // Change this string whenever you want to force one redraw after flashing/OTA
-static const char* FW_VER = "v2.7.2";
+static const char* FW_VER = "v2.7.3";
 
 // Public app page shown during pairing
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
 
-// Cheap live-update discovery wake. Keep it isolated from display decisions:
-// waking and observing a revision never imply an e-paper transaction.
-// Keep the short fallback probe for fast explicit app updates. The independent
-// ten-minute background maximum and module deadlines decide content work; this
-// probe never implies a source fetch or redraw.
-static const uint32_t MAX_REVISION_POLL_SECONDS = 10 * 60;
-// USB stays fully realtime. On battery, a PM-capable Alfred remains connected
-// with MAX_MODEM/automatic light sleep and uses a short connected idle cadence.
-// Builds without automatic light sleep use the revision-safety deep sleep.
-static const uint32_t REALTIME_UPDATE_POLL_MS = 1000;
-static const uint32_t BATTERY_CONNECTED_IDLE_LOOP_MS = 10000;
+// Both modes schedule background content exclusively from module deadlines.
+// Instant mode additionally polls ONLY the explicit app Update command every
+// 10 s. Unchanged command state never fetches content or touches e-paper.
+// On battery, use connected automatic light sleep where available; otherwise
+// discover app commands with 10 s deep-sleep wake-ups.
+static const uint32_t MANUAL_UPDATE_POLL_MS = 10000;
+static const uint32_t MANUAL_RENDER_RETRY_START_MS = 1000;
 static const uint32_t REALTIME_FAILURE_BACKOFF_MS = 5000;
 
 // Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
-RTC_DATA_ATTR static uint32_t normalSyncElapsedSeconds = 0;
-RTC_DATA_ATTR static uint32_t plannedDeepSleepSeconds = SmartRefresh::REVISION_SAFETY_SECONDS;
 RTC_DATA_ATTR static time_t g_nextScheduledWake = 0;
 RTC_DATA_ATTR static time_t g_revisionRetryNotBefore = 0;
 // Power Save is retained across timer wakes so the frame can choose the correct
@@ -127,12 +121,11 @@ static bool interactiveModeEnabled(bool usbPresent) {
 static void setPowerSaverMode(bool enabled) {
   if (g_powerSaverMode == enabled) return;
   g_powerSaverMode = enabled;
-  normalSyncElapsedSeconds = 0;
 
   const time_t now = time(nullptr);
   if (now >= 1000000000 && g_smartState.moduleCount > 0) {
     g_nextScheduledWake = now + SmartRefresh::secondsUntilNextWake(
-      g_smartState, now, g_revisionCheckedAt, !g_powerSaverMode, !g_powerSaverMode);
+      g_smartState, now, g_revisionCheckedAt, false, false);
   }
 
   Serial.println(g_powerSaverMode
@@ -367,15 +360,14 @@ static uint64_t nextDeepSleepDurationUs() {
   const time_t now = time(nullptr);
   const time_t checkedAt = g_revisionCheckedAt > 0 ? g_revisionCheckedAt : now;
   uint32_t seconds = SmartRefresh::secondsUntilNextWake(
-    g_smartState, now, checkedAt, !g_powerSaverMode, !g_powerSaverMode);
+    g_smartState, now, checkedAt, false, false);
   if (seconds <= 1 && g_revisionRetryNotBefore > now)
     seconds = (uint32_t)(g_revisionRetryNotBefore - now);
   // Invalid/unset wall time or scheduler state falls back to the revision
-  // safety maximum for normal smart-refresh work.
+  // Invalid-clock/bootstrap fallback only, never a periodic content check.
   if (now < 1000000000 || seconds == 0) seconds = SmartRefresh::REVISION_SAFETY_SECONDS;
-  // Deep sleep cannot receive a cloud manual-update request. Keep the smart
-  // scheduler's due-work calculation, but never sleep longer than the manual
-  // discovery ceiling so the app Update button remains responsive on battery.
+  // Connected light sleep is preferred. The deep-sleep fallback still wakes
+  // for manual commands within 10 seconds, without scheduling content work.
   if (!g_powerSaverMode && seconds > SmartRefresh::MANUAL_PROBE_SECONDS)
     seconds = SmartRefresh::MANUAL_PROBE_SECONDS;
   return (uint64_t)seconds * 1000000ULL;
@@ -389,7 +381,6 @@ static void goToSleep(bool usbPresent) {
     ? "Power Saver: sleeping until next scheduled deadline"
     : "LiveUpdate: dynamic deep sleep");
   const uint64_t durationUs = nextDeepSleepDurationUs();
-  plannedDeepSleepSeconds = (uint32_t)(durationUs / 1000000ULL);
   goToSleepForUs(durationUs, usbPresent);
 }
 
@@ -957,7 +948,7 @@ static bool fetchAndRenderExplicit(
   SmartRefresh::mergeScheduler(g_smartState, desired, true);
   g_revisionCheckedAt = time(nullptr);
   g_nextScheduledWake = g_revisionCheckedAt + SmartRefresh::secondsUntilNextWake(
-    g_smartState, g_revisionCheckedAt, g_revisionCheckedAt, !g_powerSaverMode, !g_powerSaverMode);
+    g_smartState, g_revisionCheckedAt, g_revisionCheckedAt, false, false);
   SmartRefresh::saveScheduler(g_smartState, g_revisionCheckedAt);
   ContentRevisionState contentRevision;
   if (SmartRefresh::probeRevision(DeviceIdentity::getToken(), SmartRefresh::displayedRevision(), contentRevision))
@@ -1048,16 +1039,6 @@ static void runFirmwareMaintenanceIfNeeded(
   Serial.println("Renderer version changed; maintenance redraw complete");
 }
 
-static InteractiveModeResult finishInteractiveMode(
-  uint32_t startedAtMs,
-  uint32_t baselineElapsedAtEntry,
-  InteractiveModeResult result
-) {
-  const uint32_t awakeSeconds = (millis() - startedAtMs) / 1000U;
-  normalSyncElapsedSeconds = baselineElapsedAtEntry + awakeSeconds;
-  return result;
-}
-
 static void deferFailedScheduledRefresh(const char* reason) {
   // Transient server outages must not repeatedly wake a battery-powered frame.
   // This changes only failed-request retries, not module deadlines or redraws.
@@ -1065,12 +1046,6 @@ static void deferFailedScheduledRefresh(const char* reason) {
   g_revisionRetryNotBefore = time(nullptr) + retrySeconds;
   g_nextScheduledWake = g_revisionRetryNotBefore;
   Serial.printf("SmartRefresh: %s; retry in %lu seconds\n", reason, (unsigned long)retrySeconds);
-}
-
-static void consumeNormalSyncPeriod() {
-  if (normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS) {
-    normalSyncElapsedSeconds -= MAX_REVISION_POLL_SECONDS;
-  }
 }
 
 // Plugging or unplugging the charger is also the user's physical display-reset
@@ -1113,9 +1088,7 @@ static InteractiveModeResult runInteractiveMode(
 
   uint64_t lastRequested = state.requestedRevision;
   uint64_t lastDisplayed = state.displayedRevision;
-  uint32_t configRetryMs = REALTIME_UPDATE_POLL_MS;
-  const uint32_t interactiveStartedAtMs = millis();
-  const uint32_t baselineElapsedAtEntry = normalSyncElapsedSeconds;
+  uint32_t configRetryMs = MANUAL_RENDER_RETRY_START_MS;
 
   while (true) {
     const PowerSenseDebug sampledPower = readPowerSenseDebug();
@@ -1169,25 +1142,14 @@ static InteractiveModeResult runInteractiveMode(
       }
       Serial.println("LiveUpdate: Wi-Fi reconnected");
     }
-    const uint32_t awakeSeconds = (millis() - interactiveStartedAtMs) / 1000U;
-    const bool scheduledSyncDue = scheduledSyncDueNow();
-    const bool revisionSafetyDue =
-      baselineElapsedAtEntry + awakeSeconds >= MAX_REVISION_POLL_SECONDS;
-    if (scheduledSyncDue || revisionSafetyDue) {
-      Serial.println(scheduledSyncDue
-        ? "LiveUpdate: scheduled module deadline became due while interactive"
-        : "LiveUpdate: normal sync became due while interactive");
-      // Carry the freshest manual-update state into the baseline path. A failure
-      // is non-blocking: scheduled/safety work is already due and must not wait.
+    if (scheduledSyncDueNow()) {
+      Serial.println("LiveUpdate: scheduled module deadline became due while interactive");
+      // Preserve manual update priority if a command coincides with a module deadline.
       LiveUpdateState deadlineState{};
       if (LiveUpdate::probe(DeviceIdentity::getToken(), deadlineState)) {
         state = deadlineState;
       }
-      return finishInteractiveMode(
-        interactiveStartedAtMs,
-        baselineElapsedAtEntry,
-        INTERACTIVE_NORMAL_SYNC_DUE
-      );
+      return INTERACTIVE_NORMAL_SYNC_DUE;
     }
     uint64_t awaitingAck = LiveUpdate::getRenderedAwaitingAck();
     if (retryRenderedAck(state.displayedRevision)) {
@@ -1245,7 +1207,7 @@ static InteractiveModeResult runInteractiveMode(
           ? 5000U
           : configRetryMs * 2U;
       } else {
-        configRetryMs = REALTIME_UPDATE_POLL_MS;
+        configRetryMs = MANUAL_RENDER_RETRY_START_MS;
         if (explicitAcked) {
           // Report after restoring ALS so telemetry records the steady-state
           // power mode rather than the short realtime burst.
@@ -1265,8 +1227,7 @@ static InteractiveModeResult runInteractiveMode(
     // If USB was inserted during battery ALS, return to the top immediately
     // so the source-aware USB policy disables light sleep before any network
     // request or e-paper work can delay host enumeration.
-    const uint32_t probeCadenceMs =
-      pwr.usbPresent ? REALTIME_UPDATE_POLL_MS : BATTERY_CONNECTED_IDLE_LOOP_MS;
+    const uint32_t probeCadenceMs = MANUAL_UPDATE_POLL_MS;
     const uint32_t lastProbeStartedAtMs = LiveUpdate::lastNetworkProbeStartedAtMs();
     const uint32_t sinceProbeStartedMs =
       lastProbeStartedAtMs == 0 ? probeCadenceMs : millis() - lastProbeStartedAtMs;
@@ -1352,23 +1313,12 @@ void setup() {
   }
 
   const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
-  if (wakeCause == ESP_SLEEP_WAKEUP_TIMER && !g_powerSaverMode) {
-    normalSyncElapsedSeconds += plannedDeepSleepSeconds;
-  }
-  // Power events never advance, reset, or trigger the display-content clock.
-  // Cold boot initializes the baseline; subsequent checks are interval-only.
+  // Cold boot initializes content; thereafter only module deadlines trigger
+  // automatic source work. Manual probes and charger edges do not.
   bool normalSyncDue =
     wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED ||
-    (g_nextScheduledWake > 0 && time(nullptr) >= g_nextScheduledWake) ||
-    (!g_powerSaverMode && normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS);
-  if (normalSyncDue) {
-    if (!g_powerSaverMode && normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS) {
-      normalSyncElapsedSeconds -= MAX_REVISION_POLL_SECONDS;
-    } else {
-      normalSyncElapsedSeconds = 0;
-    }
-    Serial.println("LiveUpdate: normal sync due");
-  }
+    (g_nextScheduledWake > 0 && time(nullptr) >= g_nextScheduledWake);
+  if (normalSyncDue) Serial.println("SmartRefresh: cold boot or module deadline due");
 
 
   Serial.print("device_id: ");
@@ -1494,7 +1444,7 @@ void setup() {
   if (SmartRefresh::loadScheduler(g_smartState, g_revisionCheckedAt)) {
     const time_t restoredNow = time(nullptr);
     g_nextScheduledWake = restoredNow + SmartRefresh::secondsUntilNextWake(
-      g_smartState, restoredNow, g_revisionCheckedAt, !g_powerSaverMode, !g_powerSaverMode);
+      g_smartState, restoredNow, g_revisionCheckedAt, false, false);
     // A failed network refresh must not cause immediate retries after a sleep
     // or reconnect just because its original source deadline is overdue.
     if (g_revisionRetryNotBefore > restoredNow &&
@@ -1561,7 +1511,6 @@ void setup() {
   } else if (postPairConfig == FrameConfigApi::FETCH_ERROR) {
     Serial.println("frame-config still unavailable; preserving existing e-paper content");
     Serial.println("Retrying frame-config on a clean wake in 10 seconds");
-    plannedDeepSleepSeconds = 10;
     goToSleepForUs(10ULL * 1000000ULL, pwrEarly.usbPresent);
   } else if (postPairConfig == FrameConfigApi::FETCH_OK) {
     setupPendingScreenDisplayed = false;
@@ -1645,7 +1594,7 @@ run_normal_sync:
   if (renderedWithoutSignature) normalSyncDue = false;
 
   // Battery, recharge, pairing and OTA maintenance remain independent of the
-  // display-content cadence. A safety wake performs only the tiny revision read.
+  // display-content cadence. Manual-command discovery never fetches content.
   PowerSenseDebug pwr = readPowerSenseDebug();
   BatteryState batt = BatteryManager::readAndUpdate(pwr.usbPresent);
   BatteryManager::logState("post-wifi-pair", batt);
@@ -1659,7 +1608,6 @@ run_normal_sync:
   if (!normalSyncDue) {
     if (interactiveModeEnabled(pwr.usbPresent) &&
         runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
-      consumeNormalSyncPeriod();
       normalSyncDue = true;
       goto run_normal_sync;
     }
@@ -1674,14 +1622,14 @@ run_normal_sync:
   if (wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED && !scheduledModules.length()) scheduledModules = "all";
   if (!SmartRefresh::probeRevision(DeviceIdentity::getToken(), knownRevision, revisionState)) {
     deferFailedScheduledRefresh("revision probe unavailable");
-    Serial.println("Revision safety poll unavailable; preserving display and sources");
+    Serial.println("Scheduled revision check unavailable; preserving display and sources");
   } else if (!revisionState.changed && !scheduledModules.length()) {
     g_revisionRetryNotBefore = 0;
     g_revisionCheckedAt = time(nullptr);
     g_nextScheduledWake = g_revisionCheckedAt + SmartRefresh::secondsUntilNextWake(
-      g_smartState, g_revisionCheckedAt, g_revisionCheckedAt, !g_powerSaverMode, !g_powerSaverMode);
+      g_smartState, g_revisionCheckedAt, g_revisionCheckedAt, false, false);
     SmartRefresh::saveScheduler(g_smartState, g_revisionCheckedAt);
-    Serial.println("Revision unchanged; no config, source, or display work");
+    Serial.println("Scheduled revision unchanged; no config, source, or display work");
 #if TEMP_REFRESH_AUDIT_ENABLED
     // TEMP_REFRESH_AUDIT: represent the cheap unchanged evaluation without
     // manufacturing source/render detail that was deliberately not fetched.
@@ -1744,7 +1692,7 @@ run_normal_sync:
           if (batt.percent >= 0) UpdateChecker::saveBatteryPercent(batt.percent);
           g_revisionCheckedAt = time(nullptr);
           g_nextScheduledWake = time(nullptr) + SmartRefresh::secondsUntilNextWake(
-            g_smartState, time(nullptr), g_revisionCheckedAt, !g_powerSaverMode, !g_powerSaverMode);
+            g_smartState, time(nullptr), g_revisionCheckedAt, false, false);
           SmartRefresh::saveScheduler(g_smartState, g_revisionCheckedAt);
           postDeviceStatus(batt, pwr, displayPlan.type != SmartDisplayPlan::NONE);
           Serial.println(displayPlan.type == SmartDisplayPlan::NONE
@@ -1760,7 +1708,6 @@ run_normal_sync:
   normalSyncDue = false;
   if (interactiveModeEnabled(pwr.usbPresent) &&
       runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
-    consumeNormalSyncPeriod();
     normalSyncDue = true;
     goto run_normal_sync;
   }

@@ -236,7 +236,7 @@ test('connected manual detection remains ten seconds while true deep sleep is dy
   const header = read('frame/src/core/SmartRefresh.h')
   assert.match(header, /REVISION_SAFETY_SECONDS = 10 \* 60/)
   assert.match(header, /MANUAL_PROBE_SECONDS = 10/)
-  assert.match(firmware, /BATTERY_CONNECTED_IDLE_LOOP_MS = 10000/)
+  assert.match(firmware, /MANUAL_UPDATE_POLL_MS = 10000/)
   assert.match(firmware, /nextDeepSleepDurationUs[\s\S]*secondsUntilNextWake/)
   assert.doesNotMatch(firmware, /PROBE_WAKE_US|PROBE_WAKE_SECONDS/)
   assert.match(firmware, /enablePowerSenseWakeForNextSleep\(usbPresent\)/)
@@ -256,11 +256,13 @@ test('unchanged revision rebases and persists scheduler progress without display
   assert.doesNotMatch(branch, /fetchRenderState|ensureDisplay|renderSmartDashboard|commitSuccessfulDisplay|sourceSucceeded/)
 })
 
-test('scheduler keeps revision safety in Normal mode but can omit it for Power Save', () => {
+test('both modes use deadline-only content scheduling; only Instant polls manual commands', () => {
   assert.match(smart, /includeRevisionSafety[\s\S]*revisionCheckedAt \+ REVISION_SAFETY_SECONDS/)
   assert.match(smart, /next == 0 \|\| deadline\.at < next/)
-  assert.match(firmware, /secondsUntilNextWake\([\s\S]*!g_powerSaverMode/)
+  assert.equal((firmware.match(/false, false\);/g) ?? []).length, 6)
+  assert.doesNotMatch(firmware, /MAX_REVISION_POLL_SECONDS|normalSyncElapsedSeconds|revisionSafetyDue/)
   assert.match(firmware, /!g_powerSaverMode && seconds > SmartRefresh::MANUAL_PROBE_SECONDS/)
+  assert.match(firmware, /const uint32_t probeCadenceMs = MANUAL_UPDATE_POLL_MS/)
 })
 
 test('user-scoped integration and Surf mutations resolve physical membership ids', () => {
