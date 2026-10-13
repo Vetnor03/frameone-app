@@ -12678,7 +12678,7 @@ function GroceriesModuleSettingsTab({
     // Supabase's default result cap and the former top-50 limit could hide
     // newly added, infrequently used products. Fetch the entire saved history.
     const pageSize = 500
-    const historyRows: any[] = []
+    const historyRows: Array<{ name: string | null; usage_count: number | null; last_used_at: string | null; category: string | null }> = []
     for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await supabase
         .from('grocery_item_history')
@@ -12696,7 +12696,7 @@ function GroceriesModuleSettingsTab({
       if ((data || []).length < pageSize) break
     }
 
-    const parsed: GrocerySuggestion[] = historyRows.map((row: any) => ({
+    const parsed: GrocerySuggestion[] = historyRows.map((row) => ({
       name: String(row.name ?? '').trim(),
       usageCount: Math.max(1, Number(row.usage_count ?? 1) || 1),
       lastUsedAt: row.last_used_at ? String(row.last_used_at) : null,
@@ -12709,12 +12709,6 @@ function GroceriesModuleSettingsTab({
     loadGroceries()
     loadHistory()
   }, [activeDeviceId])
-
-  // Refresh autocomplete when the add/edit sheet opens, including products
-  // added by another member of the same frame since this tab was last opened.
-  useEffect(() => {
-    if (sheetOpen) void loadHistory()
-  }, [sheetOpen, activeDeviceId])
 
   useEffect(() => {
     if (!activeDeviceId) return
@@ -13656,6 +13650,7 @@ function GroceriesModuleSettingsTab({
                     if (target) setDinnerPlanMainEditTarget(target)
                     return
                   }
+                  void loadHistory()
                   setEditingItem(item)
                   setSheetOpen(true)
                 }}
@@ -13719,6 +13714,7 @@ function GroceriesModuleSettingsTab({
         {addError && <p role="alert" className="mb-1 text-center text-sm text-[color:var(--danger)]">{addError}</p>}
         <button
           onClick={() => {
+            void loadHistory()
             setEditingItem(null)
             setSheetOpen(true)
           }}
