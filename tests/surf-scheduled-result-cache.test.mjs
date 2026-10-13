@@ -75,5 +75,5 @@ test('Surf cache table is service-only behind RLS', () => {
 test('scheduled Surf refresh reuses fresh Open-Meteo forecasts instead of forcing new requests', () => {
   assert.match(surfScoringRoute, /forceRefresh: truthy1\(url\.searchParams\.get\('forceRefresh'\)\)/)
   assert.doesNotMatch(surfScoringRoute, /forceRefresh: truthy1\(url\.searchParams\.get\('forceRefresh'\)\) \|\| truthy1\(url\.searchParams\.get\('refresh'\)\)/)
-  assert.match(surfScoringRoute, /const CONCURRENCY = 2/)
+  assert.match(surfScoringRoute, /const CONCURRENCY = 1/)
 })

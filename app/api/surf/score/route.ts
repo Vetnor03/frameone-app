@@ -2595,7 +2595,7 @@ export async function GET(req: Request) {
 
       // Each candidate fetches marine + wind in parallel. Keep the fan-out
       // modest so a scheduled frame wake doesn't stampede Open-Meteo.
-      const CONCURRENCY = 2
+      const CONCURRENCY = 1
 
       const settled = await mapWithConcurrency(candidates, CONCURRENCY, async (s) => {
         try {
