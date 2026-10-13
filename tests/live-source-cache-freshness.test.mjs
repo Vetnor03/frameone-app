@@ -78,7 +78,7 @@ test('News has a durable service-only cache; upstream failure does not block ren
   assert.match(api, /if \(!snapshot\.available\) return NextResponse\.json/)
   assert.doesNotMatch(api, /status: 502/)
   assert.match(renderer, /sources\.news = \{ ok: false, items: \[\] \}/)
-  assert.match(renderer, /NEWS_POWER_SAVE_FRESHNESS_MS = 60 \* 60_000/)
+  assert.match(renderer, /NEWS_SOURCE_FRESHNESS_MS = 60 \* 60_000/)
 })
 
 test('existing time-sensitive module caches remain bounded instead of treating a cache hit as permanent', () => {
