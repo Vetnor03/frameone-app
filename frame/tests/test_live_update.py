@@ -129,7 +129,7 @@ def test_manual_timing_diagnostics_and_safe_request_paths_are_present():
 def test_firmware_version_change_redraws_once_and_success_persists_version():
     checker = Path('frame/src/network/UpdateChecker.cpp').read_text()
     assert 'prefs.getString("fw_ver", "") != String(fwVer)' in checker
-    maintenance = MAIN[MAIN.index('static void runFirmwareMaintenanceIfNeeded'):MAIN.index('static InteractiveModeResult finishInteractiveMode')]
+    maintenance = MAIN[MAIN.index('static void runFirmwareMaintenanceIfNeeded'):MAIN.index('static void deferFailedScheduledRefresh')]
     assert maintenance.index('shouldForceRedrawForFirmware') < maintenance.index('forceNextFullRefresh(true)')
     assert maintenance.index('renderLoadedDashboard') < maintenance.index('saveFirmwareVersion(FW_VER)')
     assert maintenance.count('saveFirmwareVersion(FW_VER)') == 1
