@@ -70,6 +70,6 @@ test('grocery screen fetches all saved items instead of limiting suggestions to 
   const historyLoader = source.slice(source.indexOf('  async function loadHistory() {'), source.indexOf('  useEffect(() => {\n    loadGroceries()'))
   assert.match(historyLoader, /\.range\(offset, offset \+ pageSize - 1\)/)
   assert.doesNotMatch(historyLoader, /\.limit\(50\)/)
-  assert.match(source, /if \(sheetOpen\) void loadHistory\(\)/)
+  assert.match(source, /void loadHistory\(\)\s+setEditingItem\(null\)\s+setSheetOpen\(true\)/)
   assert.match(source, /rankGrocerySuggestionsForInput\(suggestions, name, category\)/)
 })
