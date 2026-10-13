@@ -134,7 +134,7 @@ test('stale entries older than 4 hours are not used', async () => {
   let calls = 0
   const fetcher = async () => {
     calls += 1
-    return new Response('rate limited', { status: 429 })
+    return new Response('rate limited', { status: 429, headers: { 'retry-after': '5' } })
   }
   const opts = surfOptions(fetcher)
   __seedForecastCacheForTests(opts, { stale: true }, Date.now() - (4 * 60 * 60 * 1000 + 1), 1, 8 * 60 * 60 * 1000)
