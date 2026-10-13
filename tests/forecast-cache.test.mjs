@@ -134,7 +134,7 @@ test('stale entries older than 4 hours are not used', async () => {
   let calls = 0
   const fetcher = async () => {
     calls += 1
-    return new Response('rate limited', { status: 429 })
+    return new Response('rate limited', { status: 429, headers: { 'retry-after': '5' } })
   }
   const opts = surfOptions(fetcher)
   __seedForecastCacheForTests(opts, { stale: true }, Date.now() - (4 * 60 * 60 * 1000 + 1), 1, 8 * 60 * 60 * 1000)
@@ -252,16 +252,79 @@ test('failed fetches are not cached permanently and the next request can recover
   let calls = 0
   const fetcher = async () => {
     calls += 1
-    if (calls === 1) return new Response('temporary failure', { status: 503 })
+    if (calls <= 2) return new Response('temporary failure', { status: 503 })
     return okJson({ marker: 'recovered' })
   }
 
   const failed = await fetchCachedForecastJson(weatherOptions(fetcher))
   const recovered = await fetchCachedForecastJson(weatherOptions(fetcher))
 
-  assert.equal(calls, 2)
+  assert.equal(calls, 3) // first request: 503 + one retry; subsequent request recovers
   assert.equal(failed.payload, null)
   assert.equal(failed.error, '503')
   assert.equal(recovered.payload.marker, 'recovered')
   assert.equal(recovered.debug.openMeteoCacheStatus, 'miss')
+})
+
+
+test('transient upstream 503 is retried once before the frame receives an error', async () => {
+  __resetForecastCacheForTests()
+  let calls = 0
+  const fetcher = async () => {
+    calls++
+    return calls === 1
+      ? new Response('temporarily unavailable', { status: 503 })
+      : okJson({ current: { temperature_2m: 12 } })
+  }
+
+  const result = await fetchCachedForecastJson(weatherOptions(fetcher))
+  assert.equal(calls, 2)
+  assert.equal(result.error, null)
+  assert.equal(result.payload.current.temperature_2m, 12)
+})
+
+test('429 with a long Retry-After does not trigger an abusive immediate retry', async () => {
+  __resetForecastCacheForTests()
+  let calls = 0
+  const fetcher = async () => {
+    calls++
+    return new Response('too many requests', { status: 429, headers: { 'retry-after': '5' } })
+  }
+
+  const result = await fetchCachedForecastJson(weatherOptions(fetcher))
+  assert.equal(calls, 1)
+  assert.equal(result.error, '429')
+  assert.equal(result.payload, null)
+})
+
+test('non-transient Open-Meteo 400 error is not retried', async () => {
+  __resetForecastCacheForTests()
+  let calls = 0
+  const result = await fetchCachedForecastJson(weatherOptions(async () => {
+    calls++
+    return new Response('bad parameters', { status: 400 })
+  }))
+  assert.equal(calls, 1)
+  assert.equal(result.error, '400')
+})
+
+test('parallel distinct forecast requests are capped at three upstream connections', async () => {
+  __resetForecastCacheForTests()
+  let active = 0
+  let peak = 0
+  const fetcher = async () => {
+    active++
+    peak = Math.max(peak, active)
+    await new Promise((resolve) => setTimeout(resolve, 15))
+    active--
+    return okJson({ ok: true })
+  }
+  const baseUrl = weatherOptions(fetcher).url
+  const requests = Array.from({ length: 9 }, (_, index) => fetchCachedForecastJson(weatherOptions(fetcher, {
+    url: baseUrl.replace('latitude=60.3929', `latitude=${60.3929 + index * 0.01}`),
+  })))
+  const results = await Promise.all(requests)
+  assert.ok(peak <= 3, `peak concurrent outbound requests was ${peak}`)
+  assert.equal(results.length, 9)
+  assert.ok(results.every((result) => result.payload?.ok === true))
 })

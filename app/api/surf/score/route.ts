@@ -2514,7 +2514,10 @@ export async function GET(req: Request) {
     const url = new URL(req.url)
     const requestContext = createSurfRequestContext({
       configUpdatedAt: url.searchParams.get('configUpdatedAt'),
-      forceRefresh: truthy1(url.searchParams.get('forceRefresh')) || truthy1(url.searchParams.get('refresh')),
+      // 'refresh=1' refreshes the three-hour Surf result, not every upstream
+      // forecast: bypassing the 15-minute Open-Meteo cache causes a burst of
+      // unnecessary requests whenever Power Save wakes the frame.
+      forceRefresh: truthy1(url.searchParams.get('forceRefresh')),
     })
     console.log('SURF SCORE QUERY:', Object.fromEntries(url.searchParams.entries()))
 
@@ -2590,7 +2593,9 @@ export async function GET(req: Request) {
         return jsonNoStore({ error: 'No spots available for Today’s Best' }, { status: 500 })
       }
 
-      const CONCURRENCY = 4
+      // Each candidate fetches marine + wind in parallel. Keep the fan-out
+      // modest so a scheduled frame wake doesn't stampede Open-Meteo.
+      const CONCURRENCY = 2
 
       const settled = await mapWithConcurrency(candidates, CONCURRENCY, async (s) => {
         try {

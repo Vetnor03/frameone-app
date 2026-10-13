@@ -71,3 +71,9 @@ test('Surf cache table is service-only behind RLS', () => {
   assert.match(migration, /revoke all on table public\.surf_frame_result_cache from anon, authenticated/)
   assert.match(migration, /grant select, insert, update, delete on table public\.surf_frame_result_cache to service_role/)
 })
+
+test('scheduled Surf refresh reuses fresh Open-Meteo forecasts instead of forcing new requests', () => {
+  assert.match(surfScoringRoute, /forceRefresh: truthy1\(url\.searchParams\.get\('forceRefresh'\)\)/)
+  assert.doesNotMatch(surfScoringRoute, /forceRefresh: truthy1\(url\.searchParams\.get\('forceRefresh'\)\) \|\| truthy1\(url\.searchParams\.get\('refresh'\)\)/)
+  assert.match(surfScoringRoute, /const CONCURRENCY = 2/)
+})
