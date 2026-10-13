@@ -1511,7 +1511,6 @@ void setup() {
   } else if (postPairConfig == FrameConfigApi::FETCH_ERROR) {
     Serial.println("frame-config still unavailable; preserving existing e-paper content");
     Serial.println("Retrying frame-config on a clean wake in 10 seconds");
-    plannedDeepSleepSeconds = 10;
     goToSleepForUs(10ULL * 1000000ULL, pwrEarly.usbPresent);
   } else if (postPairConfig == FrameConfigApi::FETCH_OK) {
     setupPendingScreenDisplayed = false;
