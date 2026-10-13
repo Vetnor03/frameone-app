@@ -19,7 +19,7 @@ export function sharedWeatherCacheKey(lat: number, lon: number, forecastDays: nu
 
 function usableForecast(payload: unknown): boolean {
   if (!payload || typeof payload !== 'object') return false
-  const forecast = payload as Record<string, any>
+  const forecast = payload as { current?: { time?: unknown; temperature_2m?: unknown; weather_code?: unknown }; hourly?: { time?: unknown }; daily?: { time?: unknown } }
   return !!(
     forecast.current?.time &&
     forecast.current?.temperature_2m != null &&
