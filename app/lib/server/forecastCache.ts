@@ -252,14 +252,101 @@ function errorCode(e: unknown) {
   return String(err.message ?? 'fetch_error')
 }
 
+// Limit outbound Open-Meteo fan-out from a single warm Vercel instance. Surf's
+// Today's Best can otherwise launch several forecast requests at once. This
+// gate is deliberately shared by both Weather and Surf, with Weather prioritized.
+const MAX_CONCURRENT_OPEN_METEO_REQUESTS = 3
+type ForecastTransportWaiter = { priority: number; resolve: () => void }
+type ForecastTransportGate = { active: number; waiters: ForecastTransportWaiter[] }
+const transportGlobal = globalThis as typeof globalThis & {
+  __forecastTransportGate?: ForecastTransportGate
+}
+const transportGate = transportGlobal.__forecastTransportGate ??
+  { active: 0, waiters: [] as ForecastTransportWaiter[] }
+transportGlobal.__forecastTransportGate = transportGate
+
+async function acquireForecastTransport(priority: number): Promise<() => void> {
+  if (transportGate.active < MAX_CONCURRENT_OPEN_METEO_REQUESTS && !transportGate.waiters.length) {
+    transportGate.active++
+  } else {
+    await new Promise<void>((resolve) => {
+      transportGate.waiters.push({ priority, resolve })
+    })
+  }
+  // Transfer the reserved slot directly to the next waiter so the active
+  // count stays correct, even when an individual upstream fetch rejects.
+  return () => {
+    if (!transportGate.waiters.length) {
+      transportGate.active--
+      return
+    }
+    const weatherIndex = transportGate.waiters.findIndex((w) => w.priority > 0)
+    const index = weatherIndex === -1 ? 0 : weatherIndex
+    const [next] = transportGate.waiters.splice(index, 1)
+    next.resolve()
+  }
+}
+
+async function withForecastTransport<T>(dataType: ForecastCacheDataType, task: () => Promise<T>): Promise<T> {
+  const release = await acquireForecastTransport(dataType === 'weather' ? 1 : 0)
+  try {
+    return await task()
+  } finally {
+    release()
+  }
+}
+
+const RETRYABLE_OPEN_METEO_STATUSES = new Set([429, 500, 502, 503, 504])
+const MAX_OPEN_METEO_ATTEMPTS = 2
+
+function transientRetryDelayMs(error: unknown): number | null {
+  const upstream = error as { status?: unknown; retryAfterMs?: unknown }
+  const status = Number(upstream?.status)
+  if (!RETRYABLE_OPEN_METEO_STATUSES.has(status)) return null
+  const serverDelay = Number(upstream.retryAfterMs)
+  if (Number.isFinite(serverDelay) && serverDelay > 0) {
+    // Never ignore a long Retry-After or intensify a real rate limit.
+    return serverDelay <= 1500 ? serverDelay : null
+  }
+  return 250 + Math.floor(Math.random() * 200)
+}
+
+function retryAfterMs(header: string | null): number | null {
+  if (!header) return null
+  const asSeconds = Number(header)
+  if (Number.isFinite(asSeconds) && asSeconds >= 0) return asSeconds * 1000
+  const asDate = Date.parse(header)
+  return Number.isFinite(asDate) ? Math.max(0, asDate - Date.now()) : null
+}
+
+async function fetchOpenMeteoWithRecovery(
+  dataType: ForecastCacheDataType,
+  url: string,
+  timeoutMs: number,
+  fetcher: typeof fetch,
+) {
+  for (let attempt = 1; attempt <= MAX_OPEN_METEO_ATTEMPTS; attempt++) {
+    try {
+      return await withForecastTransport(dataType, () => fetchJsonWithTimeout(url, timeoutMs, fetcher))
+    } catch (error) {
+      const delay = transientRetryDelayMs(error)
+      if (attempt === MAX_OPEN_METEO_ATTEMPTS || delay == null) throw error
+      // The failed attempt has released its transport slot before backing off.
+      await new Promise<void>((resolve) => setTimeout(resolve, delay))
+    }
+  }
+  throw new Error('unreachable')
+}
+
 async function fetchJsonWithTimeout(url: string, timeoutMs: number, fetcher: typeof fetch = fetch) {
   const ac = new AbortController()
   const t = setTimeout(() => ac.abort(), timeoutMs)
   try {
     const resp = await fetcher(url, { signal: ac.signal, cache: 'no-store' })
     if (!resp.ok) {
-      const err = new Error(String(resp.status))
-      ;(err as Error & { status?: number }).status = resp.status
+      const err = new Error(String(resp.status)) as Error & { status?: number; retryAfterMs?: number | null }
+      err.status = resp.status
+      err.retryAfterMs = retryAfterMs(resp.headers.get('retry-after'))
       throw err
     }
     return await resp.json()
@@ -304,7 +391,7 @@ export async function fetchCachedForecastJson<T = unknown>(options: ForecastCach
   const promise = (async (): Promise<ForecastCacheFetchResult<T>> => {
     try {
       const status: OpenMeteoCacheStatus = options.forceRefresh ? 'bypassed' : cached ? 'stale' : 'miss'
-      const payload = await fetchJsonWithTimeout(options.url, options.timeoutMs, options.fetcher) as T
+      const payload = await fetchOpenMeteoWithRecovery(options.dataType, options.url, options.timeoutMs, options.fetcher ?? fetch) as T
       const fetchedAt = Date.now()
       const ttlMs = ttlForEntry(options)
       const expiresAt = fetchedAt + ttlMs
