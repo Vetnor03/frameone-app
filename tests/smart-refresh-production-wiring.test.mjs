@@ -51,43 +51,31 @@ test('real reminder/date/countdown and source deadlines are in production manife
   assert.ok(deadlines.reminders.every((d) => d.type === 'hard'))
   assert.equal(deadlines.date[0].type, 'hard')
   assert.equal(deadlines['weather:1'][0].type, 'soft')
-  assert.equal(deadlines['weather:1'].find((d) => d.reason === 'source_freshness').at, now + 2 * 60 * 60_000)
-  assert.equal(deadlines['surf:1'].find((d) => d.reason === 'source_freshness').at, now + 3 * 60 * 60_000)
+  assert.equal(deadlines['weather:1'].find((d) => d.reason === 'source_freshness').at, Math.ceil((now + 3 * 60 * 60_000 - 15 * 60_000) / (3 * 60 * 60_000)) * (3 * 60 * 60_000))
+  assert.equal(deadlines['surf:1'].find((d) => d.reason === 'source_freshness').at, Math.ceil((now + 3 * 60 * 60_000 - 15 * 60_000) / (3 * 60 * 60_000)) * (3 * 60 * 60_000))
   const laterAdded = { reminders: { items: [...sources.reminders.items, { occurrence_date: '2026-09-06', due_time: '17:00' }] } }
   assert.equal(physicalModuleDeadlines({ settings, sources: laterAdded, now }).reminders[0].at, deadlines.reminders[0].at)
 })
 
-test('Weather and Surf normal source freshness are multi-hour with no fast fallback', () => {
+test('Weather and Surf share power-efficient three-hour source windows', () => {
   const settings = { cells: [
     { module: 'weather:1', col: 0, row: 0, w: 400, h: 240 },
     { module: 'surf:1', col: 2, row: 0, w: 400, h: 240 },
   ], modules: {} }
   const now = Date.parse('2026-09-06T07:05:00Z')
   const deadlines = physicalModuleDeadlines({ settings, sources: {}, now })
-  assert.equal(deadlines['weather:1'].find((d) => d.reason === 'source_freshness').at, now + 2 * 60 * 60_000)
-  assert.equal(deadlines['surf:1'].find((d) => d.reason === 'source_freshness').at, now + 3 * 60 * 60_000)
+  assert.equal(deadlines['weather:1'].find((d) => d.reason === 'source_freshness').at, Math.ceil((now + 3 * 60 * 60_000 - 15 * 60_000) / (3 * 60 * 60_000)) * (3 * 60 * 60_000))
+  assert.equal(deadlines['surf:1'].find((d) => d.reason === 'source_freshness').at, Math.ceil((now + 3 * 60 * 60_000 - 15 * 60_000) / (3 * 60 * 60_000)) * (3 * 60 * 60_000))
   for (const source of [frameConfigBuilder, frameConfigHeader, frameConfigSource, weatherModule]) {
     assert.doesNotMatch(source, /600000UL|refresh:\s*600000/)
   }
 })
 
-test('Power Save Weather skips hourly insight wakes while Normal mode preserves them', () => {
-  // At 11:55 Oslo, the visible insight changes from "this morning" to
-  // "this afternoon" when the clock reaches 12:00. This was waking the
-  // sleeping frame even though the forecast itself had not been refreshed.
+test('both modes suppress hourly Weather insight wakes and share source cadence', () => {
   const now = Date.parse('2026-10-09T09:55:00Z')
   const weather = {
     current: { time: '2026-10-09T11:00', temperature_2m: 10, weather_code: 61, wind_speed_10m: 3 },
-    daily: {
-      time: ['2026-10-09'], temperature_2m_max: [12], temperature_2m_min: [7],
-      weather_code: [61], wind_speed_10m_max: [4], precipitation_sum: [3],
-    },
-    hourly: {
-      time: ['2026-10-09T11:00', '2026-10-09T12:00', '2026-10-09T13:00'],
-      precipitation: [1, 1, 1], precipitation_probability: [80, 80, 80],
-      wind_speed_10m: [3, 3, 3], weather_code: [61, 61, 61],
-      temperature_2m: [10, 10, 10],
-    },
+    daily: { time: ['2026-10-09'], weather_code: [61] },
   }
   const sources = { 'weather:1': weather }
   const settings = {
@@ -95,35 +83,19 @@ test('Power Save Weather skips hourly insight wakes while Normal mode preserves 
     modules: { weather: [{ id: 1, refresh: 30 * 60_000 }] },
   }
   const normal = physicalModuleDeadlines({ settings, sources, now })['weather:1']
-  assert.ok(normal.some((d) => d.reason === 'weather_insight' && d.type === 'hard'),
-    'Normal mode keeps time-sensitive Weather insight updates')
-  assert.equal(normal.find((d) => d.reason === 'source_freshness').at, now + 2 * 60 * 60_000)
-
-  const savingSettings = { ...settings, powerSaver: true }
-  const saving = physicalModuleDeadlines({ settings: savingSettings, sources, now })['weather:1']
-  assert.equal(saving.length, 1)
-  assert.equal(saving[0].type, 'soft')
-  assert.equal(saving[0].reason, 'source_freshness')
+  const saver = physicalModuleDeadlines({ settings: { ...settings, powerSaver: true }, sources, now })['weather:1']
+  assert.deepEqual(normal, saver, 'app Update listening must not change automatic Weather scheduling')
+  assert.equal(normal.length, 1)
+  assert.equal(normal[0].type, 'soft')
+  assert.equal(normal[0].reason, 'source_freshness')
   const threeHours = 3 * 60 * 60_000
-  assert.equal(saving[0].at % threeHours, 0, 'Power Save Weather uses shared batch windows')
-  assert.ok(saving[0].at >= now + threeHours - 15 * 60_000)
-  const longer = {
-    ...savingSettings,
-    modules: { weather: [{ id: 1, refresh: 5 * 60 * 60_000 }] },
-  }
-  assert.ok(physicalModuleDeadlines({ settings: longer, sources, now })['weather:1'][0].at >=
-    now + 5 * 60 * 60_000 - 15 * 60_000, 'explicitly slower source intervals stay slower')
-
-  // Repeated Power Save evaluations with unchanged sources remain stable;
-  // its time-of-day-only Weather wording is intentionally less sensitive
-  // than Normal mode (covered by the dedicated insight test below).
-  assert.equal(
-    physicalRenderManifest({ settings: savingSettings, sources, now })[0].render_hash,
-    physicalRenderManifest({ settings: savingSettings, sources, now })[0].render_hash,
-  )
+  assert.equal(normal[0].at % threeHours, 0)
+  assert.ok(normal[0].at >= now + threeHours - 15 * 60_000)
+  const longer = { ...settings, modules: { weather: [{ id: 1, refresh: 5 * 60 * 60_000 }] } }
+  assert.ok(physicalModuleDeadlines({ settings: longer, sources, now })['weather:1'][0].at >= now + 5 * 60 * 60_000 - 15 * 60_000)
 })
 
-test('Power Save Weather and Surf share 3-hour batch windows, including boundary crossings', () => {
+test('both modes batch Weather and Surf together, including boundary crossings', () => {
   const first = Date.parse('2026-10-09T14:56:00Z') // 16:56 Europe/Oslo
   const second = Date.parse('2026-10-09T15:06:00Z') // 17:06 Europe/Oslo
   const boundary = Date.parse('2026-10-09T18:00:00Z')
@@ -144,8 +116,8 @@ test('Power Save Weather and Surf share 3-hour batch windows, including boundary
     }
   }
   const normal = physicalModuleDeadlines({ settings: { ...settings, powerSaver: false }, sources, now: first })
-  assert.equal(normal['weather:1'].find((d) => d.reason === 'source_freshness').at, first + 2 * 60 * 60_000)
-  assert.equal(normal['surf:1'].find((d) => d.reason === 'source_freshness').at, first + 3 * 60 * 60_000)
+  assert.deepEqual(normal, physicalModuleDeadlines({ settings, sources, now: first }),
+    'Instant must use the exact same source batch as Power Save')
 
   // Honor explicitly slower refresh settings; never accelerate by more than
   // the documented 15-minute batching allowance.
@@ -154,7 +126,7 @@ test('Power Save Weather and Surf share 3-hour batch windows, including boundary
   assert.ok(deadline >= first + 5 * 60 * 60_000 - 15 * 60_000)
 })
 
-test('Power Save ignores Weather daypart wording but keeps actual weather severity changes', () => {
+test('both modes ignore Weather daypart-only wording but keep severity changes', () => {
   const now = Date.parse('2026-10-09T10:00:00Z')
   const cells = [{ module: 'weather:1', size: 'MEDIUM', col: 0, row: 0, w: 400, h: 240 }]
   const modules = { weather: [{ id: 1, lat: 58.97, lon: 5.73, units: 'metric' }] }
@@ -166,8 +138,8 @@ test('Power Save ignores Weather daypart wording but keeps actual weather severi
   const powerSettings = { cells, modules, powerSaver: true }
   const normalMorning = physicalRenderManifest({ settings: normalSettings, sources: source('Rain this morning.'), now })[0]
   const normalEvening = physicalRenderManifest({ settings: normalSettings, sources: source('Rain this evening.'), now })[0]
-  assert.notEqual(normalMorning.render_hash, normalEvening.render_hash,
-    'Normal mode may update its advisory time wording')
+  assert.equal(normalMorning.render_hash, normalEvening.render_hash,
+    'Instant must not redraw only to change advisory time wording')
 
   const savingMorning = physicalRenderManifest({ settings: powerSettings, sources: source('Rain this morning.'), now })[0]
   const savingEvening = physicalRenderManifest({ settings: powerSettings, sources: source('Rain this evening.'), now })[0]
@@ -291,7 +263,7 @@ test('manual screen-wide evaluation rebases nearby soft work from completion tim
   const settings = { cells: [{ module: 'weather:1', col: 0, row: 0, w: 400, h: 240 }], modules: { weather: [{ id: 1, refresh: 1_800_000 }] } }
   const manualAt = Date.parse('2026-09-06T08:00:00Z')
   const refreshed = physicalModuleDeadlines({ settings, sources: {}, now: manualAt })
-  assert.equal(refreshed['weather:1'].find((d) => d.reason === 'source_freshness').at, manualAt + 2 * 60 * 60_000)
+  assert.equal(refreshed['weather:1'].find((d) => d.reason === 'source_freshness').at, Date.parse('2026-09-06T12:00:00Z'))
   assert.match(firmware, /fetchRenderState\(DeviceIdentity::getToken\(\), "all", desired\)/)
   assert.match(firmware, /mergeScheduler\(g_smartState, desired, true\)/)
 })

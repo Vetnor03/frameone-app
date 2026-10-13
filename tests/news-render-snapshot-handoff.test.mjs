@@ -57,11 +57,11 @@ test('render-state hands the authoritative snapshot to firmware on due/manual re
 })
 
 
-test('Power Save keeps a one-hour News freshness floor but cannot wake solely for News', () => {
+test('both modes keep a one-hour News freshness floor without News-only wakeups', () => {
   const base = { cells: [cell], modules: {} }
   const normal = physicalRenderManifest({ settings: { ...base, powerSaver: false }, sources: {}, now })[0]
   const saver = physicalRenderManifest({ settings: { ...base, powerSaver: true }, sources: {}, now })[0]
-  assert.equal(normal.deadlines[0].at, now + 30 * 60_000)
+  assert.equal(normal.deadlines[0].at, now + 60 * 60_000)
   assert.equal(saver.deadlines[0].at, now + 60 * 60_000)
   assert.equal(saver.deadlines[0].type, 'soft')
   const header = read('frame/src/core/SmartRefresh.h')

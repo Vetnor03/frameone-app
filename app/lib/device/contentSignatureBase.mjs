@@ -849,21 +849,19 @@ function reminderBoundaries(source, now) {
   return [...new Set(result)].sort((a, b) => a - b)
 }
 
-const WEATHER_SOURCE_FRESHNESS_MS = 2 * 60 * 60_000
-// In Power Save, avoid separate hourly weather-insight wakeups; piggyback on
-// the multi-hour source check instead. Match Surf's three-hour freshness floor.
-const WEATHER_POWER_SAVE_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
+// Both Power Save and Instant use the same background freshness rules.
+// The only difference is Instant's 10-second manual Update command listener.
+const WEATHER_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
 const SURF_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
 const SKI_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
-const NEWS_SOURCE_FRESHNESS_MS = 30 * 60_000
-const NEWS_POWER_SAVE_FRESHNESS_MS = 60 * 60_000
+const NEWS_SOURCE_FRESHNESS_MS = 60 * 60_000
 
-// Power Save sources that are checked a few minutes apart should not wake the
-// ESP32 separately at almost identical 3-hour deadlines. Snap source checks
+// Background sources that are checked a few minutes apart should not wake the
+// ESP32 separately at almost identical 3-hour deadlines in either mode. Snap source checks
 // to shared UTC windows with a small early-coalescing allowance; this avoids
 // splitting a 16:56/17:06 pair on opposite sides of a window boundary.
 // Source checks may run up to 15 minutes early, or be deferred to the next
-// three-hour window. Hard display deadlines and Normal mode are unaffected.
+// three-hour window. Hard display deadlines are unaffected.
 // UTC scheduling avoids ambiguous wall-clock times during DST transitions.
 const POWER_SAVE_SOURCE_BATCH_MS = 3 * 60 * 60_000
 const POWER_SAVE_SOURCE_EARLY_MS = 15 * 60_000
@@ -898,9 +896,8 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
       ]
     }
     else if (ref.base === 'news') {
-      // Normal mode can keep headlines reasonably fresh, while Power Save
-      // avoids waking the frame 48 times per day just to poll an RSS feed.
-      const interval = settings?.powerSaver ? NEWS_POWER_SAVE_FRESHNESS_MS : NEWS_SOURCE_FRESHNESS_MS
+      // News only piggybacks on another module wake and never wakes on its own.
+      const interval = NEWS_SOURCE_FRESHNESS_MS
       deadlines[ref.key] = [{ at: now + interval, type: 'soft', reason: 'source_freshness' }]
     }
     else if (ref.base === 'groceries') {
@@ -925,27 +922,17 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
       // slower user/config interval, but never churn the source faster than the
       // production three-hour floor. Hard daypart boundaries remain exact.
       const interval = Math.max(SURF_SOURCE_FRESHNESS_MS, Number(configured?.refresh) || 0)
-      deadlines[ref.key] = [...(changes ? [{ at, type: 'hard', reason: 'surf_daypart' }] : []), { at: settings?.powerSaver ? powerSaveSourceDeadline(now, interval) : now + interval, type: 'soft', reason: 'source_freshness' }]
+      deadlines[ref.key] = [...(changes ? [{ at, type: 'hard', reason: 'surf_daypart' }] : []), { at: powerSaveSourceDeadline(now, interval), type: 'soft', reason: 'source_freshness' }]
     }
     else if (ref.base === 'ski') {
       deadlines[ref.key] = [{ at: now + SKI_SOURCE_FRESHNESS_MS, type: 'soft', reason: 'source_freshness' }]
     }
     else if (ref.base === 'weather') {
-      if (settings?.powerSaver) {
-        // Weather insights are advisory, not a reason to wake an otherwise
-        // sleeping frame each hour. Check alongside Surf every ~3 hours;
-        // the normal render hash still decides whether pixels need updating.
-        const configured = configuredInstance(settings?.modules, 'weather', ref.id)
-        const interval = Math.max(WEATHER_POWER_SAVE_SOURCE_FRESHNESS_MS, Number(configured?.refresh) || 0)
-        deadlines[ref.key] = [{ at: powerSaveSourceDeadline(now, interval), type: 'soft', reason: 'source_freshness' }]
-      } else {
-        const local = osloParts(now), current = JSON.stringify(weatherProjection(sources[ref.key], ref.cell, configuredInstance(settings?.modules, 'weather', ref.id) ?? {}, now))
-        const candidates = Array.from({ length: 24 }, (_, offset) => osloLocalTime(local.year, local.month, local.day, local.hour + offset + 1))
-        const at = candidates.find((candidate) => candidate > now && current !== JSON.stringify(weatherProjection(sources[ref.key], ref.cell, configuredInstance(settings?.modules, 'weather', ref.id) ?? {}, candidate)))
-        // Normal mode preserves its time-driven insight changes and two-hour
-        // source freshness. Manual Update is unchanged in either mode.
-        deadlines[ref.key] = [...(at ? [{ at, type: 'hard', reason: 'weather_insight' }] : []), { at: now + WEATHER_SOURCE_FRESHNESS_MS, type: 'soft', reason: 'source_freshness' }]
-      }
+      // Advisory insight wording is not a reason to schedule an hourly wake.
+      // Share Surf's three-hour batching in BOTH power modes.
+      const configured = configuredInstance(settings?.modules, 'weather', ref.id)
+      const interval = Math.max(WEATHER_SOURCE_FRESHNESS_MS, Number(configured?.refresh) || 0)
+      deadlines[ref.key] = [{ at: powerSaveSourceDeadline(now, interval), type: 'soft', reason: 'source_freshness' }]
     }
     else {
       const configured = ref.id == null ? null : configuredInstance(settings?.modules, ref.base, ref.id)
@@ -969,7 +956,8 @@ export function physicalRenderManifest({ settings, sources, now = Date.now() }) 
         : canonicalVisible(configuredInstance(settings?.modules, ref.base, ref.id) ?? {}),
     }
     const projection = physicalRenderProjection(ref.key, sources[ref.key] ?? null, ref.cell, config, now)
-    const automatic = significantBackgroundProjection(ref.key, projection, { powerSaver: settings?.powerSaver === true })
+    // Automatic display hashing has the same significance policy in both modes.
+    const automatic = significantBackgroundProjection(ref.key, projection, { powerSaver: true })
     const weatherBaseline = ref.base === 'weather' ? weatherAutomaticBaseline(automatic) : null
     return {
       key: ref.key,
