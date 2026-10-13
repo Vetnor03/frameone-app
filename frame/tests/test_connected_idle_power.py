@@ -151,5 +151,5 @@ def test_connected_idle_wait_is_shortened_for_scheduled_module_deadlines():
     interactive = source.split("static InteractiveModeResult runInteractiveMode(", 1)[1].split(
         "void setup()", 1
     )[0]
-    assert "const bool scheduledSyncDue = scheduledSyncDueNow();" in interactive
+    assert "if (scheduledSyncDueNow())" in interactive
     assert "scheduled module deadline became due while interactive" in interactive
