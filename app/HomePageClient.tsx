@@ -15,7 +15,7 @@ import SensitiveInformationHelper from './components/SensitiveInformationHelper'
 import FrameAssistant from './components/FrameAssistant'
 import type { AssistantDestination } from './lib/assistant/types'
 import SubscriptionSettingsPage from './components/SubscriptionSettingsPage'
-import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
+import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey, rankGrocerySuggestionsForInput } from './lib/groceries/suggestions'
 import { addGroceryItemsCanonical } from './lib/groceries/actions'
 import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, recipeSourceLink, scaleRecipeQuantity, selectedRecipeGroceries, type GroceryRecipeItem, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes.mjs'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
@@ -12675,20 +12675,28 @@ function GroceriesModuleSettingsTab({
       return
     }
 
-    const { data, error } = await supabase
-      .from('grocery_item_history')
-      .select('name, usage_count, last_used_at, category')
-      .eq('device_id', activeDeviceId)
-      .order('usage_count', { ascending: false })
-      .order('last_used_at', { ascending: false })
-      .limit(50)
+    // Supabase's default result cap and the former top-50 limit could hide
+    // newly added, infrequently used products. Fetch the entire saved history.
+    const pageSize = 500
+    const historyRows: Array<{ name: string | null; usage_count: number | null; last_used_at: string | null; category: string | null }> = []
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase
+        .from('grocery_item_history')
+        .select('name, usage_count, last_used_at, category')
+        .eq('device_id', activeDeviceId)
+        .order('last_used_at', { ascending: false })
+        .order('name', { ascending: true })
+        .range(offset, offset + pageSize - 1)
 
-    if (error) {
-      alert(error.message)
-      return
+      if (error) {
+        console.error('Failed to load grocery suggestions', { error })
+        return
+      }
+      historyRows.push(...(data || []))
+      if ((data || []).length < pageSize) break
     }
 
-    const parsed: GrocerySuggestion[] = (data || []).map((row: any) => ({
+    const parsed: GrocerySuggestion[] = historyRows.map((row) => ({
       name: String(row.name ?? '').trim(),
       usageCount: Math.max(1, Number(row.usage_count ?? 1) || 1),
       lastUsedAt: row.last_used_at ? String(row.last_used_at) : null,
@@ -13642,6 +13650,7 @@ function GroceriesModuleSettingsTab({
                     if (target) setDinnerPlanMainEditTarget(target)
                     return
                   }
+                  void loadHistory()
                   setEditingItem(item)
                   setSheetOpen(true)
                 }}
@@ -13705,6 +13714,7 @@ function GroceriesModuleSettingsTab({
         {addError && <p role="alert" className="mb-1 text-center text-sm text-[color:var(--danger)]">{addError}</p>}
         <button
           onClick={() => {
+            void loadHistory()
             setEditingItem(null)
             setSheetOpen(true)
           }}
@@ -14017,21 +14027,10 @@ function GroceriesDraftSheet({
     setCategory(editingItem?.category ?? 'other')
   }, [editingItem])
 
-  const filteredSuggestions = useMemo(() => {
-    const q = name.trim().toLowerCase()
-    const list = suggestions.filter((s) => !q || s.name.toLowerCase().includes(q))
-    return list.sort((a, b) => {
-      if (category) {
-        const aCategoryScore = a.category === category ? 1 : 0
-        const bCategoryScore = b.category === category ? 1 : 0
-        if (aCategoryScore !== bCategoryScore) return bCategoryScore - aCategoryScore
-      }
-      if (a.usageCount !== b.usageCount) return b.usageCount - a.usageCount
-      const aTime = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0
-      const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0
-      return bTime - aTime
-    })
-  }, [category, name, suggestions])
+  const filteredSuggestions = useMemo(
+    () => rankGrocerySuggestionsForInput(suggestions, name, category),
+    [category, name, suggestions],
+  )
 
   useEffect(() => {
     if (editingItem) return
