@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { fetchWeatherForecast, fetchWeatherMarine } from '@/app/lib/server/weatherForecast'
 import { resolveWeatherInsight } from '@/app/lib/server/weatherInsight.mjs'
+import { fetchSharedFrameWeatherForecast } from '@/app/lib/server/weatherSharedCache'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -102,7 +103,9 @@ export async function GET(req: Request) {
   const frameCompactVersion = framePayload ? Number(url.searchParams.get('compact') || '1') : 0
 
   const weatherResult = await Promise.resolve(
-    fetchWeatherForecast({ lat, lon, timeoutMs: WEATHER_DETAILS_TIMEOUT_MS, forecastDays, frameRequest: framePayload })
+    framePayload
+      ? fetchSharedFrameWeatherForecast({ lat, lon, timeoutMs: WEATHER_DETAILS_TIMEOUT_MS, forecastDays })
+      : fetchWeatherForecast({ lat, lon, timeoutMs: WEATHER_DETAILS_TIMEOUT_MS, forecastDays, frameRequest: false })
   ).then(
     (value) => ({ status: 'fulfilled' as const, value }),
     (reason) => ({ status: 'rejected' as const, reason }),
