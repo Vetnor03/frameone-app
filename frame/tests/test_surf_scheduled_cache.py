@@ -49,5 +49,5 @@ def test_partial_refresh_does_not_preload_inactive_reminders():
     assert "ModuleReminders::preload();\n  bool newsDirty" not in body
 
 
-def test_firmware_version_remains_2_7_2():
-    assert 'static const char* FW_VER = "v2.7.2";' in INO
+def test_firmware_version_is_2_7_3():
+    assert 'static const char* FW_VER = "v2.7.3";' in INO
