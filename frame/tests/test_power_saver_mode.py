@@ -15,20 +15,20 @@ def test_power_saver_defaults_off_and_parses_top_level_setting():
     assert 'settings["powerSaver"] | false' in parser
 
 
-def test_power_saver_removes_both_routine_polling_ceilings():
+def test_both_modes_schedule_background_content_from_module_deadlines_only():
     source = read("src/frame_v2.5.1.ino")
     smart_h = read("src/core/SmartRefresh.h")
     smart_cpp = read("src/core/SmartRefresh.cpp")
-
     assert "RTC_DATA_ATTR static bool g_powerSaverMode = false;" in source
-    sleep = source.split("static uint64_t nextDeepSleepDurationUs()", 1)[1].split(
-        "static void goToShelfSleep", 1
-    )[0]
+    assert "MANUAL_UPDATE_POLL_MS = 10000" in source
+    assert "MAX_REVISION_POLL_SECONDS" not in source
+    assert "normalSyncElapsedSeconds" not in source
+    assert source.count("false, false);") == 6
+    sleep = source.split("static uint64_t nextDeepSleepDurationUs()", 1)[1].split("static void goToShelfSleep", 1)[0]
     assert "SmartRefresh::secondsUntilNextWake" in sleep
     assert "!g_powerSaverMode && seconds > SmartRefresh::MANUAL_PROBE_SECONDS" in sleep
     assert "bool includeRevisionSafety = true" in smart_h
     assert "includeRevisionSafety && revisionCheckedAt > 0" in smart_cpp
-
 
 def test_power_saver_skips_live_probe_and_interactive_listening():
     source = read("src/frame_v2.5.1.ino")
@@ -65,20 +65,27 @@ def test_switching_into_power_saver_leaves_interactive_mode_after_commit():
     assert committed < exit_log < return_finished
 
 
-def test_ten_minute_normal_sync_counter_is_disabled_in_power_saver():
+def test_instant_only_checks_manual_requests_until_a_module_deadline_is_due():
     source = read("src/frame_v2.5.1.ino")
     setup = source.split("void setup()", 1)[1]
-    assert "wakeCause == ESP_SLEEP_WAKEUP_TIMER && !g_powerSaverMode" in setup
-    assert "!g_powerSaverMode && normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS" in setup
-
+    instant = source.split("static InteractiveModeResult runInteractiveMode(", 1)[1].split("void setup()", 1)[0]
+    due = setup.split("bool normalSyncDue =", 1)[1].split("if (normalSyncDue)", 1)[0]
+    assert "ESP_SLEEP_WAKEUP_UNDEFINED" in due
+    assert "g_nextScheduledWake" in due
+    assert "chargerStateChanged" not in due
+    assert "normalSyncElapsedSeconds" not in due
+    assert "revisionSafetyDue" not in instant
+    assert "if (scheduledSyncDueNow())" in instant
+    assert "const uint32_t probeCadenceMs = MANUAL_UPDATE_POLL_MS;" in instant
+    assert "LiveUpdate::probe(DeviceIdentity::getToken(), next)" in instant
 
 def test_power_saver_news_piggybacks_on_another_module_wake():
     header = read("src/core/SmartRefresh.h")
     scheduler = read("src/core/SmartRefresh.cpp")
     firmware = read("src/frame_v2.5.1.ino")
 
-    # Normal mode still includes the News wake; Power Save filters only wake
-    # selection, not the persisted freshness deadline or the due-work list.
+    # Both modes skip News-only wakeups; News piggybacks on an unrelated
+    # module wake once its freshness floor has passed.
     assert "bool includeNewsWake = true" in header
     selection = scheduler.split("uint32_t SmartRefresh::secondsUntilNextWake", 1)[1].split("String SmartRefresh::dueModuleCsv", 1)[0]
     due = scheduler.split("String SmartRefresh::dueModuleCsv", 1)[1].split("String SmartRefresh::unionModuleCsv", 1)[0]
@@ -86,5 +93,5 @@ def test_power_saver_news_piggybacks_on_another_module_wake():
     assert 'const bool newsFreshness = state.modules[i].key == "news";' in due
     assert "if (d.at <= now ||" in due
     assert "!newsFreshness" in due
-    assert firmware.count("!g_powerSaverMode, !g_powerSaverMode);") == 6
+    assert firmware.count("false, false);") == 6
     assert "if (next == 0) next = now + 24 * 60 * 60;" in selection
