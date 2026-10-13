@@ -51,7 +51,7 @@ def test_usb_policy_remains_full_realtime():
 def test_main_uses_ten_second_connected_idle_and_dynamic_deep_sleep_fallback():
     source = read("src/frame_v2.5.1.ino")
     assert "REALTIME_TEST_MODE" not in source
-    assert "BATTERY_CONNECTED_IDLE_LOOP_MS = 10000" in source
+    assert "MANUAL_UPDATE_POLL_MS = 10000" in source
     interactive = source.split("static InteractiveModeResult runInteractiveMode(", 1)[1].split("void setup()", 1)[0]
     assert "applyOperationalPowerPolicy(pwr.usbPresent, true)" in interactive
     assert "connected light sleep unavailable; use dynamic deep-sleep fallback" in interactive
