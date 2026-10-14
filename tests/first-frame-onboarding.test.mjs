@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { hasChosenWeatherLocation } from '../app/lib/onboardingDefaults.ts'
 
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 const remindersRoute = readFileSync(new URL('../app/api/device/reminders/route.ts', import.meta.url), 'utf8')
@@ -51,6 +52,28 @@ test('weather setup is location-only and preserves the selected configuration', 
   assert.doesNotMatch(setup, /Oslo is used if you skip|current temperature|sunrise|UV|precipitation|next week/i)
   assert.match(setup, /weather: \[\{ id: 1, \.\.\.picked/)
   assert.match(home, /if \(!Array\.isArray\(nextModules\.weather\) \|\| !nextModules\.weather\.length\)/)
+})
+
+test('Normal setup requires an explicitly picked weather location, not silent Oslo default', () => {
+  assert.equal(hasChosenWeatherLocation(null), false)
+  assert.equal(hasChosenWeatherLocation({}), false)
+  assert.equal(hasChosenWeatherLocation({ label: 'Oslo', lat: null, lon: null }), false)
+  assert.equal(hasChosenWeatherLocation({ label: 'Invalid', lat: 0, lon: 0 }), false)
+  assert.equal(hasChosenWeatherLocation({ label: 'Out of bounds', lat: 91, lon: 10 }), false)
+  assert.equal(hasChosenWeatherLocation({ label: '', lat: 58.970, lon: 5.733 }), false)
+  assert.equal(hasChosenWeatherLocation({ label: 'Stavanger', lat: 58.97005, lon: 5.73332 }), true)
+  assert.match(setup, /const weatherLocationChosen = hasChosenWeatherLocation\(modules\.weather\?\.\[0\]\)/)
+  assert.match(setup, /disabled=\{saving \|\| \(current === 'weather' && !weatherLocationChosen\)\}/)
+  assert.match(home, /if \(!hasChosenWeatherLocation\(nextModules\.weather\?\.\[0\]\)\)/)
+  assert.match(setup, /Choose the location where your frame will be used\./)
+  assert.match(setup, /Velg stedet der rammen skal stå\./)
+})
+
+test('first-frame welcome text is localized for Norwegian users', () => {
+  const welcome = home.slice(home.indexOf('function FirstFrameOnboarding({'), home.indexOf('function MyFramesSection({'))
+  assert.match(welcome, /Legg til din første ramme/)
+  assert.match(welcome, /Koble RE:MIND-rammen din til kontoen for å komme i gang\./)
+  assert.match(welcome, /Add your first frame/)
 })
 
 test('optional Countdown still uses its own manual editor, without guided parsing', () => {
