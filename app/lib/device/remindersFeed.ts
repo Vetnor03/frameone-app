@@ -1,20 +1,6 @@
 import { wasteCollectionDisplayTitle, type WasteDisplayLanguage } from '../integrations/waste/display.ts'
 import { localEventGroupKeyFromRaw, groupSkipId } from '../integrations/local-events/grouping.ts'
-
-const MS_PER_MINUTE = 60 * 1000
-
-function floorDateToMinute(date: Date) {
-  return Math.floor(date.getTime() / MS_PER_MINUTE) * MS_PER_MINUTE
-}
-
-function isTeamsMeetingVisibleAt(startsAt: string | null | undefined, now = new Date()) {
-  if (!startsAt) return false
-  const startsAtDate = new Date(startsAt)
-  const startsAtTime = startsAtDate.getTime()
-  if (!Number.isFinite(startsAtTime)) return false
-
-  return startsAtTime >= floorDateToMinute(now)
-}
+import { isTeamsMeetingVisibleAt } from '../integrations/teams/visibility.ts'
 
 export type ReminderRepeatKey =
   | 'none'
