@@ -9,7 +9,7 @@ const setup = home.slice(home.indexOf('function FrameSetupFlow({'), home.indexOf
 const connect = home.slice(home.indexOf('function ConnectAppsScreen({'), home.indexOf('function FrameSetupFlow({'))
 
 test('first screen restores Normal and Custom with current recommended preset', () => {
-  assert.match(setup, /\['normal', 'custom'\] as SetupPurpose\[\]/)
+  assert.match(setup, /const setupPurposes: SetupPurpose\[\] = \['normal', 'custom'\]/)
   assert.match(setup, /Recommended/)
   assert.match(setup, /Date, Reminders, Weather, and News\./)
   assert.match(setup, /Dato, Påminnelser, Vær og Nyheter\./)
