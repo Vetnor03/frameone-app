@@ -27,7 +27,7 @@ import { INTEGRATION_CATALOGUE, integrationStatusLabel, type ConnectAppKey } fro
 import WasteSetupModal from './components/WasteSetupModal'
 import NewsModuleSettingsTab from './components/NewsModuleSettingsTab'
 import { wasteCollectionDisplayTitle } from './lib/integrations/waste/display'
-import { norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders, OSLO_WEATHER } from './lib/onboardingDefaults'
+import { hasChosenWeatherLocation, norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders, OSLO_WEATHER } from './lib/onboardingDefaults'
 import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
 import { deriveDynamicModuleKeys } from './lib/dynamicModuleTabs.mjs'
 import { initializeProductAnalytics, trackProductEvent } from './lib/productAnalytics.mjs'
@@ -2290,6 +2290,10 @@ export default function HomePage() {
     let nextPinnedTabs: ModuleKey[] = []
 
     if (selection.purpose === 'normal') {
+      // A skipped location must not silently configure Oslo for a pilot frame.
+      if (!hasChosenWeatherLocation(nextModules.weather?.[0])) {
+        throw new Error(language === 'no' ? 'Velg et sted for værmeldingen før du fullfører.' : 'Choose a weather location before finishing setup.')
+      }
       nextLayout = 'pyramid'
       const presetCells: Record<number, ModuleKey | null> = { 0: 'date', 1: 'reminders', 2: 'weather', 3: 'news' }
       nextCellsByLayout = { ...makeEmptyCellsByLayout(), pyramid: presetCells }
@@ -9244,6 +9248,7 @@ function FrameSetupFlow({
   const [error, setError] = useState<string | null>(null)
   const isNo = language === 'no'
   const current = guidedModules[moduleIndex]
+  const weatherLocationChosen = hasChosenWeatherLocation(modules.weather?.[0])
 
   useEffect(() => {
     sessionStorage.setItem(`remind:onboarding:${activeDeviceId}`, JSON.stringify({ step, purpose, moduleIndex, modules }))
@@ -9266,6 +9271,10 @@ function FrameSetupFlow({
   }
 
   async function advance() {
+    if (current === 'weather' && !weatherLocationChosen) {
+      setError(isNo ? 'Velg et sted for værmeldingen før du fortsetter.' : 'Choose a weather location before continuing.')
+      return
+    }
     if (moduleIndex < guidedModules.length - 1) { setError(null); setModuleIndex(index => index + 1); return }
     await finish('normal')
   }
@@ -9294,13 +9303,13 @@ function FrameSetupFlow({
 
   return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">{current === 'reminders' ? (isNo ? 'Koble til apper' : 'Connect Apps') : current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nyheter' : 'News')}</h1>
     {current === 'reminders' && <div className="mt-3 h-[min(430px,48vh)]"><ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup onIntegrationChanged={selectIntegration} /></div>}
-    {current === 'weather' && <div className="mt-6"><div className="mb-3 text-sm text-[color:var(--fg-65)]">{isNo ? 'Velg sted' : 'Select location'}</div><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Velg sted' : 'Select location')} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} /></div>}
+    {current === 'weather' && <div className="mt-6"><div className="mb-3 text-sm text-[color:var(--fg-65)]">{isNo ? 'Velg stedet der rammen skal stå.' : 'Choose the location where your frame will be used.'}</div><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Velg sted' : 'Select location')} cfg={modules.weather?.[0] || null} onPicked={(picked) => { setError(null); setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] })) }} />{!weatherLocationChosen && <p className="mt-3 text-xs leading-5 text-[color:var(--fg-60)]">{isNo ? 'Velg et sted for å få riktig værmelding. Dette kan endres senere.' : 'Choose a location for an accurate forecast. You can change it later.'}</p>}</div>}
     {current === 'news' && <div className="mt-4 h-[min(450px,52vh)]"><NewsModuleSettingsTab
       language={language}
       feed={modules.news?.feed === 'latest' ? 'latest' : 'top'}
       onFeedChange={(feed) => setModules(value => ({ ...value, news: { ...(value.news || {}), feed } }))}
     /></div>}
-    {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={advance} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : moduleIndex === guidedModules.length - 1 ? (isNo ? 'Fullfør' : 'Finish') : (isNo ? 'Neste' : 'Next')}</button>
+    {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={advance} disabled={saving || (current === 'weather' && !weatherLocationChosen)} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : moduleIndex === guidedModules.length - 1 ? (isNo ? 'Fullfør' : 'Finish') : (isNo ? 'Neste' : 'Next')}</button>
   </>, true)
 }
 function FirstFrameOnboarding({
@@ -9318,9 +9327,9 @@ function FirstFrameOnboarding({
         <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-[color:var(--bd-15)] text-xl tracking-[-0.08em] text-[color:var(--fg-80)]">
           R
         </div>
-        <h1 className="text-2xl font-medium tracking-[-0.03em] text-[color:var(--fg)]">Add your first frame</h1>
+        <h1 className="text-2xl font-medium tracking-[-0.03em] text-[color:var(--fg)]">{language === 'no' ? 'Legg til din første ramme' : 'Add your first frame'}</h1>
         <p className="mt-3 mb-7 text-sm leading-6 text-[color:var(--fg-60)]">
-          Pair your RE:MIND frame to start using the app.
+          {language === 'no' ? 'Koble RE:MIND-rammen din til kontoen for å komme i gang.' : 'Pair your RE:MIND frame to start using the app.'}
         </p>
 
         <PairFrameForm
