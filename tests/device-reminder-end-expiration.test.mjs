@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { reminderClockBoundaryReached } from '../app/lib/device/reminderClockBoundary.ts'
 
 const source = readFileSync(new URL('../app/api/device/reminders/route.ts', import.meta.url), 'utf8')
 const rowType = source.slice(source.indexOf('type ReminderRow = {'), source.indexOf('type PhysicalDeviceReminderItem'))
@@ -21,10 +22,11 @@ test('explicit end boundaries are shifted with recurring occurrence dates', () =
 
 test('frame expiry uses start time first, end time only as fallback, then the occurrence day', () => {
   assert.match(endHelpers, /const startTime = normalizeReminderTime\(row\.due_time\)/)
-  assert.match(endHelpers, /if \(startTime\) \{[\s\S]*?return startTime < nowHm/)
+  assert.match(endHelpers, /if \(startTime\) \{[\s\S]*?return reminderClockBoundaryReached\(startTime, nowHm\)/)
   assert.match(endHelpers, /const endTime = normalizeReminderTime\(row\.end_time\)/)
-  assert.match(endHelpers, /if \(endTime\) \{[\s\S]*?const endYmd = boundary\?\.endYmd \|\| occurrenceYmd[\s\S]*?return endTime < nowHm/)
+  assert.match(endHelpers, /if \(endTime\) \{[\s\S]*?const endYmd = boundary\?\.endYmd \|\| occurrenceYmd[\s\S]*?return reminderClockBoundaryReached\(endTime, nowHm\)/)
   assert.match(endHelpers, /return occurrenceYmd < todayYmd/)
+  assert.match(endHelpers, /return reminderClockBoundaryReached\(boundary.endTime, nowHm\)/)
 })
 
 test('occurrence builder always applies frame expiry before adding an item', () => {
@@ -38,4 +40,23 @@ test('expired explicit-end records still persist completion bookkeeping', () => 
   assert.match(getRoute, /from\('reminder_completions'\)\.upsert\(recurringCompletionRows/)
   assert.match(getRoute, /onConflict: 'reminder_id,occurrence_date'/)
   assert.match(getRoute, /completed_by_user_id: null/)
+})
+
+test('18:00 reminder disappears at 18:00:00 and during the 18:00 minute', () => {
+  assert.equal(reminderClockBoundaryReached('18:00', '17:59'), false)
+  assert.equal(reminderClockBoundaryReached('18:00', '18:00'), true)
+  assert.equal(reminderClockBoundaryReached('18:00', '18:01'), true)
+  assert.equal(reminderClockBoundaryReached('18:00', '19:30'), true)
+})
+
+test('later reminders and untimed reminders retain their distinct expiry policy', () => {
+  assert.equal(reminderClockBoundaryReached('19:00', '18:00'), false)
+  assert.match(endHelpers, /return occurrenceYmd < todayYmd/)
+})
+
+test('one-off and recurring explicit ends also expire at their exact end minute', () => {
+  assert.equal(reminderClockBoundaryReached('18:00', '18:00'), true)
+  assert.match(endHelpers, /isOccurrencePastExplicitEnd/)
+  assert.match(getRoute, /expiredOneOffIds/)
+  assert.match(getRoute, /recurringCompletionRows/)
 })

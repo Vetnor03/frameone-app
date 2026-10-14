@@ -7,6 +7,7 @@ import { syncTeamsIfStaleForUser } from '@/app/lib/integrations/teams/server'
 import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
+import { reminderClockBoundaryReached } from '@/app/lib/device/reminderClockBoundary'
 
 export const runtime = 'nodejs'
 
@@ -358,7 +359,7 @@ function isOccurrencePastExplicitEnd(
   if (boundary.endYmd < todayYmd) return true
   if (boundary.endYmd > todayYmd) return false
   if (!boundary.endTime) return false
-  return boundary.endTime < nowHm
+  return reminderClockBoundaryReached(boundary.endTime, nowHm)
 }
 
 function isOccurrenceExpiredForFrame(
@@ -371,7 +372,7 @@ function isOccurrenceExpiredForFrame(
   if (startTime) {
     if (occurrenceYmd < todayYmd) return true
     if (occurrenceYmd > todayYmd) return false
-    return startTime < nowHm
+    return reminderClockBoundaryReached(startTime, nowHm)
   }
 
   const endTime = normalizeReminderTime(row.end_time)
@@ -380,7 +381,7 @@ function isOccurrenceExpiredForFrame(
     const endYmd = boundary?.endYmd || occurrenceYmd
     if (endYmd < todayYmd) return true
     if (endYmd > todayYmd) return false
-    return endTime < nowHm
+    return reminderClockBoundaryReached(endTime, nowHm)
   }
 
   // With no clock time at all, the reminder lives for its occurrence date only.
