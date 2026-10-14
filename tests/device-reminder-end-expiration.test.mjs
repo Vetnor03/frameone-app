@@ -22,11 +22,11 @@ test('explicit end boundaries are shifted with recurring occurrence dates', () =
 
 test('frame expiry uses start time first, end time only as fallback, then the occurrence day', () => {
   assert.match(endHelpers, /const startTime = normalizeReminderTime\(row\.due_time\)/)
-  assert.match(endHelpers, /if \(startTime\) \{[\s\S]*?return reminderClockBoundaryReached\\\(startTime, nowHm\\\)/)
+  assert.match(endHelpers, /if \(startTime\) \{[\s\S]*?return reminderClockBoundaryReached\(startTime, nowHm\)/)
   assert.match(endHelpers, /const endTime = normalizeReminderTime\(row\.end_time\)/)
-  assert.match(endHelpers, /if \(endTime\) \{[\s\S]*?const endYmd = boundary\?\.endYmd \|\| occurrenceYmd[\s\S]*?return reminderClockBoundaryReached\\\(endTime, nowHm\\\)/)
+  assert.match(endHelpers, /if \(endTime\) \{[\s\S]*?const endYmd = boundary\?\.endYmd \|\| occurrenceYmd[\s\S]*?return reminderClockBoundaryReached\(endTime, nowHm\)/)
   assert.match(endHelpers, /return occurrenceYmd < todayYmd/)
-  assert.match(endHelpers, /return reminderClockBoundaryReached\\\(boundary.endTime, nowHm\\\)/)
+  assert.match(endHelpers, /return reminderClockBoundaryReached\(boundary.endTime, nowHm\)/)
 })
 
 test('occurrence builder always applies frame expiry before adding an item', () => {
