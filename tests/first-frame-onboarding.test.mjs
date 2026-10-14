@@ -6,7 +6,6 @@ const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url),
 const remindersRoute = readFileSync(new URL('../app/api/device/reminders/route.ts', import.meta.url), 'utf8')
 const setup = home.slice(home.indexOf('function FrameSetupFlow({'), home.indexOf('function FirstFrameOnboarding({'))
 const connect = home.slice(home.indexOf('function ConnectAppsScreen({'), home.indexOf('function FrameSetupFlow({'))
-const countdown = home.slice(home.indexOf('function NaturalCountdownComposer('), home.indexOf('function CountdownDraftSheet('))
 
 test('first screen restores Normal and Custom with current recommended preset', () => {
   assert.match(setup, /\['normal', 'custom'\] as SetupPurpose\[\]/)
@@ -54,14 +53,13 @@ test('weather setup is location-only and preserves the selected configuration', 
   assert.match(home, /if \(!Array\.isArray\(nextModules\.weather\) \|\| !nextModules\.weather\.length\)/)
 })
 
-test('countdown natural language parse pre-fills the manual draft and failure falls back', () => {
+test('optional Countdown still uses its own manual editor, without guided parsing', () => {
+  assert.match(home, /function CountdownDraftSheet\(/)
+  assert.match(home, /function CountdownModuleSettingsTab\(/)
+  assert.match(home, /<CountdownDraftSheet/)
   assert.doesNotMatch(setup, /NaturalCountdownComposer|CountdownDraftSheet/)
-  assert.match(home, /function NaturalCountdownComposer\(/)
-  assert.match(countdown, /\/api\/reminders\/parse/)
-  assert.match(countdown, /title: json\.reminder\.title, date: json\.reminder\.due_date/)
-  assert.match(countdown, /EDIT MANUALLY/)
-  assert.match(home, /initialTitle\?: string/)
 })
+
 
 test('structured errors never stringify as object Object and completion remains retryable', () => {
   const formatter = home.slice(home.indexOf('function errorMessage('), home.indexOf('function isLanguage('))
