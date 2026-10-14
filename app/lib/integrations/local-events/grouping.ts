@@ -51,7 +51,7 @@ export function groupUpcomingEvents<T extends EventGroupingItem>(items: readonly
   const groups = new Map<string, T[]>()
   for (const item of items) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(item.date)) continue
-    if (item.date < nowYmd || (item.date === nowYmd && item.time && item.time < nowTime)) continue
+    if (item.date < nowYmd || (item.date === nowYmd && item.time && item.time <= nowTime)) continue
     const key = localEventGroupKey(item.title, item.venue, item.source) || item.id
     groups.set(key, [...(groups.get(key) || []), item])
   }

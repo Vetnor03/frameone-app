@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync as requireFileRead } from 'node:fs'
 import { buildLocalEventFrameItem, compareReminderItems, selectReminderDisplayGroups } from '../app/lib/device/remindersFeed.ts'
 
 const provider = 'edge-of-norway'
@@ -131,4 +132,23 @@ test('app-facing Local Events frame item still keeps raw metadata before the phy
   assert.equal(items[0].provider, provider)
   assert.equal(items[0].external_id, 'raw-event')
   assert.deepEqual(items[0].raw, { date: '2026-07-15', all_day: true, areaKeys: ['oslo'], private_nested: { keep: true } })
+})
+
+test('real imported all-day Events use camelCase allDay and a midnight database timestamp', () => {
+  const imported = row('all-day-from-provider', 'All-day fair', '2026-07-15T00:00:00+02:00', {
+    date: '2026-07-15',
+    startTime: null,
+    allDay: true,
+  })
+  const midday = buildLocalEventFrameItem([imported], [], '2026-07-15', at('2026-07-15T12:00:00Z'))
+  assert.equal(midday.length, 1)
+  assert.equal(midday[0].display_time, null)
+  assert.equal(midday[0].raw.all_day, true)
+  assert.match(midday[0].display_date, /All day/)
+  assert.equal(buildLocalEventFrameItem([imported], [], '2026-07-16', at('2026-07-15T22:00:00Z')).length, 0)
+})
+
+test('app calendar recognizes imported all-day Events metadata as date-only', () => {
+  const app = requireFileRead(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  assert.match(app, /raw\.all_day === true \|\| raw\.allDay === true/)
 })
