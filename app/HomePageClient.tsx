@@ -28,6 +28,7 @@ import WasteSetupModal from './components/WasteSetupModal'
 import NewsModuleSettingsTab from './components/NewsModuleSettingsTab'
 import { wasteCollectionDisplayTitle } from './lib/integrations/waste/display'
 import { hasChosenWeatherLocation, norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders, OSLO_WEATHER } from './lib/onboardingDefaults'
+import { CUSTOM_SETUP_MODULES, starterCustomCells, validateCustomSetup } from './lib/onboardingCustomSetup.mjs'
 import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
 import { deriveDynamicModuleKeys } from './lib/dynamicModuleTabs.mjs'
 import { initializeProductAnalytics, trackProductEvent } from './lib/productAnalytics.mjs'
@@ -55,7 +56,7 @@ type CellSize = 'small' | 'medium' | 'large'
 type LayoutKey = 'default' | 'pyramid' | 'square' | 'full'
 type TabKey = CoreTabKey | ModuleKey
 type SetupPurpose = 'normal' | 'custom'
-type FrameSetupSelection = { purpose: SetupPurpose; modules: Record<string, any> }
+type FrameSetupSelection = { purpose: SetupPurpose; modules: Record<string, any>; customLayout?: LayoutKey; customCells?: Record<number, ModuleKey | null> }
 
 // Release visibility switches. Keep the underlying implementation/data intact so
 // these features can be re-enabled without rebuilding them.
@@ -2304,6 +2305,24 @@ export default function HomePage() {
     let nextModules = { ...modulesJson, ...selection.modules }
     let nextPinnedTabs: ModuleKey[] = []
 
+    if (selection.purpose === 'custom') {
+      const checked = validateCustomSetup(selection.customLayout, selection.customCells, hasChosenWeatherLocation(nextModules.weather?.[0]))
+      if (!checked.valid || !checked.cells) {
+        const explanation = checked.reason === 'weather_location'
+          ? (language === 'no' ? 'Velg et sted for Vær før du fullfører.' : 'Choose a Weather location before finishing.')
+          : (language === 'no' ? 'Velg minst én modul og kontroller oppsettet.' : 'Choose at least one module and check your layout.')
+        throw new Error(explanation)
+      }
+      nextLayout = selection.customLayout!
+      nextCellsByLayout = { ...makeEmptyCellsByLayout(), [nextLayout]: checked.cells as Record<number, ModuleKey | null> }
+      // Do not assign default Oslo weather to a frame that has no Weather slot.
+      if (!checked.weatherSelected) delete nextModules.weather
+      if (checked.newsSelected) {
+        const news = nextModules.news && typeof nextModules.news === 'object' && !Array.isArray(nextModules.news) ? nextModules.news : {}
+        nextModules.news = { ...news, feed: news.feed === 'latest' ? 'latest' : 'top' }
+      }
+    }
+
     if (selection.purpose === 'normal') {
       // A skipped location must not silently configure Oslo for a pilot frame.
       if (!hasChosenWeatherLocation(nextModules.weather?.[0])) {
@@ -2312,19 +2331,18 @@ export default function HomePage() {
       nextLayout = 'pyramid'
       const presetCells: Record<number, ModuleKey | null> = { 0: 'date', 1: 'reminders', 2: 'weather', 3: 'news' }
       nextCellsByLayout = { ...makeEmptyCellsByLayout(), pyramid: presetCells }
-      layoutModuleMemoryRef.current = mergeCellsIntoSlotMemory([], nextLayout, presetCells)
       // Normal setup uses curated NRK Toppsaker unless Latest News was chosen.
       const savedNews = nextModules.news && typeof nextModules.news === 'object' && !Array.isArray(nextModules.news) ? nextModules.news : {}
       nextModules.news = { ...savedNews, feed: savedNews.feed === 'latest' ? 'latest' : 'top' }
     }
 
-    if (!Array.isArray(nextModules.weather) || !nextModules.weather.length) {
+    if (selection.purpose === 'normal' && (!Array.isArray(nextModules.weather) || !nextModules.weather.length)) {
       nextModules.weather = [{ ...OSLO_WEATHER }]
     }
 
     nextModules = normalizeModulesForSave(nextModules)
     const currentCellsForLayout = nextCellsByLayout[nextLayout] || emptyCellsFor(nextLayout)
-    const nextLayoutModuleMemory = mergeCellsIntoSlotMemory(layoutModuleMemoryRef.current, nextLayout, currentCellsForLayout)
+    const nextLayoutModuleMemory = mergeCellsIntoSlotMemory([], nextLayout, currentCellsForLayout)
     const settingsJson: SettingsJson = {
       theme: frameTheme,
       powerSaver,
