@@ -290,7 +290,9 @@ function localEventDateFromRow(row: IntegrationItemRow) {
 
 function localEventIsAllDay(row: IntegrationItemRow) {
   const raw = row.raw && typeof row.raw === 'object' ? row.raw : {}
-  return raw.all_day === true && !row.starts_at
+  // Imported public Events use raw.allDay and retain a midnight starts_at for
+  // stable database ordering. Recognize both provider and legacy formats.
+  return raw.allDay === true || raw.all_day === true
 }
 
 export function buildLocalEventFrameItem(
