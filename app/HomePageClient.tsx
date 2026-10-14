@@ -2366,10 +2366,29 @@ export default function HomePage() {
     if (completionError) throw completionError
     if (completed !== true) throw new Error('Could not complete frame setup.')
 
+    // Reuse the server's settings timestamp so the first frame render can be
+    // distinguished from a successful save, even if the phone clock differs.
+    // This read is optional: an unsuccessful status lookup must not trap a
+    // correctly completed onboarding flow.
+    const { data: initialSavedSettings } = await supabase
+      .from('device_settings')
+      .select('updated_at')
+      .eq('device_id', activeDeviceId)
+      .maybeSingle()
+    const initialSettingsSavedAt = initialSavedSettings?.updated_at
+      ? String(initialSavedSettings.updated_at)
+      : new Date().toISOString()
+
     // Completion owns the same durable revision path as the normal Update
     // action. If requesting it fails, keep onboarding open so a retry can issue
     // the revision without duplicating the transactionally seeded content.
     await requestDeviceUpdate(supabase, activeDeviceId, crypto.randomUUID())
+
+    // First-time setup uses the same persistent saved -> displayed feedback
+    // as later edits. Never claim the e-paper has updated just because the
+    // settings transaction and revision request succeeded.
+    pendingFrameConfigUpdatedAtRef.current = initialSettingsSavedAt
+    setFrameSaveFeedback({ deviceId: activeDeviceId, savedAt: initialSettingsSavedAt, phase: 'waiting' })
 
     layoutModuleMemoryRef.current = nextLayoutModuleMemory
     setLayoutKey(nextLayout)
@@ -2382,7 +2401,7 @@ export default function HomePage() {
     sessionStorage.removeItem(`remind:onboarding:${activeDeviceId}`)
     setSetupDeviceId(null)
     setActiveTab('frame')
-    await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
+    await refreshPhysicalFrameState(activeDeviceId, { forceSnapshot: true })
   }
 
   async function customLayoutRequest(path:string, init?:RequestInit) {
@@ -9476,8 +9495,13 @@ function FirstFrameOnboarding({
           R
         </div>
         <h1 className="text-2xl font-medium tracking-[-0.03em] text-[color:var(--fg)]">{language === 'no' ? 'Legg til din første ramme' : 'Add your first frame'}</h1>
-        <p className="mt-3 mb-7 text-sm leading-6 text-[color:var(--fg-60)]">
+        <p className="mt-3 mb-2 text-sm leading-6 text-[color:var(--fg-60)]">
           {language === 'no' ? 'Koble RE:MIND-rammen din til kontoen for å komme i gang.' : 'Pair your RE:MIND frame to start using the app.'}
+        </p>
+        <p className="mb-6 text-xs leading-5 text-[color:var(--fg-50)]">
+          {language === 'no'
+            ? 'Slå på rammen og fullfør Wi-Fi-oppsettet. Skriv inn paringskoden som vises på rammen nedenfor.'
+            : 'Turn on the frame and complete its Wi-Fi setup. Enter the pairing code shown on the frame below.'}
         </p>
 
         <PairFrameForm
