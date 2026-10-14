@@ -513,8 +513,10 @@ function reminderProjection(value, cell, now) {
     capacity = h <= 150 && w > h ? Math.max(1, Math.floor((w - pad * 2 + 12) / 154)) : Math.max(1, Math.floor((h - pad * 2 - Math.min(30, Math.max(20, (h - pad * 2) / 4)) + 4) / 42))
   } else capacity = String(cell?.size).toUpperCase() === 'SMALL' ? 3 : primary.daysUntil === 0 || primary.daysUntil === 1 ? 4 : 3
   capacity = Math.min(primary.rows.length, capacity)
-  const start = adaptive ? 0 : rotationStep(now) % primary.rows.length
-  const visible = Array.from({ length: capacity }, (_, i) => primary.rows[(start + i) % primary.rows.length])
+  // Firmware Reminders always show the earliest entries in canonical order.
+  // Do not rotate the signature: this caused needless four-hour wakes/redraws
+  // even though physical ModuleReminders never changed its displayed entries.
+  const visible = primary.rows.slice(0, capacity)
   const local = osloParts(now), tomorrow = buckets.find((bucket) => bucket.daysUntil === 1)
   const tomorrowNote = (String(cell?.size).toUpperCase() === 'SMALL' || String(cell?.size).toUpperCase() === 'MEDIUM') && primary.daysUntil === 0 && local.hour >= 17 && tomorrow?.rows.length
   const result = { ok: source.ok, primary: { daysUntil: primary.daysUntil, overdue: primary.overdue, visible: visible.map(({ itemIdx: _itemIdx, ...row }) => row), overflow: primary.rows.length - capacity }, tomorrowNote: tomorrowNote ? tomorrow.rows.length : undefined }
@@ -884,13 +886,10 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
         { at: midnight, type: 'hard', reason: 'midnight' },
       ]
     } else if (ref.base === 'reminders') {
-      const at = nextRotation(now)
-      const rotates = JSON.stringify(reminderProjection(sources[ref.key], ref.cell, now)) !== JSON.stringify(reminderProjection(sources[ref.key], ref.cell, at))
       const local = osloParts(now), eveningAt = osloLocalTime(local.year, local.month, local.day, 17)
       const eveningChanges = now < eveningAt && JSON.stringify(reminderProjection(sources[ref.key], ref.cell, now)) !== JSON.stringify(reminderProjection(sources[ref.key], ref.cell, eveningAt))
       deadlines[ref.key] = [
         ...reminderBoundaries(sources[ref.key], now).map((boundary) => ({ at: boundary, type: 'hard', reason: 'reminder_boundary' })),
-        ...(rotates ? [{ at, type: 'hard', reason: 'reminder_rotation' }] : []),
         ...(eveningChanges ? [{ at: eveningAt, type: 'hard', reason: 'reminder_evening' }] : []),
         { at: midnight, type: 'hard', reason: 'midnight' },
       ]
