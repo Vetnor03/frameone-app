@@ -97,7 +97,8 @@ test('accepted Edge of Norway events are persisted with stable external IDs and 
   const server = readFileSync(new URL('../app/lib/integrations/local-events/server.ts', import.meta.url), 'utf8')
   assert.match(parser, /externalId: String\(eventObject\._id\)/)
   assert.match(server, /provider: EDGE_OF_NORWAY_PROVIDER/)
-  assert.match(server, /upsert\(rows, \{ onConflict: 'device_id,provider,external_id' \}\)/)
+  assert.match(server, /upsert\(changed\.slice\(index, index \+ 200\), \{ onConflict: 'device_id,provider,external_id' \}\)/)
+  assert.match(server, /changedIntegrationRows\(rows, previouslyStored \|\| \[\]\)/)
   assert.match(server, /raw: \{[\s\S]*sourceUrl:[\s\S]*primaryPlaceId:[\s\S]*includedPlaceIds:/)
 })
 
@@ -105,7 +106,8 @@ test('accepted Edge of Norway events are persisted with stable external IDs and 
 test('Local Events frame upsert conflicts have exact non-partial unique indexes', () => {
   const migration = readFileSync(new URL('../supabase/migrations/20260713120000_fix_local_events_frame_upsert_conflicts.sql', import.meta.url), 'utf8')
   const server = readFileSync(new URL('../app/lib/integrations/local-events/server.ts', import.meta.url), 'utf8')
-  assert.match(server, /upsert\(rows, \{ onConflict: 'device_id,provider,external_id' \}\)/)
+  assert.match(server, /upsert\(changed\.slice\(index, index \+ 200\), \{ onConflict: 'device_id,provider,external_id' \}\)/)
+  assert.match(server, /changedIntegrationRows\(rows, previouslyStored \|\| \[\]\)/)
   assert.match(server, /from\('user_integrations'\)\.upsert\([\s\S]*\{ onConflict: 'device_id,provider' \}\)/)
   assert.match(migration, /partition by device_id, provider/)
   assert.match(migration, /partition by device_id, provider, external_id/)
