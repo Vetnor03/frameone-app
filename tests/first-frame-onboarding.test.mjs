@@ -31,7 +31,11 @@ test('normal completion creates all four unpinned modules while custom stays cus
   assert.match(setup, /finish\('custom'\)/)
   assert.match(setup, /purpose: selectedPurpose/)
   assert.doesNotMatch(setup, /onComplete\(\{ purpose: 'normal'/)
-  assert.match(setup, /await onComplete\(\{ purpose: selectedPurpose, modules \}\)/)
+  assert.match(setup, /await onComplete\(selectedPurpose === 'custom'/)
+  assert.match(setup, /customLayout, customCells/)
+  assert.match(home, /validateCustomSetup\(selection\.customLayout, selection\.customCells/)
+  assert.match(home, /nextCellsByLayout = \{ \.\.\.makeEmptyCellsByLayout\(\), \[nextLayout\]: checked\.cells/)
+  assert.match(home, /await requestDeviceUpdate\(supabase, activeDeviceId, crypto\.randomUUID\(\)\)/)
 })
 
 test('fresh integration selection starts empty and only records explicit connects', () => {
@@ -51,7 +55,8 @@ test('weather setup is location-only and preserves the selected configuration', 
   assert.match(setup, /Select location/)
   assert.doesNotMatch(setup, /Oslo is used if you skip|current temperature|sunrise|UV|precipitation|next week/i)
   assert.match(setup, /weather: \[\{ id: 1, \.\.\.picked/)
-  assert.match(home, /if \(!Array\.isArray\(nextModules\.weather\) \|\| !nextModules\.weather\.length\)/)
+  assert.match(home, /selection\.purpose === 'normal' && \(!Array\.isArray\(nextModules\.weather\) \|\| !nextModules\.weather\.length\)/)
+  assert.match(home, /if \(!checked\.weatherSelected\) delete nextModules\.weather/)
 })
 
 test('Normal setup requires an explicitly picked weather location, not silent Oslo default', () => {
@@ -98,6 +103,7 @@ test('incomplete setup and OAuth draft survive reload while completion clears th
   assert.match(home, /setSetupDeviceId\(!hasSavedSettings \|\| hasOnboardingDraft \? deviceId : null\)/)
   assert.match(setup, /sessionStorage\.getItem\(`remind:onboarding:\$\{activeDeviceId\}`\)/)
   assert.match(setup, /sessionStorage\.setItem\(`remind:onboarding:\$\{activeDeviceId\}`/)
+  assert.match(setup, /customLayout, customCellsByLayout \}\)/)
   assert.match(home, /sessionStorage\.removeItem\(`remind:onboarding:\$\{activeDeviceId\}`\)/)
   assert.match(connect, /initialTeamsOAuthStatus === 'connected'/)
 })
