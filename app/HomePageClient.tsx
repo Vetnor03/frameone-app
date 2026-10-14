@@ -56,7 +56,7 @@ type CellSize = 'small' | 'medium' | 'large'
 type LayoutKey = 'default' | 'pyramid' | 'square' | 'full'
 type TabKey = CoreTabKey | ModuleKey
 type SetupPurpose = 'normal' | 'custom'
-type FrameSetupSelection = { purpose: SetupPurpose; modules: Record<string, any>; customLayout?: LayoutKey; customCells?: Record<number, ModuleKey | null> }
+type FrameSetupSelection = { purpose: SetupPurpose; modules: NonNullable<SettingsJson['modules']>; customLayout?: LayoutKey; customCells?: Record<number, ModuleKey | null> }
 
 // Release visibility switches. Keep the underlying implementation/data intact so
 // these features can be re-enabled without rebuilding them.
