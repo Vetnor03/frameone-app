@@ -46,7 +46,10 @@ test('Normal and Custom are both first-time options, and Normal carries a subtle
   assert.match(setup, /if \(purpose === 'normal'\)/)
   assert.match(setup, /else setStep\('custom'\)/)
   assert.match(setup, /finish\('custom'\)/)
-  assert.match(setup, /Open frame editor/)
+  assert.match(setup, /Choose your layout and modules before the frame’s first update/)
+  assert.match(setup, /<FrameLayoutRenderer/)
+  assert.match(setup, /Finish setup/)
+  assert.doesNotMatch(setup, /Open frame editor/)
   assert.doesNotMatch(setup, /const setupPurposes: SetupPurpose\[\] = SHOW_CUSTOM_LAYOUT_UI/)
   // The advanced custom geometry release flag stays off for pilot.
   assert.match(home, /const SHOW_CUSTOM_LAYOUT_UI = false/)
