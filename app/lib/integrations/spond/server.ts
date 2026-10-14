@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { decryptJson, encryptJson } from './crypto'
 import { isSpondEventExternalId } from '@/app/lib/device/remindersFeed'
+import { integrationSyncDelta } from '../integrationSyncDelta'
 import { fetchSpondItems, SpondError, type SpondCredentials, type SpondMappedItem } from './client'
 
 export const SPOND_PROVIDER = 'spond'
@@ -90,18 +91,28 @@ export async function syncSpondForUser(userId: string, credentials: SpondCredent
     updated_at: now,
   }))
 
-  const { error: deleteError } = await supabase
+  // Every integration_items write bumps a frame content revision. Preserve
+  // unchanged rows and prune only items removed by a successful Spond sync.
+  const { data: existing, error: existingError } = await supabase
     .from('integration_items')
-    .delete()
+    .select('external_id,title,body,starts_at,due_at,priority,raw')
     .eq('user_id', userId)
     .eq('provider', SPOND_PROVIDER)
+    .limit(5000)
+  if (existingError) throw new Error(existingError.message)
+  if ((existing || []).length >= 5000) throw new Error('Spond calendar cache exceeds safe sync limit')
+  const { changed, obsoleteIds } = integrationSyncDelta(rows, existing || [])
 
-  if (deleteError) throw new Error(deleteError.message)
+  for (let i = 0; i < obsoleteIds.length; i += 200) {
+    const { error: deleteError } = await supabase.from('integration_items')
+      .delete().eq('user_id', userId).eq('provider', SPOND_PROVIDER)
+      .in('external_id', obsoleteIds.slice(i, i + 200))
+    if (deleteError) throw new Error(deleteError.message)
+  }
 
-  if (rows.length > 0) {
-    const { error: upsertError } = await supabase
-      .from('integration_items')
-      .upsert(rows, { onConflict: 'user_id,provider,external_id' })
+  for (let i = 0; i < changed.length; i += 200) {
+    const { error: upsertError } = await supabase.from('integration_items')
+      .upsert(changed.slice(i, i + 200), { onConflict: 'user_id,provider,external_id' })
     if (upsertError) throw new Error(upsertError.message)
   }
 

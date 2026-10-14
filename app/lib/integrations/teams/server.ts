@@ -9,6 +9,7 @@ import {
   type TeamsTokenSet,
 } from './client'
 import { isTeamsMeetingVisibleAt } from './visibility'
+import { integrationSyncDelta } from '../integrationSyncDelta'
 
 export const TEAMS_PROVIDER = 'teams'
 export const DEFAULT_TEAMS_CALENDAR_HORIZON_DAYS = 120
@@ -162,17 +163,28 @@ export async function syncTeamsForUser(userId: string, tokenSet: TeamsTokenSet, 
     updated_at: now,
   }))
 
-  const { error: deleteError } = await supabase
+  // Never delete/reinsert unchanged meetings. Integration rows trigger a
+  // physical-frame revision for every write, even when the meeting is identical.
+  const { data: existing, error: existingError } = await supabase
     .from('integration_items')
-    .delete()
+    .select('external_id,title,body,starts_at,due_at,priority,raw')
     .eq('user_id', userId)
     .eq('provider', TEAMS_PROVIDER)
-  if (deleteError) throw new Error(deleteError.message)
+    .limit(5000)
+  if (existingError) throw new Error(existingError.message)
+  if ((existing || []).length >= 5000) throw new Error('Teams calendar cache exceeds safe sync limit')
+  const { changed, obsoleteIds } = integrationSyncDelta(rows, existing || [])
 
-  if (rows.length > 0) {
-    const { error: upsertError } = await supabase
-      .from('integration_items')
-      .upsert(rows, { onConflict: 'user_id,provider,external_id' })
+  for (let i = 0; i < obsoleteIds.length; i += 200) {
+    const { error: deleteError } = await supabase.from('integration_items')
+      .delete().eq('user_id', userId).eq('provider', TEAMS_PROVIDER)
+      .in('external_id', obsoleteIds.slice(i, i + 200))
+    if (deleteError) throw new Error(deleteError.message)
+  }
+
+  for (let i = 0; i < changed.length; i += 200) {
+    const { error: upsertError } = await supabase.from('integration_items')
+      .upsert(changed.slice(i, i + 200), { onConflict: 'user_id,provider,external_id' })
     if (upsertError) throw new Error(upsertError.message)
   }
 

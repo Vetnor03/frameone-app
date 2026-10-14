@@ -2,6 +2,7 @@ import { EDGE_OF_NORWAY_PROVIDER } from './edge-of-norway-shadow'
 import { fetchNationwideEvents, upstreamRetryDeferred } from './nationwide'
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
 import { localEventDisplayTitle } from './display'
+import { changedIntegrationRows } from '../integrationSyncDelta'
 import { getLocalEventPlace, normalizeLocalEventAreaPreference, suggestedLocalEventArea, type LocalEventAreaPreference } from './places'
 
 export type LocalEventsSyncResult = { importedCount: number; zeroEvents: boolean; areaPreference: LocalEventAreaPreference; activeSources: string[]; inactiveSources: string[] }
@@ -83,15 +84,20 @@ export async function syncLocalEventsForFrame(userId: string, deviceId: string, 
       updated_at: now,
     }
   })
-  // Preserve the last good feed when an upstream fetch fails, but remove stale future
-  // entries after a successful import (including when the selected location changes).
-  if (rows.length) {
-    const { error } = await supabase.from('integration_items').upsert(rows, { onConflict: 'device_id,provider,external_id' })
+  // Read before writing: unchanged event cards should NOT bump physical-frame
+  // content revisions. Keep the existing successful-source-only pruning policy.
+  const { data: previouslyStored, error: listingError } = await supabase.from('integration_items')
+    .select('external_id,title,body,starts_at,due_at,priority,raw')
+    .eq('device_id', deviceId).eq('provider', EDGE_OF_NORWAY_PROVIDER).limit(2000)
+  if (listingError) throw new Error(listingError.message)
+  if ((previouslyStored || []).length >= 2000) throw new Error('Local Events cache exceeds safe sync limit')
+
+  const changed = changedIntegrationRows(rows, previouslyStored || [])
+  for (let index = 0; index < changed.length; index += 200) {
+    const { error } = await supabase.from('integration_items')
+      .upsert(changed.slice(index, index + 200), { onConflict: 'device_id,provider,external_id' })
     if (error) throw new Error(error.message)
   }
-  const { data: previouslyStored, error: listingError } = await supabase.from('integration_items')
-    .select('external_id,raw').eq('device_id', deviceId).eq('provider', EDGE_OF_NORWAY_PROVIDER).limit(2000)
-  if (listingError) throw new Error(listingError.message)
   const currentIds = new Set(rows.map((row) => row.external_id))
   // Prune only data from sources which responded successfully. Stale items from a
   // failed feed remain available instead of disappearing when another feed succeeds.
