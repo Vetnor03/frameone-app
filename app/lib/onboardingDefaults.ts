@@ -107,4 +107,20 @@ export function norwegianStarterCountdowns(language: StarterLanguage, now = new 
   ]
 }
 
+/**
+ * A new Normal frame must use a weather location chosen by the user.
+ * Do not silently substitute Oslo for a skipped setup step.
+ */
+export function hasChosenWeatherLocation(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const row = value as Record<string, unknown>
+  const lat = Number(row.lat), lon = Number(row.lon)
+  return typeof row.label === 'string'
+    && row.label.trim().length > 0
+    && row.lat !== null && row.lat !== undefined && row.lon !== null && row.lon !== undefined
+    && Number.isFinite(lat) && lat >= -90 && lat <= 90
+    && Number.isFinite(lon) && lon >= -180 && lon <= 180
+    && !(lat === 0 && lon === 0)
+}
+
 export const OSLO_WEATHER = Object.freeze({ id: 1, label: 'Oslo, Norway', lat: 59.9139, lon: 10.7522, units: 'metric', refresh: 1800000, hiLo: true, cond: true })
