@@ -88,7 +88,7 @@ test('Spond reminder feed only includes event arrangements', () => {
       due_at: '2026-06-01T09:00:00.000Z',
       priority: 20,
     },
-  ], '2026-06-01', '2026-06-30', 'Europe/Oslo', false)
+  ], '2026-06-01', '2026-06-30', 'Europe/Oslo', false, new Date('2026-06-01T12:00:00Z'))
 
   assert.equal(items.length, 1)
   assert.equal(items[0].external_id, 'event:arrangement-1')
@@ -216,7 +216,7 @@ test('same-day ordering sorts manual reminders and imported items together by ti
   ], '2026-09-08', '2026-09-30', 'Europe/Oslo', new Date('2026-09-08T00:00:00Z'))
   const spond = buildSpondReminderItems([
     { id: '1', user_id: 'u', provider: 'spond', external_id: 'event:early', title: 'Spond early', body: null, starts_at: '2026-09-09T17:00:00Z', due_at: null, priority: 0 },
-  ], '2026-09-08', '2026-09-30', 'Europe/Oslo', false)
+  ], '2026-09-08', '2026-09-30', 'Europe/Oslo', false, new Date('2026-09-08T00:00:00Z'))
   const manual = timedItem('manual-middle', '2026-09-09', '19:30', 'remind')
 
   assert.deepEqual(sortReminderItems([...teams, manual, ...spond]).map(x => [x.source, x.display_time]), [
@@ -340,4 +340,28 @@ test('mixed reminder and local-event list keeps all sources in chronological ord
     selected.map((entry) => entry.display_time),
     ['14:00', '19:00', '22:00']
   )
+})
+
+test('physical Spond events expire at their exact start, without waiting for the end time', () => {
+  const meeting = {
+    id: 'event-row',
+    user_id: 'user-1',
+    provider: 'spond',
+    external_id: 'event:practice',
+    title: 'Practice',
+    body: null,
+    starts_at: '2026-10-14T16:00:00Z',
+    due_at: '2026-10-14T17:00:00Z',
+    priority: 0,
+  }
+  const get = (when, includeOverdue = false) => buildSpondReminderItems(
+    [meeting], '2026-10-14', '2026-10-15', 'Europe/Oslo',
+    includeOverdue, new Date(when),
+  )
+  assert.equal(get('2026-10-14T15:59:59.999Z').length, 1)
+  assert.equal(get('2026-10-14T16:00:00.000Z').length, 0)
+  assert.equal(get('2026-10-14T16:00:48.000Z').length, 0)
+  assert.equal(get('2026-10-14T16:59:59.000Z').length, 0)
+  // Explicitly requested overdue diagnostics keep the previous historical mode.
+  assert.equal(get('2026-10-14T16:00:48.000Z', true).length, 1)
 })
