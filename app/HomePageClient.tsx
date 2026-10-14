@@ -11399,35 +11399,6 @@ function CountdownModuleSettingsTab({
   )
 }
 
-function NaturalCountdownComposer({ language, onClose, onDraft }: { language: AppLanguage; onClose: () => void; onDraft: (draft: { title: string; date: string }) => void }) {
-  const [text, setText] = useState('')
-  const [parsing, setParsing] = useState(false)
-  const [failed, setFailed] = useState(false)
-
-  async function interpret() {
-    if (!text.trim() || parsing) return
-    setParsing(true); setFailed(false)
-    try {
-      const { data } = await supabase.auth.getSession()
-      const accessToken = data.session?.access_token
-      if (!accessToken) throw new Error('sign in')
-      const now = new Date()
-      const offset = -now.getTimezoneOffset()
-      const sign = offset >= 0 ? '+' : '-'
-      const localNow = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}T${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}${sign}${pad2(Math.floor(Math.abs(offset) / 60))}:${pad2(Math.abs(offset) % 60)}`
-      const response = await fetch('/api/reminders/parse', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ text: text.trim(), localNow, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null, language }) })
-      const json = await response.json().catch(() => ({}))
-      if (!response.ok || json.status !== 'ready' || !json.reminder?.title || !json.reminder?.due_date) throw new Error('parse failed')
-      onDraft({ title: json.reminder.title, date: json.reminder.due_date })
-    } catch (error) {
-      console.error('Countdown parsing failed', error)
-      setFailed(true)
-    } finally { setParsing(false) }
-  }
-
-  return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]"><div className="w-full max-w-[420px] rounded-t-3xl border-t border-[color:var(--bd-10)] bg-[color:var(--sheet-bg)] px-5 pb-8 pt-5"><div className="flex items-center justify-between"><div className="text-sm tracking-widest text-[color:var(--fg-70)]">{language === 'no' ? 'NY NEDTELLING' : 'NEW COUNTDOWN'}</div><button onClick={onClose} className="text-xl text-[color:var(--fg-60)]">✕</button></div><label className="mt-6 block text-lg font-medium text-[color:var(--fg-95)]">{language === 'no' ? 'Hva teller du ned til?' : 'What are you counting down to?'}</label><textarea autoFocus rows={4} value={text} onChange={event => { setText(event.target.value); setFailed(false) }} placeholder={language === 'no' ? 'Bryllup 18. august 2027' : "Vetle's birthday October 4"} className="mt-3 w-full resize-none rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4 text-[color:var(--fg-90)] outline-none" /><SensitiveInformationHelper language={language} />{failed && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{language === 'no' ? 'Kunne ikke tolke nedtellingen. Legg inn tittel og dato manuelt.' : 'Could not understand the countdown. Enter the title and date manually.'}</p>}<button onClick={interpret} disabled={!text.trim() || parsing} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{parsing ? (language === 'no' ? 'TOLKER…' : 'UNDERSTANDING…') : (language === 'no' ? 'FORTSETT' : 'CONTINUE')}</button>{failed && <button onClick={() => onDraft({ title: text.trim(), date: toLocalYmd(new Date()) })} className="mt-3 h-10 w-full text-xs tracking-widest text-[color:var(--fg-60)]">{language === 'no' ? 'REDIGER MANUELT' : 'EDIT MANUALLY'}</button>}</div></div>
-}
-
 function CountdownDraftSheet({
   language,
   activeDeviceId,
