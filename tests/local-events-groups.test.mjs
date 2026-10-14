@@ -60,3 +60,13 @@ test('frame skip marker suppresses all options, and booked reminder suppresses e
   const restored = buildLocalEventFrameItem(several, [], '2026-10-12', now)
   assert.equal(restored.length, 3)
 })
+
+test('next public Event performance takes over at its exact start minute', () => {
+  const performances = [
+    { id: 'today', title: 'Show', venue: 'Scene', date: '2026-10-14', time: '19:00' },
+    { id: 'tomorrow', title: 'Show', venue: 'Scene', date: '2026-10-15', time: '19:00' },
+  ]
+  assert.equal(groupUpcomingEvents(performances, '2026-10-14', '18:59')[0].performances[0].id, 'today')
+  assert.equal(groupUpcomingEvents(performances, '2026-10-14', '19:00')[0].performances[0].id, 'tomorrow')
+  assert.equal(groupUpcomingEvents(performances, '2026-10-14', '19:01')[0].performances[0].id, 'tomorrow')
+})
