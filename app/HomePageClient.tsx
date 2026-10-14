@@ -2291,9 +2291,12 @@ export default function HomePage() {
 
     if (selection.purpose === 'normal') {
       nextLayout = 'pyramid'
-      const presetCells: Record<number, ModuleKey | null> = { 0: 'date', 1: 'reminders', 2: 'weather', 3: 'countdown' }
+      const presetCells: Record<number, ModuleKey | null> = { 0: 'date', 1: 'reminders', 2: 'weather', 3: 'news' }
       nextCellsByLayout = { ...makeEmptyCellsByLayout(), pyramid: presetCells }
       layoutModuleMemoryRef.current = mergeCellsIntoSlotMemory([], nextLayout, presetCells)
+      // Normal setup uses curated NRK Toppsaker unless Latest News was chosen.
+      const savedNews = nextModules.news && typeof nextModules.news === 'object' && !Array.isArray(nextModules.news) ? nextModules.news : {}
+      nextModules.news = { ...savedNews, feed: savedNews.feed === 'latest' ? 'latest' : 'top' }
     }
 
     if (!Array.isArray(nextModules.weather) || !nextModules.weather.length) {
@@ -9231,7 +9234,7 @@ function FrameSetupFlow({
   activeDeviceId: string
   onComplete: (selection: FrameSetupSelection) => Promise<void>
 }) {
-  const guidedModules = ['reminders', 'weather', 'countdown'] as const
+  const guidedModules = ['reminders', 'weather', 'news'] as const
   const savedDraft = typeof window === 'undefined' ? null : (() => { try { return JSON.parse(sessionStorage.getItem(`remind:onboarding:${activeDeviceId}`) || 'null') } catch { return null } })()
   const [step, setStep] = useState<'purpose' | 'guided' | 'custom'>(SHOW_CUSTOM_LAYOUT_UI && (savedDraft?.step === 'guided' || savedDraft?.step === 'custom') ? savedDraft.step : savedDraft?.step === 'guided' ? 'guided' : 'purpose')
   const [purpose, setPurpose] = useState<SetupPurpose>(SHOW_CUSTOM_LAYOUT_UI && savedDraft?.purpose === 'custom' ? 'custom' : 'normal')
@@ -9239,9 +9242,6 @@ function FrameSetupFlow({
   const [modules, setModules] = useState<Record<string, any>>({ ...(savedDraft?.modules || {}), integration_selection_explicit: true, integrations: { ...(savedDraft?.modules?.integrations || {}) } })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [countdownComposerOpen, setCountdownComposerOpen] = useState(false)
-  const [countdownDraft, setCountdownDraft] = useState<{ title: string; date: string } | null>(null)
-  const [addedCountdown, setAddedCountdown] = useState<{ title: string; date: string } | null>(null)
   const isNo = language === 'no'
   const current = guidedModules[moduleIndex]
 
@@ -9287,18 +9287,20 @@ function FrameSetupFlow({
 
   if (step === 'purpose') {
     const setupPurposes: SetupPurpose[] = SHOW_CUSTOM_LAYOUT_UI ? ['normal', 'custom'] : ['normal']
-    return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{isNo ? 'Førstegangsoppsett' : 'First-time setup'}</div><h1 className="mt-3 text-2xl font-medium">{isNo ? 'Velg oppsett' : 'Choose your setup'}</h1><div className="mt-6 space-y-3">{setupPurposes.map(key => <button key={key} type="button" aria-pressed={purpose === key} onClick={() => setPurpose(key)} className={`w-full rounded-2xl border px-4 py-4 text-left ${purpose === key ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-15)]'}`}><span className="flex items-center justify-between text-sm uppercase tracking-[0.18em]"><span>{key === 'normal' ? 'Normal' : 'Custom'}</span>{key === 'normal' && <span className="text-[10px] text-[#2aa3ff]">{isNo ? 'Anbefalt' : 'Recommended'}</span>}</span><span className="mt-2 block text-xs normal-case leading-5 tracking-normal text-[color:var(--fg-55)]">{key === 'normal' ? (isNo ? 'Dato, Påminnelser, Vær og Nedtelling.' : 'Date, Reminders, Weather, and Countdown.') : (isNo ? 'Velg egne moduler og layout.' : 'Choose your own modules and layout.')}</span></button>)}</div><button onClick={() => { setError(null); if (purpose === 'normal') { setModuleIndex(0); setStep('guided') } else setStep('custom') }} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white">{isNo ? 'Fortsett' : 'Continue'}</button></>)
+    return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{isNo ? 'Førstegangsoppsett' : 'First-time setup'}</div><h1 className="mt-3 text-2xl font-medium">{isNo ? 'Velg oppsett' : 'Choose your setup'}</h1><div className="mt-6 space-y-3">{setupPurposes.map(key => <button key={key} type="button" aria-pressed={purpose === key} onClick={() => setPurpose(key)} className={`w-full rounded-2xl border px-4 py-4 text-left ${purpose === key ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-15)]'}`}><span className="flex items-center justify-between text-sm uppercase tracking-[0.18em]"><span>{key === 'normal' ? 'Normal' : 'Custom'}</span>{key === 'normal' && <span className="text-[10px] text-[#2aa3ff]">{isNo ? 'Anbefalt' : 'Recommended'}</span>}</span><span className="mt-2 block text-xs normal-case leading-5 tracking-normal text-[color:var(--fg-55)]">{key === 'normal' ? (isNo ? 'Dato, Påminnelser, Vær og Nyheter.' : 'Date, Reminders, Weather, and News.') : (isNo ? 'Velg egne moduler og layout.' : 'Choose your own modules and layout.')}</span></button>)}</div><button onClick={() => { setError(null); if (purpose === 'normal') { setModuleIndex(0); setStep('guided') } else setStep('custom') }} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white">{isNo ? 'Fortsett' : 'Continue'}</button></>)
   }
 
   if (step === 'custom') return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">Custom</h1><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Fullfør førstegangsoppsettet, og bruk deretter frame-editoren til å velge egne moduler og layout.' : 'Finish first-time setup, then use the frame editor to choose your own modules and layout.'}</p>{error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={() => finish('custom')} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : (isNo ? 'Åpne frame-editor' : 'Open frame editor')}</button></>)
 
-  return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">{current === 'reminders' ? (isNo ? 'Koble til apper' : 'Connect Apps') : current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nedtelling' : 'Countdown')}</h1>
+  return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">{current === 'reminders' ? (isNo ? 'Koble til apper' : 'Connect Apps') : current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nyheter' : 'News')}</h1>
     {current === 'reminders' && <div className="mt-3 h-[min(430px,48vh)]"><ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup onIntegrationChanged={selectIntegration} /></div>}
     {current === 'weather' && <div className="mt-6"><div className="mb-3 text-sm text-[color:var(--fg-65)]">{isNo ? 'Velg sted' : 'Select location'}</div><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Velg sted' : 'Select location')} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} /></div>}
-    {current === 'countdown' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Legg til en nedtelling hvis du ønsker.' : 'Add a countdown if you want.'}</p>{addedCountdown && <div className="mt-5 rounded-2xl border border-[color:var(--bd-15)] px-4 py-4"><div className="font-medium">{addedCountdown.title}</div><div className="mt-1 text-xs text-[color:var(--fg-55)]">{formatReminderFullDateLabel(language, addedCountdown.date)}</div></div>}<button type="button" onClick={() => setCountdownComposerOpen(true)} className="mt-5 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'LEGG TIL NEDTELLING' : 'ADD COUNTDOWN'}</button></>}
+    {current === 'news' && <div className="mt-4 h-[min(450px,52vh)]"><NewsModuleSettingsTab
+      language={language}
+      feed={modules.news?.feed === 'latest' ? 'latest' : 'top'}
+      onFeedChange={(feed) => setModules(value => ({ ...value, news: { ...(value.news || {}), feed } }))}
+    /></div>}
     {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={advance} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : moduleIndex === guidedModules.length - 1 ? (isNo ? 'Fullfør' : 'Finish') : (isNo ? 'Neste' : 'Next')}</button>
-    {countdownComposerOpen && <NaturalCountdownComposer language={language} onClose={() => setCountdownComposerOpen(false)} onDraft={(draft) => { setCountdownComposerOpen(false); setCountdownDraft(draft) }} />}
-    {countdownDraft && <CountdownDraftSheet language={language} activeDeviceId={activeDeviceId} editingItem={null} initialTitle={countdownDraft.title} initialDate={countdownDraft.date} onClose={() => setCountdownDraft(null)} onSaved={(saved) => { setAddedCountdown(saved); setCountdownDraft(null) }} onDeleted={() => setCountdownDraft(null)} />}
   </>, true)
 }
 function FirstFrameOnboarding({
