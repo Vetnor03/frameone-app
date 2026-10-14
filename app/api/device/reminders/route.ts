@@ -717,7 +717,8 @@ export async function GET(req: Request) {
           todayYmd,
           horizonEndYmd,
           timeZone,
-          includeOverdue
+          includeOverdue,
+          now
         )
       } catch (error) {
         logOptionalReminderProviderFailure('spond', error)
@@ -737,7 +738,8 @@ export async function GET(req: Request) {
           Array.isArray(teamsIntegrationItemsData) ? (teamsIntegrationItemsData as IntegrationItemRow[]) : [],
           todayYmd,
           horizonEndYmd,
-          timeZone
+          timeZone,
+          now
         )
       } catch (error) {
         logOptionalReminderProviderFailure('teams', error)

@@ -143,7 +143,8 @@ export function buildSpondReminderItems(
   todayYmd: string,
   horizonEndYmd: string,
   timeZone: string,
-  includeOverdue: boolean
+  includeOverdue: boolean,
+  now = new Date()
 ): DeviceReminderItem[] {
   return rows.flatMap((row) => {
     const title = String(row.title || '').trim()
@@ -151,6 +152,10 @@ export function buildSpondReminderItems(
     if (!title || !externalId || !isSpondEventExternalId(externalId)) return []
 
     const timestamp = row.starts_at || row.due_at
+    // Spond events are upcoming commitments, just like Teams meetings.
+    // Checking only the calendar date leaves an 18:00 event visible after
+    // the 18:00 scheduled wake. Preserve the opt-in overdue diagnostics.
+    if (timestamp && !includeOverdue && new Date(timestamp).getTime() <= now.getTime()) return []
     const occurrenceDate = timestamp ? isoToYmdInTimeZone(timestamp, timeZone) : todayYmd
     if (!occurrenceDate) return []
     if (occurrenceDate > horizonEndYmd) return []
