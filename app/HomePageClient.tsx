@@ -39,6 +39,7 @@ import {
   revisionHasBeenDisplayed,
 } from './lib/device/updateStateClient'
 import { clearManualUpdate, readManualUpdate, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
+import { frameSaveFeedbackPhase } from './lib/device/frameSaveFeedback.mjs'
 import { saveFrameSettings } from './lib/device/saveFrameSettings.mjs'
 import { reconcilePersistedDesiredState } from './lib/device/desiredStateReconciliation.mjs'
 import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, geometryWithAssignments, supportsPhysicalCustomLayout, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
@@ -1260,6 +1261,7 @@ export default function HomePage() {
   const [modulesJson, setModulesJson] = useState<Record<string, any>>({})
   const [persisting, setPersisting] = useState(false)
   const [frameUpdateError, setFrameUpdateError] = useState('')
+  const [frameSaveFeedback, setFrameSaveFeedback] = useState<{ deviceId: string; savedAt: string; phase: 'waiting' | 'confirmed' } | null>(null)
   const [explicitUpdateStatus, setExplicitUpdateStatus] = useState<'idle' | 'saving' | 'requesting' | 'waiting_for_display'>('idle')
   const updateActionInFlightRef = useRef(false)
   const manualUpdateCompletionRef = useRef<{ deviceId: string; promise: Promise<void> } | null>(null)
@@ -1760,18 +1762,17 @@ export default function HomePage() {
     return next
   }
 
-  function getTimeMs(value: string | null | undefined) {
-    if (!value) return null
-    const time = new Date(value).getTime()
-    return Number.isFinite(time) ? time : null
+  function isFrameUpdatePending(configUpdatedAt: string | null, renderAt: string | null) {
+    return frameSaveFeedbackPhase(configUpdatedAt, renderAt) === 'waiting'
   }
 
-  function isFrameUpdatePending(configUpdatedAt: string | null, renderAt: string | null) {
-    const configTime = getTimeMs(configUpdatedAt)
-    if (configTime == null) return false
-
-    const renderTime = getTimeMs(renderAt)
-    return renderTime == null || configTime > renderTime
+  function confirmFrameSaveOnRender(deviceId: string, renderAt: string | null) {
+    if (!renderAt || activeDeviceIdRef.current !== deviceId) return
+    setFrameSaveFeedback((current) => {
+      if (!current || current.deviceId !== deviceId || current.phase !== 'waiting') return current
+      return frameSaveFeedbackPhase(current.savedAt, renderAt) === 'confirmed'
+        ? { ...current, phase: 'confirmed' } : current
+    })
   }
 
   function rememberPendingFrameUpdate(configUpdatedAt: string | null, renderAt: string | null) {
@@ -1822,11 +1823,18 @@ export default function HomePage() {
   const actionDisabled = layoutFlow
     ? layoutDraftSaving || (layoutFlow.mode === 'create' && !activeDeviceId)
     : !activeDeviceId || manualUpdateInProgress
+  const visibleSaveFeedback = frameSaveFeedback?.deviceId === activeDeviceId ? frameSaveFeedback : null
   const updateStatusText = manualUpdateInProgress
     ? (language === 'no' ? 'Oppdaterer…' : 'Updating…')
-    : lastPhysicalDisplayUpdatedAt
-      ? formatRelative(lastPhysicalDisplayUpdatedAt)
-      : (language === 'no' ? 'Oppdatert' : 'Updated')
+    : visibleSaveFeedback?.phase === 'waiting'
+      ? (language === 'no'
+        ? (powerSaver ? 'Lagret · Venter på neste oppvåkning' : 'Lagret · Venter på rammen')
+        : (powerSaver ? 'Saved · Waiting for next wake' : 'Saved · Waiting for frame'))
+      : visibleSaveFeedback?.phase === 'confirmed'
+        ? (language === 'no' ? 'Oppdatert på rammen' : 'Updated on the frame')
+        : lastPhysicalDisplayUpdatedAt
+          ? formatRelative(lastPhysicalDisplayUpdatedAt)
+          : (language === 'no' ? 'Ingen bekreftet rammeoppdatering ennå' : 'No confirmed frame update yet')
 
   useEffect(() => {
     if (!frameUpdateError) return
@@ -1866,6 +1874,7 @@ export default function HomePage() {
         current.map((frame) => (frame.device_id === deviceId ? { ...frame, ...status } : frame))
       )
       if (renderIso) setLastPhysicalDisplayUpdatedAt(renderIso)
+      confirmFrameSaveOnRender(deviceId, renderIso || null)
       if (
         pendingFrameConfigUpdatedAtRef.current &&
         !isFrameUpdatePending(pendingFrameConfigUpdatedAtRef.current, renderIso || null)
@@ -1895,6 +1904,7 @@ export default function HomePage() {
       current.map((frame) => (frame.device_id === deviceId ? { ...frame, ...status } : frame))
     )
     if (renderIso) setLastPhysicalDisplayUpdatedAt(renderIso)
+    confirmFrameSaveOnRender(deviceId, renderIso || null)
     if (
       pendingFrameConfigUpdatedAtRef.current &&
       !isFrameUpdatePending(pendingFrameConfigUpdatedAtRef.current, renderIso || null)
@@ -2089,10 +2099,15 @@ export default function HomePage() {
 
     setDirty(false)
     const renderAt = await loadDeviceStatus(deviceId)
-    rememberPendingFrameUpdate(
-      hasSavedSettings && data?.updated_at ? String(data.updated_at) : null,
-      renderAt
-    )
+    const settingsUpdatedAt = hasSavedSettings && data?.updated_at ? String(data.updated_at) : null
+    rememberPendingFrameUpdate(settingsUpdatedAt, renderAt)
+    // Restore status from backend timestamps after reload or frame switching.
+    // No new frame polling or manual update request is created here.
+    if (activeDeviceIdRef.current === deviceId) {
+      setFrameSaveFeedback(settingsUpdatedAt && isFrameUpdatePending(settingsUpdatedAt, renderAt)
+        ? { deviceId, savedAt: settingsUpdatedAt, phase: 'waiting' }
+        : null)
+    }
 
     if (!stickySettingsRef.current) setActiveTab('frame')
     const hasOnboardingDraft = typeof window !== 'undefined' && sessionStorage.getItem(`remind:onboarding:${deviceId}`) !== null
@@ -2520,7 +2535,9 @@ export default function HomePage() {
         cellsByLayout: nextCellsByLayout,
       }
       setDirty(reconciliation.dirty)
-      pendingFrameConfigUpdatedAtRef.current = new Date().toISOString()
+      const savedAt = new Date().toISOString()
+      pendingFrameConfigUpdatedAtRef.current = savedAt
+      setFrameSaveFeedback({ deviceId, savedAt, phase: 'waiting' })
       return true
     } catch (error) {
       setDirty(true)
@@ -2614,14 +2631,9 @@ export default function HomePage() {
     }
 
     if (powerSaver) {
-      // Saving device_settings already bumps the smart content revision ledger.
-      // In Power Save we deliberately do not create a realtime/manual update
-      // request: the next planned wake will consume the saved changes together
-      // with whatever scheduled module work caused the wake.
+      // Settings were saved; leave a persistent informational status visible
+      // until the next physical render, without waking a sleeping frame.
       setExplicitUpdateStatus('idle')
-      setFrameUpdateError(language === 'no'
-        ? 'Lagret. Strømsparing bruker endringene ved neste planlagte oppvåkning.'
-        : 'Saved. Power Save will apply these changes at the next scheduled wake.')
       updateActionInFlightRef.current = false
       return
     }
@@ -2954,8 +2966,11 @@ async function handleSelectTab(k: TabKey) {
                   </div>
                 )}
                 {!layoutFlow && (
-                  <div className={`${frameUpdateError ? 'mt-2' : 'mt-6'} min-h-[16px] max-w-[360px] text-center text-xs tracking-widest text-[color:var(--fg-40)]`}>
-                    {updateStatusText}
+                  <div role="status" aria-live="polite" className={`${frameUpdateError ? 'mt-2' : 'mt-6'} min-h-[16px] max-w-[360px] text-center text-xs leading-5 text-[color:var(--fg-60)]`}>
+                    <div>{updateStatusText}</div>
+                    {visibleSaveFeedback && lastPhysicalDisplayUpdatedAt && (
+                      <div className="mt-1 text-[11px] text-[color:var(--fg-40)]">{formatRelative(lastPhysicalDisplayUpdatedAt)}</div>
+                    )}
                   </div>
                 )}
               </div>
@@ -9240,8 +9255,8 @@ function FrameSetupFlow({
 }) {
   const guidedModules = ['reminders', 'weather', 'news'] as const
   const savedDraft = typeof window === 'undefined' ? null : (() => { try { return JSON.parse(sessionStorage.getItem(`remind:onboarding:${activeDeviceId}`) || 'null') } catch { return null } })()
-  const [step, setStep] = useState<'purpose' | 'guided' | 'custom'>(SHOW_CUSTOM_LAYOUT_UI && (savedDraft?.step === 'guided' || savedDraft?.step === 'custom') ? savedDraft.step : savedDraft?.step === 'guided' ? 'guided' : 'purpose')
-  const [purpose, setPurpose] = useState<SetupPurpose>(SHOW_CUSTOM_LAYOUT_UI && savedDraft?.purpose === 'custom' ? 'custom' : 'normal')
+  const [step, setStep] = useState<'purpose' | 'guided' | 'custom'>(savedDraft?.step === 'guided' || savedDraft?.step === 'custom' ? savedDraft.step : 'purpose')
+  const [purpose, setPurpose] = useState<SetupPurpose>(savedDraft?.purpose === 'custom' ? 'custom' : 'normal')
   const [moduleIndex, setModuleIndex] = useState(Number.isInteger(savedDraft?.moduleIndex) ? Math.max(0, Math.min(2, savedDraft.moduleIndex)) : 0)
   const [modules, setModules] = useState<Record<string, any>>({ ...(savedDraft?.modules || {}), integration_selection_explicit: true, integrations: { ...(savedDraft?.modules?.integrations || {}) } })
   const [saving, setSaving] = useState(false)
@@ -9295,8 +9310,8 @@ function FrameSetupFlow({
   </div>
 
   if (step === 'purpose') {
-    const setupPurposes: SetupPurpose[] = SHOW_CUSTOM_LAYOUT_UI ? ['normal', 'custom'] : ['normal']
-    return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{isNo ? 'Førstegangsoppsett' : 'First-time setup'}</div><h1 className="mt-3 text-2xl font-medium">{isNo ? 'Velg oppsett' : 'Choose your setup'}</h1><div className="mt-6 space-y-3">{setupPurposes.map(key => <button key={key} type="button" aria-pressed={purpose === key} onClick={() => setPurpose(key)} className={`w-full rounded-2xl border px-4 py-4 text-left ${purpose === key ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-15)]'}`}><span className="flex items-center justify-between text-sm uppercase tracking-[0.18em]"><span>{key === 'normal' ? 'Normal' : 'Custom'}</span>{key === 'normal' && <span className="text-[10px] text-[#2aa3ff]">{isNo ? 'Anbefalt' : 'Recommended'}</span>}</span><span className="mt-2 block text-xs normal-case leading-5 tracking-normal text-[color:var(--fg-55)]">{key === 'normal' ? (isNo ? 'Dato, Påminnelser, Vær og Nyheter.' : 'Date, Reminders, Weather, and News.') : (isNo ? 'Velg egne moduler og layout.' : 'Choose your own modules and layout.')}</span></button>)}</div><button onClick={() => { setError(null); if (purpose === 'normal') { setModuleIndex(0); setStep('guided') } else setStep('custom') }} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white">{isNo ? 'Fortsett' : 'Continue'}</button></>)
+    const setupPurposes: SetupPurpose[] = ['normal', 'custom']
+    return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{isNo ? 'Førstegangsoppsett' : 'First-time setup'}</div><h1 className="mt-3 text-2xl font-medium">{isNo ? 'Velg oppsett' : 'Choose your setup'}</h1><div className="mt-6 space-y-3">{setupPurposes.map(key => <button key={key} type="button" aria-pressed={purpose === key} onClick={() => setPurpose(key)} className={`w-full rounded-2xl border px-4 py-4 text-left ${purpose === key ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-15)]'}`}><span className="flex items-center justify-between text-sm uppercase tracking-[0.18em]"><span>{key === 'normal' ? 'Normal' : 'Custom'}</span>{key === 'normal' && <span className="text-[10px] font-normal normal-case tracking-normal text-[color:var(--fg-60)]">{isNo ? 'Anbefalt' : 'Recommended'}</span>}</span><span className="mt-2 block text-xs normal-case leading-5 tracking-normal text-[color:var(--fg-55)]">{key === 'normal' ? (isNo ? 'Dato, Påminnelser, Vær og Nyheter.' : 'Date, Reminders, Weather, and News.') : (isNo ? 'Velg egne moduler og layout.' : 'Choose your own modules and layout.')}</span></button>)}</div><button onClick={() => { setError(null); if (purpose === 'normal') { setModuleIndex(0); setStep('guided') } else setStep('custom') }} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white">{isNo ? 'Fortsett' : 'Continue'}</button></>)
   }
 
   if (step === 'custom') return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">Custom</h1><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Fullfør førstegangsoppsettet, og bruk deretter frame-editoren til å velge egne moduler og layout.' : 'Finish first-time setup, then use the frame editor to choose your own modules and layout.'}</p>{error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={() => finish('custom')} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : (isNo ? 'Åpne frame-editor' : 'Open frame editor')}</button></>)
