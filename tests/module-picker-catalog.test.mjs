@@ -62,6 +62,6 @@ test('single More Modules disclosure groups and scrolls without nested dropdowns
   assert.match(home, /selectWidget: 'VELG MODUL'/)
 })
 
-test('picker-only work leaves the onboarding default assignments unchanged', () => {
-  assert.match(home, /const presetCells: Record<number, ModuleKey \| null> = \{ 0: 'date', 1: 'reminders', 2: 'weather', 3: 'countdown' \}/)
+test('Normal setup uses the curated News core preset while Countdown stays available in More Modules', () => {
+  assert.match(home, /const presetCells: Record<number, ModuleKey \| null> = \{ 0: 'date', 1: 'reminders', 2: 'weather', 3: 'news' \}/)
 })

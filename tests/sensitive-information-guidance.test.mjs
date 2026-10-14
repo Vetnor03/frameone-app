@@ -37,7 +37,7 @@ test('one localized helper is reused for user-created free text', () => {
   assert.match(helper, /border-\[#2aa3ff\]\/15 bg-\[#2aa3ff\]\/\[0\.07\]/)
   assert.doesNotMatch(helper, /bg-\[#17344b\]/)
   assert.equal((assistant.match(/<SensitiveInformationHelper language=\{language\} \/>/g) ?? []).length, 2)
-  assert.equal((app.match(/<SensitiveInformationHelper language=\{language\}\s*\/>/g) ?? []).length, 4)
+  assert.equal((app.match(/<SensitiveInformationHelper language=\{language\}\s*\/>/g) ?? []).length, 3)
 
   const groceriesSheet = app.slice(app.indexOf('function GroceriesDraftSheet'), app.indexOf('function DinnerPlanSheet'))
   const dinnerPlanSheet = app.slice(app.indexOf('function DinnerPlanSheet'), app.indexOf('function DinnerPlanAddItemSheet'))

@@ -6,24 +6,26 @@ const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url),
 const remindersRoute = readFileSync(new URL('../app/api/device/reminders/route.ts', import.meta.url), 'utf8')
 const setup = home.slice(home.indexOf('function FrameSetupFlow({'), home.indexOf('function FirstFrameOnboarding({'))
 const connect = home.slice(home.indexOf('function ConnectAppsScreen({'), home.indexOf('function FrameSetupFlow({'))
-const countdown = home.slice(home.indexOf('function NaturalCountdownComposer('), home.indexOf('function CountdownDraftSheet('))
 
 test('first screen restores Normal and Custom with current recommended preset', () => {
   assert.match(setup, /\['normal', 'custom'\] as SetupPurpose\[\]/)
   assert.match(setup, /Recommended/)
-  assert.match(setup, /Date, Reminders, Weather, and Countdown\./)
+  assert.match(setup, /Date, Reminders, Weather, and News\./)
+  assert.match(setup, /Dato, Påminnelser, Vær og Nyheter\./)
   assert.match(setup, /Choose your own modules and layout\./)
 })
 
-test('guided Normal setup is Reminders, Weather, Countdown only', () => {
-  assert.match(setup, /guidedModules = \['reminders', 'weather', 'countdown'\] as const/)
+test('guided Normal setup is Reminders, Weather, News only', () => {
+  assert.match(setup, /guidedModules = \['reminders', 'weather', 'news'\] as const/)
   assert.doesNotMatch(setup, /current === 'date'/)
   assert.match(setup, /moduleIndex \+ 1} \/ {guidedModules\.length}/)
   assert.doesNotMatch(setup, /AI Follow|create_ai_assistant_watch|get_ai_subscription_entitlements/)
 })
 
 test('normal completion creates all four unpinned modules while custom stays custom', () => {
-  assert.match(home, /0: 'date', 1: 'reminders', 2: 'weather', 3: 'countdown'/)
+  assert.match(home, /0: 'date', 1: 'reminders', 2: 'weather', 3: 'news'/)
+  assert.match(home, /nextModules\.news = \{ \.\.\.savedNews, feed: savedNews\.feed === 'latest' \? 'latest' : 'top' \}/)
+  assert.match(home, /const starterCountdowns = norwegianStarterCountdowns\(language\)/)
   assert.match(home, /let nextPinnedTabs: ModuleKey\[\] = \[\]/)
   assert.match(setup, /finish\('custom'\)/)
   assert.match(setup, /purpose: selectedPurpose/)
@@ -51,13 +53,13 @@ test('weather setup is location-only and preserves the selected configuration', 
   assert.match(home, /if \(!Array\.isArray\(nextModules\.weather\) \|\| !nextModules\.weather\.length\)/)
 })
 
-test('countdown natural language parse pre-fills the manual draft and failure falls back', () => {
-  assert.match(setup, /NaturalCountdownComposer/)
-  assert.match(countdown, /\/api\/reminders\/parse/)
-  assert.match(countdown, /title: json\.reminder\.title, date: json\.reminder\.due_date/)
-  assert.match(countdown, /EDIT MANUALLY/)
-  assert.match(home, /initialTitle\?: string/)
+test('optional Countdown still uses its own manual editor, without guided parsing', () => {
+  assert.match(home, /function CountdownDraftSheet\(/)
+  assert.match(home, /function CountdownModuleSettingsTab\(/)
+  assert.match(home, /<CountdownDraftSheet/)
+  assert.doesNotMatch(setup, /NaturalCountdownComposer|CountdownDraftSheet/)
 })
+
 
 test('structured errors never stringify as object Object and completion remains retryable', () => {
   const formatter = home.slice(home.indexOf('function errorMessage('), home.indexOf('function isLanguage('))
@@ -211,10 +213,14 @@ test('Teams OAuth success replaces finishing status only after safe frame conver
   assert.match(connect, /setStatusTone\('success'\)[\s\S]*setStatus\(language === 'no' \? 'Teams er tilkoblet' : 'Teams connected'\)[\s\S]*changeFrameIntegration\('teams'/)
 })
 
-test('guided reminders is integrations-only and countdown stays optional', () => {
+test('guided reminders stays integrations-only and News defaults to Toppsaker', () => {
   assert.match(setup, /current === 'reminders'.*ConnectAppsScreen/)
   assert.doesNotMatch(setup, /NaturalReminderComposer|ReminderDraftSheet|ADD REMINDER|Add a reminder/)
-  assert.match(setup, /ADD COUNTDOWN/)
+  assert.doesNotMatch(setup, /ADD COUNTDOWN|Nedtelling|current === 'countdown'/)
+  assert.match(setup, /current === 'news'/)
+  assert.match(setup, /<NewsModuleSettingsTab/)
+  assert.match(setup, /modules\.news\?\.feed === 'latest' \? 'latest' : 'top'/)
+  assert.match(setup, /news: \{ \.\.\.\(value\.news \|\| \{\}\), feed \}/)
   assert.match(setup, /moduleIndex === guidedModules\.length - 1.*Finish/)
 })
 
@@ -232,9 +238,10 @@ test('startup Connect Apps suppresses its nested heading', () => {
   assert.match(connect, /\{!startup && <div className="flex items-center justify-between/)
 })
 
-test('countdown preview receives the final edited values from the save sheet', () => {
-  assert.match(setup, /onSaved=\{\(saved\) => \{ setAddedCountdown\(saved\)/)
+test('Countdown remains available in the module editor, but is not a Normal setup step', () => {
+  assert.match(home, /if \(module === 'countdown'\)/)
+  assert.match(home, /<CountdownModuleSettingsTab/)
   assert.match(home, /onSaved: \(saved: \{ title: string; date: string \}\)/)
   assert.match(home, /await onSaved\(\{ title: cleanTitle, date \}\)/)
-  assert.doesNotMatch(setup, /setAddedCountdown\(countdownDraft\)/)
+  assert.doesNotMatch(setup, /countdownComposerOpen|addedCountdown|CountdownDraftSheet/)
 })
