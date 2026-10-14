@@ -158,7 +158,7 @@ test('Spond builder only returns Spond event reminders and excludes unrelated Lo
   const items = buildSpondReminderItems([
     { id: '1', user_id: 'u1', provider: 'spond', external_id: 'event:1', title: 'Practice', body: null, starts_at: '2026-07-13T10:00:00.000Z', due_at: null, priority: null, raw: null },
     { id: '2', user_id: 'u1', provider: 'local_events', external_id: 'local:1', title: 'Town concert', body: null, starts_at: '2026-07-13T11:00:00.000Z', due_at: null, priority: null, raw: { source: 'local_events' } },
-  ], '2026-07-12', '2026-08-01', 'UTC', false)
+  ], '2026-07-12', '2026-08-01', 'UTC', false, new Date('2026-07-12T09:00:00Z'))
   assert.equal(items.length, 1)
   assert.equal(items[0].source, 'spond')
   assert.equal(items[0].title, 'Practice')
