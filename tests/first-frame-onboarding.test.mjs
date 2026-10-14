@@ -38,6 +38,18 @@ test('normal completion creates all four unpinned modules while custom stays cus
   assert.match(home, /await requestDeviceUpdate\(supabase, activeDeviceId, crypto\.randomUUID\(\)\)/)
 })
 
+test('first-time completion persists waiting feedback until a real frame render', () => {
+  const completion = home.slice(home.indexOf('  async function completeFrameSetup('), home.indexOf('  async function customLayoutRequest('))
+  assert.match(completion, /\.from\('device_settings'\)/)
+  assert.match(completion, /\.select\('updated_at'\)/)
+  assert.match(completion, /const initialSettingsSavedAt = initialSavedSettings\?\.updated_at/)
+  assert.match(completion, /await requestDeviceUpdate\(supabase, activeDeviceId, crypto\.randomUUID\(\)\)/)
+  assert.match(completion, /setFrameSaveFeedback\(\{ deviceId: activeDeviceId, savedAt: initialSettingsSavedAt, phase: 'waiting' \}\)/)
+  assert.match(completion, /await refreshPhysicalFrameState\(activeDeviceId, \{ forceSnapshot: true \}\)/)
+  assert.ok(completion.indexOf('await requestDeviceUpdate(') < completion.indexOf('setSetupDeviceId(null)'))
+  assert.ok(completion.indexOf('setFrameSaveFeedback(') < completion.indexOf('setSetupDeviceId(null)'))
+})
+
 test('fresh integration selection starts empty and only records explicit connects', () => {
   assert.match(setup, /integration_selection_explicit: true, integrations: \{ \.\.\.\(savedDraft\?\.modules\?\.integrations \|\| \{\}\) \}/)
   assert.match(connect, /frameUsesIntegration\(modulesJson, 'spond'\)/)
@@ -79,6 +91,10 @@ test('first-frame welcome text is localized for Norwegian users', () => {
   assert.match(welcome, /Legg til din første ramme/)
   assert.match(welcome, /Koble RE:MIND-rammen din til kontoen for å komme i gang\./)
   assert.match(welcome, /Add your first frame/)
+  assert.match(welcome, /Turn on the frame and complete its Wi-Fi setup/)
+  assert.match(welcome, /Enter the pairing code shown on the frame below/)
+  assert.match(welcome, /fullfør Wi-Fi-oppsettet/)
+
 })
 
 test('optional Countdown still uses its own manual editor, without guided parsing', () => {
