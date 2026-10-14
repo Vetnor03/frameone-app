@@ -9,6 +9,7 @@ import {
   type TeamsTokenSet,
 } from './client'
 import { isTeamsMeetingVisibleAt } from './visibility'
+import { integrationSyncDelta } from '../integrationSyncDelta'
 
 export const TEAMS_PROVIDER = 'teams'
 export const DEFAULT_TEAMS_CALENDAR_HORIZON_DAYS = 120
@@ -133,8 +134,6 @@ async function refreshIfNeeded(userId: string, credentials: TeamsStoredCredentia
   if (error) throw new Error(error.message)
   return next
 }
-
-import { integrationSyncDelta } from '../integrationSyncDelta'
 
 export async function syncTeamsForUser(userId: string, tokenSet: TeamsTokenSet, timeZone: string, options: { horizonDays?: number } = {}) {
   const supabase = getSupabaseAdmin()
