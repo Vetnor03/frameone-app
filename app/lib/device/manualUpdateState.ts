@@ -4,6 +4,7 @@ export type PersistedManualUpdate = {
   requestedRevision: number | null
   requestedAt: number
   deadline: number
+  savedAt?: string
 }
 
 export type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
@@ -23,6 +24,7 @@ export function readManualUpdate(storage: StorageLike, deviceId: string): Persis
     if (typeof value.requestId !== 'string' || value.requestId.length < 8) return null
     if (!Number.isFinite(value.requestedAt) || !Number.isFinite(value.deadline)) return null
     const revision = value.requestedRevision
+    const savedAt = typeof value.savedAt === 'string' && Number.isFinite(Date.parse(value.savedAt)) ? value.savedAt : null
     if (phase === 'waiting_for_display' && (!Number.isSafeInteger(revision) || revision! < 0)) return null
     return {
       phase,
@@ -30,6 +32,7 @@ export function readManualUpdate(storage: StorageLike, deviceId: string): Persis
       requestedRevision: revision == null ? null : revision,
       requestedAt: value.requestedAt!,
       deadline: value.deadline!,
+      ...(savedAt ? { savedAt } : {}),
     }
   } catch {
     return null
