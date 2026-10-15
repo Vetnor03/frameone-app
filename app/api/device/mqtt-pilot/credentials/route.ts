@@ -35,6 +35,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: auth.error }, { status: auth.status, headers: NO_STORE })
   }
 
+  // Preserve the manually configured prototype's original authenticated
+  // credentials path. This is deliberately checked before the new fleet-only
+  // pairing gate so the pilot can't regress during backend migration.
+  const pilot = pilotCredentialPayload(deviceId)
+  if (pilot) return NextResponse.json({ ...pilot, ...connection }, { headers: NO_STORE })
+
   // Only paired frames get a broker account, preventing a factory/shelf-mode
   // device from provisioning itself before a user actually claims it.
   const { data: members, error: memberError } = await auth.supabase
@@ -44,11 +50,6 @@ export async function GET(req: Request) {
     .limit(1)
   if (memberError) return NextResponse.json({ error: 'backend_unavailable' }, { status: 503, headers: NO_STORE })
   if (!members?.length) return NextResponse.json({ error: 'not_paired' }, { status: 403, headers: NO_STORE })
-
-  // Preserve the manually created first prototype without rotating its
-  // separate MQTT password or requiring any further setup in EMQX.
-  const pilot = pilotCredentialPayload(deviceId)
-  if (pilot) return NextResponse.json({ ...pilot, ...connection }, { headers: NO_STORE })
 
   // Fleet onboarding is separately gated until per-user management endpoints
   // have been confirmed on the selected broker tier. Even if those endpoints
