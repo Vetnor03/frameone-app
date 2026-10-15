@@ -29,6 +29,14 @@ jobs:
       # TEMP_REFRESH_AUDIT: compile the gated diagnostic code until removal.
       - run: pio run -d frame -e alfred_v1_2_refresh_audit
       - run: pio run -d frame -e alfred_v1_2_mqtt_pilot
+      - name: Archive unflashed MQTT pilot firmware for physical testing
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: alfred-v1_2-mqtt-pilot-unflashed
+          path: frame/.pio/build/alfred_v1_2_mqtt_pilot/firmware.bin
+          if-no-files-found: error
+          retention-days: 7
       - run: pio run -d frame -e frame_esp32
       - run: pio run -d frame -e alfred_v1_2 -t size
 

@@ -1255,6 +1255,7 @@ static InteractiveModeResult runInteractiveMode(
     LiveUpdateState next{};
     const uint32_t probeStartedAtMs = millis();
     if (!LiveUpdate::probe(DeviceIdentity::getToken(), next, pushHint)) {
+      if (pushHint) MqttPushPilot::restoreNotification();
       Serial.println("LiveUpdate: interactive probe failed; staying awake");
       delay(REALTIME_FAILURE_BACKOFF_MS);
       continue;

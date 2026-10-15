@@ -16,14 +16,17 @@ configured and compiled. No firmware OTA or broker is deployed by this code.
 
 ## Broker requirements (before the pilot can function)
 
-1. Managed MQTT 3.1.1 broker with a valid public CA-signed TLS certificate on
-   port 8883. The test build currently uses the same **ISRG public root CA**
-   set as re-mind.no, so the MQTT broker must present a chain ending at one of
-   those roots. TLS hostname verification MUST remain enabled.
+1. Managed EMQX Serverless MQTT 3.1.1 broker with a valid public CA-signed
+   certificate on port 8883. The test firmware pins the **DigiCert Global
+   Root G2 public CA** uploaded from the deployment for MQTT TLS. HTTPS to
+   RE:MIND still uses its separate ISRG root set. Hostname and certificate
+   validation must always remain enabled.
 2. Per-device MQTT authentication: MQTT username is the frame's device ID;
-   MQTT password is its **existing frame token**. Broker-side authentication
-   must validate these securely. Never use an anonymous broker or distribute
-   one shared MQTT password in every frame firmware build.
+   MQTT password is a **separate EMQX password**, kept as a sensitive Vercel
+   variable for the single test frame. After verifying physical-frame Bearer
+   auth, the RE:MIND API delivers it only to the one enabled, allowlisted
+   device. The MQTT password is never built into firmware, committed to GitHub,
+   or used as the RE:MIND HTTP token. Never permit anonymous broker access.
 3. A per-device **subscribe-only ACL** for exactly
    `remind/pilot/revisions/{authenticated device_id}`. Deny wildcard
    subscriptions, publishing, other device topics, and anonymous sessions.
@@ -31,13 +34,17 @@ configured and compiled. No firmware OTA or broker is deployed by this code.
 4. Server-only EMQX publish credentials (or a compatible custom bridge).
    **Do not** expose management endpoints or credentials to the PWA or frame.
 
-No MQTT broker or credentials have been provisioned by this PR; the above is a
-required security gate before enabling the experiment.
+The first prototype broker and username were manually configured in EMQX
+Cloud; this is **not** an automated production-provisioning implementation.
+Future units need a factory/secure provisioning service with unique credentials,
+rotation and deprovisioning before MQTT can be shipped commercially.
 
 ## Server configuration
 
-Only on a test/staging backend:
-- `MQTT_PILOT_ENABLED=true`
+Only when the pilot has passed code, broker and physical security checks:
+- `MQTT_PILOT_ENABLED=true` (deliberately **UNSET** until ready)
+- `MQTT_PILOT_DEVICE_ID=frm_54AE37455F34` (scope to this one prototype)
+- `MQTT_PILOT_FRAME_PASSWORD` (sensitive; EMQX password, never checked in)
 - `MQTT_PILOT_EMQX_PUBLISH_URL=https://<managed-broker-api>/publish`
   (alternatively a secure `/api/v5/publish` endpoint)
 - `MQTT_PILOT_EMQX_API_KEY` (server-side)
@@ -53,15 +60,19 @@ durable revision still succeed; the frame's fallback retrieves it.
 
 ## Firmware test candidate
 
-Build the separate **alfred_v1_2_mqtt_pilot** PlatformIO environment, with the
-broker hostname supplied at compile time as `MQTT_PILOT_BROKER_HOST` and,
-optionally, `MQTT_PILOT_BROKER_PORT` (default 8883). Example build flag:
-
-`-DMQTT_PILOT_BROKER_HOST=\\\"mqtt.broker.example\\\"`
+Build the separate **alfred_v1_2_mqtt_pilot** PlatformIO environment.
+The test broker's public hostname is included in pilot source only:
+`i5138504.ala.us-east-1.emqxsl.com:8883`. Never embed the EMQX
+password, App ID, App Secret, or RE:MIND device token in firmware.
 
 Keep this hostname test-only and **never** embed broker administrator secrets.
-Firmware connects with its provisioned *device token*, not an administrator
-key. Credentials are transmitted only inside authenticated, CA-verified TLS.
+Firmware authenticates to RE:MIND HTTPS using its existing frame token to
+request `/api/device/mqtt-pilot/credentials?device_id=...`. The endpoint
+returns a separate MQTT username/password only when `MQTT_PILOT_ENABLED=true`,
+the device ID matches the explicit `MQTT_PILOT_DEVICE_ID` allowlist, and the
+physical frame Bearer token matches the token stored for that device. MQTT
+then connects with the separate account; it never sends the HTTP frame token
+to the broker. Both network transports verify TLS certificates.
 The standard firmware builds still define `FRAME_MQTT_PILOT_ENABLED=0`.
 
 The experimental MQTT client:
