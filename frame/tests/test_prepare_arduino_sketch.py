@@ -73,3 +73,25 @@ def test_ci_compiles_the_generated_sketch_with_exact_alfred_options():
         "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,"
         "PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc"
     ) in workflow
+
+
+
+def test_explicit_mqtt_arduino_export_enables_generic_firmware_without_source_changes(tmp_path):
+    normal = tmp_path / "normal" / "frame_v2.5.1"
+    enabled = tmp_path / "enabled" / "frame_v2.5.1"
+    for output, extra in [(normal, []), (enabled, ["--enable-mqtt"])]:
+        subprocess.run(
+            [sys.executable, str(SCRIPT), "--output", str(output), *extra],
+            check=True, capture_output=True, text=True,
+        )
+    assert "#define FRAME_MQTT_PILOT_ENABLED 0" in (normal / "MqttPushPilot.h").read_text()
+    assert "#define FRAME_MQTT_PILOT_ENABLED 1" in (enabled / "MqttPushPilot.h").read_text()
+    assert "#define FRAME_MQTT_PILOT_ENABLED 0" in (SOURCE_ROOT / "network" / "MqttPushPilot.h").read_text()
+    assert (normal / "partitions.csv").read_bytes() == (enabled / "partitions.csv").read_bytes()
+
+
+def test_ci_compiles_explicit_mqtt_enabled_arduino_sketch():
+    workflow = (FRAME_ROOT.parent / ".github" / "workflows" / "frame-firmware-build.yml").read_text()
+    assert 'arduino-cli lib install "PubSubClient@2.8"' in workflow
+    assert 'prepare_arduino_sketch.py --enable-mqtt' in workflow or '--enable-mqtt' in workflow
+    assert 'Compile MQTT-enabled Alfred with Arduino CLI' in workflow
