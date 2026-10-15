@@ -105,6 +105,8 @@ test('client uses universal runtime broker details; provisioning endpoint authen
   assert.match(route, /private, no-store, max-age=0/)
   assert.match(fw, /doc\["broker_host"\]/)
   assert.match(fw, /doc\["broker_port"\]/)
+  assert.match(fw, /doc\["broker_ca_pem"\]/)
+  assert.match(fw, /g_tls\.setCACert\(g_brokerCaPem\.isEmpty\(\)/)
   assert.match(fw, /g_mqtt\.setServer\(g_brokerHost\.c_str\(\), brokerPort\)/)
   assert.doesNotMatch(fw, /g_mqtt\.connect\(clientId\.c_str\(\), id\.c_str\(\), deviceToken\.c_str\(\)\)/)
 })
