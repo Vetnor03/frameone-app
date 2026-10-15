@@ -19,6 +19,11 @@ namespace WiFiManagerV2 {
   // when another caller may have changed the Wi-Fi power-save mode.
   bool applyOperationalPowerPolicy(bool usbPresent, bool force = false);
 
+  // Experimental Smart Instant: while the app is active, keep automatic
+  // light sleep but receive buffered Wi-Fi at the AP DTIM interval instead
+  // of the long MAX_MODEM listen interval. Never use on Power Save sleep.
+  bool applyAppActiveLightSleepPolicy(bool usbPresent);
+
   // Temporarily disable automatic light sleep / Wi-Fi power save while a
   // user-requested refresh downloads its content. The caller must restore the
   // source-aware operational policy immediately after the burst.

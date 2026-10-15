@@ -1,21 +1,20 @@
 /**
  * Experimental EMQX MQTT-push bridge.
  *
- * Requires a deliberately configured TLS broker and per-device subscriber ACL.
- * The API credentials only authorize server-side publishing, never frame access.
- * Disabled by default; missing configuration means no external calls.
+ * Both manual revisions and temporary foreground-presence hints use the same
+ * device-scoped topic and authenticated, best-effort publish path. No dedicated
+ * topic ACL or extra broker configuration is needed for Smart Instant.
  */
 export const MQTT_PILOT_TOPIC_PREFIX = 'remind/pilot/revisions/'
 
 export function pilotRevisionTopic(deviceId: string): string | null {
-  // Device identifiers never enter a topic as wildcards, level separators or URL-like data.
   if (!/^[a-zA-Z0-9_-]{1,128}$/.test(deviceId)) return null
   return MQTT_PILOT_TOPIC_PREFIX + deviceId
 }
 
 export type PilotPushResult = 'disabled' | 'published' | 'no_subscribers' | 'failed'
 
-type BrokerConfig = {
+export type BrokerConfig = {
   enabled?: string
   pilotDeviceId?: string
   publishUrl?: string
@@ -23,22 +22,25 @@ type BrokerConfig = {
   apiSecret?: string
 }
 
-export async function publishPilotRevision(
-  deviceId: string,
-  revision: number,
-  config: BrokerConfig = {
+function defaultBrokerConfig(): BrokerConfig {
+  return {
     enabled: process.env.MQTT_PILOT_ENABLED,
     pilotDeviceId: process.env.MQTT_PILOT_DEVICE_ID,
     publishUrl: process.env.MQTT_PILOT_EMQX_PUBLISH_URL,
     apiKey: process.env.MQTT_PILOT_EMQX_API_KEY,
     apiSecret: process.env.MQTT_PILOT_EMQX_API_SECRET,
-  },
-  fetchImpl: typeof fetch = fetch,
+  }
+}
+
+async function publishPilotMessage(
+  deviceId: string,
+  message: string,
+  config: BrokerConfig,
+  fetchImpl: typeof fetch,
 ): Promise<PilotPushResult> {
   if (config.enabled !== 'true' || config.pilotDeviceId !== deviceId) return 'disabled'
   const topic = pilotRevisionTopic(deviceId)
-  if (!topic || !Number.isSafeInteger(revision) || revision <= 0) return 'failed'
-  if (!config.publishUrl || !config.apiKey || !config.apiSecret) return 'failed'
+  if (!topic || !config.publishUrl || !config.apiKey || !config.apiSecret) return 'failed'
 
   let endpoint: URL
   try {
@@ -46,7 +48,6 @@ export async function publishPilotRevision(
   } catch {
     return 'failed'
   }
-  // Avoid leaking management credentials to redirected or insecure endpoints.
   if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password ||
     endpoint.search || endpoint.hash ||
     !['/publish', '/api/v5/publish'].includes(endpoint.pathname)) return 'failed'
@@ -64,7 +65,7 @@ export async function publishPilotRevision(
         topic,
         qos: 1,
         retain: false,
-        payload: String(revision),
+        payload: message,
         payload_encoding: 'plain',
       }),
     })
@@ -73,4 +74,30 @@ export async function publishPilotRevision(
   } catch {
     return 'failed'
   }
+}
+
+// Revision messages remain decimal only and always require the frame's
+// authoritative HTTPS revision check before display.
+export async function publishPilotRevision(
+  deviceId: string,
+  revision: number,
+  config: BrokerConfig = defaultBrokerConfig(),
+  fetchImpl: typeof fetch = fetch,
+): Promise<PilotPushResult> {
+  if (!Number.isSafeInteger(revision) || revision <= 0) {
+    if (config.enabled !== 'true' || config.pilotDeviceId !== deviceId) return 'disabled'
+    return 'failed'
+  }
+  return publishPilotMessage(deviceId, String(revision), config, fetchImpl)
+}
+
+// The presence hint is not an update request, and cannot cause a redraw.
+// The frame enforces an absolute 120-second ceiling even if a malformed
+// or delayed activity hint is received. Repeated app activity extends it.
+export async function publishPilotActivity(
+  deviceId: string,
+  config: BrokerConfig = defaultBrokerConfig(),
+  fetchImpl: typeof fetch = fetch,
+): Promise<PilotPushResult> {
+  return publishPilotMessage(deviceId, 'active:120', config, fetchImpl)
 }

@@ -17,6 +17,7 @@ static bool g_lastPolicyUsbPresent = false;
 static bool g_lastBatteryConnectedIdleReady = false;
 static bool g_lastAssociationPreparedForConnectedIdle = false;
 static bool g_realtimeNetworkBurstActive = false;
+static bool g_appActiveLightSleep = false;
 
 bool stationHasIp() {
   if (WiFi.status() != WL_CONNECTED) return false;
@@ -150,6 +151,7 @@ bool applyOperationalPowerPolicy(bool usbPresent, bool force) {
   g_policyInitialized = true;
   g_lastPolicyUsbPresent = usbPresent;
   g_realtimeNetworkBurstActive = false;
+  g_appActiveLightSleep = false;
 
   if (usbPresent) {
     // USB power is the debugging/realtime case: prioritize latency and native
@@ -187,6 +189,27 @@ bool applyOperationalPowerPolicy(bool usbPresent, bool force) {
   return false;
 }
 
+bool applyAppActiveLightSleepPolicy(bool usbPresent) {
+  if (usbPresent) return true;  // USB already runs at full responsiveness.
+  if (!stationHasIp() || !g_lastAssociationPreparedForConnectedIdle) return false;
+
+  wifi_ps_type_t current = WIFI_PS_NONE;
+  if (g_appActiveLightSleep && esp_wifi_get_ps(&current) == ESP_OK &&
+      current == WIFI_PS_MIN_MODEM) return true;
+
+  // MIN_MODEM receives buffered packets on AP DTIM, without requiring a
+  // second TLS connection or keeping the radio permanently powered.
+  WiFi.setSleep(true);
+  const esp_err_t psErr = esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+  const bool alsReady = configureAutomaticLightSleep(true);
+  g_appActiveLightSleep = psErr == ESP_OK && alsReady;
+  g_realtimeNetworkBurstActive = false;
+  if (g_appActiveLightSleep) {
+    Serial.println("WiFi power policy: Smart Instant (DTIM connected light sleep)");
+  }
+  return g_appActiveLightSleep;
+}
+
 bool beginRealtimeNetworkBurst() {
   if (!stationHasIp()) {
     Serial.println("WiFi power policy: realtime burst requested before IP is ready");
@@ -196,6 +219,7 @@ bool beginRealtimeNetworkBurst() {
   const bool lightSleepDisabled = configureAutomaticLightSleep(false);
   WiFi.setSleep(false);
   const esp_err_t psErr = esp_wifi_set_ps(WIFI_PS_NONE);
+  g_appActiveLightSleep = false;
   g_realtimeNetworkBurstActive = lightSleepDisabled && psErr == ESP_OK;
 
   if (g_realtimeNetworkBurstActive) {
@@ -209,6 +233,7 @@ bool beginRealtimeNetworkBurst() {
 
 const char* operationalPowerMode() {
   if (g_realtimeNetworkBurstActive) return "battery_realtime_burst";
+  if (g_appActiveLightSleep) return "battery_app_active";
   if (!g_policyInitialized) return "uninitialized";
   if (g_lastPolicyUsbPresent) return "usb_realtime";
   return g_lastBatteryConnectedIdleReady

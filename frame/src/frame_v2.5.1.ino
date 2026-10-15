@@ -1254,7 +1254,7 @@ static InteractiveModeResult runInteractiveMode(
     // 10-second HTTP cadence. Keep this an opt-in pilot: the extra wake-ups
     // and radio-listen behavior must be measured before shipping.
     const uint32_t probeCadenceMs =
-      MqttPushPilot::connected() ? 1000UL : MANUAL_UPDATE_POLL_MS;
+      MqttPushPilot::appActivityIsActive() ? 1000UL : MANUAL_UPDATE_POLL_MS;
     const uint32_t lastProbeStartedAtMs = lastMqttServiceAtMs;
 #else
     const uint32_t probeCadenceMs = MANUAL_UPDATE_POLL_MS;
@@ -1278,6 +1278,7 @@ static InteractiveModeResult runInteractiveMode(
     lastMqttServiceAtMs = millis();
 #endif
     const bool pushConnected = MqttPushPilot::poll(DeviceIdentity::getToken(), pwr.usbPresent);
+    MqttPushPilot::maintainActivityPowerPolicy(pwr.usbPresent);
     const bool pushHint = MqttPushPilot::takeNotification();
     const uint32_t lastProbeMs = LiveUpdate::lastNetworkProbeStartedAtMs();
     const uint32_t nowProbeMs = millis();
