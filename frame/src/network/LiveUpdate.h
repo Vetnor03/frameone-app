@@ -26,7 +26,7 @@ struct ManualUpdateTimings {
 };
 
 namespace LiveUpdate {
-  bool probe(const String& deviceToken, LiveUpdateState& out);
+  bool probe(const String& deviceToken, LiveUpdateState& out, bool forceNetwork = false);
   uint32_t lastNetworkProbeStartedAtMs();
   bool acknowledge(const String& deviceToken, uint64_t revision, const ManualUpdateTimings* timings = nullptr);
 
