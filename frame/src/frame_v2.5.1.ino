@@ -1278,6 +1278,7 @@ static InteractiveModeResult runInteractiveMode(
     lastMqttServiceAtMs = millis();
 #endif
     const bool pushConnected = MqttPushPilot::poll(DeviceIdentity::getToken(), pwr.usbPresent);
+    MqttPushPilot::maintainActivityPowerPolicy(pwr.usbPresent);
     const bool pushHint = MqttPushPilot::takeNotification();
     const uint32_t lastProbeMs = LiveUpdate::lastNetworkProbeStartedAtMs();
     const uint32_t nowProbeMs = millis();
