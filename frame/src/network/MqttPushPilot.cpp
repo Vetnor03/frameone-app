@@ -27,6 +27,9 @@ static WiFiClientSecure g_tls;
 static PubSubClient g_mqtt(g_tls);
 static bool g_configured = false;
 static bool g_notificationPending = false;
+static bool g_appActivePowerApplied = false;
+static uint32_t g_appActiveDeadlineMs = 0;
+static const uint32_t ACTIVITY_TTL_MS = 120000UL;
 static uint32_t g_retryAfterMs = 0;
 static const uint32_t CONNECT_RETRY_MS = 60000;
 static const char* TOPIC_PREFIX = "remind/pilot/revisions/";
@@ -44,6 +47,13 @@ bool validDeviceId(const String& id) {
 
 void onMessage(char* topic, byte* payload, unsigned int length) {
   if (g_topic != topic || length == 0 || length > 20) return;
+  // A short-lived app presence hint never triggers a redraw or config fetch.
+  // It only controls Wi-Fi listening policy; the device applies its own
+  // 120-second ceiling and reverts even if the app crashes.
+  if (length == 10 && memcmp(payload, "active:120", 10) == 0) {
+    g_appActiveDeadlineMs = millis() + ACTIVITY_TTL_MS;
+    return;
+  }
   // MQTT is only a hint: always verify any revision with our authenticated
   // HTTPS backend before the display is allowed to redraw.
   if (payload[0] == '0') return;
@@ -99,6 +109,24 @@ bool fetchCredentials(const String& deviceToken, String& username, String& passw
 namespace MqttPushPilot {
 bool connected() { return g_mqtt.connected(); }
 
+void maintainActivityPowerPolicy(bool usbPresent) {
+  const uint32_t now = millis();
+  const bool active = g_mqtt.connected() && !usbPresent &&
+    g_appActiveDeadlineMs != 0 &&
+    (int32_t)(g_appActiveDeadlineMs - now) > 0;
+
+  if (active) {
+    // Check the real ESP Wi-Fi policy each tick; rendering temporarily sets
+    // WIFI_PS_NONE and restore code may reset MAX_MODEM.
+    g_appActivePowerApplied =
+      WiFiManagerV2::applyAppActiveLightSleepPolicy(usbPresent);
+  } else if (g_appActivePowerApplied) {
+    g_appActivePowerApplied = false;
+    WiFiManagerV2::applyOperationalPowerPolicy(usbPresent, true);
+    Serial.println("WiFi power policy: Smart Instant expired; returning to connected idle");
+  }
+}
+
 bool poll(const String& deviceToken, bool usbPresent) {
   if (!configure() || deviceToken.length() == 0 ||
       WiFi.status() != WL_CONNECTED) return false;
@@ -149,6 +177,7 @@ void restoreNotification() {
 
 namespace MqttPushPilot {
 bool connected() { return false; }
+void maintainActivityPowerPolicy(bool) {}
 bool poll(const String&, bool) { return false; }
 bool takeNotification() { return false; }
 void restoreNotification() {}
