@@ -19,15 +19,16 @@ test('saved app theme is applied by an inline bootstrap before the app renders',
   assert.match(home, /\[frameTheme, setFrameTheme\] = useState<AppTheme>\('dark'\)/)
 })
 
-test('frame color selection never modifies the app theme or account preferences', () => {
-  const picker = home.slice(home.indexOf('<FrameThemePickerModal'), home.indexOf('{languagePickerOpen'))
-  const modal = home.slice(home.indexOf('function FrameThemePickerModal({'), home.indexOf('function LanguagePickerModal({'))
-  assert.match(picker, /onPickFrame=\{\(t\) => \{/)
-  assert.match(picker, /setFrameTheme\(t\)[\s\S]*markDirty\(\{ frameTheme: t \}\)/)
-  assert.doesNotMatch(picker, /onPickApp|setAppTheme|persistTheme|applyDocumentTheme|user_app_preferences/)
-  assert.doesNotMatch(modal, /appTheme|onPickApp|appThemeTab|setAppTheme|persistTheme/)
+test('frame theme switch leaves app theme and account preferences untouched', () => {
+  const frame = home.slice(home.indexOf('<FrameTab'), home.indexOf("{activeTab === 'settings'"))
+  const toggle = home.slice(home.indexOf('function FrameTab(props:'), home.indexOf('function LayoutDefault('))
+  assert.match(frame, /onFrameThemeToggle=\{\(\) => \{[\s\S]*setFrameTheme\(next\)[\s\S]*markDirty\(\{ frameTheme: next \}\)/)
+  assert.match(toggle, /role="switch"/)
+  assert.match(toggle, /aria-checked=\{frameTheme === 'light'\}/)
+  assert.doesNotMatch(frame, /setAppTheme|persistTheme|applyDocumentTheme|user_app_preferences/)
+  assert.doesNotMatch(toggle, /appTheme|onPickApp/)
 })
-
+ 
 test('account app theme is loaded across browsers and missing preferences migrate to light', () => {
   assert.match(home, /from\('user_app_preferences'\)[\s\S]*select\('app_theme'\)[\s\S]*eq\('user_id', userId\)/)
   assert.match(home, /const accountTheme: AppTheme = isAppTheme\(data\?\.app_theme\) \? data\.app_theme : 'light'/)
@@ -44,8 +45,8 @@ test('account app preferences are owner-scoped by RLS', () => {
 })
 
 test('frame theme remains device-backed and only becomes a pending frame change', () => {
-  const picker = home.slice(home.indexOf('<FrameThemePickerModal'), home.indexOf('{languagePickerOpen'))
-  assert.match(picker, /onPickFrame=\{\(t\) => \{[\s\S]*setFrameTheme\(t\)[\s\S]*markDirty\(\{ frameTheme: t \}\)/)
+  const frame = home.slice(home.indexOf('<FrameTab'), home.indexOf("{activeTab === 'settings'"))
+  assert.match(frame, /onFrameThemeToggle=\{\(\) => \{[\s\S]*setFrameTheme\(next\)[\s\S]*markDirty\(\{ frameTheme: next \}\)/)
   assert.match(home, /const nextFrameTheme = isAppTheme\(json\.theme\) \? json\.theme : 'dark'/)
   assert.match(home, /const settingsJson: SettingsJson = \{[\s\S]*?theme: frameTheme/)
 })
