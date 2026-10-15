@@ -118,6 +118,7 @@ const UI = {
     english: 'English',
     norwegian: 'Norwegian',
 
+    appThemeRow: 'App theme',
     languageRow: 'Language',
     subscription: 'Subscription',
     privacyPolicy: 'Privacy policy',
@@ -249,6 +250,7 @@ const UI = {
     english: 'Engelsk',
     norwegian: 'Norsk',
 
+    appThemeRow: 'Apptema',
     languageRow: 'Språk',
     subscription: 'Abonnement',
     privacyPolicy: 'Personvern',
@@ -1223,6 +1225,7 @@ export default function HomePage() {
   const [setupDeviceId, setSetupDeviceId] = useState<string | null>(null)
 
   const [appTheme, setAppTheme] = useState<AppTheme>(initialTheme)
+  const [appThemePickerOpen, setAppThemePickerOpen] = useState(false)
   const [frameTheme, setFrameTheme] = useState<AppTheme>('dark')
   const [powerSaver, setPowerSaver] = useState(false)
   const [powerSaverSaving, setPowerSaverSaving] = useState(false)
@@ -2761,7 +2764,7 @@ async function handleSelectTab(k: TabKey) {
   preferInstantScrollRef.current = false
   stickySettingsRef.current = k === 'settings'
   setRemindersConnectScreenOpen(false)
-  if (k !== 'settings') setSettingsSubpage(null)
+  if (k !== 'settings') { setSettingsSubpage(null); setAppThemePickerOpen(false) }
 
   // Re-read device-scoped state in the navigation event, before React is
   // allowed to mount the Frame subtree and consider scheduled presentation.
@@ -2888,6 +2891,8 @@ async function handleSelectTab(k: TabKey) {
               {activeTab === 'settings' && (
                 <SettingsTab
                   language={language}
+                  appTheme={appTheme}
+                  onOpenAppTheme={() => setAppThemePickerOpen(true)}
                   powerSaver={powerSaver}
                   powerSaverBusy={powerSaverSaving}
                   onPowerSaverChange={handlePowerSaverChange}
@@ -3028,6 +3033,30 @@ async function handleSelectTab(k: TabKey) {
                 }}
                 onPick={chooseModule}
                 onClear={clearCell}
+              />
+            )}
+
+            {activeTab === 'settings' && appThemePickerOpen && (
+              <AppThemePickerModal
+                language={language}
+                current={appTheme}
+                onClose={() => setAppThemePickerOpen(false)}
+                onPick={(next) => {
+                  if (next !== appTheme) {
+                    trackProductEvent({ event: 'theme_changed', surface: 'settings' })
+                    applyDocumentTheme(next)
+                    persistTheme(next)
+                    setAppTheme(next)
+                    if (userId) {
+                      void supabase.from('user_app_preferences')
+                        .upsert({ user_id: userId, app_theme: next }, { onConflict: 'user_id' })
+                        .then(({ error }) => {
+                          if (error) console.warn('[app-theme:account-save-failed]', { message: error.message })
+                        })
+                    }
+                  }
+                  setAppThemePickerOpen(false)
+                }}
               />
             )}
 
@@ -4087,8 +4116,8 @@ function FrameTab(props: {
               className="mt-2 inline-flex min-h-6 items-center justify-center gap-2 rounded-full px-2 text-[10px] tracking-[0.08em] text-[color:var(--fg-45)] disabled:opacity-40"
             >
               <span>{frameTheme === 'light' ? 'LIGHT' : 'DARK'}</span>
-              <span aria-hidden="true" className="relative h-[14px] w-[26px] rounded-full border border-[color:var(--bd-30)] bg-[color:var(--bd-10)]">
-                <span className={`absolute left-[2px] top-[2px] h-2 w-2 rounded-full bg-[color:var(--fg-60)] transition-transform ${frameTheme === 'light' ? 'translate-x-3' : ''}`} />
+              <span aria-hidden="true" className={`relative h-[14px] w-[26px] rounded-full border transition-colors ${frameTheme === 'dark' ? 'border-[#354653] bg-[#263440]' : 'border-[color:var(--bd-30)] bg-[color:var(--bd-10)]'}`}>
+                <span className={`absolute left-[2px] top-[2px] h-2 w-2 rounded-full transition-[transform,background-color] ${frameTheme === 'dark' ? 'bg-[#f5f6f8]' : 'bg-[color:var(--fg-60)] translate-x-3'}`} />
               </span>
             </button>
           )}
@@ -8666,6 +8695,48 @@ function PickerModal({
   )
 }
 
+function AppThemePickerModal({
+  language,
+  current,
+  onClose,
+  onPick,
+}: {
+  language: AppLanguage
+  current: AppTheme
+  onClose: () => void
+  onPick: (theme: AppTheme) => void
+}) {
+  const t = tx(language)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
+      <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-8">
+        <div className="flex items-center justify-between">
+          <div className="tracking-widest text-sm text-[color:var(--fg-70)]">{t.appThemeRow.toUpperCase()}</div>
+          <button type="button" onClick={onClose} aria-label={language === 'no' ? 'Lukk' : 'Close'} className="text-[color:var(--fg-60)] text-xl">
+            ✕
+          </button>
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-3" role="group" aria-label={t.appThemeRow}>
+          {(['dark', 'light'] as const).map((theme) => (
+            <button
+              key={theme}
+              type="button"
+              aria-pressed={current === theme}
+              onClick={() => onPick(theme)}
+              className={`h-12 rounded-2xl border tracking-widest ${
+                current === theme ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-80)]'
+              }`}
+            >
+              {theme === 'dark' ? t.dark : t.light}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function LanguagePickerModal({
   current,
   onClose,
@@ -8713,6 +8784,8 @@ function LanguagePickerModal({
 
 function SettingsTab({
   language,
+  appTheme,
+  onOpenAppTheme,
   powerSaver,
   powerSaverBusy,
   onPowerSaverChange,
@@ -8731,6 +8804,8 @@ function SettingsTab({
   onAssistantPreferenceChange,
 }: {
   language: AppLanguage
+  appTheme: AppTheme
+  onOpenAppTheme: () => void
   powerSaver: boolean
   powerSaverBusy: boolean
   onPowerSaverChange: (next: boolean) => Promise<void>
@@ -8812,7 +8887,7 @@ function SettingsTab({
       window.clearTimeout(t1)
       window.clearTimeout(t2)
     }
-  }, [frames.length, activeDeviceId, powerSaver, language])
+  }, [frames.length, activeDeviceId, appTheme, powerSaver, language])
 
   if (subpage === 'subscription') {
     return <SubscriptionSettingsPage language={language} onBack={() => setSubpage(null)} />
@@ -8845,6 +8920,7 @@ function SettingsTab({
           <div ref={scrollRef} className="settings-scroll h-full overflow-y-auto pr-1 pb-4">
             <div className="mt-2 divide-y divide-[color:var(--bd-10)]">
               <SettingRow label={t.shop} value="" onClick={() => onGo('/shop')} />
+              <SettingRow label={t.appThemeRow} value={appTheme === 'dark' ? t.dark : t.light} onClick={onOpenAppTheme} />
               <SettingRow label={t.languageRow} value={languageValue} onClick={onOpenLanguage} />
               <SettingRow label={t.subscription} value="" onClick={() => setSubpage('subscription')} />
               <div className="py-3">
