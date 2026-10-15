@@ -5,7 +5,7 @@
  * device-scoped topic and authenticated, best-effort publish path. No dedicated
  * topic ACL or extra broker configuration is needed for Smart Instant.
  */
-import { mqttEnabledForDevice } from './mqttRollout'
+import { mqttEnabledForDevice } from './mqttRollout.ts'
 
 export const MQTT_PILOT_TOPIC_PREFIX = 'remind/pilot/revisions/'
 
