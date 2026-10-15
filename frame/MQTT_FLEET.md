@@ -8,9 +8,11 @@ It uses the same familiar AP → Wi-Fi → pairing → app flow. Every frame use
 own existing RE:MIND token to fetch its MQTT credentials from an authenticated
 no-store HTTPS endpoint, after it is paired.
 
-The broker hostname/port now come from the backend so later changing broker
-hosts does not require flashing every deployed unit (provided the new TLS
-certificate chains to the CA included in the installed firmware). One firmware
+The broker hostname/port and optional public trusted root CA now come from
+our authenticated RE:MIND backend. Future hostname or root CA changes can be
+provisioned centrally without reflashing devices. The backend verifies the
+HTTPS connection before the frame uses this public trust anchor; the MQTT
+transport independently checks the broker hostname and certificate chain. One firmware
 build can support many frames. The 2026 prototype EMQX broker and public
 DigiCert Global Root G2 certificate remain the compatibility defaults.
 
