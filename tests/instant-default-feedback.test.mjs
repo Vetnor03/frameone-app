@@ -49,6 +49,13 @@ test('ACK confirms only exact saved revision and never a more recent save', () =
   assert.equal(frameSaveFeedbackPhase(waiting.savedAt, null), 'waiting')
 })
 
+test('reload does not overwrite an acknowledged Instant update with stale heartbeat status', () => {
+  const load = home.slice(home.indexOf('  async function loadDeviceSettings('), home.indexOf('  // This is the only policy exception'))
+  assert.match(load, /setFrameSaveFeedback\(\(current\) => \{/)
+  assert.match(load, /current\?\.deviceId === deviceId && current\.savedAt === settingsUpdatedAt && current\.phase === 'confirmed'/)
+  assert.match(load, /return current[\s\S]*isFrameUpdatePending\(settingsUpdatedAt, renderAt\)/)
+})
+
 test('in-flight update recovery retains exact save ID and accepts older persisted records', () => {
   const state = new Map()
   const storage = {
