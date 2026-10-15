@@ -54,6 +54,7 @@ jobs:
           arduino-cli lib install "Adafruit BusIO@1.17.4"
           arduino-cli lib install "Adafruit GFX Library@1.12.6"
           arduino-cli lib install "GxEPD2@1.6.4"
+          arduino-cli lib install "PubSubClient@2.8"
       - name: Prepare flat Arduino IDE sketch
         run: python frame/tools/prepare_arduino_sketch.py --output "$RUNNER_TEMP/frame_v2.5.1"
       - name: Compile Alfred with Arduino CLI
@@ -61,6 +62,21 @@ jobs:
           arduino-cli compile --verbose --warnings default --export-binaries \
             --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" \
             "$RUNNER_TEMP/frame_v2.5.1"
+      - name: Prepare MQTT-enabled Arduino sketch
+        run: python frame/tools/prepare_arduino_sketch.py --output "$RUNNER_TEMP/mqtt-enabled/frame_v2.5.1" --enable-mqtt
+      - name: Compile MQTT-enabled Alfred with Arduino CLI
+        run: |
+          arduino-cli compile --verbose --warnings default --export-binaries \
+            --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" \
+            "$RUNNER_TEMP/mqtt-enabled/frame_v2.5.1"
+      - name: Archive MQTT-enabled Arduino sketch for first physical flash
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: alfred-v1_2-mqtt-arduino-sketch-unflashed
+          path: ${{ runner.temp }}/mqtt-enabled/frame_v2.5.1/
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload unflashed Alfred USB test candidate
         if: success() && github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
