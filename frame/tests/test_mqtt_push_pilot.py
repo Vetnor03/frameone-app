@@ -30,6 +30,8 @@ def test_mqtt_messages_only_hint_at_secure_authoritative_revision_check():
     assert '"i5138504.ala.us-east-1.emqxsl.com"' in source
     assert 'DigiCert Global Root G2' in read('src/network/MqttPilotTrust.h')
     assert 'g_notificationPending = true;' in source
+    assert 'void restoreNotification()' in source
+    assert 'if (pushHint) MqttPushPilot::restoreNotification();' in read('src/frame_v2.5.1.ino')
     assert 'g_mqtt.setKeepAlive(90)' in source
     assert 'CONNECT_RETRY_MS = 60000' in source
     assert 'bool LiveUpdate::probe(const String& deviceToken, LiveUpdateState& out, bool forceNetwork)' in client
