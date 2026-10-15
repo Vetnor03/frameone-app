@@ -19,11 +19,13 @@ test('saved app theme is applied by an inline bootstrap before the app renders',
   assert.match(home, /\[frameTheme, setFrameTheme\] = useState<AppTheme>\('dark'\)/)
 })
 
-test('an explicit theme selection is persisted immediately', () => {
-  const picker = home.slice(home.indexOf('<ThemePickerModal'), home.indexOf('{languagePickerOpen'))
-  assert.match(picker, /onPickApp=\{\(t\) => \{[\s\S]*persistTheme\(t\)[\s\S]*setAppTheme\(t\)/)
-  assert.doesNotMatch(picker.slice(picker.indexOf('onPickApp'), picker.indexOf('onPickFrame')), /markDirty/)
-  assert.match(picker, /from\('user_app_preferences'\)[\s\S]*upsert\(\{ user_id: userId, app_theme: t \}/)
+test('frame color selection never modifies the app theme or account preferences', () => {
+  const picker = home.slice(home.indexOf('<FrameThemePickerModal'), home.indexOf('{languagePickerOpen'))
+  const modal = home.slice(home.indexOf('function FrameThemePickerModal({'), home.indexOf('function LanguagePickerModal({'))
+  assert.match(picker, /onPickFrame=\{\(t\) => \{/)
+  assert.match(picker, /setFrameTheme\(t\)[\s\S]*markDirty\(\{ frameTheme: t \}\)/)
+  assert.doesNotMatch(picker, /onPickApp|setAppTheme|persistTheme|applyDocumentTheme|user_app_preferences/)
+  assert.doesNotMatch(modal, /appTheme|onPickApp|appThemeTab|setAppTheme|persistTheme/)
 })
 
 test('account app theme is loaded across browsers and missing preferences migrate to light', () => {
@@ -42,7 +44,7 @@ test('account app preferences are owner-scoped by RLS', () => {
 })
 
 test('frame theme remains device-backed and only becomes a pending frame change', () => {
-  const picker = home.slice(home.indexOf('<ThemePickerModal'), home.indexOf('{languagePickerOpen'))
+  const picker = home.slice(home.indexOf('<FrameThemePickerModal'), home.indexOf('{languagePickerOpen'))
   assert.match(picker, /onPickFrame=\{\(t\) => \{[\s\S]*setFrameTheme\(t\)[\s\S]*markDirty\(\{ frameTheme: t \}\)/)
   assert.match(home, /const nextFrameTheme = isAppTheme\(json\.theme\) \? json\.theme : 'dark'/)
   assert.match(home, /const settingsJson: SettingsJson = \{[\s\S]*?theme: frameTheme/)
