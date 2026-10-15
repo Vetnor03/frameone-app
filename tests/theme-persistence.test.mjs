@@ -19,6 +19,17 @@ test('saved app theme is applied by an inline bootstrap before the app renders',
   assert.match(home, /\[frameTheme, setFrameTheme\] = useState<AppTheme>\('dark'\)/)
 })
 
+test('app theme can be explicitly changed and persisted from Settings without altering frame', () => {
+  const settingsPicker = home.slice(
+    home.indexOf("{activeTab === 'settings' && appThemePickerOpen"),
+    home.indexOf('{languagePickerOpen && (')
+  )
+  assert.match(settingsPicker, /current=\{appTheme\}/)
+  assert.match(settingsPicker, /applyDocumentTheme\(next\)[\s\S]*persistTheme\(next\)[\s\S]*setAppTheme\(next\)/)
+  assert.match(settingsPicker, /from\('user_app_preferences'\)[\s\S]*upsert\(\{ user_id: userId, app_theme: next \}, \{ onConflict: 'user_id' \}\)/)
+  assert.doesNotMatch(settingsPicker, /setFrameTheme|markDirty|saveFrameSettings/)
+})
+
 test('frame theme switch leaves app theme and account preferences untouched', () => {
   const frame = home.slice(home.indexOf('<FrameTab'), home.indexOf("{activeTab === 'settings'"))
   const toggle = home.slice(home.indexOf('function FrameTab(props:'), home.indexOf('function LayoutDefault('))
