@@ -4,7 +4,6 @@
 
 #include "BackendTrust.h"
 #include "DeviceIdentity.h"
-#include "UpdateChecker.h"
 #include "WiFiManager.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -64,14 +63,14 @@ bool configure() {
   g_mqtt.setCallback(onMessage);
   g_mqtt.setKeepAlive(90);
   g_mqtt.setSocketTimeout(5);
-  g_mqtt.setBufferSize(192);
+  g_mqtt.setBufferSize(512);
   g_configured = true;
   return true;
 }
 }
 
 namespace MqttPushPilot {
-bool poll(const String& deviceToken) {
+bool poll(const String& deviceToken, bool usbPresent) {
   if (!configure() || deviceToken.length() == 0 ||
       WiFi.status() != WL_CONNECTED) return false;
   if (g_mqtt.connected()) {
@@ -94,8 +93,6 @@ bool poll(const String& deviceToken) {
   if (connected && !subscribed) g_mqtt.disconnect();
 
   // Resume battery connected light sleep immediately after TLS handshake.
-  const bool usbPresent = UpdateChecker::hasLastUsbPresent()
-    ? UpdateChecker::getLastUsbPresent() : true;
   WiFiManagerV2::applyOperationalPowerPolicy(usbPresent, true);
   return subscribed;
 }
@@ -110,7 +107,7 @@ bool takeNotification() {
 #else
 
 namespace MqttPushPilot {
-bool poll(const String&) { return false; }
+bool poll(const String&, bool) { return false; }
 bool takeNotification() { return false; }
 }
 
