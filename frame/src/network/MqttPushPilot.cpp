@@ -35,6 +35,7 @@ static const uint32_t CONNECT_RETRY_MS = 60000;
 static const char* TOPIC_PREFIX = "remind/pilot/revisions/";
 static String g_topic;
 static String g_brokerHost;
+static String g_brokerCaPem;
 
 bool validDeviceId(const String& id) {
   if (id.length() < 1 || id.length() > 128) return false;
@@ -88,7 +89,7 @@ bool configure() {
   return true;
 }
 
-bool fetchCredentials(const String& deviceToken, String& username, String& password, String& brokerHost, uint16_t& brokerPort) {
+bool fetchCredentials(const String& deviceToken, String& username, String& password, String& brokerHost, uint16_t& brokerPort, String& brokerCaPem) {
   const String url = String(BASE_URL) +
     "/api/device/mqtt-pilot/credentials?device_id=" + DeviceIdentity::getDeviceId();
   int code = 0;
@@ -97,7 +98,7 @@ bool fetchCredentials(const String& deviceToken, String& username, String& passw
   // Credentials are never written to NVS, a URL, or the serial log.
   if (!NetClient::httpGetAuth(url, deviceToken, code, body) || code != 200) return false;
 
-  StaticJsonDocument<512> doc;
+  StaticJsonDocument<6144> doc;
   if (deserializeJson(doc, body)) return false;
   const char* mqttUsername = doc["username"] | "";
   const char* mqttPassword = doc["password"] | "";
@@ -113,6 +114,15 @@ bool fetchCredentials(const String& deviceToken, String& username, String& passw
     if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
           (c >= '0' && c <= '9') || c == '.' || c == '-')) return false;
   }
+  // CA trust is provisioned only by the already TLS-authenticated RE:MIND
+  // backend. If unset, continue using the built-in public DigiCert G2 root.
+  const char* providedCa = doc["broker_ca_pem"] | "";
+  const String receivedCa(providedCa);
+  if (receivedCa.length() > 4096 ||
+      (receivedCa.length() > 0 &&
+        (receivedCa.indexOf("-----BEGIN CERTIFICATE-----") < 0 ||
+         receivedCa.indexOf("-----END CERTIFICATE-----") < 0))) return false;
+  brokerCaPem = receivedCa;
   brokerHost = validatedHost;
   brokerPort = (uint16_t)port;
   username = mqttUsername;
@@ -164,12 +174,18 @@ bool poll(const String& deviceToken, bool usbPresent) {
   String username;
   String password;
   String brokerHost;
+  String brokerCaPem;
   uint16_t brokerPort = MQTT_PILOT_BROKER_PORT;
-  const bool haveCredentials = fetchCredentials(deviceToken, username, password, brokerHost, brokerPort);
+  const bool haveCredentials = fetchCredentials(
+    deviceToken, username, password, brokerHost, brokerPort, brokerCaPem
+  );
   bool subscribed = false;
   if (haveCredentials) {
     // Keep the hostname String alive for the lifetime of PubSubClient.
     g_brokerHost = brokerHost;
+    g_brokerCaPem = brokerCaPem;
+    g_tls.setCACert(g_brokerCaPem.isEmpty()
+      ? kMqttPilotRootCaPem : g_brokerCaPem.c_str());
     g_mqtt.setServer(g_brokerHost.c_str(), brokerPort);
     const String clientId = String("remind-") + DeviceIdentity::getDeviceId();
     const bool connected = g_mqtt.connect(
