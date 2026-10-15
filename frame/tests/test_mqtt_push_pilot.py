@@ -47,3 +47,25 @@ def test_mqtt_pilot_separate_build_cannot_change_production_firmware_flags():
     assert 'knolleary/PubSubClient@2.8' in ini
     assert 'pio run -d frame -e alfred_v1_2_mqtt_pilot' in ci
     assert ini.index('[env:alfred_v1_2_mqtt_pilot]') > ini.index('[env:alfred_v1_2]')
+
+
+
+def test_connected_mqtt_local_service_runs_without_hotloop_or_extra_https_probes():
+    source = read('src/frame_v2.5.1.ino')
+    header = read('src/network/MqttPushPilot.h')
+    cpp = read('src/network/MqttPushPilot.cpp')
+    interactive = source.split('static InteractiveModeResult runInteractiveMode(', 1)[1].split('void setup()', 1)[0]
+    assert 'uint32_t lastMqttServiceAtMs = 0;' in interactive
+    assert 'MqttPushPilot::connected() ? 1000UL : MANUAL_UPDATE_POLL_MS' in interactive
+    assert 'const uint32_t lastProbeStartedAtMs = lastMqttServiceAtMs;' in interactive
+    assert 'lastMqttServiceAtMs = millis();' in interactive
+    assert 'if (remainingProbeWaitMs > 0 &&' in interactive
+    assert 'waitForInteractiveCadence(pwr.usbPresent, remainingProbeWaitMs)' in interactive
+    assert 'const bool debounceNow =' in interactive
+    assert 'const PowerSenseDebug sampledPower = debounceNow ? readPowerSenseDebug() : pwr;' in interactive
+    assert 'bool connected();' in header
+    assert 'bool connected() { return g_mqtt.connected(); }' in cpp
+    assert 'bool connected() { return false; }' in cpp
+    # No new HTTP probes from the fast loop: connected idle still skips them
+    # unless a push hint arrives or the 15-minute safety check becomes due.
+    assert 'if (pushConnected && !pushHint && !safetyProbeDue) continue;' in interactive
