@@ -63,6 +63,8 @@ type FrameSetupSelection = { purpose: SetupPurpose; modules: NonNullable<Setting
 const SHOW_AI_FOLLOW_UI = false
 const SHOW_CUSTOM_LAYOUT_UI = false
 const SHOW_NOTIFICATIONS_UI = false
+// Start new frames in responsive/Instant mode; existing saved preferences take precedence.
+const DEFAULT_POWER_SAVER = false
 
 type AppLanguage = 'en' | 'no'
 type AppFontSize = 'normal' | 'large'
@@ -1227,7 +1229,7 @@ export default function HomePage() {
   const [appTheme, setAppTheme] = useState<AppTheme>(initialTheme)
   const [appThemePickerOpen, setAppThemePickerOpen] = useState(false)
   const [frameTheme, setFrameTheme] = useState<AppTheme>('dark')
-  const [powerSaver, setPowerSaver] = useState(false)
+  const [powerSaver, setPowerSaver] = useState(DEFAULT_POWER_SAVER)
   const [powerSaverSaving, setPowerSaverSaving] = useState(false)
   const [language, setLanguage] = useState<AppLanguage>('en')
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
@@ -1318,7 +1320,9 @@ export default function HomePage() {
           resolvedRevision = requestedRevision
           const backend = await getDeviceUpdateStatus(supabase, deviceId)
           if (requestedRevision > 0 && revisionHasBeenDisplayed(backend.displayedRevision, requestedRevision)) {
+            if (cancelled || activeDeviceIdRef.current !== deviceId) return
             clearManualUpdate(window.localStorage, deviceId)
+            confirmFrameSaveOnRevision(deviceId, update.savedAt)
             setExplicitUpdateStatus('idle')
             await refreshPhysicalFrameState(deviceId, { forceSnapshot: true })
             return
@@ -1776,6 +1780,17 @@ export default function HomePage() {
     })
   }
 
+  function confirmFrameSaveOnRevision(deviceId: string, savedAt: string | null | undefined) {
+    // A displayed revision ACK is stronger evidence than comparing server
+    // timestamps; never confirm a newer, unrelated save with an older ACK.
+    if (!savedAt || activeDeviceIdRef.current !== deviceId) return
+    setFrameSaveFeedback((current) => {
+      if (!current || current.deviceId !== deviceId || current.savedAt !== savedAt || current.phase !== 'waiting') return current
+      return { ...current, phase: 'confirmed' }
+    })
+    if (pendingFrameConfigUpdatedAtRef.current === savedAt) pendingFrameConfigUpdatedAtRef.current = null
+  }
+
   function rememberPendingFrameUpdate(configUpdatedAt: string | null, renderAt: string | null) {
     const isPending = isFrameUpdatePending(configUpdatedAt, renderAt)
     pendingFrameConfigUpdatedAtRef.current = isPending ? configUpdatedAt : null
@@ -2036,7 +2051,7 @@ export default function HomePage() {
     // `theme` remains the frame setting for backwards compatibility, so an
     // existing physical frame never changes appearance during migration.
     const nextFrameTheme = isAppTheme(json.theme) ? json.theme : 'dark'
-    const nextPowerSaver = json.powerSaver === true
+    const nextPowerSaver = json.powerSaver === true ? true : DEFAULT_POWER_SAVER
     const nextLanguage = (json.language || 'en') as AppLanguage
     const nextFontSize = (json.fontSize || 'normal') as AppFontSize
     const storedCustomId = SHOW_CUSTOM_LAYOUT_UI && json.layout === 'custom' && typeof json.custom_layout_id === 'string' ? json.custom_layout_id : null
@@ -2345,7 +2360,7 @@ export default function HomePage() {
     const nextLayoutModuleMemory = mergeCellsIntoSlotMemory([], nextLayout, currentCellsForLayout)
     const settingsJson: SettingsJson = {
       theme: frameTheme,
-      powerSaver,
+      powerSaver: DEFAULT_POWER_SAVER,
       language,
       fontSize,
       layout: nextLayout,
@@ -2395,7 +2410,8 @@ export default function HomePage() {
     setCellsByLayout(nextCellsByLayout)
     setModulesJson(nextModules)
     setPinnedModuleTabs(nextPinnedTabs)
-    savedStateRef.current = serializeComparableState({ frameTheme, powerSaver, language, fontSize, layoutKey: nextLayout, cellsByLayout: nextCellsByLayout, modulesJson: nextModules, pinnedModuleTabs: nextPinnedTabs })
+    setPowerSaver(DEFAULT_POWER_SAVER)
+    savedStateRef.current = serializeComparableState({ frameTheme, powerSaver: DEFAULT_POWER_SAVER, language, fontSize, layoutKey: nextLayout, cellsByLayout: nextCellsByLayout, modulesJson: nextModules, pinnedModuleTabs: nextPinnedTabs })
     desiredStateRef.current = savedStateRef.current
     setDirty(false)
     sessionStorage.removeItem(`remind:onboarding:${activeDeviceId}`)
@@ -2552,7 +2568,10 @@ export default function HomePage() {
       const session = await supabase.auth.getSession()
       const accessToken = session.data.session?.access_token
       if (!accessToken) throw new Error(draftLanguage === 'no' ? 'Økten er utløpt. Logg inn igjen.' : 'Your session expired. Please sign in again.')
-      await saveFrameSettings({ deviceId, settingsJson: { ...settingsJson, theme: draftTheme }, accessToken })
+      const savedResult = await saveFrameSettings({ deviceId, settingsJson: { ...settingsJson, theme: draftTheme }, accessToken })
+      if (typeof savedResult.updated_at !== 'string' || !Number.isFinite(Date.parse(savedResult.updated_at))) {
+        throw new Error('Could not confirm when the frame settings were saved.')
+      }
       if (activeDeviceIdRef.current !== deviceId) return false
 
       const nextCellsByLayout = { ...makeEmptyCellsByLayout(), [draftLayoutKey]: { ...currentCells } }
@@ -2572,7 +2591,7 @@ export default function HomePage() {
         cellsByLayout: nextCellsByLayout,
       }
       setDirty(reconciliation.dirty)
-      const savedAt = new Date().toISOString()
+      const savedAt = savedResult.updated_at
       pendingFrameConfigUpdatedAtRef.current = savedAt
       setFrameSaveFeedback({ deviceId, savedAt, phase: 'waiting' })
       return true
@@ -2661,6 +2680,7 @@ export default function HomePage() {
     setExplicitUpdateStatus('saving')
 
     const saved = await performSettingsSave(deviceId)
+    const savedAtForRevision = pendingFrameConfigUpdatedAtRef.current
     if (!saved || activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) {
       if (activeDeviceIdRef.current === deviceId && updateOperationIdRef.current === operationId) setExplicitUpdateStatus('idle')
       updateActionInFlightRef.current = false
@@ -2697,6 +2717,7 @@ export default function HomePage() {
       requestedRevision,
       requestedAt,
       deadline: requestedAt + DEVICE_UPDATE_TIMEOUT_MS,
+      ...(savedAtForRevision ? { savedAt: savedAtForRevision } : {}),
     }
     writeManualUpdate(window.localStorage, deviceId, persistedUpdate)
     setExplicitUpdateStatus('waiting_for_display')
@@ -2714,6 +2735,7 @@ export default function HomePage() {
           if (revisionHasBeenDisplayed(updateStatus.displayedRevision, operation.requestedRevision)) {
             clearManualUpdate(window.localStorage, deviceId)
             updateOperationRef.current = null
+            confirmFrameSaveOnRevision(deviceId, savedAtForRevision)
             setExplicitUpdateStatus('idle')
             // The revision ACK establishes completion; physical status alone
             // owns the visible freshness timestamp.
