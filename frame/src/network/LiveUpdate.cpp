@@ -39,9 +39,9 @@ void restoreOperationalPowerPolicyAfterProbe() {
 }
 }
 
-bool LiveUpdate::probe(const String& deviceToken, LiveUpdateState& out) {
+bool LiveUpdate::probe(const String& deviceToken, LiveUpdateState& out, bool forceNetwork) {
   const uint32_t nowMs = millis();
-  if (g_haveCachedProbeState &&
+  if (!forceNetwork && g_haveCachedProbeState &&
       (uint32_t)(nowMs - g_lastProbeNetworkStartedAtMs) < LIVE_PROBE_MIN_NETWORK_INTERVAL_MS) {
     out = g_cachedProbeState;
     return true;
