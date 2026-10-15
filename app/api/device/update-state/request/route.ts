@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authenticateUserForDevice, deviceIdFrom } from '@/app/lib/device/updateStateAuth'
+import { publishPilotRevision } from '@/app/lib/device/mqttPilotPublish'
 
 export const runtime = 'nodejs'
 
@@ -25,6 +26,19 @@ export async function POST(req: Request) {
   })
   const rpcMs = Date.now() - rpcStartedAt
   if (error) return NextResponse.json({ error: 'internal_error' }, { status: 500 })
+
+  // Pilot push is best-effort. The durable revision has already been recorded;
+  // even an offline broker cannot prevent the frame's normal HTTPS fallback.
+  const pushStartedAt = Date.now()
+  const pilotPush = await publishPilotRevision(deviceId, Number(data))
+  if (pilotPush !== 'disabled') {
+    console.info('[device/update-state/request] mqtt-pilot', {
+      device_id: deviceId,
+      revision: data,
+      result: pilotPush,
+      duration_ms: Date.now() - pushStartedAt,
+    })
+  }
 
   console.info('[device/update-state/request] timing', {
     device_id: deviceId,
