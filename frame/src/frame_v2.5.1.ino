@@ -1244,7 +1244,7 @@ static InteractiveModeResult runInteractiveMode(
     // The experimental push path keeps HTTPS as an authoritative verifier.
     // While subscribed, avoid the 10-second HTTPS no-change probes; missed
     // messages are recovered by a bounded periodic safety probe.
-    const bool pushConnected = MqttPushPilot::poll(DeviceIdentity::getToken());
+    const bool pushConnected = MqttPushPilot::poll(DeviceIdentity::getToken(), pwr.usbPresent);
     const bool pushHint = MqttPushPilot::takeNotification();
     const uint32_t lastProbeMs = LiveUpdate::lastNetworkProbeStartedAtMs();
     const uint32_t nowProbeMs = millis();
