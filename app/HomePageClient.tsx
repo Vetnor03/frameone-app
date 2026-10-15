@@ -2117,9 +2117,16 @@ export default function HomePage() {
     // Restore status from backend timestamps after reload or frame switching.
     // No new frame polling or manual update request is created here.
     if (activeDeviceIdRef.current === deviceId) {
-      setFrameSaveFeedback(settingsUpdatedAt && isFrameUpdatePending(settingsUpdatedAt, renderAt)
-        ? { deviceId, savedAt: settingsUpdatedAt, phase: 'waiting' }
-        : null)
+      setFrameSaveFeedback((current) => {
+        // A recovered, acknowledged Instant revision must not be downgraded by
+        // an older heartbeat that arrives while this settings lookup is in flight.
+        if (settingsUpdatedAt && current?.deviceId === deviceId && current.savedAt === settingsUpdatedAt && current.phase === 'confirmed') {
+          return current
+        }
+        return settingsUpdatedAt && isFrameUpdatePending(settingsUpdatedAt, renderAt)
+          ? { deviceId, savedAt: settingsUpdatedAt, phase: 'waiting' }
+          : null
+      })
     }
 
     if (!stickySettingsRef.current) setActiveTab('frame')
