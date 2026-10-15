@@ -119,3 +119,48 @@ Note that current firmware only attempts Wi-Fi automatic light sleep if its
 underlying Arduino/ESP-IDF SDK was built with PM + tickless idle. The stock
 Arduino 2.0.14 toolchain may not have these flags; verify `power_mode`
 telemetry, the flashed binary and actual current **before** interpreting results.
+
+
+## Smart Instant adaptive app presence (additional pilot behavior)
+
+This extension does not add any user-facing mode or change Power Save. Only
+`frm_54AE37455F34` receives app-presence notifications during this pilot.
+
+1. When the RE:MIND app opens in the foreground, the authorized user's
+   session POSTs to `/api/device/mqtt-pilot/activity`. Only the allowlisted
+   physical frame can be targeted; the endpoint verifies membership before
+   publishing. The app will not send for any other frame or in Power Save.
+2. The publisher sends `active:120` to the **existing** device-scoped
+   `remind/pilot/revisions/{device_id}` topic, QoS 1, non-retained. The
+   existing EMQX subscribe-only device ACL still applies. Presence is a
+   **power-mode hint, never a display command**.
+3. While the app is visible and the user recently interacted with it, the app
+   sends presence at most once per ~50 seconds, checking on a 45s timer.
+   After 90s without interaction or when hidden, it stops sending. A returning
+   user or a fresh app visit triggers another hint.
+4. Normally, the frame keeps the existing `WIFI_PS_MAX_MODEM` ~10-second
+   receive interval, and MQTT's local socket is serviced on the same ~10s
+   cadence. This makes **no** 10-second HTTP revision requests when MQTT is
+   connected.
+5. Upon receiving `active:120`, the frame temporarily uses
+   `WIFI_PS_MIN_MODEM` at the router's DTIM interval, retaining connected
+   automatic light sleep, and services the MQTT client approximately every
+   **one second**. Subsequent valid hints extend the local 120-second TTL.
+6. When TTL expires, MQTT disconnects, or the frame is no longer on battery,
+   the frame restores the standard low-power/USB Wi-Fi policy. Missing or
+   maliciously delayed hints cannot permanently hold fast reception on.
+   A manual revision still uses the existing authoritative HTTPS fetch and
+   physical display acknowledgement. The 10s disconnected HTTPS fallback and
+   15-minute connected safety checks remain intact.
+
+**Performance caveat:** The first app-open hint still has to reach a frame
+listening every ~10s. If the user immediately presses Update, the first
+update may be no faster than before. Subsequent edits should become faster
+once the presence hint is received; actual DTIM depends on the customer's
+router. Neither lower average power nor instant e-paper render is guaranteed
+without whole-board current and tap-to-ACK measurements.
+
+**Build/runtime gate:** Smart Instant requires the separate MQTT
+`alfred_v1_2_mqtt_pilot` firmware build and `MQTT_PILOT_ENABLED=true` only
+after final broker/firmware validation. Non-pilot firmware remains unchanged,
+as do all customer frames and normal Power Save.
