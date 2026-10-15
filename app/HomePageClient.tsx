@@ -2994,10 +2994,12 @@ async function handleSelectTab(k: TabKey) {
                   <button
                     type="button"
                     onClick={() => setThemePickerOpen(true)}
-                    aria-label={language === 'no' ? 'Velg fargetema' : 'Choose color theme'}
-                    className="h-[56px] shrink-0 rounded-2xl border border-[color:var(--bd-30)] px-4 text-[11px] tracking-widest text-[color:var(--fg-70)] transition hover:text-[color:var(--fg)]"
+                    disabled={!activeDeviceId}
+                    aria-label={language === 'no' ? 'Velg lys eller mørk ramme' : 'Choose light or dark frame'}
+                    className="h-[56px] shrink-0 rounded-2xl border border-[color:var(--bd-30)] px-3 text-[11px] tracking-widest text-[color:var(--fg-70)] transition hover:text-[color:var(--fg)] disabled:opacity-40"
                   >
-                    {tx(language).themeTitle}
+                    <span className="block text-[10px] text-[color:var(--fg-50)]">{language === 'no' ? 'RAMME' : 'FRAME'}</span>
+                    <span className="block mt-1">{frameTheme === 'dark' ? tx(language).dark : tx(language).light}</span>
                   </button>
                 )}
                 </div>
@@ -3037,28 +3039,17 @@ async function handleSelectTab(k: TabKey) {
             )}
 
             {themePickerOpen && (
-              <ThemePickerModal
+              <FrameThemePickerModal
                 language={language}
-                appTheme={appTheme}
                 frameTheme={frameTheme}
                 onClose={() => setThemePickerOpen(false)}
-                onPickApp={(t) => {
-                  trackProductEvent({ event: 'theme_changed', surface: 'frame' })
-                  applyDocumentTheme(t)
-                  persistTheme(t)
-                  setAppTheme(t)
-                  if (userId) {
-                    void supabase
-                      .from('user_app_preferences')
-                      .upsert({ user_id: userId, app_theme: t }, { onConflict: 'user_id' })
-                      .then(({ error }) => {
-                        if (error) console.warn('[app-theme:account-save-failed]', { message: error.message })
-                      })
-                  }
-                }}
                 onPickFrame={(t) => {
-                  setFrameTheme(t)
-                  markDirty({ frameTheme: t })
+                  if (t !== frameTheme) {
+                    trackProductEvent({ event: 'theme_changed', surface: 'frame' })
+                    setFrameTheme(t)
+                    markDirty({ frameTheme: t })
+                  }
+                  setThemePickerOpen(false)
                 }}
               />
             )}
@@ -8678,69 +8669,47 @@ function PickerModal({
   )
 }
 
-function ThemePickerModal({
-  appTheme,
+function FrameThemePickerModal({
   frameTheme,
   onClose,
-  onPickApp,
   onPickFrame,
   language,
 }: {
-  appTheme: AppTheme
   frameTheme: AppTheme
   onClose: () => void
-  onPickApp: (theme: AppTheme) => void
   onPickFrame: (theme: AppTheme) => void
   language: AppLanguage
 }) {
   const t = tx(language)
-  const [activeThemeTab, setActiveThemeTab] = useState<'app' | 'frame'>('app')
-  const current = activeThemeTab === 'app' ? appTheme : frameTheme
-  const onPick = activeThemeTab === 'app' ? onPickApp : onPickFrame
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
       <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-8">
         <div className="flex items-center justify-between">
-          <div className="tracking-widest text-sm text-[color:var(--fg-70)]">{t.themeTitle}</div>
-          <button onClick={onClose} className="text-[color:var(--fg-60)] text-xl">
+          <div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'RAMMEFARGE' : 'FRAME COLOR'}</div>
+          <button type="button" onClick={onClose} aria-label={language === 'no' ? 'Lukk' : 'Close'} className="text-[color:var(--fg-60)] text-xl">
             ✕
           </button>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 border-b border-[color:var(--bd-10)]" role="tablist" aria-label={t.themeTitle}>
-          {(['app', 'frame'] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              role="tab"
-              aria-selected={activeThemeTab === tab}
-              onClick={() => setActiveThemeTab(tab)}
-              className={`h-10 border-b-2 text-xs tracking-widest ${
-                activeThemeTab === tab
-                  ? 'border-[#2aa3ff] text-[#2aa3ff]'
-                  : 'border-transparent text-[color:var(--fg-60)]'
-              }`}
-            >
-              {tab === 'app' ? t.appThemeTab : t.frameThemeTab}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-5 grid grid-cols-2 gap-3">
+        <div className="mt-5 grid grid-cols-2 gap-3" role="group" aria-label={language === 'no' ? 'Rammefarge' : 'Frame color'}>
           <button
-            onClick={() => onPick('dark')}
+            type="button"
+            onClick={() => onPickFrame('dark')}
+            aria-pressed={frameTheme === 'dark'}
             className={`h-12 rounded-2xl border tracking-widest ${
-              current === 'dark' ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-80)]'
+              frameTheme === 'dark' ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-80)]'
             }`}
           >
             {t.dark}
           </button>
 
           <button
-            onClick={() => onPick('light')}
+            type="button"
+            onClick={() => onPickFrame('light')}
+            aria-pressed={frameTheme === 'light'}
             className={`h-12 rounded-2xl border tracking-widest ${
-              current === 'light' ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-80)]'
+              frameTheme === 'light' ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-80)]'
             }`}
           >
             {t.light}
