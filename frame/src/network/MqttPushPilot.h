@@ -12,6 +12,9 @@ namespace MqttPushPilot {
   // Nonblocking in steady state; reconnect attempts may take a few seconds.
   // Returns true only while the encrypted MQTT subscription is connected.
   bool poll(const String& deviceToken, bool usbPresent);
+  // Whether the current broker subscription is live; used to select a
+  // faster, local-only MQTT service cadence without changing HTTPS cadence.
+  bool connected();
   // Notifications only prompt an authenticated HTTPS revision verification.
   // They do not contain arbitrary display content or bypass revision ACKs.
   bool takeNotification();
