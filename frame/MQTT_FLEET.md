@@ -39,6 +39,10 @@ unchanged.
   controlled device credential rotation at the broker.
 - `MQTT_BROKER_HOST`, `MQTT_BROKER_PORT`: backend-only broker location,
   validated before delivery. Defaults to the current test broker and 8883.
+- `MQTT_BROKER_ROOT_CA_PEM`: optional **public** broker root certificate
+  delivered over device-authenticated HTTPS, allowing secure CA migration
+  without another frame flash; if absent, firmware uses its bundled public
+  DigiCert Global Root G2.
 - Existing `MQTT_PILOT_EMQX_API_KEY`, `_API_SECRET`, and
   `_PUBLISH_URL` stay server-side only.
 
