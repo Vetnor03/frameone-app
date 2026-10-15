@@ -37,11 +37,12 @@ test('frame toggle queues only physical frame theme changes for Update', () => {
   assert.doesNotMatch(frame, /setAppTheme|persistTheme|user_app_preferences/)
 })
 
-test('dark frame mode has dark track and contrasting light thumb; Light retains subtle styling', () => {
+test('frame theme controls switch track and thumb independently from app theme', () => {
   const frameTab = home.slice(home.indexOf('function FrameTab(props:'), home.indexOf('function LayoutDefault('))
-  assert.match(frameTab, /frameTheme === 'dark' \? 'border-\[#354653\] bg-\[#263440\]' : 'border-\[color:var\(--bd-30\)\] bg-\[color:var\(--bd-10\)\]'/)
-  assert.match(frameTab, /frameTheme === 'dark' \? 'bg-\[#f5f6f8\]' : 'bg-\[color:var\(--fg-60\)\] translate-x-3'/)
+  assert.match(frameTab, /frameTheme === 'dark' \? 'border-\[#354653\] bg-\[#263440\]' : 'border-\[#cbd5dc\] bg-\[#f4f6f8\]'/)
+  assert.match(frameTab, /frameTheme === 'dark' \? 'bg-\[#f5f6f8\]' : 'bg-\[#586773\] translate-x-3'/)
   assert.match(frameTab, /frameTheme === 'light' \? 'LIGHT' : 'DARK'/)
+  assert.doesNotMatch(frameTab, /bg-\[color:var\(--bd-10\)\]|bg-\[color:var\(--fg-60\)\]/)
 })
 
 test('App theme is restored to Settings with its own picker and no frame-setting writes', () => {
