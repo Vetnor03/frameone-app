@@ -56,7 +56,7 @@ def test_connected_mqtt_local_service_runs_without_hotloop_or_extra_https_probes
     cpp = read('src/network/MqttPushPilot.cpp')
     interactive = source.split('static InteractiveModeResult runInteractiveMode(', 1)[1].split('void setup()', 1)[0]
     assert 'uint32_t lastMqttServiceAtMs = 0;' in interactive
-    assert 'MqttPushPilot::connected() ? 1000UL : MANUAL_UPDATE_POLL_MS' in interactive
+    assert 'MqttPushPilot::appActivityIsActive() ? 1000UL : MANUAL_UPDATE_POLL_MS' in interactive
     assert 'const uint32_t lastProbeStartedAtMs = lastMqttServiceAtMs;' in interactive
     assert 'lastMqttServiceAtMs = millis();' in interactive
     assert 'if (remainingProbeWaitMs > 0 &&' in interactive
@@ -69,3 +69,28 @@ def test_connected_mqtt_local_service_runs_without_hotloop_or_extra_https_probes
     # No new HTTP probes from the fast loop: connected idle still skips them
     # unless a push hint arrives or the 15-minute safety check becomes due.
     assert 'if (pushConnected && !pushHint && !safetyProbeDue) continue;' in interactive
+
+
+
+def test_smart_instant_only_accelerates_while_authenticated_app_is_active():
+    mqtt = read('src/network/MqttPushPilot.cpp')
+    header = read('src/network/MqttPushPilot.h')
+    wifi = read('src/device/WiFiManager.cpp')
+    main = read('src/frame_v2.5.1.ino')
+    assert 'if (length == 10 && memcmp(payload, "active:120", 10) == 0)' in mqtt
+    assert 'ACTIVITY_TTL_MS = 120000UL' in mqtt
+    assert 'g_appActiveDeadlineMs = millis() + ACTIVITY_TTL_MS;' in mqtt
+    assert 'bool appActivityIsActive()' in mqtt
+    assert 'bool appActivityIsActive();' in header
+    assert 'MqttPushPilot::appActivityIsActive() ? 1000UL : MANUAL_UPDATE_POLL_MS' in main
+    assert 'MqttPushPilot::maintainActivityPowerPolicy(pwr.usbPresent);' in main
+    assert 'applyAppActiveLightSleepPolicy(bool usbPresent)' in wifi
+    assert 'esp_wifi_set_ps(WIFI_PS_MIN_MODEM)' in wifi
+    assert 'esp_wifi_set_ps(WIFI_PS_MAX_MODEM)' in wifi
+    assert 'configureAutomaticLightSleep(true)' in wifi
+    assert 'battery_app_active' in wifi
+    assert 'g_mqtt.connected() && !usbPresent' in mqtt
+    assert 'WiFiManagerV2::applyOperationalPowerPolicy(usbPresent, true);' in mqtt
+    assert 'if (g_appActiveLightSleep) return "battery_app_active";' in wifi
+    assert 'void maintainActivityPowerPolicy(bool) {}' in mqtt
+    assert 'bool appActivityIsActive() { return false; }' in mqtt
