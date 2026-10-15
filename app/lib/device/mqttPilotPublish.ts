@@ -20,6 +20,7 @@ export type BrokerConfig = {
   enabled?: string
   pilotDeviceId?: string
   fleetEnabled?: string
+  fleetSecret?: string
   publishUrl?: string
   apiKey?: string
   apiSecret?: string
@@ -30,6 +31,7 @@ function defaultBrokerConfig(): BrokerConfig {
     enabled: process.env.MQTT_PILOT_ENABLED,
     pilotDeviceId: process.env.MQTT_PILOT_DEVICE_ID,
     fleetEnabled: process.env.MQTT_FLEET_ENABLED,
+    fleetSecret: process.env.MQTT_FLEET_DERIVATION_SECRET,
     publishUrl: process.env.MQTT_PILOT_EMQX_PUBLISH_URL,
     apiKey: process.env.MQTT_PILOT_EMQX_API_KEY,
     apiSecret: process.env.MQTT_PILOT_EMQX_API_SECRET,
@@ -42,7 +44,7 @@ async function publishPilotMessage(
   config: BrokerConfig,
   fetchImpl: typeof fetch,
 ): Promise<PilotPushResult> {
-  if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled })) return 'disabled'
+  if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret, fleetSecret: config.fleetSecret })) return 'disabled'
   const topic = pilotRevisionTopic(deviceId)
   if (!topic || !config.publishUrl || !config.apiKey || !config.apiSecret) return 'failed'
 
