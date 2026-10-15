@@ -17,6 +17,7 @@ export type PilotPushResult = 'disabled' | 'published' | 'no_subscribers' | 'fai
 
 type BrokerConfig = {
   enabled?: string
+  pilotDeviceId?: string
   publishUrl?: string
   apiKey?: string
   apiSecret?: string
@@ -27,13 +28,14 @@ export async function publishPilotRevision(
   revision: number,
   config: BrokerConfig = {
     enabled: process.env.MQTT_PILOT_ENABLED,
+    pilotDeviceId: process.env.MQTT_PILOT_DEVICE_ID,
     publishUrl: process.env.MQTT_PILOT_EMQX_PUBLISH_URL,
     apiKey: process.env.MQTT_PILOT_EMQX_API_KEY,
     apiSecret: process.env.MQTT_PILOT_EMQX_API_SECRET,
   },
   fetchImpl: typeof fetch = fetch,
 ): Promise<PilotPushResult> {
-  if (config.enabled !== 'true') return 'disabled'
+  if (config.enabled !== 'true' || config.pilotDeviceId !== deviceId) return 'disabled'
   const topic = pilotRevisionTopic(deviceId)
   if (!topic || !Number.isSafeInteger(revision) || revision <= 0) return 'failed'
   if (!config.publishUrl || !config.apiKey || !config.apiSecret) return 'failed'
