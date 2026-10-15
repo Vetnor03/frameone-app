@@ -1090,9 +1090,29 @@ static InteractiveModeResult runInteractiveMode(
   uint64_t lastRequested = state.requestedRevision;
   uint64_t lastDisplayed = state.displayedRevision;
   uint32_t configRetryMs = MANUAL_RENDER_RETRY_START_MS;
+#if FRAME_MQTT_PILOT_ENABLED
+  // MQTT service is local socket processing, NOT an HTTPS revision request.
+  // Track it independently so a stale 10-second HTTP probe clock cannot
+  // cause a hot-loop while a broker subscription is active.
+  uint32_t lastMqttServiceAtMs = 0;
+  uint32_t lastDebouncedPowerReadAtMs = 0;
+#endif
 
   while (true) {
+#if FRAME_MQTT_PILOT_ENABLED
+    // The old loop's 100ms USB debounce on every 1-second MQTT service
+    // would waste CPU and defeat automatic light sleep. Sample cheaply and
+    // debounce only every 10s or when battery->USB is detected. USB->battery
+    // is checked on the same 10s baseline as before this pilot.
+    const bool usbJustConnected = !pwr.usbPresent && digitalRead(POWER_SENSE_PIN) == LOW;
+    const bool debounceNow = lastDebouncedPowerReadAtMs == 0 ||
+      (uint32_t)(millis() - lastDebouncedPowerReadAtMs) >= MANUAL_UPDATE_POLL_MS ||
+      usbJustConnected;
+    const PowerSenseDebug sampledPower = debounceNow ? readPowerSenseDebug() : pwr;
+    if (debounceNow) lastDebouncedPowerReadAtMs = millis();
+#else
     const PowerSenseDebug sampledPower = readPowerSenseDebug();
+#endif
     if (sampledPower.stable && sampledPower.usbPresent != pwr.usbPresent) {
       pwr = sampledPower;
       batt = BatteryManager::readAndUpdate(pwr.usbPresent);
@@ -1228,8 +1248,18 @@ static InteractiveModeResult runInteractiveMode(
     // If USB was inserted during battery ALS, return to the top immediately
     // so the source-aware USB policy disables light sleep before any network
     // request or e-paper work can delay host enumeration.
+#if FRAME_MQTT_PILOT_ENABLED
+    // Broker traffic is served every 1s when connected, letting push hints
+    // reach the HTTPS verifier promptly. When offline, retain the existing
+    // 10-second HTTP cadence. Keep this an opt-in pilot: the extra wake-ups
+    // and radio-listen behavior must be measured before shipping.
+    const uint32_t probeCadenceMs =
+      MqttPushPilot::connected() ? 1000UL : MANUAL_UPDATE_POLL_MS;
+    const uint32_t lastProbeStartedAtMs = lastMqttServiceAtMs;
+#else
     const uint32_t probeCadenceMs = MANUAL_UPDATE_POLL_MS;
     const uint32_t lastProbeStartedAtMs = LiveUpdate::lastNetworkProbeStartedAtMs();
+#endif
     const uint32_t sinceProbeStartedMs =
       lastProbeStartedAtMs == 0 ? probeCadenceMs : millis() - lastProbeStartedAtMs;
     const uint32_t remainingProbeWaitMs =
@@ -1244,6 +1274,9 @@ static InteractiveModeResult runInteractiveMode(
     // The experimental push path keeps HTTPS as an authoritative verifier.
     // While subscribed, avoid the 10-second HTTPS no-change probes; missed
     // messages are recovered by a bounded periodic safety probe.
+#if FRAME_MQTT_PILOT_ENABLED
+    lastMqttServiceAtMs = millis();
+#endif
     const bool pushConnected = MqttPushPilot::poll(DeviceIdentity::getToken(), pwr.usbPresent);
     const bool pushHint = MqttPushPilot::takeNotification();
     const uint32_t lastProbeMs = LiveUpdate::lastNetworkProbeStartedAtMs();
