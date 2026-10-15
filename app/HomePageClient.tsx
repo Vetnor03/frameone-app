@@ -4116,8 +4116,8 @@ function FrameTab(props: {
               className="mt-2 inline-flex min-h-6 items-center justify-center gap-2 rounded-full px-2 text-[10px] tracking-[0.08em] text-[color:var(--fg-45)] disabled:opacity-40"
             >
               <span>{frameTheme === 'light' ? 'LIGHT' : 'DARK'}</span>
-              <span aria-hidden="true" className={`relative h-[14px] w-[26px] rounded-full border transition-colors ${frameTheme === 'dark' ? 'border-[#354653] bg-[#263440]' : 'border-[color:var(--bd-30)] bg-[color:var(--bd-10)]'}`}>
-                <span className={`absolute left-[2px] top-[2px] h-2 w-2 rounded-full transition-[transform,background-color] ${frameTheme === 'dark' ? 'bg-[#f5f6f8]' : 'bg-[color:var(--fg-60)] translate-x-3'}`} />
+              <span aria-hidden="true" className={`relative h-[14px] w-[26px] rounded-full border transition-colors ${frameTheme === 'dark' ? 'border-[#354653] bg-[#263440]' : 'border-[#cbd5dc] bg-[#f4f6f8]'}`}>
+                <span className={`absolute left-[2px] top-[2px] h-2 w-2 rounded-full transition-[transform,background-color] ${frameTheme === 'dark' ? 'bg-[#f5f6f8]' : 'bg-[#586773] translate-x-3'}`} />
               </span>
             </button>
           )}
