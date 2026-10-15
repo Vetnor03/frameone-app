@@ -137,6 +137,10 @@ bool takeNotification() {
   g_notificationPending = false;
   return pending;
 }
+
+void restoreNotification() {
+  g_notificationPending = true;
+}
 }
 
 #else
@@ -144,6 +148,7 @@ bool takeNotification() {
 namespace MqttPushPilot {
 bool poll(const String&, bool) { return false; }
 bool takeNotification() { return false; }
+void restoreNotification() {}
 }
 
 #endif
