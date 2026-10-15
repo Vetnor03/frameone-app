@@ -98,7 +98,9 @@ bool fetchCredentials(const String& deviceToken, String& username, String& passw
   // Credentials are never written to NVS, a URL, or the serial log.
   if (!NetClient::httpGetAuth(url, deviceToken, code, body) || code != 200) return false;
 
-  StaticJsonDocument<6144> doc;
+  // Public CA PEM can be >1KB; allocate JSON capacity on heap instead of
+  // using >6KB of the ESP32 Arduino loop task's limited stack.
+  DynamicJsonDocument doc(6144);
   if (deserializeJson(doc, body)) return false;
   const char* mqttUsername = doc["username"] | "";
   const char* mqttPassword = doc["password"] | "";
