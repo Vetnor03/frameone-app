@@ -1226,7 +1226,6 @@ export default function HomePage() {
   const [frameTheme, setFrameTheme] = useState<AppTheme>('dark')
   const [powerSaver, setPowerSaver] = useState(false)
   const [powerSaverSaving, setPowerSaverSaving] = useState(false)
-  const [themePickerOpen, setThemePickerOpen] = useState(false)
   const [language, setLanguage] = useState<AppLanguage>('en')
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
   const [fontSize, setFontSize] = useState<AppFontSize>('normal')
@@ -2808,7 +2807,7 @@ async function handleSelectTab(k: TabKey) {
   }
 
   const isPlainFrameAssistantSurface = activeTab === 'frame'
-    && !layoutFlow && !pickerOpen && !themePickerOpen && !languagePickerOpen
+    && !layoutFlow && !pickerOpen && !languagePickerOpen
     && shouldRenderApp && !booting && !showSplash && !shouldShowFirstFrameOnboarding && !setupDeviceId
 
   if (isPhoneLandscapeMirror) {
@@ -2857,6 +2856,14 @@ async function handleSelectTab(k: TabKey) {
                 <FrameTab
                   title={layoutMeta.title}
                   subtitle={layoutMeta.subtitle}
+                  frameTheme={frameTheme}
+                  canChangeFrameTheme={!!activeDeviceId}
+                  onFrameThemeToggle={() => {
+                    const next = frameTheme === 'dark' ? 'light' : 'dark'
+                    trackProductEvent({ event: 'theme_changed', surface: 'frame' })
+                    setFrameTheme(next)
+                    markDirty({ frameTheme: next })
+                  }}
                   layoutKey={layoutKey}
                   cells={cellsByLayout[layoutKey]}
                   onPrev={prevLayout}
@@ -2973,10 +2980,9 @@ async function handleSelectTab(k: TabKey) {
 
             {activeTab === 'frame' && (
               <div className="pt-5 pb-[20px] flex flex-col items-center relative z-20">
-                <div className="flex w-full max-w-[360px] items-center justify-center gap-3">
                 <button
                   onClick={layoutFlow?submitLayoutDraft:handleExplicitUpdate}
-                  className={`${layoutFlow ? 'w-[260px]' : 'min-w-0 flex-1'} h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
+                  className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
                     layoutFlow||dirty
                       ? 'border-[#2aa3ff] text-[#2aa3ff]'
                       : 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]'
@@ -2990,19 +2996,6 @@ async function handleSelectTab(k: TabKey) {
                       ? 'Updating RE:MIND…'
                       : tx(language).update}
                 </button>
-                {!layoutFlow && (
-                  <button
-                    type="button"
-                    onClick={() => setThemePickerOpen(true)}
-                    disabled={!activeDeviceId}
-                    aria-label={language === 'no' ? 'Velg lys eller mørk ramme' : 'Choose light or dark frame'}
-                    className="h-[56px] shrink-0 rounded-2xl border border-[color:var(--bd-30)] px-3 text-[11px] tracking-widest text-[color:var(--fg-70)] transition hover:text-[color:var(--fg)] disabled:opacity-40"
-                  >
-                    <span className="block text-[10px] text-[color:var(--fg-50)]">{language === 'no' ? 'RAMME' : 'FRAME'}</span>
-                    <span className="block mt-1">{frameTheme === 'dark' ? tx(language).dark : tx(language).light}</span>
-                  </button>
-                )}
-                </div>
 
                 {layoutFlow?.mode==='edit'&&<button type="button" onClick={()=>deleteCustom(layoutFlow.layout)} className="mt-4 text-xs tracking-[.16em] text-red-400">DELETE LAYOUT</button>}
 
@@ -3035,22 +3028,6 @@ async function handleSelectTab(k: TabKey) {
                 }}
                 onPick={chooseModule}
                 onClear={clearCell}
-              />
-            )}
-
-            {themePickerOpen && (
-              <FrameThemePickerModal
-                language={language}
-                frameTheme={frameTheme}
-                onClose={() => setThemePickerOpen(false)}
-                onPickFrame={(t) => {
-                  if (t !== frameTheme) {
-                    trackProductEvent({ event: 'theme_changed', surface: 'frame' })
-                    setFrameTheme(t)
-                    markDirty({ frameTheme: t })
-                  }
-                  setThemePickerOpen(false)
-                }}
               />
             )}
 
@@ -4064,6 +4041,9 @@ function FrameLayoutRenderer({
 function FrameTab(props: {
   title: string
   subtitle: string
+  frameTheme: AppTheme
+  canChangeFrameTheme: boolean
+  onFrameThemeToggle: () => void
   layoutKey: LayoutKey
   cells: Record<number, ModuleKey | null>
   onPrev: () => void
@@ -4083,7 +4063,7 @@ function FrameTab(props: {
   onAdd:()=>void
   onEdit:(layout:CustomLayout)=>void
 }) {
-  const { title, subtitle, layoutKey, cells, onPrev, onNext, onCellTap, language,editorMode,editorName,editorCells,editorUnsupportedSlots,onEditorNameChange,onEditorCellsChange,onCancelEditor,customLayout,customAssignments,isAddCard,onAdd,onEdit } = props
+  const { title, subtitle, frameTheme, canChangeFrameTheme, onFrameThemeToggle, layoutKey, cells, onPrev, onNext, onCellTap, language,editorMode,editorName,editorCells,editorUnsupportedSlots,onEditorNameChange,onEditorCellsChange,onCancelEditor,customLayout,customAssignments,isAddCard,onAdd,onEdit } = props
 
   return (
     <div id="frame-layout-controls" tabIndex={-1} className="h-full flex flex-col outline-none">
@@ -4094,7 +4074,26 @@ function FrameTab(props: {
 
         <div className="min-w-0 flex-1 text-center">
           {editorMode?<input aria-label="Layout name" maxLength={40} value={editorName} onChange={event=>onEditorNameChange(event.target.value)} placeholder="Layout name" className="w-full bg-transparent text-center text-2xl font-semibold uppercase tracking-widest outline-none placeholder:text-[color:var(--fg-35)]"/>:<div className="flex items-center justify-center gap-1"><span className="text-2xl font-semibold tracking-widest">{title}</span>{customLayout&&<button type="button" aria-label="Edit custom layout" title="Edit layout" onClick={()=>onEdit(customLayout)} className="inline-flex h-8 w-8 items-center justify-center text-[color:var(--fg-45)] transition-colors hover:text-[color:var(--fg-75)]"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.5"><path d="m4 20 4.1-1 10.8-10.8a2.1 2.1 0 0 0-3-3L5.1 16 4 20Z"/><path d="m14.5 6.5 3 3"/></svg></button>}</div>}
-          <div className="mt-1 text-xs tracking-widest text-[color:var(--fg-60)]">{editorMode?'Draw to split · trace to erase':subtitle}</div>
+          <div className="mt-1 flex items-center justify-center gap-3">
+            <span className="text-xs tracking-widest text-[color:var(--fg-60)]">{editorMode?'Draw to split · trace to erase':subtitle}</span>
+            {!editorMode && (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={frameTheme === 'light'}
+                aria-label={language === 'no' ? 'Lyst rammetema' : 'Light frame theme'}
+                title={language === 'no' ? `Ramme: ${frameTheme === 'dark' ? 'Mørk' : 'Lys'}` : `Frame: ${frameTheme === 'dark' ? 'Dark' : 'Light'}`}
+                disabled={!canChangeFrameTheme}
+                onClick={onFrameThemeToggle}
+                className="inline-flex h-4 shrink-0 items-center gap-1.5 text-[9px] tracking-[0.08em] text-[color:var(--fg-45)] disabled:opacity-40"
+              >
+                <span>{language === 'no' ? 'RAMME' : 'FRAME'}</span>
+                <span aria-hidden="true" className="relative h-[14px] w-[26px] rounded-full border border-[color:var(--bd-30)] bg-[color:var(--bd-10)]">
+                  <span className={`absolute left-[2px] top-[2px] h-2 w-2 rounded-full bg-[color:var(--fg-60)] transition-transform ${frameTheme === 'light' ? 'translate-x-3' : ''}`} />
+                </span>
+              </button>
+            )}
+          </div>
         </div>
 
         <button onClick={onNext} disabled={!!editorMode} aria-hidden={!!editorMode} className={`w-10 h-10 flex items-center justify-center text-[color:var(--fg-60)] text-3xl ${editorMode?'invisible':''}`}>
@@ -8662,57 +8661,6 @@ function PickerModal({
             className="px-3 py-2 text-[11px] tracking-[0.24em] text-red-500/70 transition hover:text-red-500"
           >
             {t.clearCell}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function FrameThemePickerModal({
-  frameTheme,
-  onClose,
-  onPickFrame,
-  language,
-}: {
-  frameTheme: AppTheme
-  onClose: () => void
-  onPickFrame: (theme: AppTheme) => void
-  language: AppLanguage
-}) {
-  const t = tx(language)
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
-      <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-8">
-        <div className="flex items-center justify-between">
-          <div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'RAMMEFARGE' : 'FRAME COLOR'}</div>
-          <button type="button" onClick={onClose} aria-label={language === 'no' ? 'Lukk' : 'Close'} className="text-[color:var(--fg-60)] text-xl">
-            ✕
-          </button>
-        </div>
-
-        <div className="mt-5 grid grid-cols-2 gap-3" role="group" aria-label={language === 'no' ? 'Rammefarge' : 'Frame color'}>
-          <button
-            type="button"
-            onClick={() => onPickFrame('dark')}
-            aria-pressed={frameTheme === 'dark'}
-            className={`h-12 rounded-2xl border tracking-widest ${
-              frameTheme === 'dark' ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-80)]'
-            }`}
-          >
-            {t.dark}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onPickFrame('light')}
-            aria-pressed={frameTheme === 'light'}
-            className={`h-12 rounded-2xl border tracking-widest ${
-              frameTheme === 'light' ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-80)]'
-            }`}
-          >
-            {t.light}
           </button>
         </div>
       </div>
