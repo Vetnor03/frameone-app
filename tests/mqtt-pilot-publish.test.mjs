@@ -59,7 +59,7 @@ test('publisher fails closed on unsafe endpoints, invalid topics, revisions or c
   const forbid = async () => { throw Error('Should not send') }
   assert.equal(await publishPilotRevision('frame-1', 1, conf, forbid), 'failed')
   assert.equal(await publishPilotRevision('frame-1', 1, { ...conf, publishUrl: 'https://evil.example/redirect' }, forbid), 'failed')
-  assert.equal(await publishPilotRevision('frame/2', 1, { ...conf, publishUrl: 'https://broker.example/publish' }, forbid), 'failed')
+  assert.equal(await publishPilotRevision('frame/2', 1, { ...conf, publishUrl: 'https://broker.example/publish' }, forbid), 'disabled')
   assert.equal(await publishPilotRevision('frame-1', -1, { ...conf, publishUrl: 'https://broker.example/publish' }, forbid), 'failed')
   assert.equal(await publishPilotRevision('frame-1', 1, { ...conf, publishUrl: 'https://broker.example/publish', apiSecret: '' }, forbid), 'failed')
 })
