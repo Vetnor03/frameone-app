@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto'
-import { pilotRevisionTopic } from './mqttPilotPublish'
+import { pilotRevisionTopic } from './mqttPilotPublish.ts'
 
 /**
  * Future fleet onboarding on compatible EMQX broker management APIs.
