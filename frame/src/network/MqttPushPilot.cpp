@@ -97,6 +97,8 @@ bool fetchCredentials(const String& deviceToken, String& username, String& passw
 }
 
 namespace MqttPushPilot {
+bool connected() { return g_mqtt.connected(); }
+
 bool poll(const String& deviceToken, bool usbPresent) {
   if (!configure() || deviceToken.length() == 0 ||
       WiFi.status() != WL_CONNECTED) return false;
@@ -146,6 +148,7 @@ void restoreNotification() {
 #else
 
 namespace MqttPushPilot {
+bool connected() { return false; }
 bool poll(const String&, bool) { return false; }
 bool takeNotification() { return false; }
 void restoreNotification() {}
