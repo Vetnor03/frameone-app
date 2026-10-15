@@ -20,9 +20,15 @@ def test_production_has_mqtt_disabled_by_default_and_http_fallback():
 def test_mqtt_messages_only_hint_at_secure_authoritative_revision_check():
     source = read('src/network/MqttPushPilot.cpp')
     client = read('src/network/LiveUpdate.cpp')
-    assert 'BackendTrust::configure(g_tls);' in source
+    assert 'g_tls.setCACert(kMqttPilotRootCaPem);' in source
     assert 'g_mqtt.subscribe(g_topic.c_str(), 1)' in source
-    assert 'g_mqtt.connect(clientId.c_str(), id.c_str(), deviceToken.c_str())' in source
+    assert 'fetchCredentials(deviceToken, username, password)' in source
+    assert 'NetClient::httpGetAuth(url, deviceToken, code, body)' in source
+    assert 'g_mqtt.connect(' in source
+    assert 'username.c_str(), password.c_str()' in source
+    assert 'username = "";' in source and 'password = "";' in source
+    assert '"i5138504.ala.us-east-1.emqxsl.com"' in source
+    assert 'DigiCert Global Root G2' in read('src/network/MqttPilotTrust.h')
     assert 'g_notificationPending = true;' in source
     assert 'g_mqtt.setKeepAlive(90)' in source
     assert 'CONNECT_RETRY_MS = 60000' in source
