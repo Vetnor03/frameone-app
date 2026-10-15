@@ -118,7 +118,6 @@ const UI = {
     english: 'English',
     norwegian: 'Norwegian',
 
-    themeRow: 'Theme',
     languageRow: 'Language',
     subscription: 'Subscription',
     privacyPolicy: 'Privacy policy',
@@ -250,7 +249,6 @@ const UI = {
     english: 'Engelsk',
     norwegian: 'Norsk',
 
-    themeRow: 'Tema',
     languageRow: 'Språk',
     subscription: 'Abonnement',
     privacyPolicy: 'Personvern',
@@ -2883,12 +2881,9 @@ async function handleSelectTab(k: TabKey) {
               {activeTab === 'settings' && (
                 <SettingsTab
                   language={language}
-                  appTheme={appTheme}
-                  frameTheme={frameTheme}
                   powerSaver={powerSaver}
                   powerSaverBusy={powerSaverSaving}
                   onPowerSaverChange={handlePowerSaverChange}
-                  onOpenTheme={() => setThemePickerOpen(true)}
                   onOpenLanguage={() => setLanguagePickerOpen(true)}
                   frames={frames}
                   activeDeviceId={activeDeviceId}
@@ -2978,9 +2973,10 @@ async function handleSelectTab(k: TabKey) {
 
             {activeTab === 'frame' && (
               <div className="pt-5 pb-[20px] flex flex-col items-center relative z-20">
+                <div className="flex w-full max-w-[360px] items-center justify-center gap-3">
                 <button
                   onClick={layoutFlow?submitLayoutDraft:handleExplicitUpdate}
-                  className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
+                  className={`${layoutFlow ? 'w-[260px]' : 'min-w-0 flex-1'} h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
                     layoutFlow||dirty
                       ? 'border-[#2aa3ff] text-[#2aa3ff]'
                       : 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]'
@@ -2994,6 +2990,17 @@ async function handleSelectTab(k: TabKey) {
                       ? 'Updating RE:MIND…'
                       : tx(language).update}
                 </button>
+                {!layoutFlow && (
+                  <button
+                    type="button"
+                    onClick={() => setThemePickerOpen(true)}
+                    aria-label={language === 'no' ? 'Velg fargetema' : 'Choose color theme'}
+                    className="h-[56px] shrink-0 rounded-2xl border border-[color:var(--bd-30)] px-4 text-[11px] tracking-widest text-[color:var(--fg-70)] transition hover:text-[color:var(--fg)]"
+                  >
+                    {tx(language).themeTitle}
+                  </button>
+                )}
+                </div>
 
                 {layoutFlow?.mode==='edit'&&<button type="button" onClick={()=>deleteCustom(layoutFlow.layout)} className="mt-4 text-xs tracking-[.16em] text-red-400">DELETE LAYOUT</button>}
 
@@ -3036,7 +3043,7 @@ async function handleSelectTab(k: TabKey) {
                 frameTheme={frameTheme}
                 onClose={() => setThemePickerOpen(false)}
                 onPickApp={(t) => {
-                  trackProductEvent({ event: 'theme_changed', surface: 'settings' })
+                  trackProductEvent({ event: 'theme_changed', surface: 'frame' })
                   applyDocumentTheme(t)
                   persistTheme(t)
                   setAppTheme(t)
@@ -8791,12 +8798,9 @@ function LanguagePickerModal({
 
 function SettingsTab({
   language,
-  appTheme,
-  frameTheme,
   powerSaver,
   powerSaverBusy,
   onPowerSaverChange,
-  onOpenTheme,
   onOpenLanguage,
   frames,
   activeDeviceId,
@@ -8812,12 +8816,9 @@ function SettingsTab({
   onAssistantPreferenceChange,
 }: {
   language: AppLanguage
-  appTheme: AppTheme
-  frameTheme: AppTheme
   powerSaver: boolean
   powerSaverBusy: boolean
   onPowerSaverChange: (next: boolean) => Promise<void>
-  onOpenTheme: () => void
   onOpenLanguage: () => void
   frames: MemberRow[]
   activeDeviceId: string | null
@@ -8896,7 +8897,7 @@ function SettingsTab({
       window.clearTimeout(t1)
       window.clearTimeout(t2)
     }
-  }, [frames.length, activeDeviceId, appTheme, frameTheme, powerSaver, language])
+  }, [frames.length, activeDeviceId, powerSaver, language])
 
   if (subpage === 'subscription') {
     return <SubscriptionSettingsPage language={language} onBack={() => setSubpage(null)} />
@@ -8929,11 +8930,6 @@ function SettingsTab({
           <div ref={scrollRef} className="settings-scroll h-full overflow-y-auto pr-1 pb-4">
             <div className="mt-2 divide-y divide-[color:var(--bd-10)]">
               <SettingRow label={t.shop} value="" onClick={() => onGo('/shop')} />
-              <SettingRow
-                label={t.themeRow}
-                value={`${t.appThemeTab}: ${appTheme === 'dark' ? t.dark : t.light} · ${t.frameThemeTab}: ${frameTheme === 'dark' ? t.dark : t.light}`}
-                onClick={onOpenTheme}
-              />
               <SettingRow label={t.languageRow} value={languageValue} onClick={onOpenLanguage} />
               <SettingRow label={t.subscription} value="" onClick={() => setSubpage('subscription')} />
               <div className="py-3">
