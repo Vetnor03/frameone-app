@@ -44,7 +44,7 @@ async function publishPilotMessage(
   config: BrokerConfig,
   fetchImpl: typeof fetch,
 ): Promise<PilotPushResult> {
-  if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret, fleetSecret: config.fleetSecret })) return 'disabled'
+  if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret })) return 'disabled'
   const topic = pilotRevisionTopic(deviceId)
   if (!topic || !config.publishUrl || !config.apiKey || !config.apiSecret) return 'failed'
 
@@ -91,7 +91,7 @@ export async function publishPilotRevision(
   fetchImpl: typeof fetch = fetch,
 ): Promise<PilotPushResult> {
   if (!Number.isSafeInteger(revision) || revision <= 0) {
-    if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled })) return 'disabled'
+    if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret })) return 'disabled'
     return 'failed'
   }
   return publishPilotMessage(deviceId, String(revision), config, fetchImpl)
