@@ -39,6 +39,32 @@ On macOS or Linux:
 python3 frame/tools/prepare_arduino_sketch.py --output "$HOME/Arduino/frame_v2.5.1"
 ```
 
+### Smart Instant MQTT universal test build (Arduino IDE)
+
+**The ordinary Arduino export compiles with MQTT OFF.** For the first
+Smart Instant test, use the explicit `--enable-mqtt` option and install the
+additional **PubSubClient 2.8** library in Arduino IDE Library Manager.
+This build uses the exact same firmware for every RE:MIND Alfred V1.2 frame:
+it does not contain any MQTT passwords, frame IDs or broker admin keys. After
+pairing, each device gets its own credentials and current broker address
+through RE:MIND's authenticated HTTPS backend.
+
+Windows PowerShell (from a fresh repository ZIP):
+```powershell
+py frame\tools\prepare_arduino_sketch.py --output "$HOME\Documents\Arduino\frame_v2.5.1" --enable-mqtt
+```
+
+Use the same Board/Flash/PSRAM/USB settings as below and verify/compile before
+USB upload. Do **not** enable Erase All Flash, use a different 16 MB partition
+table, or overwrite NVS—existing pairing and saved Wi-Fi must survive. The
+GitHub Actions `alfred-v1_2-mqtt-arduino-sketch-unflashed` artifact contains
+this prepared version, already CI compiled.
+
+**Activation:** MQTT is optional in firmware; if it can't connect it uses the
+existing 10-second HTTPS fallback. The backend fleet switch remains OFF until
+the deployment's automatic account/ACL support is verified. Read
+`frame/MQTT_FLEET.md` before enabling all devices.
+
 The destination must be new or empty, and its final folder name must remain `frame_v2.5.1`. This prevents a removed/renamed module from lingering as a stale source file. Open `frame_v2.5.1.ino` from that generated folder in Arduino IDE. You can still edit or replace individual `.h`/`.cpp` files there; rerun the preparation into a new empty folder whenever you want a guaranteed clean copy of the repository version.
 
 Select these Tools menu values:
