@@ -8,7 +8,7 @@ const route = readFileSync(new URL('../app/api/device/update-state/request/route
 test('MQTT publisher is disabled without explicit opt-in and makes no requests', async () => {
   let calls = 0
   const result = await publishPilotRevision('frm_54AE37455F34', 42, {
-    enabled: undefined, publishUrl: 'https://broker.example/api/v5/publish',
+    enabled: undefined, pilotDeviceId: 'frm_54AE37455F34', publishUrl: 'https://broker.example/api/v5/publish',
     apiKey: 'key', apiSecret: 'secret',
   }, async () => { calls++; throw new Error('unexpected') })
   assert.equal(result, 'disabled')
@@ -18,7 +18,7 @@ test('MQTT publisher is disabled without explicit opt-in and makes no requests',
 test('pilot notifications contain only an exact device topic and durable revision', async () => {
   let seen
   const config = {
-    enabled: 'true', publishUrl: 'https://broker.example/api/v5/publish',
+    enabled: 'true', pilotDeviceId: 'frm_54AE37455F34', publishUrl: 'https://broker.example/api/v5/publish',
     apiKey: 'test-key', apiSecret: 'test-secret'
   }
   const result = await publishPilotRevision('frm_54AE37455F34', 42, config, async (url, init) => {
@@ -43,7 +43,7 @@ test('pilot notifications contain only an exact device topic and durable revisio
 })
 
 test('offline MQTT never blocks a successful HTTP update request', async () => {
-  const config = { enabled: 'true', publishUrl: 'https://broker.example/publish', apiKey: 'key', apiSecret: 'secret' }
+  const config = { enabled: 'true', pilotDeviceId: 'frame-1', publishUrl: 'https://broker.example/publish', apiKey: 'key', apiSecret: 'secret' }
   assert.equal(await publishPilotRevision('frame-1', 1, config, async () => {
     throw new Error('broker offline')
   }), 'failed')
@@ -55,7 +55,7 @@ test('offline MQTT never blocks a successful HTTP update request', async () => {
 })
 
 test('publisher fails closed on unsafe endpoints, invalid topics, revisions or config', async () => {
-  const conf = { enabled: 'true', publishUrl: 'http://broker.example/api/v5/publish', apiKey: 'key', apiSecret: 'secret' }
+  const conf = { enabled: 'true', pilotDeviceId: 'frame-1', publishUrl: 'http://broker.example/api/v5/publish', apiKey: 'key', apiSecret: 'secret' }
   const forbid = async () => { throw Error('Should not send') }
   assert.equal(await publishPilotRevision('frame-1', 1, conf, forbid), 'failed')
   assert.equal(await publishPilotRevision('frame-1', 1, { ...conf, publishUrl: 'https://evil.example/redirect' }, forbid), 'failed')
