@@ -25,7 +25,10 @@ test('credential endpoint is physically authenticated, rejects missing token and
   assert.match(route, /if \('error' in auth\)/)
   assert.match(route, /pilotCredentialPayload\(deviceId\)/)
   assert.match(route, /private, no-store, max-age=0/)
-  assert.match(route, /return NextResponse\.json\(credentials, \{ headers: NO_STORE \}\)/)
+  assert.match(route, /return NextResponse\.json\(\{ \.\.\.pilot, \.\.\.connection \}, \{ headers: NO_STORE \}\)/)
+  assert.match(route, /authenticatePhysicalDevice\(req, deviceId\)/)
+  assert.match(route, /\.from\('device_members'\)/)
+  assert.match(route, /provisionFrameMqtt\(deviceId\)/)
 })
 
 test('publish path rejects other frames even when pilot server is enabled', async () => {
