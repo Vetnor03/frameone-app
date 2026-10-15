@@ -5,6 +5,8 @@
  * device-scoped topic and authenticated, best-effort publish path. No dedicated
  * topic ACL or extra broker configuration is needed for Smart Instant.
  */
+import { mqttEnabledForDevice } from './mqttRollout'
+
 export const MQTT_PILOT_TOPIC_PREFIX = 'remind/pilot/revisions/'
 
 export function pilotRevisionTopic(deviceId: string): string | null {
@@ -17,6 +19,7 @@ export type PilotPushResult = 'disabled' | 'published' | 'no_subscribers' | 'fai
 export type BrokerConfig = {
   enabled?: string
   pilotDeviceId?: string
+  fleetEnabled?: string
   publishUrl?: string
   apiKey?: string
   apiSecret?: string
@@ -26,6 +29,7 @@ function defaultBrokerConfig(): BrokerConfig {
   return {
     enabled: process.env.MQTT_PILOT_ENABLED,
     pilotDeviceId: process.env.MQTT_PILOT_DEVICE_ID,
+    fleetEnabled: process.env.MQTT_FLEET_ENABLED,
     publishUrl: process.env.MQTT_PILOT_EMQX_PUBLISH_URL,
     apiKey: process.env.MQTT_PILOT_EMQX_API_KEY,
     apiSecret: process.env.MQTT_PILOT_EMQX_API_SECRET,
@@ -38,7 +42,7 @@ async function publishPilotMessage(
   config: BrokerConfig,
   fetchImpl: typeof fetch,
 ): Promise<PilotPushResult> {
-  if (config.enabled !== 'true' || config.pilotDeviceId !== deviceId) return 'disabled'
+  if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled })) return 'disabled'
   const topic = pilotRevisionTopic(deviceId)
   if (!topic || !config.publishUrl || !config.apiKey || !config.apiSecret) return 'failed'
 
@@ -85,7 +89,7 @@ export async function publishPilotRevision(
   fetchImpl: typeof fetch = fetch,
 ): Promise<PilotPushResult> {
   if (!Number.isSafeInteger(revision) || revision <= 0) {
-    if (config.enabled !== 'true' || config.pilotDeviceId !== deviceId) return 'disabled'
+    if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled })) return 'disabled'
     return 'failed'
   }
   return publishPilotMessage(deviceId, String(revision), config, fetchImpl)
