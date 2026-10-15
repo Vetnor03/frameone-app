@@ -10,6 +10,7 @@
 #include "Layout.h"
 #include "UpdateChecker.h"
 #include "LiveUpdate.h"
+#include "MqttPushPilot.h"
 #include "DisplayCore.h"
 #include "Theme.h"
 #include "TimeSync.h"
@@ -1240,9 +1241,20 @@ static InteractiveModeResult runInteractiveMode(
     // scheduled module work runs at its intended boundary.
     if (scheduledSyncDueNow()) continue;
 
+    // The experimental push path keeps HTTPS as an authoritative verifier.
+    // While subscribed, avoid the 10-second HTTPS no-change probes; missed
+    // messages are recovered by a bounded periodic safety probe.
+    const bool pushConnected = MqttPushPilot::poll(DeviceIdentity::getToken());
+    const bool pushHint = MqttPushPilot::takeNotification();
+    const uint32_t lastProbeMs = LiveUpdate::lastNetworkProbeStartedAtMs();
+    const uint32_t nowProbeMs = millis();
+    const bool safetyProbeDue = lastProbeMs == 0 ||
+      (uint32_t)(nowProbeMs - lastProbeMs) >= 15UL * 60UL * 1000UL;
+    if (pushConnected && !pushHint && !safetyProbeDue) continue;
+
     LiveUpdateState next{};
     const uint32_t probeStartedAtMs = millis();
-    if (!LiveUpdate::probe(DeviceIdentity::getToken(), next)) {
+    if (!LiveUpdate::probe(DeviceIdentity::getToken(), next, pushHint)) {
       Serial.println("LiveUpdate: interactive probe failed; staying awake");
       delay(REALTIME_FAILURE_BACKOFF_MS);
       continue;
