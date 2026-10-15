@@ -15,6 +15,9 @@ namespace MqttPushPilot {
   // Whether the current broker subscription is live; used to select a
   // faster, local-only MQTT service cadence without changing HTTPS cadence.
   bool connected();
+  // Restore MAX_MODEM after 120s without app activity, or switch to MIN_MODEM
+  // while authenticated foreground hints are arriving. USB remains realtime.
+  void maintainActivityPowerPolicy(bool usbPresent);
   // Notifications only prompt an authenticated HTTPS revision verification.
   // They do not contain arbitrary display content or bypass revision ACKs.
   bool takeNotification();
