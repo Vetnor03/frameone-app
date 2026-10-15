@@ -4,29 +4,33 @@ import test from 'node:test'
 
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 
-test('frame color picker lives on the Frame home page beside Update', () => {
+test('Update button has its original centered dimensions with no adjacent theme button', () => {
   const frameActions = home.slice(
     home.indexOf("{activeTab === 'frame' && (\n              <div className=\"pt-5"),
     home.indexOf('{isPlainFrameAssistantSurface')
   )
   assert.match(frameActions, /onClick=\{layoutFlow\?submitLayoutDraft:handleExplicitUpdate\}/)
-  assert.match(frameActions, /onClick=\{\(\) => setThemePickerOpen\(true\)\}/)
-  assert.match(frameActions, /Velg lys eller mørk ramme/)
-  assert.match(frameActions, /frameTheme === 'dark' \? tx\(language\)\.dark : tx\(language\)\.light/)
+  assert.match(frameActions, /className=\{`w-\[260px\] h-\[56px\] rounded-2xl border/)
+  assert.doesNotMatch(frameActions, /setThemePickerOpen|themeTitle|frameTheme === 'dark'/)
+  assert.doesNotMatch(frameActions, /flex w-full max-w-\[360px\] items-center justify-center gap-3/)
 })
 
-test('Settings no longer offers frame appearance', () => {
+test('small frame theme switch is in the layout heading, not Settings or the Update area', () => {
+  const frame = home.slice(home.indexOf('<FrameTab'), home.indexOf("{activeTab === 'settings'"))
+  const frameTab = home.slice(home.indexOf('function FrameTab(props:'), home.indexOf('function LayoutDefault('))
   const settings = home.slice(home.indexOf('function SettingsTab({'))
-  assert.doesNotMatch(settings, /onOpenTheme/)
-  assert.doesNotMatch(settings, /t\.themeRow/)
+  assert.match(frame, /frameTheme=\{frameTheme\}/)
+  assert.match(frame, /canChangeFrameTheme=\{!!activeDeviceId\}/)
+  assert.match(frameTab, /role="switch"/)
+  assert.match(frameTab, /onClick=\{onFrameThemeToggle\}/)
+  assert.match(frameTab, /\{language === 'no' \? 'RAMME' : 'FRAME'\}/)
+  assert.doesNotMatch(settings, /onOpenTheme|t\.themeRow/)
+  assert.doesNotMatch(home, /FrameThemePickerModal|themePickerOpen/)
 })
 
-test('Frame home color picker only selects the physical frame theme', () => {
-  const modal = home.slice(home.indexOf('function FrameThemePickerModal({'), home.indexOf('function LanguagePickerModal({'))
-  const mounted = home.slice(home.indexOf('{themePickerOpen && ('), home.indexOf('{languagePickerOpen && ('))
-  assert.match(modal, /onPickFrame\('dark'\)/)
-  assert.match(modal, /onPickFrame\('light'\)/)
-  assert.doesNotMatch(modal, /onPickApp|appTheme/)
-  assert.match(mounted, /setFrameTheme\(t\)[\s\S]*markDirty\(\{ frameTheme: t \}\)/)
-  assert.doesNotMatch(mounted, /setAppTheme\(t\)|persistTheme\(t\)|applyDocumentTheme\(t\)/)
+test('frame toggle queues only physical frame theme changes for Update', () => {
+  const frame = home.slice(home.indexOf('<FrameTab'), home.indexOf("{activeTab === 'settings'"))
+  assert.match(frame, /const next = frameTheme === 'dark' \? 'light' : 'dark'/)
+  assert.match(frame, /setFrameTheme\(next\)[\s\S]*markDirty\(\{ frameTheme: next \}\)/)
+  assert.doesNotMatch(frame, /setAppTheme|persistTheme|user_app_preferences/)
 })
