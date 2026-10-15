@@ -182,6 +182,7 @@ void restoreNotification() {
 
 namespace MqttPushPilot {
 bool connected() { return false; }
+bool appActivityIsActive() { return false; }
 void maintainActivityPowerPolicy(bool) {}
 bool poll(const String&, bool) { return false; }
 bool takeNotification() { return false; }
