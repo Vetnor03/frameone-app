@@ -109,6 +109,11 @@ bool fetchCredentials(const String& deviceToken, String& username, String& passw
 namespace MqttPushPilot {
 bool connected() { return g_mqtt.connected(); }
 
+bool appActivityIsActive() {
+  return g_mqtt.connected() && g_appActiveDeadlineMs != 0 &&
+    (int32_t)(g_appActiveDeadlineMs - millis()) > 0;
+}
+
 void maintainActivityPowerPolicy(bool usbPresent) {
   const uint32_t now = millis();
   const bool active = g_mqtt.connected() && !usbPresent &&
