@@ -4,6 +4,7 @@
 
 #include "BackendTrust.h"
 #include "DeviceIdentity.h"
+#include "UpdateChecker.h"
 #include "WiFiManager.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -59,7 +60,7 @@ bool configure() {
   // Uses the same verified public root CA set as the HTTPS backend;
   // TLS validates the broker hostname and server certificate.
   BackendTrust::configure(g_tls);
-  g_mqtt.setServer(host.c_str(), MQTT_PILOT_BROKER_PORT);
+  g_mqtt.setServer(MQTT_PILOT_BROKER_HOST, MQTT_PILOT_BROKER_PORT);
   g_mqtt.setCallback(onMessage);
   g_mqtt.setKeepAlive(90);
   g_mqtt.setSocketTimeout(5);
@@ -93,7 +94,9 @@ bool poll(const String& deviceToken) {
   if (connected && !subscribed) g_mqtt.disconnect();
 
   // Resume battery connected light sleep immediately after TLS handshake.
-  WiFiManagerV2::applyOperationalPowerPolicy(false, true);
+  const bool usbPresent = UpdateChecker::hasLastUsbPresent()
+    ? UpdateChecker::getLastUsbPresent() : true;
+  WiFiManagerV2::applyOperationalPowerPolicy(usbPresent, true);
   return subscribed;
 }
 
