@@ -65,6 +65,9 @@ const SHOW_CUSTOM_LAYOUT_UI = false
 const SHOW_NOTIFICATIONS_UI = false
 // Start new frames in responsive/Instant mode; existing saved preferences take precedence.
 const DEFAULT_POWER_SAVER = false
+// Smart Instant is restricted to the physically provisioned MQTT pilot frame.
+// Normal customer sessions make no presence requests.
+const MQTT_SMART_INSTANT_PILOT_DEVICE_ID = 'frm_54AE37455F34'
 
 type AppLanguage = 'en' | 'no'
 type AppFontSize = 'normal' | 'large'
@@ -1283,6 +1286,86 @@ export default function HomePage() {
     setExplicitUpdateStatus(active?.phase ?? 'idle')
     return persisted
   }
+
+  // Experimental Smart Instant: send best-effort foreground activity only for
+  // the explicitly allowlisted prototype. No extra requests for customer
+  // frames, no background traffic, and no new Update/revision is requested.
+  // After ~2 minutes without interaction the frame returns to low-power mode
+  // independently, even if the browser is killed without an unload event.
+  useEffect(() => {
+    if (!userId || activeDeviceId !== MQTT_SMART_INSTANT_PILOT_DEVICE_ID || powerSaver) return
+
+    let cancelled = false
+    let inFlight = false
+    let disabledOnServer = false
+    let lastInteractionAt = Date.now()
+    let lastSentAt = 0
+    const deviceId = activeDeviceId
+
+    async function signalActivity() {
+      if (cancelled || disabledOnServer || inFlight ||
+          document.visibilityState !== 'visible' ||
+          Date.now() - lastInteractionAt > 90_000 ||
+          Date.now() - lastSentAt < 50_000) return
+
+      lastSentAt = Date.now()
+      inFlight = true
+      try {
+        const { data } = await supabase.auth.getSession()
+        if (cancelled || !data.session?.access_token) return
+        const response = await fetch('/api/device/mqtt-pilot/activity', {
+          method: 'POST',
+          cache: 'no-store',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${data.session.access_token}`,
+          },
+          body: JSON.stringify({ device_id: deviceId }),
+        })
+        if (cancelled) return
+        if (response.ok) {
+          const result = await response.json() as { enabled?: boolean }
+          if (result.enabled === false) disabledOnServer = true
+        }
+      } catch {
+        // The app remains fully usable when broker, network or hint API fails.
+      } finally {
+        inFlight = false
+      }
+    }
+
+    function noteInteraction() {
+      const now = Date.now()
+      const wasInactive = now - lastInteractionAt > 90_000
+      lastInteractionAt = now
+      if (wasInactive) lastSentAt = 0
+      if (wasInactive) void signalActivity()
+    }
+
+    function onVisibility() {
+      if (document.visibilityState === 'visible') {
+        lastInteractionAt = Date.now()
+        lastSentAt = 0
+        void signalActivity()
+      }
+    }
+
+    if (document.visibilityState === 'visible') void signalActivity()
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onVisibility)
+    document.addEventListener('pointerdown', noteInteraction, { passive: true })
+    document.addEventListener('keydown', noteInteraction)
+    const interval = window.setInterval(() => { void signalActivity() }, 45_000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onVisibility)
+      document.removeEventListener('pointerdown', noteInteraction)
+      document.removeEventListener('keydown', noteInteraction)
+    }
+  }, [activeDeviceId, userId, powerSaver])
 
   useEffect(() => {
     physicalFrameSnapshotRef.current = physicalFrameSnapshot
