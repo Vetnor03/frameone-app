@@ -15,7 +15,19 @@ function brokerConnectionDetails() {
   const port = Number(process.env.MQTT_BROKER_PORT || '8883')
   if (!/^[A-Za-z0-9.-]{1,253}$/.test(host) ||
       !Number.isInteger(port) || port < 1 || port > 65535) return null
-  return { broker_host: host, broker_port: port }
+  // Public root PEM may be provided by the trusted backend when the broker
+  // moves to a different CA. No firmware reflash is needed for a CA rotation.
+  // The ESP32 authenticates this payload over the existing trusted HTTPS
+  // connection and still performs real TLS hostname verification to MQTT.
+  const rootCa = process.env.MQTT_BROKER_ROOT_CA_PEM
+  if (rootCa && (rootCa.length > 4096 ||
+      !rootCa.includes('-----BEGIN CERTIFICATE-----') ||
+      !rootCa.includes('-----END CERTIFICATE-----'))) return null
+  return {
+    broker_host: host,
+    broker_port: port,
+    ...(rootCa ? { broker_ca_pem: rootCa } : {}),
+  }
 }
 
 // A physical frame's own HTTP device token is required (never browser JWT).
