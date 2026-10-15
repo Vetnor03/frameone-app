@@ -4074,26 +4074,24 @@ function FrameTab(props: {
 
         <div className="min-w-0 flex-1 text-center">
           {editorMode?<input aria-label="Layout name" maxLength={40} value={editorName} onChange={event=>onEditorNameChange(event.target.value)} placeholder="Layout name" className="w-full bg-transparent text-center text-2xl font-semibold uppercase tracking-widest outline-none placeholder:text-[color:var(--fg-35)]"/>:<div className="flex items-center justify-center gap-1"><span className="text-2xl font-semibold tracking-widest">{title}</span>{customLayout&&<button type="button" aria-label="Edit custom layout" title="Edit layout" onClick={()=>onEdit(customLayout)} className="inline-flex h-8 w-8 items-center justify-center text-[color:var(--fg-45)] transition-colors hover:text-[color:var(--fg-75)]"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.5"><path d="m4 20 4.1-1 10.8-10.8a2.1 2.1 0 0 0-3-3L5.1 16 4 20Z"/><path d="m14.5 6.5 3 3"/></svg></button>}</div>}
-          <div className="mt-1 flex items-center justify-center gap-3">
-            <span className="text-xs tracking-widest text-[color:var(--fg-60)]">{editorMode?'Draw to split · trace to erase':subtitle}</span>
-            {!editorMode && (
-              <button
-                type="button"
-                role="switch"
-                aria-checked={frameTheme === 'light'}
-                aria-label={language === 'no' ? 'Lyst rammetema' : 'Light frame theme'}
-                title={language === 'no' ? `Ramme: ${frameTheme === 'dark' ? 'Mørk' : 'Lys'}` : `Frame: ${frameTheme === 'dark' ? 'Dark' : 'Light'}`}
-                disabled={!canChangeFrameTheme}
-                onClick={onFrameThemeToggle}
-                className="inline-flex h-4 shrink-0 items-center gap-1.5 text-[9px] tracking-[0.08em] text-[color:var(--fg-45)] disabled:opacity-40"
-              >
-                <span>{language === 'no' ? 'RAMME' : 'FRAME'}</span>
-                <span aria-hidden="true" className="relative h-[14px] w-[26px] rounded-full border border-[color:var(--bd-30)] bg-[color:var(--bd-10)]">
-                  <span className={`absolute left-[2px] top-[2px] h-2 w-2 rounded-full bg-[color:var(--fg-60)] transition-transform ${frameTheme === 'light' ? 'translate-x-3' : ''}`} />
-                </span>
-              </button>
-            )}
-          </div>
+          <div className="mt-1 text-xs tracking-widest text-[color:var(--fg-60)]">{editorMode?'Draw to split · trace to erase':subtitle}</div>
+          {!editorMode && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={frameTheme === 'light'}
+              aria-label={language === 'no' ? 'Lys eller mørk ramme' : 'Light or dark frame'}
+              title={language === 'no' ? `Ramme: ${frameTheme === 'dark' ? 'Mørk' : 'Lys'}` : `Frame: ${frameTheme === 'dark' ? 'Dark' : 'Light'}`}
+              disabled={!canChangeFrameTheme}
+              onClick={onFrameThemeToggle}
+              className="mt-2 inline-flex min-h-6 items-center justify-center gap-2 rounded-full px-2 text-[10px] tracking-[0.08em] text-[color:var(--fg-45)] disabled:opacity-40"
+            >
+              <span>{frameTheme === 'light' ? 'LIGHT' : 'DARK'}</span>
+              <span aria-hidden="true" className="relative h-[14px] w-[26px] rounded-full border border-[color:var(--bd-30)] bg-[color:var(--bd-10)]">
+                <span className={`absolute left-[2px] top-[2px] h-2 w-2 rounded-full bg-[color:var(--fg-60)] transition-transform ${frameTheme === 'light' ? 'translate-x-3' : ''}`} />
+              </span>
+            </button>
+          )}
         </div>
 
         <button onClick={onNext} disabled={!!editorMode} aria-hidden={!!editorMode} className={`w-10 h-10 flex items-center justify-center text-[color:var(--fg-60)] text-3xl ${editorMode?'invisible':''}`}>
