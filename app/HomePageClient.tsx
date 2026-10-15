@@ -40,7 +40,7 @@ import {
   revisionHasBeenDisplayed,
 } from './lib/device/updateStateClient'
 import { clearManualUpdate, readManualUpdate, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
-import { frameSaveFeedbackPhase } from './lib/device/frameSaveFeedback.mjs'
+import { confirmFrameSaveForRevision, frameSaveFeedbackPhase } from './lib/device/frameSaveFeedback.mjs'
 import { saveFrameSettings } from './lib/device/saveFrameSettings.mjs'
 import { reconcilePersistedDesiredState } from './lib/device/desiredStateReconciliation.mjs'
 import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, geometryWithAssignments, supportsPhysicalCustomLayout, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
@@ -1784,10 +1784,7 @@ export default function HomePage() {
     // A displayed revision ACK is stronger evidence than comparing server
     // timestamps; never confirm a newer, unrelated save with an older ACK.
     if (!savedAt || activeDeviceIdRef.current !== deviceId) return
-    setFrameSaveFeedback((current) => {
-      if (!current || current.deviceId !== deviceId || current.savedAt !== savedAt || current.phase !== 'waiting') return current
-      return { ...current, phase: 'confirmed' }
-    })
+    setFrameSaveFeedback((current) => confirmFrameSaveForRevision(current, deviceId, savedAt))
     if (pendingFrameConfigUpdatedAtRef.current === savedAt) pendingFrameConfigUpdatedAtRef.current = null
   }
 
