@@ -10,7 +10,7 @@ def test_production_has_mqtt_disabled_by_default_and_http_fallback():
     cpp = read('src/network/MqttPushPilot.cpp')
     assert '#define FRAME_MQTT_PILOT_ENABLED 0' in header
     assert '#if FRAME_MQTT_PILOT_ENABLED' in cpp
-    assert 'bool poll(const String&) { return false; }' in cpp
+    assert 'bool poll(const String&, bool) { return false; }' in cpp
     assert 'const bool pushConnected = MqttPushPilot::poll(' in source
     assert 'if (pushConnected && !pushHint && !safetyProbeDue) continue;' in source
     assert '15UL * 60UL * 1000UL' in source
