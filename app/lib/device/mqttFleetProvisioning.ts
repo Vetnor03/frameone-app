@@ -95,6 +95,12 @@ export async function provisionFrameMqtt(
     }
   } else if (!user.ok) {
     return { ok: false, reason: [405, 501].includes(user.status) ? 'broker_unsupported' : 'broker_unavailable' }
+  } else {
+    const existing = await user.json().catch(() => null) as
+      | { user_id?: string; is_superuser?: boolean } | null
+    if (!existing || existing.user_id !== deviceId || existing.is_superuser === true) {
+      return { ok: false, reason: 'authorization' }
+    }
   }
 
   // Avoid accidentally enabling broad cross-device subscriptions.
