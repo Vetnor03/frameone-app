@@ -36,7 +36,7 @@ test('per-frame derived credentials are stable, unique, and do not expose master
 
 test('fleet provisions its own broker user and exact subscribe-only ACL after authenticated request', async () => {
   const received = []
-  const response = (status, obj = {}) => new Response(JSON.stringify(obj), { status })
+  const response = (status, obj = {}) => new Response(status === 204 ? null : JSON.stringify(obj), { status })
   const request = async (url, init) => {
     const u = new URL(url)
     received.push({ path: u.pathname, method: init.method, body: init.body ? JSON.parse(init.body) : null, headers: init.headers })
