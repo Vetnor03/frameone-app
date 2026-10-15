@@ -9,3 +9,15 @@ export function frameSaveFeedbackPhase(savedAt, lastRenderAt) {
   const renderMs = typeof lastRenderAt === 'string' ? Date.parse(lastRenderAt) : NaN
   return Number.isFinite(renderMs) && renderMs >= savedMs ? 'confirmed' : 'waiting'
 }
+
+/**
+ * An acknowledged exact display revision confirms the save even when the
+ * separate device heartbeat's last_render_at is delayed. Never let an old
+ * revision confirm a different, newer settings save.
+ */
+export function confirmFrameSaveForRevision(current, deviceId, savedAt) {
+  if (!current || !savedAt || current.deviceId !== deviceId || current.savedAt !== savedAt || current.phase !== 'waiting') {
+    return current
+  }
+  return { ...current, phase: 'confirmed' }
+}
