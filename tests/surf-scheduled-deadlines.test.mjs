@@ -32,7 +32,8 @@ test('manual redraw preserves existing Surf freshness without forcing Surf reque
   assert.match(preserve, /deadline\.at = previousSoft/)
   const explicit = firmware.slice(firmware.indexOf('static bool fetchAndRenderExplicit'), firmware.indexOf('static bool refreshContentSignatureBestEffort'))
   assert.ok(explicit.indexOf('preserveManualSurfFreshness(g_smartState, desired)') < explicit.indexOf('mergeScheduler(g_smartState, desired, true)'))
-  assert.match(explicit, /fetchRenderState\(DeviceIdentity::getToken\(\), "all", desired\)/)
+  assert.match(explicit, /fetchRenderState\(\s*DeviceIdentity::getToken\(\), "all", desired\)/)
+  assert.match(firmware, /fetchRenderState\(job->token, "all", job->desired\)/)
   assert.doesNotMatch(explicit, /invalidateScheduled/)
 })
 
