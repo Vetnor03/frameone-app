@@ -26,13 +26,18 @@ test('pilot remains live; fleet needs secret, explicit flag, compatible broker a
   const live = {
     ...pilot, fleetEnabled: 'true', fleetSecret: longSecret, fleetProvider: base.provider,
     fleetManagementUrl: base.managementUrl,
+    fleetBrokerHost: 'dedicated-broker.example', fleetBrokerPort: '8883',
+    fleetApiKey: base.apiKey, fleetApiSecret: base.apiSecret,
   }
   assert.equal(mqttEnabledForDevice('frm_next', { ...live, fleetEnabled: undefined }), false)
   assert.equal(mqttEnabledForDevice('frm_next', { ...live, fleetSecret: 'short' }), false)
   assert.equal(mqttEnabledForDevice('frm_next', { ...live, fleetProvider: undefined }), false)
   assert.equal(mqttEnabledForDevice('frm_next', { ...live, fleetManagementUrl: 'http://broker.example/api/v5' }), false)
   assert.equal(mqttEnabledForDevice('frm_next', live), true)
-  assert.equal(mqttEnabledForDevice('frm_next', { ...live, pilotEnabled: undefined }), false)
+  assert.equal(mqttEnabledForDevice('frm_next', { ...live, pilotEnabled: undefined }), true)
+  assert.equal(mqttEnabledForDevice('frm_next', { ...live, fleetBrokerHost: undefined }), false)
+  assert.equal(mqttEnabledForDevice('frm_next', { ...live, fleetApiSecret: undefined }), false)
+  assert.equal(mqttEnabledForDevice('frm_next', { ...live, fleetBrokerPort: '0' }), false)
   assert.equal(mqttEnabledForDevice('bad/#', live), false)
 })
 
@@ -178,6 +183,9 @@ test('client uses universal runtime broker trust, authenticated paired-device en
   assert.match(route, /authenticatePhysicalDevice\(req, deviceId\)/)
   assert.match(route, /from\('device_members'\)/)
   assert.match(route, /provisionFrameMqtt\(deviceId\)/)
+  assert.match(route, /brokerConnectionDetails\(true\)/)
+  assert.match(route, /MQTT_FLEET_BROKER_HOST/)
+  assert.match(route, /MQTT_FLEET_BROKER_ROOT_CA_PEM/)
   assert.match(route, /mqttEnabledForDevice\(deviceId\)/)
   assert.match(route, /private, no-store, max-age=0/)
   assert.match(fw, /doc\["broker_host"\]/)

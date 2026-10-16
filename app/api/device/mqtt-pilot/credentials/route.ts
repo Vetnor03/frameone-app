@@ -10,16 +10,22 @@ export const revalidate = 0
 
 const NO_STORE = { 'Cache-Control': 'private, no-store, max-age=0' }
 
-function brokerConnectionDetails() {
-  const host = process.env.MQTT_BROKER_HOST || 'i5138504.ala.us-east-1.emqxsl.com'
-  const port = Number(process.env.MQTT_BROKER_PORT || '8883')
+function brokerConnectionDetails(fleet: boolean) {
+  // Never return the Serverless pilot host when issuing Dedicated fleet credentials.
+  const host = fleet ? process.env.MQTT_FLEET_BROKER_HOST :
+    (process.env.MQTT_BROKER_HOST || 'i5138504.ala.us-east-1.emqxsl.com')
+  const rawPort = fleet ? process.env.MQTT_FLEET_BROKER_PORT :
+    (process.env.MQTT_BROKER_PORT || '8883')
+  if (!host || !rawPort) return null
+  const port = Number(rawPort)
   if (!/^[A-Za-z0-9.-]{1,253}$/.test(host) ||
       !Number.isInteger(port) || port < 1 || port > 65535) return null
   // Public root PEM may be provided by the trusted backend when the broker
   // moves to a different CA. No firmware reflash is needed for a CA rotation.
   // The ESP32 authenticates this payload over the existing trusted HTTPS
   // connection and still performs real TLS hostname verification to MQTT.
-  const rootCa = process.env.MQTT_BROKER_ROOT_CA_PEM
+  const rootCa = fleet ? process.env.MQTT_FLEET_BROKER_ROOT_CA_PEM :
+    process.env.MQTT_BROKER_ROOT_CA_PEM
   if (rootCa && (rootCa.length > 4096 ||
       !rootCa.includes('-----BEGIN CERTIFICATE-----') ||
       !rootCa.includes('-----END CERTIFICATE-----'))) return null
@@ -39,9 +45,6 @@ export async function GET(req: Request) {
   if (!mqttEnabledForDevice(deviceId)) {
     return NextResponse.json({ error: 'not_enabled' }, { status: 404, headers: NO_STORE })
   }
-  const connection = brokerConnectionDetails()
-  if (!connection) return NextResponse.json({ error: 'broker_not_configured' }, { status: 503, headers: NO_STORE })
-
   const auth = await authenticatePhysicalDevice(req, deviceId)
   if ('error' in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status, headers: NO_STORE })
@@ -51,7 +54,11 @@ export async function GET(req: Request) {
   // credentials path. This is deliberately checked before the new fleet-only
   // pairing gate so the pilot can't regress during backend migration.
   const pilot = pilotCredentialPayload(deviceId)
-  if (pilot) return NextResponse.json({ ...pilot, ...connection }, { headers: NO_STORE })
+  if (pilot) {
+    const connection = brokerConnectionDetails(false)
+    if (!connection) return NextResponse.json({ error: 'broker_not_configured' }, { status: 503, headers: NO_STORE })
+    return NextResponse.json({ ...pilot, ...connection }, { headers: NO_STORE })
+  }
 
   // Only paired frames get a broker account, preventing a factory/shelf-mode
   // device from provisioning itself before a user actually claims it.
@@ -69,6 +76,8 @@ export async function GET(req: Request) {
   if (process.env.MQTT_FLEET_ENABLED !== 'true') {
     return NextResponse.json({ error: 'not_enabled' }, { status: 404, headers: NO_STORE })
   }
+  const connection = brokerConnectionDetails(true)
+  if (!connection) return NextResponse.json({ error: 'broker_not_configured' }, { status: 503, headers: NO_STORE })
   const provision = await provisionFrameMqtt(deviceId)
   if (!provision.ok) {
     console.warn('[mqtt-credentials] fleet provisioning deferred', { device_id: deviceId, reason: provision.reason })

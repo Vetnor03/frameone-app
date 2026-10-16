@@ -108,3 +108,21 @@ check pricing and scale before pilot expansion.
 Do not force OTA or wipe NVS. A normal single-app firmware flash should
 preserve pairing, but confirm hardware flash layout / partition before
 applying any binary to a production unit.
+
+
+## Broker isolation — 16 October 2026
+
+Fleet must never reuse the original pilot's Serverless publish credentials,
+publish endpoint, or MQTT connection hostname. For Dedicated fleets set:
+`MQTT_FLEET_BROKER_HOST`, `MQTT_FLEET_BROKER_PORT` (MQTT/TLS endpoint),
+`MQTT_FLEET_BROKER_ROOT_CA_PEM` (if the trust root differs),
+and `MQTT_FLEET_MANAGEMENT_URL`, `MQTT_FLEET_API_KEY`,
+`MQTT_FLEET_API_SECRET` (same Dedicated deployment's management/publish API).
+The server derives fleet publishing URL from the management URL, avoiding
+an independent publish-URL configuration that could silently target Serverless.
+The pilot keeps its original host, credentials and publish API. Fleet enablement
+is independent from `MQTT_PILOT_ENABLED` and remains **false** until a live
+two-device broker test has verified account creation, cross-device subscription
+denial and revocation. Ensure the configured management endpoint and MQTT
+endpoint belong to the *same* Dedicated deployment in its console before enabling.
+No per-device source edit or extra flash is needed for hostname migration.
