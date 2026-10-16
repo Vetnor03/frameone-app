@@ -31,7 +31,7 @@ def test_mqtt_messages_only_hint_at_secure_authoritative_revision_check():
     assert 'doc["broker_host"]' in source
     assert 'NetClient::httpGetAuth(url, deviceToken, code, body)' in source
     assert 'g_mqtt.connect(' in source
-    assert 'username.c_str(), password.c_str()' in source
+    assert 'username.c_str(), ablyToken ? nullptr : password.c_str()' in source
     assert 'username = "";' in source and 'password = "";' in source
     assert '"i5138504.ala.us-east-1.emqxsl.com"' in source
     assert 'DigiCert Global Root G2' in read('src/network/MqttPilotTrust.h')
