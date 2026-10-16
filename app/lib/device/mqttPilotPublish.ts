@@ -8,12 +8,8 @@
 import { mqttEnabledForDevice } from './mqttRollout.ts'
 import { publishAblyFrameHint } from './mqttAbly.ts'
 
-export const MQTT_PILOT_TOPIC_PREFIX = 'remind/pilot/revisions/'
-
-export function pilotRevisionTopic(deviceId: string): string | null {
-  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(deviceId)) return null
-  return MQTT_PILOT_TOPIC_PREFIX + deviceId
-}
+import { pilotRevisionTopic } from './mqttPilotTopic.ts'
+export { pilotRevisionTopic, MQTT_PILOT_TOPIC_PREFIX } from './mqttPilotTopic.ts'
 
 export type PilotPushResult = 'disabled' | 'published' | 'no_subscribers' | 'failed'
 
