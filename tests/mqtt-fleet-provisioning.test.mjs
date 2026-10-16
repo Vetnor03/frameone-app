@@ -12,9 +12,9 @@ const base = {
   managementUrl: 'https://broker.example:8443/api/v5',
   apiKey: 'api-id', apiSecret: 'api-secret', derivationSecret: longSecret,
 }
-const goodUser = { user_id: 'rmd_frm_future', is_superuser: false }
+const goodUser = { user_id: 'frm_future', is_superuser: false }
 const goodAcl = {
-  username: 'rmd_frm_future',
+  username: 'frm_future',
   rules: [{ topic: 'remind/pilot/revisions/frm_future', action: 'subscribe', permission: 'allow' }],
 }
 const reply = (status, body = {}) => new Response(status === 204 ? null : JSON.stringify(body), { status })
@@ -36,8 +36,8 @@ test('pilot remains live; fleet needs secret, explicit flag, compatible broker a
   assert.equal(mqttEnabledForDevice('bad/#', live), false)
 })
 
-test('password is different per frame and broker username cannot conflict with the manually created pilot', () => {
-  assert.equal(deriveFrameMqttUsername('frm_first'), 'rmd_frm_first')
+test('password differs per frame and firmware-compatible broker username is the device ID', () => {
+  assert.equal(deriveFrameMqttUsername('frm_first'), 'frm_first')
   assert.equal(deriveFrameMqttUsername('bad/#'), null)
   const first = deriveFrameMqttPassword('frm_first', longSecret)
   assert.equal(first, deriveFrameMqttPassword('frm_first', longSecret))
@@ -85,18 +85,18 @@ test('new broker user is created, confirmed, upserted with correct password and 
   }
   const result = await provisionFrameMqtt('frm_future', base, request)
   assert.deepEqual(result, {
-    ok: true, username: 'rmd_frm_future',
+    ok: true, username: 'frm_future',
     password: deriveFrameMqttPassword('frm_future', longSecret),
   })
-  assert.equal(seen.length, 8)
+  assert.equal(seen.length, 7)
   assert.equal(seen[0].method, 'GET')
   assert.equal(seen[1].method, 'POST')
   assert.equal(seen[2].method, 'GET')
-  assert.equal(seen[3].method, 'PUT')
-  assert.equal(seen[4].method, 'GET')
-  assert.equal(seen[5].method, 'POST')
+  assert.equal(seen[3].method, 'GET')
+  assert.equal(seen[4].method, 'POST')
+  assert.equal(seen[5].method, 'GET')
   assert.equal(seen[6].method, 'GET')
-  assert.equal(seen[7].method, 'GET')
+  assert.equal(seen.some(x => x.method === 'PUT'), false)
 })
 
 test('existing managed account with exact ACL is idempotently revalidated', async () => {
@@ -107,6 +107,18 @@ test('existing managed account with exact ACL is idempotently revalidated', asyn
     throw Error('unexpected request')
   })
   assert.equal(result.ok, true)
+})
+
+test('a preexisting account without our exact topic ACL is never overwritten', async () => {
+  let credentialWrites = 0
+  const result = await provisionFrameMqtt('frm_future', base, async (url, init) => {
+    if (init.method === 'PUT' && url.includes('/authentication/')) credentialWrites++
+    if (url.includes('/authentication/')) return reply(200, goodUser)
+    if (url.includes('/authorization/')) return reply(404)
+    throw Error('unexpected request')
+  })
+  assert.deepEqual(result, { ok: false, reason: 'authorization' })
+  assert.equal(credentialWrites, 0)
 })
 
 test('Serverless provider and unsupported management routes fail closed without leaking credentials', async () => {
