@@ -965,7 +965,7 @@ static bool fetchAndRenderExplicit(
       desired = std::move(prefetch->desired);
     }
     Serial.printf(
-      "LiveUpdate: parallel fetch total_ms=%lu after_feedback_wait_ms=%lu\\n",
+      "LiveUpdate: parallel fetch total_ms=%lu after_feedback_wait_ms=%lu\n",
       (unsigned long)prefetch->totalMs,
       (unsigned long)g_manualTiming.fetchWaitMs);
     delete prefetch;
@@ -981,11 +981,11 @@ static bool fetchAndRenderExplicit(
     }
   }
   Serial.printf(
-    "LiveUpdate timing config_fetch_ms=%lu render_state_fetch_ms=%lu\\n",
+    "LiveUpdate timing config_fetch_ms=%lu render_state_fetch_ms=%lu\n",
     (unsigned long)g_manualTiming.configFetchMs,
     (unsigned long)g_manualTiming.renderStateFetchMs);
   if (result != FrameConfigApi::FETCH_OK) {
-    Serial.printf("LiveUpdate: revision %" PRIu64 " frame fetch failed\\n", revision);
+    Serial.printf("LiveUpdate: revision %" PRIu64 " frame fetch failed\n", revision);
     return false;
   }
   if (!renderStateOk) return false;
