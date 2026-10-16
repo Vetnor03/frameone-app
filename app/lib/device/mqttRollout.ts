@@ -18,7 +18,22 @@ export type MqttRolloutEnv = {
   fleetApiSecret?: string
   ablyApiKey?: string
   ablyRootCaPem?: string
+  ablyCanaryEnabled?: string
+  ablyCanaryDeviceId?: string
 }
+export function ablyCanaryForDevice(deviceId: string, env: MqttRolloutEnv): boolean {
+  return env.ablyCanaryEnabled === 'true' &&
+    env.ablyCanaryDeviceId === deviceId &&
+    /^[A-Za-z0-9_-]{1,128}$/.test(deviceId) &&
+    isAblyApiKey(env.ablyApiKey) &&
+    Boolean(env.ablyRootCaPem && env.ablyRootCaPem.length <= 4096 &&
+      env.ablyRootCaPem.includes('-----BEGIN CERTIFICATE-----') &&
+      env.ablyRootCaPem.includes('-----END CERTIFICATE-----'))
+}
+
+// A single, explicit real-device Ably canary is independent of the global
+// fleet switch and preserves the legacy EMQX pilot. This can be turned off
+// server-side without reflashing the frame.
 export function mqttEnabledForDevice(deviceId: string, env: MqttRolloutEnv = {
   pilotEnabled: process.env.MQTT_PILOT_ENABLED,
   pilotDeviceId: process.env.MQTT_PILOT_DEVICE_ID,
@@ -32,9 +47,12 @@ export function mqttEnabledForDevice(deviceId: string, env: MqttRolloutEnv = {
   fleetApiSecret: process.env.MQTT_FLEET_API_SECRET,
   ablyApiKey: process.env.MQTT_ABLY_API_KEY,
   ablyRootCaPem: process.env.MQTT_ABLY_ROOT_CA_PEM,
+  ablyCanaryEnabled: process.env.MQTT_ABLY_CANARY_ENABLED,
+  ablyCanaryDeviceId: process.env.MQTT_ABLY_CANARY_DEVICE_ID,
 }): boolean {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(deviceId)) return false
   if (env.pilotEnabled === 'true' && deviceId === env.pilotDeviceId) return true
+  if (ablyCanaryForDevice(deviceId, env)) return true
 
   // Fleet enablement is independent of the original single-frame experiment.
   // All fleet transport and broker-management inputs must be present before
