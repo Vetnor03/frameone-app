@@ -27,6 +27,9 @@ static WiFiClientSecure g_tls;
 static PubSubClient g_mqtt(g_tls);
 static bool g_configured = false;
 static bool g_notificationPending = false;
+// A QoS0 message may be published while the broker session is offline.
+// Reconcile the durable HTTPS revision once after every new subscription.
+static bool g_subscriptionResyncPending = false;
 static bool g_appActivePowerApplied = false;
 static uint32_t g_appActiveDeadlineMs = 0;
 static const uint32_t ACTIVITY_TTL_MS = 120000UL;
@@ -242,6 +245,10 @@ bool poll(const String& deviceToken, bool usbPresent) {
     );
     subscribed = connected && g_mqtt.subscribe(g_topic.c_str(), ablyToken ? 0 : 1);
     if (connected && !subscribed) g_mqtt.disconnect();
+    if (subscribed) {
+      g_subscriptionResyncPending = true;
+      Serial.println("MQTT subscribed: schedule authenticated HTTPS revision reconciliation");
+    }
     g_ablyTokenActive = subscribed && ablyToken;
     g_tokenRenewAfterMs = g_ablyTokenActive ? millis() + ABLY_RENEW_AFTER_MS : 0;
   }
@@ -252,6 +259,16 @@ bool poll(const String& deviceToken, bool usbPresent) {
   // Always restore the correct USB/battery policy, including on failure.
   WiFiManagerV2::applyOperationalPowerPolicy(usbPresent, true);
   return subscribed;
+}
+
+bool takeSubscriptionResync() {
+  const bool pending = g_subscriptionResyncPending;
+  g_subscriptionResyncPending = false;
+  return pending;
+}
+
+void restoreSubscriptionResync() {
+  g_subscriptionResyncPending = true;
 }
 
 bool takeNotification() {
@@ -274,6 +291,8 @@ void maintainActivityPowerPolicy(bool) {}
 bool poll(const String&, bool) { return false; }
 bool takeNotification() { return false; }
 void restoreNotification() {}
+bool takeSubscriptionResync() { return false; }
+void restoreSubscriptionResync() {}
 }
 
 #endif
