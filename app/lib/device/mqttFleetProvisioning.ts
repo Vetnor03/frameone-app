@@ -158,6 +158,18 @@ export async function provisionFrameMqtt(
     return { ok: false, reason: 'authorization' }
   }
 
+  // Username-specific rules take priority, but EMQX may otherwise allow
+  // unmatched subscriptions by default. Require a broker-wide deny-all
+  // fallback before giving any new frame its MQTT password.
+  const globalAcl = await brokerRequest('authorization/sources/built_in_database/rules/all', 'GET')
+  if (!globalAcl?.ok) return { ok: false, reason: 'authorization' }
+  const globalData = await globalAcl.json().catch(() => null) as
+    | { rules?: { topic?: unknown; action?: unknown; permission?: unknown }[] } | null
+  if (!Array.isArray(globalData?.rules) || !globalData.rules.some(rule =>
+    rule.topic === '#' && rule.action === 'all' && rule.permission === 'deny')) {
+    return { ok: false, reason: 'authorization' }
+  }
+
   // Always check broker's actual permissions before ever returning password.
   const checked = await brokerRequest(aclPath, 'GET')
   if (!checked?.ok) return { ok: false, reason: 'authorization' }
