@@ -44,7 +44,7 @@
 #include <utility>
 
 // Change this string whenever you want to force one redraw after flashing/OTA
-static const char* FW_VER = "v2.7.4";
+static const char* FW_VER = "v2.7.2";
 
 // Public app page shown during pairing
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
@@ -56,6 +56,10 @@ static const char* APP_LOGIN_URL = "https://re-mind.no/login";
 // discover app commands with 10 s deep-sleep wake-ups.
 static const uint32_t MANUAL_UPDATE_POLL_MS = 10000;
 static const uint32_t MANUAL_RENDER_RETRY_START_MS = 1000;
+// While MQTT is subscribed, a missed QoS0 publish previously waited up to
+// 15 minutes. Recover with a bounded 2-minute HTTPS safety probe; the normal
+// disconnected path retains its 10-second cadence.
+static const uint32_t MQTT_MISSED_HINT_RECOVERY_MS = 120000UL;
 static const uint32_t REALTIME_FAILURE_BACKOFF_MS = 5000;
 
 // Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
@@ -91,6 +95,7 @@ static bool g_captureManualRenderTimings = false;
 static uint32_t g_manualTimingAttempts = 0;
 // Set only after an MQTT hint causes a successful authenticated revision probe.
 static uint64_t g_mqttHintVerifiedRevision = 0;
+static uint64_t g_mqttResyncVerifiedRevision = 0;
 
 
 enum SetupStep {
@@ -912,6 +917,7 @@ static bool fetchAndRenderExplicit(
     ? explicitTimingStartedAtMs - explicitRevisionObservedAtMs : 0;
   g_manualTiming.mqttSubscribed = MqttPushPilot::connected() ? 1 : 0;
   g_manualTiming.mqttHintReceived = g_mqttHintVerifiedRevision == revision ? 1 : 0;
+  g_manualTiming.mqttSubscriptionResync = g_mqttResyncVerifiedRevision == revision ? 1 : 0;
   Serial.printf(
     "LiveUpdate timing probe_to_pending_ms=%lu\n",
     (unsigned long)g_manualTiming.probeToPendingMs
@@ -1356,16 +1362,19 @@ static InteractiveModeResult runInteractiveMode(
     const bool pushConnected = MqttPushPilot::poll(DeviceIdentity::getToken(), pwr.usbPresent);
     MqttPushPilot::maintainActivityPowerPolicy(pwr.usbPresent);
     const bool pushHint = MqttPushPilot::takeNotification();
+    const bool subscriptionResync = MqttPushPilot::takeSubscriptionResync();
     const uint32_t lastProbeMs = LiveUpdate::lastNetworkProbeStartedAtMs();
     const uint32_t nowProbeMs = millis();
     const bool safetyProbeDue = lastProbeMs == 0 ||
-      (uint32_t)(nowProbeMs - lastProbeMs) >= 15UL * 60UL * 1000UL;
-    if (pushConnected && !pushHint && !safetyProbeDue) continue;
+      (uint32_t)(nowProbeMs - lastProbeMs) >= MQTT_MISSED_HINT_RECOVERY_MS;
+    if (pushConnected && !pushHint && !subscriptionResync && !safetyProbeDue) continue;
 
     LiveUpdateState next{};
     const uint32_t probeStartedAtMs = millis();
-    if (!LiveUpdate::probe(DeviceIdentity::getToken(), next, pushHint)) {
+    if (!LiveUpdate::probe(DeviceIdentity::getToken(), next,
+                          pushHint || subscriptionResync)) {
       if (pushHint) MqttPushPilot::restoreNotification();
+      if (subscriptionResync) MqttPushPilot::restoreSubscriptionResync();
       Serial.println("LiveUpdate: interactive probe failed; staying awake");
       delay(REALTIME_FAILURE_BACKOFF_MS);
       continue;
@@ -1373,6 +1382,10 @@ static InteractiveModeResult runInteractiveMode(
 
     if (pushHint && next.requestedRevision > next.displayedRevision) {
       g_mqttHintVerifiedRevision = next.requestedRevision;
+    }
+    if (subscriptionResync && next.requestedRevision > next.displayedRevision) {
+      g_mqttResyncVerifiedRevision = next.requestedRevision;
+      Serial.println("MQTT reconnect: recovered pending display revision by HTTPS");
     }
     if (next.requestedRevision != lastRequested ||
         next.displayedRevision != lastDisplayed) {
