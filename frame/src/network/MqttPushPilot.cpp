@@ -225,7 +225,7 @@ bool poll(const String& deviceToken, bool usbPresent) {
     const bool bufferReady = g_mqtt.setBufferSize(ablyToken ? 2048 : 512);
     const String clientId = String("remind-") + DeviceIdentity::getDeviceId();
     const bool connected = bufferReady && g_mqtt.connect(
-      clientId.c_str(), username.c_str(), password.c_str()
+      clientId.c_str(), username.c_str(), ablyToken ? nullptr : password.c_str()
     );
     subscribed = connected && g_mqtt.subscribe(g_topic.c_str(), ablyToken ? 0 : 1);
     if (connected && !subscribed) g_mqtt.disconnect();
