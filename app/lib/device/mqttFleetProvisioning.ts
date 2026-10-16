@@ -22,10 +22,10 @@ export type ProvisionResult =
   | { ok: true; username: string; password: string }
   | { ok: false; reason: 'configuration' | 'broker_unavailable' | 'broker_unsupported' | 'authorization' }
 
-const PREFIX = 'rmd_' // Reserved for automatically provisioned RE:MIND MQTT users.
-
+// Firmware already verifies that MQTT username equals its own device ID.
+// Keep this invariant so no additional flash is needed for fleet rollout.
 export function deriveFrameMqttUsername(deviceId: string): string | null {
-  return pilotRevisionTopic(deviceId) ? PREFIX + deviceId : null
+  return pilotRevisionTopic(deviceId) ? deviceId : null
 }
 
 export function deriveFrameMqttPassword(deviceId: string, secret: string): string | null {
@@ -110,6 +110,7 @@ export async function provisionFrameMqtt(
 
   // Read before writing; do not trust an unexpected existing account.
   const user = await brokerRequest(userPath, 'GET')
+  let preexisting = user?.ok === true
   if (!user) return { ok: false, reason: 'broker_unavailable' }
   if (user.status === 404) {
     const created = await brokerRequest(userBase, 'POST', {
@@ -120,6 +121,7 @@ export async function provisionFrameMqtt(
     if (created.status !== 201 && created.status !== 409) {
       return { ok: false, reason: 'broker_unavailable' }
     }
+    if (created.status === 409) preexisting = true
   } else if (!user.ok) {
     return { ok: false, reason: [405, 501].includes(user.status) ? 'broker_unsupported' : 'broker_unavailable' }
   }
@@ -133,14 +135,9 @@ export async function provisionFrameMqtt(
     return { ok: false, reason: 'authorization' }
   }
 
-  // PUT the deterministic password to recover a drifted account: idempotent
-  // and consistent across stateless Vercel instances. Username is reserved,
-  // so this cannot overwrite the original manually provisioned prototype.
-  const refreshed = await brokerRequest(userPath, 'PUT', {
-    password, is_superuser: false,
-  })
-  if (!refreshed?.ok) return { ok: false, reason: 'broker_unavailable' }
-
+  // Do not overwrite a manually provisioned account unless its existing ACL
+  // already matches this exact device. This prevents takeover of unrelated
+  // MQTT accounts, and also protects the original pilot if misrouted.
   const acl = await brokerRequest(aclPath, 'GET')
   if (!acl) return { ok: false, reason: 'broker_unavailable' }
   const desired = {
@@ -148,13 +145,19 @@ export async function provisionFrameMqtt(
     rules: [{ topic: pilotRevisionTopic(deviceId), action: 'subscribe', permission: 'allow' }],
   }
   if (acl.status === 404) {
+    if (preexisting) return { ok: false, reason: 'authorization' }
     const created = await brokerRequest(aclBase, 'POST', [desired])
     if (!created) return { ok: false, reason: 'broker_unavailable' }
     // EMQX's documented success for POST rules is 204, not 201.
     if (created.status !== 204 && created.status !== 409) {
       return { ok: false, reason: [404, 405, 501].includes(created.status) ? 'broker_unsupported' : 'authorization' }
     }
-  } else if (!acl.ok) {
+  } else if (acl.ok) {
+    const previousAcl = await acl.json().catch(() => null)
+    if (!exactDeviceRule(previousAcl, username, deviceId)) {
+      return { ok: false, reason: 'authorization' }
+    }
+  } else {
     return { ok: false, reason: 'authorization' }
   }
 
@@ -176,6 +179,16 @@ export async function provisionFrameMqtt(
   if (!checked?.ok) return { ok: false, reason: 'authorization' }
   const rules = await checked.json().catch(() => null)
   if (!exactDeviceRule(rules, username, deviceId)) return { ok: false, reason: 'authorization' }
+
+  // Password is already installed when the account is first created. For an
+  // existing *verified* device account, restore deterministic credentials
+  // only after its exact ACL and global deny-all have been checked.
+  if (preexisting) {
+    const refreshed = await brokerRequest(userPath, 'PUT', {
+      password, is_superuser: false,
+    })
+    if (!refreshed?.ok) return { ok: false, reason: 'broker_unavailable' }
+  }
 
   return { ok: true, username, password }
 }
