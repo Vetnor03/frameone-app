@@ -4,7 +4,7 @@
 
 The firmware uses the Arduino framework. PlatformIO provides the reproducible repository/CI build, and Arduino IDE is also supported for the Alfred V1.2 USB workflow.
 
-The classic `frame_esp32` PlatformIO environment remains the default and preserves the existing 4 MB ESP32 profile. It is retained for existing frames; its board-specific assumptions have not been reclassified as Alfred facts.
+The standard PlatformIO environment is `alfred_v1_2` for the current ESP32-S3 frame. The legacy `frame_esp32` 4 MB hardware profile remains available explicitly for older devices; do not flash its binary onto an Alfred PCB.
 
 `alfred_v1_2` is the dedicated hardware profile for the physically verified Alfred V1.2 PCB:
 
@@ -26,6 +26,7 @@ Requirements:
 - Adafruit BusIO `1.17.4`
 - Adafruit GFX Library `1.12.6`
 - GxEPD2 `1.6.4`
+- PubSubClient `2.8` (MQTT is included in the standard Alfred firmware)
 
 After downloading and extracting the GitHub ZIP, open a terminal in the repository root. On Windows, prepare a new sketch folder with:
 
@@ -39,31 +40,27 @@ On macOS or Linux:
 python3 frame/tools/prepare_arduino_sketch.py --output "$HOME/Arduino/frame_v2.5.1"
 ```
 
-### Smart Instant MQTT universal test build (Arduino IDE)
+### Smart Instant MQTT (included in standard firmware)
 
-**The ordinary Arduino export compiles with MQTT OFF.** For the first
-Smart Instant test, use the explicit `--enable-mqtt` option and install the
-additional **PubSubClient 2.8** library in Arduino IDE Library Manager.
-This build uses the exact same firmware for every RE:MIND Alfred V1.2 frame:
-it does not contain any MQTT passwords, frame IDs or broker admin keys. After
-pairing, each device gets its own credentials and current broker address
-through RE:MIND's authenticated HTTPS backend.
+There is **one** normal Alfred firmware in `main`. It contains authenticated
+MQTT push support by default: no MQTT build variant, source edit or
+`--enable-mqtt` flag is required. Install **PubSubClient 2.8** through
+Arduino IDE Library Manager before compiling. This universal build embeds
+no broker secrets or frame IDs; after pairing, each frame obtains its own
+credentials and broker location over authenticated RE:MIND HTTPS.
 
-Windows PowerShell (from a fresh repository ZIP):
-```powershell
-py frame\tools\prepare_arduino_sketch.py --output "$HOME\Documents\Arduino\frame_v2.5.1" --enable-mqtt
-```
+MQTT availability and provider rollout remain entirely server-controlled.
+The existing single-frame EMQX pilot stays on its own backend gate; the Ably
+fleet remains disabled until isolated live broker tests. If a frame is not
+eligible, broker authentication fails, or MQTT disconnects, the proven HTTPS
+revision-check fallback continues. Compile-in does not prove battery life or
+physical MQTT behavior.
 
-Use the same Board/Flash/PSRAM/USB settings as below and verify/compile before
+Use the **normal** Arduino export command shown above. Verify/compile before
 USB upload. Do **not** enable Erase All Flash, use a different 16 MB partition
 table, or overwrite NVS—existing pairing and saved Wi-Fi must survive. The
-GitHub Actions `alfred-v1_2-mqtt-arduino-sketch-unflashed` artifact contains
-this prepared version, already CI compiled.
-
-**Activation:** MQTT is optional in firmware; if it can't connect it uses the
-existing 10-second HTTPS fallback. The backend fleet switch remains OFF until
-the deployment's automatic account/ACL support is verified. Read
-`frame/MQTT_FLEET.md` before enabling all devices.
+CI artifact is named `alfred-v1_2-standard-arduino-sketch-unflashed`, never
+a separate MQTT build.
 
 The destination must be new or empty, and its final folder name must remain `frame_v2.5.1`. This prevents a removed/renamed module from lingering as a stale source file. Open `frame_v2.5.1.ino` from that generated folder in Arduino IDE. You can still edit or replace individual `.h`/`.cpp` files there; rerun the preparation into a new empty folder whenever you want a guaranteed clean copy of the repository version.
 
