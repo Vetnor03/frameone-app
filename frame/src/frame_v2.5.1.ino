@@ -40,9 +40,11 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <inttypes.h>
+#include <new>
+#include <utility>
 
 // Change this string whenever you want to force one redraw after flashing/OTA
-static const char* FW_VER = "v2.7.3";
+static const char* FW_VER = "v2.7.4";
 
 // Public app page shown during pairing
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
@@ -87,6 +89,8 @@ static bool g_lastEvaluationDrew = false;
 static ManualUpdateTimings g_manualTiming{};
 static bool g_captureManualRenderTimings = false;
 static uint32_t g_manualTimingAttempts = 0;
+// Set only after an MQTT hint causes a successful authenticated revision probe.
+static uint64_t g_mqttHintVerifiedRevision = 0;
 
 
 enum SetupStep {
@@ -862,6 +866,38 @@ static uint64_t explicitTimingRevision = 0;
 static uint32_t explicitTimingStartedAtMs = 0;
 static uint32_t explicitRevisionObservedAtMs = 0;
 
+// The worker owns NetClient's shared HTTPS session while the loop task
+// exclusively owns the e-paper/SPI and currently displayed g_cfg. All results
+// are staged until the task notification joins both operations.
+struct ManualUpdatePrefetch {
+  FrameConfig stagedConfig{};
+  SmartRenderState desired{};
+  String token;
+  TaskHandle_t waiter = nullptr;
+  FrameConfigApi::FetchResult configResult = FrameConfigApi::FETCH_ERROR;
+  bool renderStateOk = false;
+  uint32_t configMs = 0;
+  uint32_t renderStateMs = 0;
+  uint32_t totalMs = 0;
+};
+
+static void manualUpdatePrefetchTask(void* arg) {
+  ManualUpdatePrefetch* job = static_cast<ManualUpdatePrefetch*>(arg);
+  const uint32_t startedAt = millis();
+  const uint32_t configStartedAt = millis();
+  job->configResult = FrameConfigApi::fetchWithStatus(job->stagedConfig, job->token);
+  job->configMs = millis() - configStartedAt;
+  if (job->configResult == FrameConfigApi::FETCH_OK) {
+    const uint32_t renderStartedAt = millis();
+    job->renderStateOk = SmartRefresh::fetchRenderState(job->token, "all", job->desired);
+    job->renderStateMs = millis() - renderStartedAt;
+  }
+  job->totalMs = millis() - startedAt;
+  // No job/network data is touched after this join notification.
+  xTaskNotifyGive(job->waiter);
+  vTaskDelete(nullptr);
+}
+
 static bool fetchAndRenderExplicit(
   const BatteryState& batt,
   const PowerSenseDebug& pwr,
@@ -874,13 +910,34 @@ static bool fetchAndRenderExplicit(
   g_manualTiming.attempts = ++g_manualTimingAttempts;
   g_manualTiming.probeToPendingMs = explicitRevisionObservedAtMs
     ? explicitTimingStartedAtMs - explicitRevisionObservedAtMs : 0;
+  g_manualTiming.mqttSubscribed = MqttPushPilot::connected() ? 1 : 0;
+  g_manualTiming.mqttHintReceived = g_mqttHintVerifiedRevision == revision ? 1 : 0;
   Serial.printf(
     "LiveUpdate timing probe_to_pending_ms=%lu\n",
     (unsigned long)g_manualTiming.probeToPendingMs
   );
-  // Manual Update is an intentional user action. Give immediate physical
-  // acknowledgement before the slower config/content fetches begin. Power Save
-  // never reaches this path for routine sleeping updates.
+  // Start authenticated HTTPS fetch before drawing the physical Updating
+  // feedback. A short-lived worker isolates g_cfg and the shared HTTP session.
+  // If task/heap allocation fails, retain the existing sequential fallback.
+  ManualUpdatePrefetch* prefetch = new (std::nothrow) ManualUpdatePrefetch();
+  bool parallelFetch = false;
+  if (prefetch) {
+    prefetch->token = DeviceIdentity::getToken();
+    prefetch->waiter = xTaskGetCurrentTaskHandle();
+    TaskHandle_t workerTask = nullptr;
+    parallelFetch = xTaskCreatePinnedToCore(
+      manualUpdatePrefetchTask, "manual-fetch", 16384,
+      prefetch, 1, &workerTask, 0) == pdPASS;
+    if (!parallelFetch) {
+      delete prefetch;
+      prefetch = nullptr;
+      Serial.println("LiveUpdate: worker unavailable; sequential fallback");
+    }
+  } else {
+    Serial.println("LiveUpdate: no worker memory; sequential fallback");
+  }
+
+  // The user must still see the Updating screen as immediate physical feedback.
   if (interactiveModeEnabled(pwr.usbPresent)) {
     ensureDisplay();
     Theme::set(g_cfg.theme);
@@ -888,32 +945,51 @@ static bool fetchAndRenderExplicit(
     shutdownDisplay();
     Serial.println("LiveUpdate: Updating screen displayed");
   }
-
   g_manualTiming.updatingScreenMs = millis() - explicitTimingStartedAtMs;
-  const uint32_t configFetchStartedAtMs = millis();
-  FrameConfigApi::FetchResult result =
-    FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
-  g_manualTiming.configFetchMs = millis() - configFetchStartedAtMs;
+  g_manualTiming.parallelFetch = parallelFetch ? 1 : 0;
+
+  SmartRenderState desired;
+  FrameConfigApi::FetchResult result = FrameConfigApi::FETCH_ERROR;
+  bool renderStateOk = false;
+  if (parallelFetch) {
+    const uint32_t waitStartedAtMs = millis();
+    // Do not abandon a running worker; it owns NetClient until the join.
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    g_manualTiming.fetchWaitMs = millis() - waitStartedAtMs;
+    g_manualTiming.configFetchMs = prefetch->configMs;
+    g_manualTiming.renderStateFetchMs = prefetch->renderStateMs;
+    result = prefetch->configResult;
+    renderStateOk = prefetch->renderStateOk;
+    if (result == FrameConfigApi::FETCH_OK && renderStateOk) {
+      g_cfg = prefetch->stagedConfig;
+      desired = std::move(prefetch->desired);
+    }
+    Serial.printf(
+      "LiveUpdate: parallel fetch total_ms=%lu after_feedback_wait_ms=%lu\\n",
+      (unsigned long)prefetch->totalMs,
+      (unsigned long)g_manualTiming.fetchWaitMs);
+    delete prefetch;
+  } else {
+    const uint32_t startedAt = millis();
+    result = FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
+    g_manualTiming.configFetchMs = millis() - startedAt;
+    if (result == FrameConfigApi::FETCH_OK) {
+      const uint32_t renderStartedAt = millis();
+      renderStateOk = SmartRefresh::fetchRenderState(
+        DeviceIdentity::getToken(), "all", desired);
+      g_manualTiming.renderStateFetchMs = millis() - renderStartedAt;
+    }
+  }
   Serial.printf(
-    "LiveUpdate timing config_fetch_ms=%lu\n",
-    (unsigned long)g_manualTiming.configFetchMs
-  );
+    "LiveUpdate timing config_fetch_ms=%lu render_state_fetch_ms=%lu\\n",
+    (unsigned long)g_manualTiming.configFetchMs,
+    (unsigned long)g_manualTiming.renderStateFetchMs);
   if (result != FrameConfigApi::FETCH_OK) {
-    Serial.printf("LiveUpdate: revision %" PRIu64 " frame fetch failed\n", revision);
+    Serial.printf("LiveUpdate: revision %" PRIu64 " frame fetch failed\\n", revision);
     return false;
   }
-
-  setupPendingScreenDisplayed = false;
-  SmartRenderState desired;
-  const uint32_t renderStateStartedAtMs = millis();
-  const bool renderStateOk =
-    SmartRefresh::fetchRenderState(DeviceIdentity::getToken(), "all", desired);
-  g_manualTiming.renderStateFetchMs = millis() - renderStateStartedAtMs;
-  Serial.printf(
-    "LiveUpdate timing render_state_fetch_ms=%lu\n",
-    (unsigned long)g_manualTiming.renderStateFetchMs
-  );
   if (!renderStateOk) return false;
+  setupPendingScreenDisplayed = false;
   SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);
 
   // The app's Update button is an explicit user request for the freshest
@@ -1295,6 +1371,9 @@ static InteractiveModeResult runInteractiveMode(
       continue;
     }
 
+    if (pushHint && next.requestedRevision > next.displayedRevision) {
+      g_mqttHintVerifiedRevision = next.requestedRevision;
+    }
     if (next.requestedRevision != lastRequested ||
         next.displayedRevision != lastDisplayed) {
       if (next.requestedRevision > next.displayedRevision) {
