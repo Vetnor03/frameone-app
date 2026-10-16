@@ -93,6 +93,14 @@ export async function GET(req: Request) {
         !publicCa.includes('-----END CERTIFICATE-----')) {
       return NextResponse.json({ error: 'broker_not_configured' }, { status: 503, headers: NO_STORE })
     }
+    if (ablyCanary) {
+      // One redacted record per successful authorized token issuance; this
+      // confirms onboarding without logging the JWT, API key, or device token.
+      console.info('[mqtt-credentials] ably-canary-issued', {
+        device_id: deviceId,
+        ttl_sec: credentials.token_ttl_sec,
+      })
+    }
     return NextResponse.json({ ...credentials, broker_host: ABLY_MQTT_HOST,
       broker_port: ABLY_MQTT_PORT, broker_ca_pem: publicCa }, { headers: NO_STORE })
   }
