@@ -21,7 +21,9 @@ def test_mqtt_messages_only_hint_at_secure_authoritative_revision_check():
     source = read('src/network/MqttPushPilot.cpp')
     client = read('src/network/LiveUpdate.cpp')
     assert 'g_tls.setCACert(kMqttPilotRootCaPem);' in source
-    assert 'g_mqtt.subscribe(g_topic.c_str(), 1)' in source
+    assert 'g_mqtt.subscribe(g_topic.c_str(), ablyToken ? 0 : 1)' in source
+    assert 'g_mqtt.setKeepAlive(ablyToken ? 60 : 90)' in source
+    assert 'g_tokenRenewAfterMs = g_ablyTokenActive ? millis() + ABLY_RENEW_AFTER_MS : 0;' in source
     assert 'username, password, brokerHost, brokerPort, brokerCaPem' in source
     assert 'g_tls.setCACert(g_brokerCaPem.isEmpty()' in source
     assert 'doc["broker_ca_pem"]' in source
