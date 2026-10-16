@@ -191,3 +191,15 @@ Official docs:
 - https://ably.com/docs/auth/token/jwt
 - https://ably.com/docs/auth/capabilities
 - https://ably.com/docs/api/rest-api
+
+## Single-frame Ably field test
+
+`MQTT_ABLY_CANARY_ENABLED=true` plus an exact
+`MQTT_ABLY_CANARY_DEVICE_ID` authorizes only that paired frame for Ably
+JWT credentials and REST revision hints. The existing EMQX Serverless pilot
+is independently preserved; `MQTT_FLEET_ENABLED=false` still blocks all
+other frames. The device must present its physical bearer token before it
+gets scoped, one-hour, subscribe-only credentials. Set the canary enabled
+flag back to `false` to roll back server-side without reflashing.
+Only activate this after a passing build and verify the live publish and
+physical subscribe path before approving broader rollout.
