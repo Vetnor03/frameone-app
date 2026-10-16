@@ -72,6 +72,7 @@ test('new broker user is created, confirmed, upserted with correct password and 
         return reply(200, goodUser)
       }
     }
+    if (u.pathname.endsWith('/authorization/sources/built_in_database/rules/all')) return reply(200, { rules: [{ topic: '#', action: 'all', permission: 'deny' }] })
     if (u.pathname.includes('/authorization/')) {
       if (init.method === 'GET') return aclCreated ? reply(200, goodAcl) : reply(404)
       if (init.method === 'POST') {
@@ -87,7 +88,7 @@ test('new broker user is created, confirmed, upserted with correct password and 
     ok: true, username: 'rmd_frm_future',
     password: deriveFrameMqttPassword('frm_future', longSecret),
   })
-  assert.equal(seen.length, 7)
+  assert.equal(seen.length, 8)
   assert.equal(seen[0].method, 'GET')
   assert.equal(seen[1].method, 'POST')
   assert.equal(seen[2].method, 'GET')
@@ -95,11 +96,13 @@ test('new broker user is created, confirmed, upserted with correct password and 
   assert.equal(seen[4].method, 'GET')
   assert.equal(seen[5].method, 'POST')
   assert.equal(seen[6].method, 'GET')
+  assert.equal(seen[7].method, 'GET')
 })
 
 test('existing managed account with exact ACL is idempotently revalidated', async () => {
   const result = await provisionFrameMqtt('frm_future', base, async (url, init) => {
     if (url.includes('/authentication/')) return reply(200, goodUser)
+    if (url.endsWith('/authorization/sources/built_in_database/rules/all')) return reply(200, { rules: [{ topic: '#', action: 'all', permission: 'deny' }] })
     if (url.includes('/authorization/')) return reply(200, goodAcl)
     throw Error('unexpected request')
   })
@@ -131,6 +134,16 @@ test('malicious or unexpected accounts and permissions cannot obtain a password'
   ]) {
     assert.equal(exactDeviceRule({ username: goodUser.user_id, rules }, goodUser.user_id, 'frm_future'), false)
   }
+})
+
+test('deny-all broker fallback is required, so extra subscriptions cannot be allowed by default', async () => {
+  const result = await provisionFrameMqtt('frm_future', base, async (url) => {
+    if (url.includes('/authentication/')) return reply(200, goodUser)
+    if (url.endsWith('/authorization/sources/built_in_database/rules/all')) return reply(200, { rules: [] })
+    if (url.includes('/authorization/')) return reply(200, goodAcl)
+    throw Error('unexpected request')
+  })
+  assert.deepEqual(result, { ok: false, reason: 'authorization' })
 })
 
 test('HTTPS and exact management URL are mandatory', async () => {
