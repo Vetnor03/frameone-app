@@ -15,9 +15,9 @@ def test_alfred_standard_includes_mqtt_but_keeps_https_fallback():
     assert '#if FRAME_MQTT_PILOT_ENABLED' in cpp
     assert 'bool poll(const String&, bool) { return false; }' in cpp
     assert 'const bool pushConnected = MqttPushPilot::poll(' in source
-    assert 'if (pushConnected && !pushHint && !safetyProbeDue) continue;' in source
-    assert '15UL * 60UL * 1000UL' in source
-    assert 'LiveUpdate::probe(DeviceIdentity::getToken(), next, pushHint)' in source
+    assert 'if (pushConnected && !pushHint && !subscriptionResync && !safetyProbeDue) continue;' in source
+    assert 'MQTT_MISSED_HINT_RECOVERY_MS = 120000UL' in source
+    assert 'LiveUpdate::probe(DeviceIdentity::getToken(), next,' in source
 
 
 def test_standard_mqtt_firmware_backs_off_when_backend_says_disabled():
@@ -86,8 +86,8 @@ def test_connected_mqtt_local_service_runs_without_hotloop_or_extra_https_probes
     assert 'bool connected() { return g_mqtt.connected(); }' in cpp
     assert 'bool connected() { return false; }' in cpp
     # No new HTTP probes from the fast loop: connected idle still skips them
-    # unless a push hint arrives or the 15-minute safety check becomes due.
-    assert 'if (pushConnected && !pushHint && !safetyProbeDue) continue;' in interactive
+    # unless a push hint arrives or the bounded two-minute safety check becomes due.
+    assert 'if (pushConnected && !pushHint && !subscriptionResync && !safetyProbeDue) continue;' in interactive
 
 
 

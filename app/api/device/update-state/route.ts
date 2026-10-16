@@ -40,7 +40,7 @@ export async function GET(req: Request) {
 // Only numeric, whitelisted fields are logged; no token, content or titles.
 const MANUAL_TIMING_FIELDS = [
   'attempts', 'probe_to_pending_ms', 'mqtt_subscribed',
-  'mqtt_hint_received', 'parallel_fetch', 'fetch_wait_ms', 'updating_screen_ms', 'config_fetch_ms',
+  'mqtt_hint_received', 'mqtt_subscription_resync', 'parallel_fetch', 'fetch_wait_ms', 'updating_screen_ms', 'config_fetch_ms',
   'render_state_fetch_ms', 'reminders_preload_ms', 'news_preload_ms',
   'soccer_preload_ms', 'display_ms', 'render_total_ms', 'post_render_ms',
   'before_ack_ms',

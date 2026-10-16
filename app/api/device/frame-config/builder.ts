@@ -2,6 +2,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { spotIdFromLabel } from '@/app/lib/surf/spots'
 import { supportsPhysicalCustomLayout } from '@/app/lib/customLayouts'
+import { getFrameHolidayList } from '@/app/lib/device/frameHolidayCache.mjs'
 
 // Keep payload tiny (ESP-friendly)
 const MAX_UPCOMING_HOLIDAYS = 6
@@ -484,52 +485,30 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
       const year = now.getUTCFullYear()
       const yearsToFetch = [year, year + 1]
 
-      let all: HolidayItem[] = []
-
-      try {
-        const base = process.env.NEXT_PUBLIC_SUPABASE_URL!
-        for (const y of yearsToFetch) {
-          const resp = await fetch(`${base}/functions/v1/holidays?country=${encodeURIComponent(country)}&year=${y}`, {
-            cache: 'no-store',
-          })
-
-          if (!resp.ok) continue
-
-          const body = (await resp.json()) as UnknownRecord
-          const list = Array.isArray(body?.holidays) ? body.holidays : []
-
-          for (const h of list) {
-            if (!h) continue
-            const date = String(h.date || '')
-            const name = String(h.name || '')
-            if (!isIsoDate(date) || !name) continue
-            all.push({ date, name })
-          }
-        }
-
-        const keySet = new Set<string>()
-        all = all.filter((h) => {
-          const k = `${h.date}|${h.name}`
-          if (keySet.has(k)) return false
-          keySet.add(k)
-          return true
-        })
-
-        all.sort((a, b) => compareIso(a.date, b.date))
-        const upcoming = all.filter((h) => h.date >= todayIso).slice(0, MAX_UPCOMING_HOLIDAYS)
-
-        responseModules.date = {
-          ...dateMod,
-          country,
-          holidays: upcoming,
-        }
-      } catch {
-        responseModules.date = {
-          ...dateMod,
-          country,
-          holidays: Array.isArray(dateMod.holidays) ? dateMod.holidays : [],
-        }
-      }
+      // The date provider is noncritical for a manual redraw. Run its two
+      // year requests concurrently, coalesce across config/render endpoints,
+      // and use persisted dates when the provider is unavailable.
+      const fetched = await getFrameHolidayList({
+        base: process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
+        country,
+        years: yearsToFetch,
+      })
+      const original = Array.isArray(dateMod.holidays) ? dateMod.holidays : []
+      const all: HolidayItem[] = (fetched ?? original).flatMap((holiday: unknown) => {
+        if (!holiday || typeof holiday !== 'object') return []
+        const item = holiday as Record<string, unknown>
+        const date = String(item.date ?? '')
+        const name = String(item.name ?? '')
+        return isIsoDate(date) && name ? [{ date, name }] : []
+      })
+      const seen = new Set<string>()
+      const upcoming = all.filter((holiday) => {
+        const key = `${holiday.date}|${holiday.name}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return holiday.date >= todayIso
+      }).sort((a, b) => compareIso(a.date, b.date)).slice(0, MAX_UPCOMING_HOLIDAYS)
+      responseModules.date = { ...dateMod, country, holidays: upcoming }
     }
 
     // Send the per-frame News selection to the firmware's direct-fetch fallback.

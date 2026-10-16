@@ -15,6 +15,7 @@ struct ManualUpdateTimings {
   uint32_t probeToPendingMs = 0;
   uint32_t mqttSubscribed = 0;
   uint32_t mqttHintReceived = 0;
+  uint32_t mqttSubscriptionResync = 0;
   uint32_t parallelFetch = 0;
   uint32_t fetchWaitMs = 0;
   uint32_t updatingScreenMs = 0;
