@@ -20,6 +20,14 @@ def test_alfred_standard_includes_mqtt_but_keeps_https_fallback():
     assert 'LiveUpdate::probe(DeviceIdentity::getToken(), next, pushHint)' in source
 
 
+def test_standard_mqtt_firmware_backs_off_when_backend_says_disabled():
+    cpp = read('src/network/MqttPushPilot.cpp')
+    assert 'MQTT_DISABLED_RETRY_MS = 30UL * 60UL * 1000UL' in cpp
+    assert 'if (code == 404)' in cpp
+    assert 'if (mqttNotEnabled) g_retryAfterMs = millis() + MQTT_DISABLED_RETRY_MS;' in cpp
+    assert 'CONNECT_RETRY_MS = 60000' in cpp
+
+
 def test_mqtt_messages_only_hint_at_secure_authoritative_revision_check():
     source = read('src/network/MqttPushPilot.cpp')
     client = read('src/network/LiveUpdate.cpp')
