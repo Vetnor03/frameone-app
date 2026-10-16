@@ -13,6 +13,10 @@ struct ManualUpdateTimings {
   bool ready = false;
   uint32_t attempts = 0;
   uint32_t probeToPendingMs = 0;
+  uint32_t mqttSubscribed = 0;
+  uint32_t mqttHintReceived = 0;
+  uint32_t parallelFetch = 0;
+  uint32_t fetchWaitMs = 0;
   uint32_t updatingScreenMs = 0;
   uint32_t configFetchMs = 0;
   uint32_t renderStateFetchMs = 0;

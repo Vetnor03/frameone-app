@@ -264,7 +264,8 @@ test('manual screen-wide evaluation rebases nearby soft work from completion tim
   const manualAt = Date.parse('2026-09-06T08:00:00Z')
   const refreshed = physicalModuleDeadlines({ settings, sources: {}, now: manualAt })
   assert.equal(refreshed['weather:1'].find((d) => d.reason === 'source_freshness').at, Date.parse('2026-09-06T12:00:00Z'))
-  assert.match(firmware, /fetchRenderState\(DeviceIdentity::getToken\(\), "all", desired\)/)
+  assert.match(firmware, /fetchRenderState\(\s*DeviceIdentity::getToken\(\), "all", desired\)/)
+  assert.match(firmware, /fetchRenderState\(job->token, "all", job->desired\)/)
   assert.match(firmware, /mergeScheduler\(g_smartState, desired, true\)/)
 })
 

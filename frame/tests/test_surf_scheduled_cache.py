@@ -12,7 +12,9 @@ def test_manual_update_does_not_force_surf_source_refresh():
     start = INO.index("static bool fetchAndRenderExplicit(")
     end = INO.index("static bool refreshContentSignatureBestEffort()", start)
     body = INO[start:end]
-    assert 'SmartRefresh::fetchRenderState(DeviceIdentity::getToken(), "all", desired)' in body
+    assert 'SmartRefresh::fetchRenderState(job->token, "all", job->desired)' in INO
+    assert 'SmartRefresh::fetchRenderState(' in body
+    assert 'DeviceIdentity::getToken(), "all", desired);' in body
     assert "invalidateScheduled" not in body
 
 
@@ -49,5 +51,5 @@ def test_partial_refresh_does_not_preload_inactive_reminders():
     assert "ModuleReminders::preload();\n  bool newsDirty" not in body
 
 
-def test_firmware_version_is_2_7_3():
-    assert 'static const char* FW_VER = "v2.7.3";' in INO
+def test_firmware_version_is_2_7_4():
+    assert 'static const char* FW_VER = "v2.7.4";' in INO

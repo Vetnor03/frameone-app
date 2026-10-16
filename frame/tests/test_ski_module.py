@@ -45,4 +45,4 @@ def test_frame_config_preserves_only_lightweight_active_ski_locations():
 
 
 def test_ski_work_keeps_locked_firmware_label():
-    assert 'static const char* FW_VER = "v2.7.3";' in SKETCH
+    assert 'static const char* FW_VER = "v2.7.4";' in SKETCH
