@@ -220,7 +220,7 @@ def test_manual_refresh_reports_render_state_fetch_timing():
     explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool refreshContentSignatureBestEffort')]
     assert 'render_state_fetch_ms=%lu' in explicit
     assert 'g_manualTiming.renderStateFetchMs = prefetch->renderStateMs;' in explicit
-    assert 'g_manualTiming.renderStateFetchMs = millis() - renderStartedAtMs;' in explicit
+    assert 'g_manualTiming.renderStateFetchMs = millis() - renderStartedAt;' in explicit
 
 
 def test_manual_update_forces_fresh_full_render_even_when_background_hash_is_unchanged():
