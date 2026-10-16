@@ -52,10 +52,12 @@ unchanged.
   `_PUBLISH_URL` stay server-side only.
 
 When enabled, the backend derives a different MQTT password for each frame
-with HMAC-SHA256 and the dedicated secret, and uses a reserved
-`rmd_{device_id}` broker username so it never modifies the original pilot's
-manually created account. It checks or creates the broker's password-auth
-account, confirms non-superuser status, and verifies exactly one subscribe-only
+with HMAC-SHA256 and the dedicated secret, and uses the frame's existing device ID as its MQTT username, so the
+universal firmware needs no changes. It preserves the prototype's manually
+created account through the separate pilot credentials path. A pre-existing
+fleet account is never modified unless its ACL already matches this frame.
+The backend checks or creates the broker's password-auth account, confirms
+non-superuser status, and verifies exactly one subscribe-only
 ACL for `remind/pilot/revisions/{device_id}`. It also demands a global
 deny-all ACL rule for other topics; an unexpected or permissive policy blocks
 credential issuance. It refuses unexpected identities, superusers and wider
