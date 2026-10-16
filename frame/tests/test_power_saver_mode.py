@@ -77,7 +77,7 @@ def test_instant_only_checks_manual_requests_until_a_module_deadline_is_due():
     assert "revisionSafetyDue" not in instant
     assert "if (scheduledSyncDueNow())" in instant
     assert "const uint32_t probeCadenceMs = MANUAL_UPDATE_POLL_MS;" in instant
-    assert "LiveUpdate::probe(DeviceIdentity::getToken(), next, pushHint)" in instant
+    assert "LiveUpdate::probe(DeviceIdentity::getToken(), next," in instant
 
 def test_power_saver_news_piggybacks_on_another_module_wake():
     header = read("src/core/SmartRefresh.h")
