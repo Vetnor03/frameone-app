@@ -165,8 +165,9 @@ export async function provisionFrameMqtt(
   if (!globalAcl?.ok) return { ok: false, reason: 'authorization' }
   const globalData = await globalAcl.json().catch(() => null) as
     | { rules?: { topic?: unknown; action?: unknown; permission?: unknown }[] } | null
-  if (!Array.isArray(globalData?.rules) || !globalData.rules.some(rule =>
-    rule.topic === '#' && rule.action === 'all' && rule.permission === 'deny')) {
+  if (!Array.isArray(globalData?.rules) || globalData.rules.length !== 1 ||
+      globalData.rules[0].topic !== '#' || globalData.rules[0].action !== 'all' ||
+      globalData.rules[0].permission !== 'deny') {
     return { ok: false, reason: 'authorization' }
   }
 
