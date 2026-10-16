@@ -32,4 +32,8 @@ namespace MqttPushPilot {
   bool takeNotification();
   // Retry the same hint on the next cadence if HTTPS revision verification fails.
   void restoreNotification();
+  // True once after each successful (re)subscription. Always verify
+  // the durable revision after reconnection: Ably MQTT QoS0 has no replay.
+  bool takeSubscriptionResync();
+  void restoreSubscriptionResync();
 }
