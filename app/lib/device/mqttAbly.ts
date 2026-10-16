@@ -73,3 +73,43 @@ export async function publishAblyFrameHint(
     return 'failed'
   }
 }
+
+
+/**
+ * Diagnostic-only: returns Ably's current subscriber count for a single
+ * frame channel without disclosing API keys or JWTs. This endpoint is only
+ * called after a manual revision publish for the explicitly selected canary;
+ * Ably's REST status request can activate a previously inactive channel.
+ */
+export async function getAblyFrameSubscribers(
+  deviceId: string,
+  apiKey: string | undefined,
+  request: typeof fetch = fetch,
+): Promise<number | null> {
+  const channel = pilotRevisionTopic(deviceId)
+  if (!channel || !isAblyApiKey(apiKey)) return null
+  try {
+    const response = await request(
+      ABLY_REST_PUBLISH_ORIGIN + '/channels/' + encodeURIComponent(channel),
+      {
+        method: 'GET',
+        redirect: 'error',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(1200),
+        headers: {
+          authorization: 'Basic ' + Buffer.from(apiKey!).toString('base64'),
+          accept: 'application/json',
+        },
+      },
+    )
+    if (!response.ok) return null
+    const details = await response.json() as { status?: { occupancy?: {
+      metrics?: { subscribers?: unknown }
+    } } }
+    const subscribers = details?.status?.occupancy?.metrics?.subscribers
+    return typeof subscribers === 'number' &&
+      Number.isSafeInteger(subscribers) && subscribers >= 0 ? subscribers : null
+  } catch {
+    return null
+  }
+}
