@@ -23,6 +23,10 @@ export type BrokerConfig = {
   fleetSecret?: string
   fleetProvider?: string
   fleetManagementUrl?: string
+  fleetBrokerHost?: string
+  fleetBrokerPort?: string
+  fleetApiKey?: string
+  fleetApiSecret?: string
   publishUrl?: string
   apiKey?: string
   apiSecret?: string
@@ -36,6 +40,10 @@ function defaultBrokerConfig(): BrokerConfig {
     fleetSecret: process.env.MQTT_FLEET_DERIVATION_SECRET,
     fleetProvider: process.env.MQTT_FLEET_PROVIDER,
     fleetManagementUrl: process.env.MQTT_FLEET_MANAGEMENT_URL,
+    fleetBrokerHost: process.env.MQTT_FLEET_BROKER_HOST,
+    fleetBrokerPort: process.env.MQTT_FLEET_BROKER_PORT,
+    fleetApiKey: process.env.MQTT_FLEET_API_KEY,
+    fleetApiSecret: process.env.MQTT_FLEET_API_SECRET,
     publishUrl: process.env.MQTT_PILOT_EMQX_PUBLISH_URL,
     apiKey: process.env.MQTT_PILOT_EMQX_API_KEY,
     apiSecret: process.env.MQTT_PILOT_EMQX_API_SECRET,
@@ -48,13 +56,20 @@ async function publishPilotMessage(
   config: BrokerConfig,
   fetchImpl: typeof fetch,
 ): Promise<PilotPushResult> {
-  if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret, fleetProvider: config.fleetProvider, fleetManagementUrl: config.fleetManagementUrl })) return 'disabled'
+  if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret, fleetProvider: config.fleetProvider, fleetManagementUrl: config.fleetManagementUrl, fleetBrokerHost: config.fleetBrokerHost, fleetBrokerPort: config.fleetBrokerPort, fleetApiKey: config.fleetApiKey, fleetApiSecret: config.fleetApiSecret })) return 'disabled'
   const topic = pilotRevisionTopic(deviceId)
-  if (!topic || !config.publishUrl || !config.apiKey || !config.apiSecret) return 'failed'
+  const pilot = config.enabled === 'true' && deviceId === config.pilotDeviceId
+  // Fleet messages are published through the *same* Dedicated management API
+  // that provisions the accounts. Never publish fleet revisions to Serverless.
+  const publishUrl = pilot ? config.publishUrl :
+    config.fleetManagementUrl?.replace(/\/$/, '') + '/publish'
+  const apiKey = pilot ? config.apiKey : config.fleetApiKey
+  const apiSecret = pilot ? config.apiSecret : config.fleetApiSecret
+  if (!topic || !publishUrl || !apiKey || !apiSecret) return 'failed'
 
   let endpoint: URL
   try {
-    endpoint = new URL(config.publishUrl)
+    endpoint = new URL(publishUrl)
   } catch {
     return 'failed'
   }
@@ -68,7 +83,7 @@ async function publishPilotMessage(
       redirect: 'error',
       signal: AbortSignal.timeout(1800),
       headers: {
-        authorization: 'Basic ' + Buffer.from(config.apiKey + ':' + config.apiSecret).toString('base64'),
+        authorization: 'Basic ' + Buffer.from(apiKey + ':' + apiSecret).toString('base64'),
         'content-type': 'application/json',
       },
       body: JSON.stringify({
@@ -95,7 +110,7 @@ export async function publishPilotRevision(
   fetchImpl: typeof fetch = fetch,
 ): Promise<PilotPushResult> {
   if (!Number.isSafeInteger(revision) || revision <= 0) {
-    if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret, fleetProvider: config.fleetProvider, fleetManagementUrl: config.fleetManagementUrl })) return 'disabled'
+    if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret, fleetProvider: config.fleetProvider, fleetManagementUrl: config.fleetManagementUrl, fleetBrokerHost: config.fleetBrokerHost, fleetBrokerPort: config.fleetBrokerPort, fleetApiKey: config.fleetApiKey, fleetApiSecret: config.fleetApiSecret })) return 'disabled'
     return 'failed'
   }
   return publishPilotMessage(deviceId, String(revision), config, fetchImpl)
