@@ -58,7 +58,14 @@ test('holiday failure is bounded and does not poison cache for six hours', async
   const request = async (_url, { signal }) => {
     requests++
     return new Promise((_, reject) => {
-      signal.addEventListener('abort', () => reject(new Error('timeout')), { once: true })
+      // Keep the mocked transport alive until AbortSignal.timeout fires.
+      // Node's AbortSignal timeout is unref'ed, so a bare unresolved Promise
+      // otherwise causes the node:test runner to cancel the test early.
+      const timer = setTimeout(() => reject(new Error('mock network timeout')), 100)
+      signal.addEventListener('abort', () => {
+        clearTimeout(timer)
+        reject(new Error('timeout'))
+      }, { once: true })
     })
   }
   const options = { base: 'https://holiday-timeout.example', country: 'NO',
