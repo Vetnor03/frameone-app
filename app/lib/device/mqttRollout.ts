@@ -3,6 +3,8 @@
  * independently; enabling the fleet later is a server-side configuration
  * change and NEVER requires a firmware reflash.
  */
+import { isAblyApiKey } from './mqttAbly.ts'
+
 export type MqttRolloutEnv = {
   pilotEnabled?: string
   pilotDeviceId?: string
@@ -14,6 +16,8 @@ export type MqttRolloutEnv = {
   fleetBrokerPort?: string
   fleetApiKey?: string
   fleetApiSecret?: string
+  ablyApiKey?: string
+  ablyRootCaPem?: string
 }
 export function mqttEnabledForDevice(deviceId: string, env: MqttRolloutEnv = {
   pilotEnabled: process.env.MQTT_PILOT_ENABLED,
@@ -26,6 +30,8 @@ export function mqttEnabledForDevice(deviceId: string, env: MqttRolloutEnv = {
   fleetBrokerPort: process.env.MQTT_FLEET_BROKER_PORT,
   fleetApiKey: process.env.MQTT_FLEET_API_KEY,
   fleetApiSecret: process.env.MQTT_FLEET_API_SECRET,
+  ablyApiKey: process.env.MQTT_ABLY_API_KEY,
+  ablyRootCaPem: process.env.MQTT_ABLY_ROOT_CA_PEM,
 }): boolean {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(deviceId)) return false
   if (env.pilotEnabled === 'true' && deviceId === env.pilotDeviceId) return true
@@ -33,8 +39,14 @@ export function mqttEnabledForDevice(deviceId: string, env: MqttRolloutEnv = {
   // Fleet enablement is independent of the original single-frame experiment.
   // All fleet transport and broker-management inputs must be present before
   // *any* fleet MQTT message is sent or credentials are requested.
-  if (env.fleetEnabled !== 'true' ||
-      (env.fleetSecret?.length ?? 0) < 43 ||
+  if (env.fleetEnabled !== 'true') return false
+  if (env.fleetProvider === 'ably_jwt_v1') {
+    const ca = env.ablyRootCaPem
+    return isAblyApiKey(env.ablyApiKey) && Boolean(ca && ca.length <= 4096 &&
+      ca.includes('-----BEGIN CERTIFICATE-----') &&
+      ca.includes('-----END CERTIFICATE-----'))
+  }
+  if ((env.fleetSecret?.length ?? 0) < 43 ||
       env.fleetProvider !== 'emqx_dedicated_v5' ||
       !env.fleetApiKey || !env.fleetApiSecret ||
       !env.fleetBrokerHost || !/^[a-z0-9.-]{1,253}$/i.test(env.fleetBrokerHost) ||
