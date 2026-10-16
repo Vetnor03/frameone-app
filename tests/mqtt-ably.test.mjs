@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createHmac } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { mqttEnabledForDevice } from '../app/lib/device/mqttRollout.ts'
+import { ablyCanaryForDevice, mqttEnabledForDevice } from '../app/lib/device/mqttRollout.ts'
 import {
   ABLY_MQTT_HOST, ABLY_MQTT_PORT, ABLY_TOKEN_TTL_SEC,
   makeAblyFrameCredentials, publishAblyFrameHint,
@@ -36,6 +36,23 @@ test('fleet Ably activates independently of EMQX pilot and fails closed on incom
   assert.equal(mqttEnabledForDevice('frm_original', {
     ...base, fleetEnabled: 'false', pilotEnabled: 'true', pilotDeviceId: 'frm_original',
   }), true)
+})
+
+test('one paired frame can opt into Ably without enabling the fleet or disturbing EMQX', () => {
+  const canary = {
+    pilotEnabled: 'true', pilotDeviceId: 'frm_emqx_legacy',
+    fleetEnabled: 'false', fleetProvider: 'ably_jwt_v1',
+    ablyCanaryEnabled: 'true', ablyCanaryDeviceId: 'frm_active',
+    ablyApiKey: key, ablyRootCaPem: ca,
+  }
+  assert.equal(ablyCanaryForDevice('frm_active', canary), true)
+  assert.equal(ablyCanaryForDevice('frm_other', canary), false)
+  assert.equal(mqttEnabledForDevice('frm_active', canary), true)
+  assert.equal(mqttEnabledForDevice('frm_emqx_legacy', canary), true)
+  assert.equal(mqttEnabledForDevice('frm_other', canary), false)
+  assert.equal(mqttEnabledForDevice('frm_active', { ...canary, ablyCanaryEnabled: 'false' }), false)
+  assert.equal(mqttEnabledForDevice('frm_active', { ...canary, ablyApiKey: undefined }), false)
+  assert.equal(mqttEnabledForDevice('frm_active', { ...canary, ablyRootCaPem: undefined }), false)
 })
 
 test('JWT is signed, scoped to one frame subscribe-only, short lived and unique by identity', () => {
@@ -95,6 +112,9 @@ test('backend requires physical device auth and pairing before issuing Ably JWT'
   assert.match(route, /from\('device_members'\)/)
   assert.match(route, /if \(!members\?\.length\)/)
   assert.match(route, /MQTT_FLEET_ENABLED !== 'true'/)
+  assert.match(route, /MQTT_ABLY_CANARY_ENABLED/)
+  assert.match(route, /MQTT_ABLY_CANARY_DEVICE_ID/)
+  assert.match(route, /ablyCanaryForDevice\(deviceId/)
   assert.match(route, /makeAblyFrameCredentials\(deviceId, process\.env\.MQTT_ABLY_API_KEY\)/)
   assert.match(route, /broker_host: ABLY_MQTT_HOST/)
   assert.match(route, /broker_port: ABLY_MQTT_PORT/)
