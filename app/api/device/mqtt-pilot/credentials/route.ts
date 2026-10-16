@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { authenticatePhysicalDevice, deviceIdFrom } from '@/app/lib/device/updateStateAuth'
 import { pilotCredentialPayload } from '@/app/lib/device/mqttPilotCredentials'
-import { mqttEnabledForDevice } from '@/app/lib/device/mqttRollout'
+import { ablyCanaryForDevice, mqttEnabledForDevice } from '@/app/lib/device/mqttRollout'
 import { provisionFrameMqtt } from '@/app/lib/device/mqttFleetProvisioning'
 import { ABLY_MQTT_HOST, ABLY_MQTT_PORT, makeAblyFrameCredentials } from '@/app/lib/device/mqttAbly'
 
@@ -71,13 +71,19 @@ export async function GET(req: Request) {
   if (memberError) return NextResponse.json({ error: 'backend_unavailable' }, { status: 503, headers: NO_STORE })
   if (!members?.length) return NextResponse.json({ error: 'not_paired' }, { status: 403, headers: NO_STORE })
 
-  // Fleet onboarding is separately gated until per-user management endpoints
-  // have been confirmed on the selected broker tier. Even if those endpoints
-  // are unsupported, the firmware keeps its proven HTTPS fallback.
-  if (process.env.MQTT_FLEET_ENABLED !== 'true') {
+  // The one-frame Ably canary can be activated without enabling all paired
+  // frames. It still requires the real physical-device token and pairing.
+  // Fleet rollout remains independently disabled until validation.
+  const ablyCanary = ablyCanaryForDevice(deviceId, {
+    ablyCanaryEnabled: process.env.MQTT_ABLY_CANARY_ENABLED,
+    ablyCanaryDeviceId: process.env.MQTT_ABLY_CANARY_DEVICE_ID,
+    ablyApiKey: process.env.MQTT_ABLY_API_KEY,
+    ablyRootCaPem: process.env.MQTT_ABLY_ROOT_CA_PEM,
+  })
+  if (!ablyCanary && process.env.MQTT_FLEET_ENABLED !== 'true') {
     return NextResponse.json({ error: 'not_enabled' }, { status: 404, headers: NO_STORE })
   }
-  if (process.env.MQTT_FLEET_PROVIDER === 'ably_jwt_v1') {
+  if (ablyCanary || process.env.MQTT_FLEET_PROVIDER === 'ably_jwt_v1') {
     // A channel-scoped, short-lived JWT replaces broker-side account creation.
     // Firmware will supply the JWT as its MQTT username, never the device token.
     const credentials = makeAblyFrameCredentials(deviceId, process.env.MQTT_ABLY_API_KEY)
@@ -86,6 +92,14 @@ export async function GET(req: Request) {
         !publicCa.includes('-----BEGIN CERTIFICATE-----') ||
         !publicCa.includes('-----END CERTIFICATE-----')) {
       return NextResponse.json({ error: 'broker_not_configured' }, { status: 503, headers: NO_STORE })
+    }
+    if (ablyCanary) {
+      // One redacted record per successful authorized token issuance; this
+      // confirms onboarding without logging the JWT, API key, or device token.
+      console.info('[mqtt-credentials] ably-canary-issued', {
+        device_id: deviceId,
+        ttl_sec: credentials.token_ttl_sec,
+      })
     }
     return NextResponse.json({ ...credentials, broker_host: ABLY_MQTT_HOST,
       broker_port: ABLY_MQTT_PORT, broker_ca_pem: publicCa }, { headers: NO_STORE })
