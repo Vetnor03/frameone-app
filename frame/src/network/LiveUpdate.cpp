@@ -104,6 +104,10 @@ bool LiveUpdate::acknowledge(const String& deviceToken, uint64_t revision, const
     json += ",\"manual_timing\":{";
     json += "\"attempts\":" + String(timings->attempts);
     json += ",\"probe_to_pending_ms\":" + String(timings->probeToPendingMs);
+    json += ",\"mqtt_subscribed\":" + String(timings->mqttSubscribed);
+    json += ",\"mqtt_hint_received\":" + String(timings->mqttHintReceived);
+    json += ",\"parallel_fetch\":" + String(timings->parallelFetch);
+    json += ",\"fetch_wait_ms\":" + String(timings->fetchWaitMs);
     json += ",\"updating_screen_ms\":" + String(timings->updatingScreenMs);
     json += ",\"config_fetch_ms\":" + String(timings->configFetchMs);
     json += ",\"render_state_fetch_ms\":" + String(timings->renderStateFetchMs);
