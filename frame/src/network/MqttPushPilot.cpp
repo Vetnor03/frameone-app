@@ -32,6 +32,7 @@ static uint32_t g_appActiveDeadlineMs = 0;
 static const uint32_t ACTIVITY_TTL_MS = 120000UL;
 static uint32_t g_retryAfterMs = 0;
 static const uint32_t CONNECT_RETRY_MS = 60000;
+static const uint32_t MQTT_DISABLED_RETRY_MS = 30UL * 60UL * 1000UL;
 static const char* TOPIC_PREFIX = "remind/pilot/revisions/";
 static String g_topic;
 static String g_brokerHost;
@@ -94,14 +95,23 @@ bool configure() {
 
 bool fetchCredentials(const String& deviceToken, String& username, String& password,
                       String& brokerHost, uint16_t& brokerPort, String& brokerCaPem,
-                      bool& ablyToken) {
+                      bool& ablyToken, bool& mqttNotEnabled) {
   const String url = String(BASE_URL) +
     "/api/device/mqtt-pilot/credentials?device_id=" + DeviceIdentity::getDeviceId();
   int code = 0;
   String body;
   // Uses the existing trusted HTTPS transport and physical device Bearer auth.
   // Credentials are never written to NVS, a URL, or the serial log.
-  if (!NetClient::httpGetAuth(url, deviceToken, code, body) || code != 200) return false;
+  const bool fetched = NetClient::httpGetAuth(url, deviceToken, code, body);
+  // MQTT is built into every Alfred frame, but fleet rollout can remain OFF.
+  // Respect the backend's explicit 404 rather than retrying every minute
+  // (unnecessary Wi-Fi/TLS work and Vercel calls). Normal failures still use
+  // bounded 60s retries and authoritative HTTPS updates remain available.
+  if (code == 404) {
+    mqttNotEnabled = true;
+    return false;
+  }
+  if (!fetched || code != 200) return false;
 
   // Public CA PEM can be >1KB; allocate JSON capacity on heap instead of
   // using >6KB of the ESP32 Arduino loop task's limited stack.
@@ -208,9 +218,12 @@ bool poll(const String& deviceToken, bool usbPresent) {
   String brokerCaPem;
   uint16_t brokerPort = MQTT_PILOT_BROKER_PORT;
   bool ablyToken = false;
+  bool mqttNotEnabled = false;
   const bool haveCredentials = fetchCredentials(
-    deviceToken, username, password, brokerHost, brokerPort, brokerCaPem, ablyToken
+    deviceToken, username, password, brokerHost, brokerPort, brokerCaPem,
+    ablyToken, mqttNotEnabled
   );
+  if (mqttNotEnabled) g_retryAfterMs = millis() + MQTT_DISABLED_RETRY_MS;
   bool subscribed = false;
   if (haveCredentials) {
     // Keep the hostname String alive for the lifetime of PubSubClient.

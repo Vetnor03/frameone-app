@@ -2,7 +2,8 @@
 
 ## Important
 
-The binary built as `alfred_v1_2_mqtt_pilot` is **device-agnostic**. It does
+The standard `alfred_v1_2` firmware on `main` is **device-agnostic** and
+includes MQTT support without a separate build flag. It does
 NOT embed any frame ID, MQTT password, broker API key or customer credentials.
 It uses the same familiar AP → Wi-Fi → pairing → app flow. Every frame uses its
 own existing RE:MIND token to fetch its MQTT credentials from an authenticated
@@ -16,10 +17,11 @@ transport independently checks the broker hostname and certificate chain. One fi
 build can support many frames. The 2026 prototype EMQX broker and public
 DigiCert Global Root G2 certificate remain the compatibility defaults.
 
-**Do not ship this firmware commercially until actual physical testing,
+**Do not ship commercially until actual physical MQTT testing,
 reliable automatic provisioning, lifecycle deprovisioning and power/latency
-measurements have been completed.** Standard non-MQTT firmware builds remain
-unchanged.
+measurements have been completed.** The standard Alfred binary contains MQTT,
+but backend rollout gates stay off for unapproved fleets; HTTPS always remains
+the fallback. The separate legacy ESP32 hardware profile is unchanged.
 
 ## Backend switches
 

@@ -50,15 +50,6 @@ jobs:
       - run: pio run -v -d frame -e alfred_v1_2
       # TEMP_REFRESH_AUDIT: compile the gated diagnostic code until removal.
       - run: pio run -d frame -e alfred_v1_2_refresh_audit
-      - run: pio run -d frame -e alfred_v1_2_mqtt_pilot
-      - name: Archive unflashed MQTT pilot firmware for physical testing
-        if: success() && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: alfred-v1_2-mqtt-pilot-unflashed
-          path: frame/.pio/build/alfred_v1_2_mqtt_pilot/firmware.bin
-          if-no-files-found: error
-          retention-days: 7
       - run: pio run -d frame -e frame_esp32
       - run: pio run -d frame -e alfred_v1_2 -t size
 
@@ -84,26 +75,19 @@ jobs:
           arduino-cli compile --verbose --warnings default --export-binaries \
             --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" \
             "$RUNNER_TEMP/frame_v2.5.1"
-      - name: Prepare MQTT-enabled Arduino sketch
-        run: python frame/tools/prepare_arduino_sketch.py --output "$RUNNER_TEMP/mqtt-enabled/frame_v2.5.1" --enable-mqtt
-      - name: Compile MQTT-enabled Alfred with Arduino CLI
-        run: |
-          arduino-cli compile --verbose --warnings default --export-binaries \
-            --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" \
-            "$RUNNER_TEMP/mqtt-enabled/frame_v2.5.1"
-      - name: Archive MQTT-enabled Arduino sketch for first physical flash
+      - name: Archive normal Alfred Arduino sketch (MQTT included)
         if: success() && github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: alfred-v1_2-mqtt-arduino-sketch-unflashed
-          path: ${{ runner.temp }}/mqtt-enabled/frame_v2.5.1/
+          name: alfred-v1_2-standard-arduino-sketch-unflashed
+          path: ${{ runner.temp }}/frame_v2.5.1/
           if-no-files-found: error
           retention-days: 7
       - name: Upload unflashed Alfred USB test candidate
         if: success() && github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: alfred-v1_2-tls-usb-test-pr1314
+          name: alfred-v1_2-standard-compiled-unflashed
           path: ${{ runner.temp }}/frame_v2.5.1/
           if-no-files-found: error
           retention-days: 7
