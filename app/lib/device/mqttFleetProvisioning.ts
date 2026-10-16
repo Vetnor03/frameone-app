@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createHmac } from 'node:crypto'
 import { pilotRevisionTopic } from './mqttPilotPublish.ts'
 
 /**
