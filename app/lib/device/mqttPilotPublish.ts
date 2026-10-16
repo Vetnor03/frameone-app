@@ -5,7 +5,7 @@
  * device-scoped topic and authenticated, best-effort publish path. No dedicated
  * topic ACL or extra broker configuration is needed for Smart Instant.
  */
-import { mqttEnabledForDevice } from './mqttRollout.ts'
+import { ablyCanaryForDevice, mqttEnabledForDevice } from './mqttRollout.ts'
 import { publishAblyFrameHint } from './mqttAbly.ts'
 
 import { pilotRevisionTopic } from './mqttPilotTopic.ts'
@@ -26,6 +26,8 @@ export type BrokerConfig = {
   fleetApiSecret?: string
   ablyApiKey?: string
   ablyRootCaPem?: string
+  ablyCanaryEnabled?: string
+  ablyCanaryDeviceId?: string
   publishUrl?: string
   apiKey?: string
   apiSecret?: string
@@ -45,6 +47,8 @@ function defaultBrokerConfig(): BrokerConfig {
     fleetApiSecret: process.env.MQTT_FLEET_API_SECRET,
     ablyApiKey: process.env.MQTT_ABLY_API_KEY,
     ablyRootCaPem: process.env.MQTT_ABLY_ROOT_CA_PEM,
+    ablyCanaryEnabled: process.env.MQTT_ABLY_CANARY_ENABLED,
+    ablyCanaryDeviceId: process.env.MQTT_ABLY_CANARY_DEVICE_ID,
     publishUrl: process.env.MQTT_PILOT_EMQX_PUBLISH_URL,
     apiKey: process.env.MQTT_PILOT_EMQX_API_KEY,
     apiSecret: process.env.MQTT_PILOT_EMQX_API_SECRET,
@@ -57,10 +61,16 @@ async function publishPilotMessage(
   config: BrokerConfig,
   fetchImpl: typeof fetch,
 ): Promise<PilotPushResult> {
-  if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret, fleetProvider: config.fleetProvider, fleetManagementUrl: config.fleetManagementUrl, fleetBrokerHost: config.fleetBrokerHost, fleetBrokerPort: config.fleetBrokerPort, fleetApiKey: config.fleetApiKey, fleetApiSecret: config.fleetApiSecret, ablyApiKey: config.ablyApiKey, ablyRootCaPem: config.ablyRootCaPem })) return 'disabled'
+  if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret, fleetProvider: config.fleetProvider, fleetManagementUrl: config.fleetManagementUrl, fleetBrokerHost: config.fleetBrokerHost, fleetBrokerPort: config.fleetBrokerPort, fleetApiKey: config.fleetApiKey, fleetApiSecret: config.fleetApiSecret, ablyApiKey: config.ablyApiKey, ablyRootCaPem: config.ablyRootCaPem, ablyCanaryEnabled: config.ablyCanaryEnabled, ablyCanaryDeviceId: config.ablyCanaryDeviceId })) return 'disabled'
   const topic = pilotRevisionTopic(deviceId)
   const pilot = config.enabled === 'true' && deviceId === config.pilotDeviceId
-  if (!pilot && config.fleetProvider === 'ably_jwt_v1') {
+  const ablyCanary = ablyCanaryForDevice(deviceId, {
+    ablyCanaryEnabled: config.ablyCanaryEnabled,
+    ablyCanaryDeviceId: config.ablyCanaryDeviceId,
+    ablyApiKey: config.ablyApiKey,
+    ablyRootCaPem: config.ablyRootCaPem,
+  })
+  if (!pilot && (ablyCanary || config.fleetProvider === 'ably_jwt_v1')) {
     return publishAblyFrameHint(deviceId, message, config.ablyApiKey, fetchImpl)
   }
   // Fleet messages are published through the *same* Dedicated management API
@@ -114,7 +124,7 @@ export async function publishPilotRevision(
   fetchImpl: typeof fetch = fetch,
 ): Promise<PilotPushResult> {
   if (!Number.isSafeInteger(revision) || revision <= 0) {
-    if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret, fleetProvider: config.fleetProvider, fleetManagementUrl: config.fleetManagementUrl, fleetBrokerHost: config.fleetBrokerHost, fleetBrokerPort: config.fleetBrokerPort, fleetApiKey: config.fleetApiKey, fleetApiSecret: config.fleetApiSecret, ablyApiKey: config.ablyApiKey, ablyRootCaPem: config.ablyRootCaPem })) return 'disabled'
+    if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret, fleetProvider: config.fleetProvider, fleetManagementUrl: config.fleetManagementUrl, fleetBrokerHost: config.fleetBrokerHost, fleetBrokerPort: config.fleetBrokerPort, fleetApiKey: config.fleetApiKey, fleetApiSecret: config.fleetApiSecret, ablyApiKey: config.ablyApiKey, ablyRootCaPem: config.ablyRootCaPem, ablyCanaryEnabled: config.ablyCanaryEnabled, ablyCanaryDeviceId: config.ablyCanaryDeviceId })) return 'disabled'
     return 'failed'
   }
   return publishPilotMessage(deviceId, String(revision), config, fetchImpl)
