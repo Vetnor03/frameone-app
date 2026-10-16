@@ -15,6 +15,28 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify live re-mind.no TLS using firmware CA bundle
         run: python3 frame/tools/check_backend_tls.py
+      - name: Check public Ably MQTT broker TLS (no credentials)
+        run: |
+          python3 - <<'PY'
+          import socket
+          import ssl
+
+          hostname = "main.mqtt.ably.net"
+          context = ssl.create_default_context()
+          with socket.create_connection((hostname, 8883), timeout=12) as sock:
+              with context.wrap_socket(sock, server_hostname=hostname) as secured:
+                  certificate = secured.getpeercert()
+                  assert certificate and secured.version().startswith("TLS")
+                  print("Ably MQTT TLS: verified hostname, server certificate and trusted chain")
+                  print("TLS:", secured.version())
+                  print("Subject:", certificate.get("subject"))
+                  print("Issuer:", certificate.get("issuer"))
+                  print("Valid until:", certificate.get("notAfter"))
+          PY
+          timeout 15 openssl s_client -connect main.mqtt.ably.net:8883 \
+            -servername main.mqtt.ably.net -showcerts </dev/null 2>&1 \
+            | grep -E '^ *(depth|[0-9]+ s:|[0-9]+ i:|verify return:|Verify return code:)' \
+            | head -30
 
   firmware:
     runs-on: ubuntu-latest
