@@ -71,7 +71,7 @@ def rewrite_local_includes(source: Path, contents: str, known_paths: set[str]) -
     return INCLUDE_PATTERN.sub(replace, contents)
 
 
-def prepare(output: Path, *, enable_mqtt: bool = False) -> int:
+def prepare(output: Path) -> int:
     output = output.expanduser().resolve()
     source_root = SOURCE_ROOT.resolve()
 
@@ -97,13 +97,6 @@ def prepare(output: Path, *, enable_mqtt: bool = False) -> int:
     prepared: list[tuple[str, str]] = []
     for source in sources:
         contents = source.read_text(encoding="utf-8")
-        if enable_mqtt and source.name == "MqttPushPilot.h":
-            # Only the generated flat Arduino sketch changes. Canonical
-            # firmware and the default Arduino build still keep MQTT off.
-            disabled = "#define FRAME_MQTT_PILOT_ENABLED 0"
-            if contents.count(disabled) != 1:
-                raise RuntimeError("MQTT pilot feature gate was not found exactly once")
-            contents = contents.replace(disabled, "#define FRAME_MQTT_PILOT_ENABLED 1")
         prepared.append(
             (source.name, rewrite_local_includes(source, contents, known_paths))
         )
@@ -126,15 +119,10 @@ def main() -> int:
         type=Path,
         help=f"new or empty destination folder named {SKETCH_NAME}",
     )
-    parser.add_argument(
-        "--enable-mqtt",
-        action="store_true",
-        help="generate MQTT-enabled universal Alfred sketch (requires PubSubClient 2.8)",
-    )
     args = parser.parse_args()
 
     try:
-        prepare(args.output, enable_mqtt=args.enable_mqtt)
+        prepare(args.output)
     except RuntimeError as error:
         parser.error(str(error))
     return 0
