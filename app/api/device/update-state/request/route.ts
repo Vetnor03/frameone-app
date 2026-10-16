@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { authenticateUserForDevice, deviceIdFrom } from '@/app/lib/device/updateStateAuth'
 import { publishPilotRevision } from '@/app/lib/device/mqttPilotPublish'
+import { ablyCanaryForDevice } from '@/app/lib/device/mqttRollout'
+import { getAblyFrameSubscribers } from '@/app/lib/device/mqttAbly'
 
 export const runtime = 'nodejs'
 
@@ -37,6 +39,24 @@ export async function POST(req: Request) {
       revision: data,
       result: pilotPush,
       duration_ms: Date.now() - pushStartedAt,
+    })
+  }
+
+  // One-frame canary only: Ably accepted a message does not prove an MQTT
+  // subscriber received it. Record the broker's current subscriber count.
+  // This is read-only and never determines update success.
+  if (pilotPush === 'published' && ablyCanaryForDevice(deviceId, {
+    ablyCanaryEnabled: process.env.MQTT_ABLY_CANARY_ENABLED,
+    ablyCanaryDeviceId: process.env.MQTT_ABLY_CANARY_DEVICE_ID,
+    ablyApiKey: process.env.MQTT_ABLY_API_KEY,
+    ablyRootCaPem: process.env.MQTT_ABLY_ROOT_CA_PEM,
+  })) {
+    const subscribers = await getAblyFrameSubscribers(
+      deviceId, process.env.MQTT_ABLY_API_KEY,
+    )
+    console.info('[device/update-state/request] ably-subscriber-status', {
+      device_id: deviceId,
+      subscribers: subscribers === null ? 'unknown' : subscribers,
     })
   }
 
