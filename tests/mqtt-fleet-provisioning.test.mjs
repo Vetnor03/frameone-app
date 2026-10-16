@@ -100,7 +100,7 @@ test('new broker user is created, confirmed, upserted with correct password and 
 })
 
 test('existing managed account with exact ACL is idempotently revalidated', async () => {
-  const result = await provisionFrameMqtt('frm_future', base, async (url, init) => {
+  const result = await provisionFrameMqtt('frm_future', base, async (url) => {
     if (url.includes('/authentication/')) return reply(200, goodUser)
     if (url.endsWith('/authorization/sources/built_in_database/rules/all')) return reply(200, { rules: [{ topic: '#', action: 'all', permission: 'deny' }] })
     if (url.includes('/authorization/')) return reply(200, goodAcl)
