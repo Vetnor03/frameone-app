@@ -21,6 +21,8 @@ export type BrokerConfig = {
   pilotDeviceId?: string
   fleetEnabled?: string
   fleetSecret?: string
+  fleetProvider?: string
+  fleetManagementUrl?: string
   publishUrl?: string
   apiKey?: string
   apiSecret?: string
@@ -32,6 +34,8 @@ function defaultBrokerConfig(): BrokerConfig {
     pilotDeviceId: process.env.MQTT_PILOT_DEVICE_ID,
     fleetEnabled: process.env.MQTT_FLEET_ENABLED,
     fleetSecret: process.env.MQTT_FLEET_DERIVATION_SECRET,
+    fleetProvider: process.env.MQTT_FLEET_PROVIDER,
+    fleetManagementUrl: process.env.MQTT_FLEET_MANAGEMENT_URL,
     publishUrl: process.env.MQTT_PILOT_EMQX_PUBLISH_URL,
     apiKey: process.env.MQTT_PILOT_EMQX_API_KEY,
     apiSecret: process.env.MQTT_PILOT_EMQX_API_SECRET,
@@ -44,7 +48,7 @@ async function publishPilotMessage(
   config: BrokerConfig,
   fetchImpl: typeof fetch,
 ): Promise<PilotPushResult> {
-  if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret })) return 'disabled'
+  if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret, fleetProvider: config.fleetProvider, fleetManagementUrl: config.fleetManagementUrl })) return 'disabled'
   const topic = pilotRevisionTopic(deviceId)
   if (!topic || !config.publishUrl || !config.apiKey || !config.apiSecret) return 'failed'
 
@@ -91,7 +95,7 @@ export async function publishPilotRevision(
   fetchImpl: typeof fetch = fetch,
 ): Promise<PilotPushResult> {
   if (!Number.isSafeInteger(revision) || revision <= 0) {
-    if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret })) return 'disabled'
+    if (!mqttEnabledForDevice(deviceId, { pilotEnabled: config.enabled, pilotDeviceId: config.pilotDeviceId, fleetEnabled: config.fleetEnabled, fleetSecret: config.fleetSecret, fleetProvider: config.fleetProvider, fleetManagementUrl: config.fleetManagementUrl })) return 'disabled'
     return 'failed'
   }
   return publishPilotMessage(deviceId, String(revision), config, fetchImpl)
