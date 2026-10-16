@@ -4,11 +4,14 @@ ROOT = Path(__file__).parents[1]
 read = lambda p: (ROOT / p).read_text()
 
 
-def test_production_has_mqtt_disabled_by_default_and_http_fallback():
+def test_alfred_standard_includes_mqtt_but_keeps_https_fallback():
     header = read('src/network/MqttPushPilot.h')
     source = read('src/frame_v2.5.1.ino')
     cpp = read('src/network/MqttPushPilot.cpp')
-    assert '#define FRAME_MQTT_PILOT_ENABLED 0' in header
+    assert '#include "HardwareProfile.h"' in header
+    assert '#if defined(FRAME_IS_ALFRED_V1_2)' in header
+    assert '#define FRAME_MQTT_PILOT_ENABLED 1' in header
+    assert '#define FRAME_MQTT_PILOT_ENABLED 0' in header  # legacy ESP32 only
     assert '#if FRAME_MQTT_PILOT_ENABLED' in cpp
     assert 'bool poll(const String&, bool) { return false; }' in cpp
     assert 'const bool pushConnected = MqttPushPilot::poll(' in source
@@ -45,14 +48,16 @@ def test_mqtt_messages_only_hint_at_secure_authoritative_revision_check():
     assert 'WiFiManagerV2::applyOperationalPowerPolicy(usbPresent, true)' in source
 
 
-def test_mqtt_pilot_separate_build_cannot_change_production_firmware_flags():
+def test_standard_alfred_build_includes_mqtt_without_extra_variant():
     ini = read('platformio.ini')
     ci = (ROOT.parent / '.github/workflows/frame-firmware-build.yml').read_text()
-    assert '[env:alfred_v1_2_mqtt_pilot]' in ini
-    assert '-DFRAME_MQTT_PILOT_ENABLED=1' in ini
+    assert 'default_envs = alfred_v1_2' in ini
     assert 'knolleary/PubSubClient@2.8' in ini
-    assert 'pio run -d frame -e alfred_v1_2_mqtt_pilot' in ci
-    assert ini.index('[env:alfred_v1_2_mqtt_pilot]') > ini.index('[env:alfred_v1_2]')
+    assert '[env:alfred_v1_2_mqtt_pilot]' not in ini
+    assert 'pio run -v -d frame -e alfred_v1_2' in ci
+    assert 'pio run -d frame -e alfred_v1_2_mqtt_pilot' not in ci
+    assert 'Compile Alfred with Arduino CLI' in ci
+    assert 'Archive normal Alfred Arduino sketch (MQTT included)' in ci
 
 
 
