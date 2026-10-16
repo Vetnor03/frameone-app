@@ -65,9 +65,7 @@ const SHOW_CUSTOM_LAYOUT_UI = false
 const SHOW_NOTIFICATIONS_UI = false
 // Start new frames in responsive/Instant mode; existing saved preferences take precedence.
 const DEFAULT_POWER_SAVER = false
-// Smart Instant is restricted to the physically provisioned MQTT pilot frame.
-// Normal customer sessions make no presence requests.
-const MQTT_SMART_INSTANT_PILOT_DEVICE_ID = 'frm_54AE37455F34'
+// MQTT presence remains server gated. The app itself works with any paired frame.
 
 type AppLanguage = 'en' | 'no'
 type AppFontSize = 'normal' | 'large'
@@ -1293,7 +1291,7 @@ export default function HomePage() {
   // After ~2 minutes without interaction the frame returns to low-power mode
   // independently, even if the browser is killed without an unload event.
   useEffect(() => {
-    if (!userId || activeDeviceId !== MQTT_SMART_INSTANT_PILOT_DEVICE_ID || powerSaver) return
+    if (!userId || !activeDeviceId || powerSaver) return
 
     let cancelled = false
     let inFlight = false

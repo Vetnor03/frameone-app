@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { authenticateUserForDevice, deviceIdFrom } from '@/app/lib/device/updateStateAuth'
 import { publishPilotActivity } from '@/app/lib/device/mqttPilotPublish'
+import { mqttEnabledForDevice } from '@/app/lib/device/mqttRollout'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -16,8 +17,7 @@ export async function POST(req: Request) {
   if (!deviceId) return NextResponse.json({ error: 'missing_device_id' }, { status: 400 })
 
   // No broker calls and no new DB work when the experiment is switched off.
-  if (process.env.MQTT_PILOT_ENABLED !== 'true' ||
-    process.env.MQTT_PILOT_DEVICE_ID !== deviceId) {
+  if (!mqttEnabledForDevice(deviceId)) {
     return NextResponse.json({ enabled: false }, {
       headers: { 'Cache-Control': 'no-store' },
     })

@@ -36,8 +36,7 @@ test('activity publishing does nothing for other customers and when experiment d
 })
 
 test('app activity requests require membership and a single allowlisted frame', () => {
-  assert.match(route, /process\.env\.MQTT_PILOT_ENABLED !== 'true'/)
-  assert.match(route, /process\.env\.MQTT_PILOT_DEVICE_ID !== deviceId/)
+  assert.match(route, /if \(!mqttEnabledForDevice\(deviceId\)\)/)
   assert.match(route, /authenticateUserForDevice\(req, deviceId\)/)
   assert.match(route, /publishPilotActivity\(deviceId\)/)
   assert.doesNotMatch(route, /request_device_display_revision/)
@@ -45,8 +44,8 @@ test('app activity requests require membership and a single allowlisted frame', 
 })
 
 test('foreground app sends throttle-limited hints and stops on invisibility/inactivity/Power Save', () => {
-  assert.match(app, /const MQTT_SMART_INSTANT_PILOT_DEVICE_ID = 'frm_54AE37455F34'/)
-  assert.match(app, /activeDeviceId !== MQTT_SMART_INSTANT_PILOT_DEVICE_ID \|\| powerSaver/)
+  assert.doesNotMatch(app, /MQTT_SMART_INSTANT_PILOT_DEVICE_ID/)
+  assert.match(app, /if \(!userId \|\| !activeDeviceId \|\| powerSaver\) return/)
   assert.match(app, /document\.visibilityState !== 'visible'/)
   assert.match(app, /Date\.now\(\) - lastInteractionAt > 90_000/)
   assert.match(app, /Date\.now\(\) - lastSentAt < 50_000/)
