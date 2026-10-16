@@ -3,6 +3,7 @@ import { authenticatePhysicalDevice, deviceIdFrom } from '@/app/lib/device/updat
 import { pilotCredentialPayload } from '@/app/lib/device/mqttPilotCredentials'
 import { mqttEnabledForDevice } from '@/app/lib/device/mqttRollout'
 import { provisionFrameMqtt } from '@/app/lib/device/mqttFleetProvisioning'
+import { ABLY_MQTT_HOST, ABLY_MQTT_PORT, makeAblyFrameCredentials } from '@/app/lib/device/mqttAbly'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -76,6 +77,20 @@ export async function GET(req: Request) {
   if (process.env.MQTT_FLEET_ENABLED !== 'true') {
     return NextResponse.json({ error: 'not_enabled' }, { status: 404, headers: NO_STORE })
   }
+  if (process.env.MQTT_FLEET_PROVIDER === 'ably_jwt_v1') {
+    // A channel-scoped, short-lived JWT replaces broker-side account creation.
+    // Firmware will supply the JWT as its MQTT username, never the device token.
+    const credentials = makeAblyFrameCredentials(deviceId, process.env.MQTT_ABLY_API_KEY)
+    const publicCa = process.env.MQTT_ABLY_ROOT_CA_PEM
+    if (!credentials || !publicCa || publicCa.length > 4096 ||
+        !publicCa.includes('-----BEGIN CERTIFICATE-----') ||
+        !publicCa.includes('-----END CERTIFICATE-----')) {
+      return NextResponse.json({ error: 'broker_not_configured' }, { status: 503, headers: NO_STORE })
+    }
+    return NextResponse.json({ ...credentials, broker_host: ABLY_MQTT_HOST,
+      broker_port: ABLY_MQTT_PORT, broker_ca_pem: publicCa }, { headers: NO_STORE })
+  }
+
   const connection = brokerConnectionDetails(true)
   if (!connection) return NextResponse.json({ error: 'broker_not_configured' }, { status: 503, headers: NO_STORE })
   const provision = await provisionFrameMqtt(deviceId)

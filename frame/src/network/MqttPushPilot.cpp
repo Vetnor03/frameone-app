@@ -36,6 +36,9 @@ static const char* TOPIC_PREFIX = "remind/pilot/revisions/";
 static String g_topic;
 static String g_brokerHost;
 static String g_brokerCaPem;
+static bool g_ablyTokenActive = false;
+static uint32_t g_tokenRenewAfterMs = 0;
+static const uint32_t ABLY_RENEW_AFTER_MS = 50UL * 60UL * 1000UL;
 
 bool validDeviceId(const String& id) {
   if (id.length() < 1 || id.length() > 128) return false;
@@ -89,7 +92,9 @@ bool configure() {
   return true;
 }
 
-bool fetchCredentials(const String& deviceToken, String& username, String& password, String& brokerHost, uint16_t& brokerPort, String& brokerCaPem) {
+bool fetchCredentials(const String& deviceToken, String& username, String& password,
+                      String& brokerHost, uint16_t& brokerPort, String& brokerCaPem,
+                      bool& ablyToken) {
   const String url = String(BASE_URL) +
     "/api/device/mqtt-pilot/credentials?device_id=" + DeviceIdentity::getDeviceId();
   int code = 0;
@@ -100,17 +105,30 @@ bool fetchCredentials(const String& deviceToken, String& username, String& passw
 
   // Public CA PEM can be >1KB; allocate JSON capacity on heap instead of
   // using >6KB of the ESP32 Arduino loop task's limited stack.
-  DynamicJsonDocument doc(6144);
+  DynamicJsonDocument doc(8192);
   if (deserializeJson(doc, body)) return false;
   const char* mqttUsername = doc["username"] | "";
   const char* mqttPassword = doc["password"] | "";
-  if (String(mqttUsername) != DeviceIdentity::getDeviceId()) return false;
-  const size_t size = strlen(mqttPassword);
-  if (size < 24 || size > 256) return false;
+  // Existing EMQX contract uses device ID + separate MQTT password.
+  // Ably's protocol adapter instead authenticates a scoped, expiring JWT as
+  // MQTT username, with an empty password. Never send the RE:MIND device token.
+  const char* authMode = doc["mqtt_auth"] | "emqx_password_v1";
+  ablyToken = strcmp(authMode, "ably_jwt_v1") == 0;
+  if (ablyToken) {
+    const size_t jwtLength = strlen(mqttUsername);
+    if (jwtLength < 200 || jwtLength > 1400 || mqttPassword[0] != '\0' ||
+        (doc["token_ttl_sec"] | 0) != 3600) return false;
+  } else {
+    if (strcmp(authMode, "emqx_password_v1") != 0 ||
+        String(mqttUsername) != DeviceIdentity::getDeviceId()) return false;
+    const size_t size = strlen(mqttPassword);
+    if (size < 24 || size > 256) return false;
+  }
   const char* host = doc["broker_host"] | MQTT_PILOT_BROKER_HOST;
   const int port = doc["broker_port"] | MQTT_PILOT_BROKER_PORT;
   const String validatedHost(host);
   if (validatedHost.isEmpty() || validatedHost.length() > 253 || port < 1 || port > 65535) return false;
+  if (ablyToken && (validatedHost != "main.mqtt.ably.net" || port != 8883)) return false;
   for (size_t i = 0; i < validatedHost.length(); ++i) {
     const char c = validatedHost[i];
     if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
@@ -124,6 +142,9 @@ bool fetchCredentials(const String& deviceToken, String& username, String& passw
       (receivedCa.length() > 0 &&
         (receivedCa.indexOf("-----BEGIN CERTIFICATE-----") < 0 ||
          receivedCa.indexOf("-----END CERTIFICATE-----") < 0))) return false;
+  // Ably's CA must be explicitly provisioned, never borrowed from the
+  // EMQX compatibility default without verification.
+  if (ablyToken && receivedCa.isEmpty()) return false;
   brokerCaPem = receivedCa;
   brokerHost = validatedHost;
   brokerPort = (uint16_t)port;
@@ -163,7 +184,15 @@ bool poll(const String& deviceToken, bool usbPresent) {
   if (!configure() || deviceToken.length() == 0 ||
       WiFi.status() != WL_CONNECTED) return false;
   if (g_mqtt.connected()) {
-    return g_mqtt.loop() && g_mqtt.connected();
+    if (!g_ablyTokenActive || (int32_t)(millis() - g_tokenRenewAfterMs) < 0) {
+      return g_mqtt.loop() && g_mqtt.connected();
+    }
+    // MQTT 3.1.1 has no in-place AUTH command. Refresh proactively at 50m
+    // (JWT expires after 60m) so the broker never drops us for token expiry.
+    // A backend outage still falls through to the existing HTTPS fallback.
+    g_mqtt.disconnect();
+    g_retryAfterMs = millis();
+    g_ablyTokenActive = false;
   }
 
   const uint32_t now = millis();
@@ -178,8 +207,9 @@ bool poll(const String& deviceToken, bool usbPresent) {
   String brokerHost;
   String brokerCaPem;
   uint16_t brokerPort = MQTT_PILOT_BROKER_PORT;
+  bool ablyToken = false;
   const bool haveCredentials = fetchCredentials(
-    deviceToken, username, password, brokerHost, brokerPort, brokerCaPem
+    deviceToken, username, password, brokerHost, brokerPort, brokerCaPem, ablyToken
   );
   bool subscribed = false;
   if (haveCredentials) {
@@ -189,12 +219,18 @@ bool poll(const String& deviceToken, bool usbPresent) {
     g_tls.setCACert(g_brokerCaPem.isEmpty()
       ? kMqttPilotRootCaPem : g_brokerCaPem.c_str());
     g_mqtt.setServer(g_brokerHost.c_str(), brokerPort);
+    // Ably accepts QoS0 subscriptions only and requires <=60s keepalive.
+    // Its JWT username needs a larger MQTT CONNECT packet buffer.
+    g_mqtt.setKeepAlive(ablyToken ? 60 : 90);
+    const bool bufferReady = g_mqtt.setBufferSize(ablyToken ? 2048 : 512);
     const String clientId = String("remind-") + DeviceIdentity::getDeviceId();
-    const bool connected = g_mqtt.connect(
-      clientId.c_str(), username.c_str(), password.c_str()
+    const bool connected = bufferReady && g_mqtt.connect(
+      clientId.c_str(), username.c_str(), ablyToken ? nullptr : password.c_str()
     );
-    subscribed = connected && g_mqtt.subscribe(g_topic.c_str(), 1);
+    subscribed = connected && g_mqtt.subscribe(g_topic.c_str(), ablyToken ? 0 : 1);
     if (connected && !subscribed) g_mqtt.disconnect();
+    g_ablyTokenActive = subscribed && ablyToken;
+    g_tokenRenewAfterMs = g_ablyTokenActive ? millis() + ABLY_RENEW_AFTER_MS : 0;
   }
   // Clear the mutable copy after use; never log or persist it.
   password = "";
