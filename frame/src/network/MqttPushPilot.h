@@ -2,10 +2,17 @@
 
 #include <Arduino.h>
 
-// EXPERIMENT ONLY: production firmware keeps this disabled. Enabling requires
-// broker TLS, a distinct per-device MQTT password and device-scoped ACLs.
+// The standard Alfred ESP32-S3 build includes MQTT automatically. Broker
+// provisioning is controlled by authenticated backend rollout switches; a
+// disconnected/unconfigured broker leaves the existing HTTPS fallback intact.
+// Keep the legacy original-ESP32 build source-compatible without forcing MQTT.
+#include "HardwareProfile.h"
 #ifndef FRAME_MQTT_PILOT_ENABLED
+#if defined(FRAME_IS_ALFRED_V1_2)
+#define FRAME_MQTT_PILOT_ENABLED 1
+#else
 #define FRAME_MQTT_PILOT_ENABLED 0
+#endif
 #endif
 
 namespace MqttPushPilot {
