@@ -3,6 +3,7 @@ import test from 'node:test'
 import { createHmac } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { ablyCanaryForDevice, mqttEnabledForDevice } from '../app/lib/device/mqttRollout.ts'
+import { publishPilotRevision } from '../app/lib/device/mqttPilotPublish.ts'
 import {
   ABLY_MQTT_HOST, ABLY_MQTT_PORT, ABLY_TOKEN_TTL_SEC,
   makeAblyFrameCredentials, publishAblyFrameHint,
@@ -53,6 +54,34 @@ test('one paired frame can opt into Ably without enabling the fleet or disturbin
   assert.equal(mqttEnabledForDevice('frm_active', { ...canary, ablyCanaryEnabled: 'false' }), false)
   assert.equal(mqttEnabledForDevice('frm_active', { ...canary, ablyApiKey: undefined }), false)
   assert.equal(mqttEnabledForDevice('frm_active', { ...canary, ablyRootCaPem: undefined }), false)
+})
+
+test('Ably canary routes hints correctly, preserving old EMQX and disabled other frames', async () => {
+  const config = {
+    enabled: 'true', pilotDeviceId: 'frm_emqx_legacy',
+    fleetEnabled: 'false', fleetProvider: 'ably_jwt_v1',
+    ablyCanaryEnabled: 'true', ablyCanaryDeviceId: 'frm_active',
+    ablyApiKey: key, ablyRootCaPem: ca,
+    publishUrl: 'https://legacy.example/api/v5/publish',
+    apiKey: 'pilot-key', apiSecret: 'pilot-secret',
+  }
+  const calls = []
+  const fakeFetch = async (url, init) => {
+    calls.push({ url, init })
+    return { ok: true, status: 201 }
+  }
+  assert.equal(await publishPilotRevision('frm_active', 72, config, fakeFetch), 'published')
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].url, 'https://main.realtime.ably.net/channels/remind%2Fpilot%2Frevisions%2Ffrm_active/messages')
+  assert.deepEqual(JSON.parse(calls[0].init.body), { name: 'mqtt-hint', data: '72' })
+
+  assert.equal(await publishPilotRevision('frm_emqx_legacy', 73, config, fakeFetch), 'published')
+  assert.equal(calls.length, 2)
+  assert.equal(calls[1].url, 'https://legacy.example/api/v5/publish')
+  assert.equal(JSON.parse(calls[1].init.body).topic, 'remind/pilot/revisions/frm_emqx_legacy')
+
+  assert.equal(await publishPilotRevision('frm_other', 74, config, fakeFetch), 'disabled')
+  assert.equal(calls.length, 2)
 })
 
 test('JWT is signed, scoped to one frame subscribe-only, short lived and unique by identity', () => {
