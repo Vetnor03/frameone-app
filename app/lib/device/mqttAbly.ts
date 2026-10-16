@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto'
-import { pilotRevisionTopic } from './mqttPilotPublish.ts'
+import { pilotRevisionTopic } from './mqttPilotTopic.ts'
 
 /**
  * Ably MQTT adapter: JWT is the MQTT username, empty password.
