@@ -63,3 +63,43 @@ test('publisher fails closed on unsafe endpoints, invalid topics, revisions or c
   assert.equal(await publishPilotRevision('frame-1', -1, { ...conf, publishUrl: 'https://broker.example/publish' }, forbid), 'failed')
   assert.equal(await publishPilotRevision('frame-1', 1, { ...conf, publishUrl: 'https://broker.example/publish', apiSecret: '' }, forbid), 'failed')
 })
+
+
+test('fleet publisher uses the Dedicated provisioning API and credentials, never pilot Serverless', async () => {
+  let called
+  const config = {
+    enabled: 'true', pilotDeviceId: 'frm_54AE37455F34',
+    fleetEnabled: 'true', fleetSecret: 'S'.repeat(64),
+    fleetProvider: 'emqx_dedicated_v5', fleetManagementUrl: 'https://dedicated.example:8443/api/v5',
+    fleetBrokerHost: 'dedicated-mqtt.example', fleetBrokerPort: '8883',
+    fleetApiKey: 'dedicated-key', fleetApiSecret: 'dedicated-secret',
+    publishUrl: 'https://serverless.example:8443/api/v5/publish',
+    apiKey: 'pilot-key', apiSecret: 'pilot-secret',
+  }
+  const response = await publishPilotRevision('frm_future', 15, config, async (url, init) => {
+    called = { url, init }
+    return { status: 200, ok: true }
+  })
+  assert.equal(response, 'published')
+  assert.equal(called.url, 'https://dedicated.example:8443/api/v5/publish')
+  assert.equal(called.init.headers.authorization,
+    'Basic ' + Buffer.from('dedicated-key:dedicated-secret').toString('base64'))
+  assert.equal(JSON.parse(called.init.body).topic, 'remind/pilot/revisions/frm_future')
+
+  const pilot = await publishPilotRevision('frm_54AE37455F34', 15, config, async (url, init) => {
+    called = { url, init }
+    return { status: 200, ok: true }
+  })
+  assert.equal(pilot, 'published')
+  assert.equal(called.url, config.publishUrl)
+  assert.equal(called.init.headers.authorization,
+    'Basic ' + Buffer.from('pilot-key:pilot-secret').toString('base64'))
+
+  const fleetWithoutPilot = await publishPilotRevision('frm_future', 15,
+    { ...config, enabled: 'false' }, async (url) => {
+      called = { url }
+      return { status: 200, ok: true }
+    })
+  assert.equal(fleetWithoutPilot, 'published')
+  assert.equal(called.url, 'https://dedicated.example:8443/api/v5/publish')
+})
