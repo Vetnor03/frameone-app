@@ -6,7 +6,7 @@ import { ablyCanaryForDevice, mqttEnabledForDevice } from '../app/lib/device/mqt
 import { publishPilotRevision } from '../app/lib/device/mqttPilotPublish.ts'
 import {
   ABLY_MQTT_HOST, ABLY_MQTT_PORT, ABLY_TOKEN_TTL_SEC,
-  makeAblyFrameCredentials, publishAblyFrameHint,
+  makeAblyFrameCredentials, publishAblyFrameHint, getAblyFrameSubscribers,
 } from '../app/lib/device/mqttAbly.ts'
 
 const key = 'appID.keyID:' + 'd'.repeat(32)
@@ -164,4 +164,38 @@ test('firmware supports short-lived MQTT token contract while EMQX remains backw
   assert.match(fw, /ABLY_RENEW_AFTER_MS = 50UL \* 60UL \* 1000UL/)
   assert.match(fw, /g_mqtt\.disconnect\(\)/)
   assert.match(fw, /receivedCa\.isEmpty\(\)/)
+})
+
+test('Ably canary subscriber check uses read-only single-channel metadata', async () => {
+  let called
+  const authorized = await getAblyFrameSubscribers('frm_active', key, async (url, init) => {
+    called = { url, init }
+    return { ok: true, json: async () => ({ status: { occupancy: {
+      metrics: { subscribers: 1 },
+    } } }) }
+  })
+  assert.equal(authorized, 1)
+  assert.equal(called.url,
+    'https://main.realtime.ably.net/channels/remind%2Fpilot%2Frevisions%2Ffrm_active')
+  assert.equal(called.init.method, 'GET')
+  assert.equal(called.init.redirect, 'error')
+  assert.ok(called.init.headers.authorization.startsWith('Basic '))
+  assert.equal(await getAblyFrameSubscribers('frm_active', key,
+    async () => ({ ok: true, json: async () => ({ status: {
+      occupancy: { metrics: { subscribers: 0 } },
+    } }) })), 0)
+  assert.equal(await getAblyFrameSubscribers('frm_active', key,
+    async () => ({ ok: false, status: 403 })), null)
+  assert.equal(await getAblyFrameSubscribers('bad/#', key,
+    async () => { throw Error('must not send invalid topic') }), null)
+})
+
+test('app activity endpoint pushes hints after durable authenticated heartbeat', () => {
+  const activity = readFileSync(new URL(
+    '../app/api/device/update-state/activity/route.ts', import.meta.url), 'utf8')
+  assert.match(activity, /authenticateUserForDevice\(req, deviceId\)/)
+  assert.match(activity, /heartbeat_device_app_activity/)
+  assert.match(activity, /publishPilotActivity\(deviceId\)/)
+  assert.ok(activity.indexOf("if (error) return NextResponse") <
+    activity.indexOf("await publishPilotActivity(deviceId)"))
 })
