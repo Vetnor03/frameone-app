@@ -40,7 +40,7 @@ test('numeric-only transport and parallel fetch timings piggyback on existing AC
     ['fetch_wait_ms','fetchWaitMs'],
   ]) {
     assert.match(timings, new RegExp('uint32_t ' + member + ' = 0'))
-    assert.ok(transport.includes('"' + field + ''))
+    assert.ok(transport.includes(field))
     assert.ok(transport.includes('timings->' + member))
     assert.ok(route.includes("'" + field + "'"))
   }
