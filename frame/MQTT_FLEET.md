@@ -126,3 +126,66 @@ two-device broker test has verified account creation, cross-device subscription
 denial and revocation. Ensure the configured management endpoint and MQTT
 endpoint belong to the *same* Dedicated deployment in its console before enabling.
 No per-device source edit or extra flash is needed for hostname migration.
+
+
+## Alternative fleet provider: Ably scoped JWT (16 October 2026)
+
+**Candidate only. Not activated or validated with a live Ably account.** Ably's
+MQTT 3.1.1 adapter supports token authentication and individually restricted
+channel capabilities without maintaining an account for each frame.
+
+New server-only settings (Production only after two-frame negative testing):
+
+- `MQTT_FLEET_PROVIDER=ably_jwt_v1`
+- `MQTT_FLEET_ENABLED=true` (**keep false until live verification**)
+- `MQTT_ABLY_API_KEY`: a new Ably application's secret API key, configured
+  directly in Vercel; **never put it in firmware, GitHub or a support message**.
+- `MQTT_ABLY_ROOT_CA_PEM`: verified *public* PEM trust anchor for
+  `main.mqtt.ably.net:8883`; **required** for this provider. Verify the
+  actual broker chain before setting; the old EMQX CA is not assumed valid.
+
+The backend first validates the physical RE:MIND device token and an existing
+`device_members` pairing. It then signs a 60-minute Ably JWT containing
+`x-ably-clientId=deviceId` with exactly one capability:
+`remind/pilot/revisions/{deviceId}: ['subscribe']`. No broker user creation,
+fleet password HMAC, or new customer-facing toggle is required. The JWT is
+delivered only over authenticated no-cache RE:MIND HTTPS.
+
+**MQTT firmware support:** Ably MQTT's username is the JWT and its password
+is empty. The new universal MQTT build accepts `mqtt_auth=ably_jwt_v1` and
+`token_ttl_sec=3600`, limits keepalive to 60 seconds, subscribes with QoS 0,
+and proactively reconnects for a fresh JWT after 50 minutes. Firmware still
+supports the original EMQX deviceId/password contract (90s keepalive, QoS 1).
+The MQTT buffer is increased for JWT authentication only. A missed message,
+disconnect or token-renewal failure always falls back to authoritative HTTPS
+revision checks and physical display ACK.
+
+Backend publishes hints through the Ably REST API against the same application
+specified by `MQTT_ABLY_API_KEY`. `main.mqtt.ably.net` is the documented
+MQTT adapter hostname; `main.realtime.ably.net` is Ably's documented REST
+API hostname. We must verify both reach the same Ably application using a real
+API key before rollout. The legacy prototype remains on its original EMQX
+account while `MQTT_PILOT_ENABLED=true`; turning that flag off and enabling
+the Ably fleet on a controlled test deployment migrates the prototype through
+the same authenticated credential endpoint, with no source changes.
+
+**Provider limitations to verify physically:** Ably MQTT subscriptions are
+QoS 0, will/retain are not supported, and MQTT needs TLS on 8883. The
+application-level durable revision and 15-minute HTTPS safety check are
+essential. Check token renewal, broker ACL isolation (cross-device and wildcard
+subscriptions), negative publish permissions, expiry, disconnect recovery,
+TLS hostname validation and whole-board power measurements. JWTs already
+issued remain valid until expiry unless Ably token revocation is configured;
+production unpair/reset security requires a deliberate revocation strategy
+and a tested lifecycle response. Short-lived tokens are not equivalent to
+instant revocation.
+
+No live Ably credentials, broker connections, topic isolation or battery
+results have been verified by CI. Do not activate commercial fleet MQTT or
+recommend flashing this build solely on the basis of passing compilation.
+
+Official docs:
+- https://ably.com/docs/protocols/mqtt
+- https://ably.com/docs/auth/token/jwt
+- https://ably.com/docs/auth/capabilities
+- https://ably.com/docs/api/rest-api
