@@ -110,6 +110,7 @@ test('firmware supports short-lived MQTT token contract while EMQX remains backw
   assert.match(fw, /strcmp\(authMode, "ably_jwt_v1"\)/)
   assert.match(fw, /mqttPassword\[0\] != '\\0'/)
   assert.match(fw, /setKeepAlive\(ablyToken \? 60 : 90\)/)
+  assert.match(fw, /ablyToken \? nullptr : password\.c_str\(\)/)
   assert.match(fw, /subscribe\(g_topic\.c_str\(\), ablyToken \? 0 : 1\)/)
   assert.match(fw, /ABLY_RENEW_AFTER_MS = 50UL \* 60UL \* 1000UL/)
   assert.match(fw, /g_mqtt\.disconnect\(\)/)
