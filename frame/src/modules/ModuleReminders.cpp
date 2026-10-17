@@ -1259,8 +1259,9 @@ static int drawBucketLinesCentered(const Cell& c,
     return 0;
   }
 
-  char label[32];
-  buildRelativeDateText(bucket.daysUntil, bucket.isOverdue, label, sizeof(label));
+  // The bucket heading already gives the day (e.g. "Tomorrow").
+  // Repeating it on every reminder wastes space and looks duplicated.
+  const char* label = "";
 
   SmartReminderLayout& layout = g_smartLayoutScratch[0];
   resetSmartReminderLayout(layout);
