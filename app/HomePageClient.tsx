@@ -51,7 +51,7 @@ import type { EditorCell } from './lib/frameLayoutEditor.mjs'
 import { MAX_FRAME_NAME_LENGTH, normalizeFrameName } from './lib/frameName.mjs'
 import { recommendedModuleKeys, additionalModuleGroups } from './lib/modulePickerCatalog.mjs'
 
-type CoreTabKey = 'frame' | 'settings'
+type CoreTabKey = 'frame' | 'connect' | 'settings'
 type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'ski' | 'reminders' | 'news' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
 type CellSize = 'small' | 'medium' | 'large'
 type LayoutKey = 'default' | 'pyramid' | 'square' | 'full'
@@ -1213,7 +1213,6 @@ export default function HomePage() {
 
   const [activeTab, setActiveTab] = useState<TabKey>('frame')
   const [assistantDeepLink, setAssistantDeepLink] = useState<{ watchId: string; updateId: string | null } | null>(null)
-  const [remindersConnectScreenOpen, setRemindersConnectScreenOpen] = useState(false)
   const [dirty, setDirty] = useState(false)
 
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null)
@@ -1651,6 +1650,11 @@ export default function HomePage() {
       setAssistantDeepLink({ watchId, updateId: searchParams?.get('update')?.trim() || null })
       return
     }
+    if (tab === 'connect' || searchParams?.has('teams')) {
+      preferInstantScrollRef.current = true
+      setActiveTab('connect')
+      return
+    }
     if (tab === 'settings') {
       stickySettingsRef.current = true
       preferInstantScrollRef.current = true
@@ -1685,15 +1689,19 @@ export default function HomePage() {
     return [
       { key: 'frame' as const, label: tx(language).frame },
       ...dynamicTabs,
+      { key: 'connect' as const, label: 'CONNECT' },
       { key: 'settings' as const, label: tx(language).settings },
     ]
   }, [dynamicTabs, language])
+
+  const remindersShownOnFrame = Object.values(
+    activeCustomLayoutId ? (customAssignments[activeCustomLayoutId] || {}) : (cellsByLayout[layoutKey] || {}),
+  ).includes('reminders')
 
 
   useEffect(() => {
     if (tabs.some((tab) => tab.key === activeTab)) return
     stickySettingsRef.current = false
-    setRemindersConnectScreenOpen(false)
     setActiveTab('frame')
   }, [activeTab, tabs])
 
@@ -2871,7 +2879,6 @@ export default function HomePage() {
 async function handleSelectTab(k: TabKey) {
   preferInstantScrollRef.current = false
   stickySettingsRef.current = k === 'settings'
-  setRemindersConnectScreenOpen(false)
   if (k !== 'settings') { setSettingsSubpage(null); setAppThemePickerOpen(false) }
 
   // Re-read device-scoped state in the navigation event, before React is
@@ -2905,8 +2912,8 @@ async function handleSelectTab(k: TabKey) {
       case 'surf': setActiveTab('surf'); return
       case 'weather': setActiveTab('weather'); return
       case 'groceries': case 'recipes': setActiveTab('groceries'); return
-      case 'reminders': setRemindersConnectScreenOpen(false); setActiveTab('reminders'); return
-      case 'spond': setRemindersConnectScreenOpen(true); setActiveTab('reminders'); return
+      case 'reminders': setActiveTab('reminders'); return
+      case 'spond': setActiveTab('connect'); return
       case 'countdown': setActiveTab('countdown'); return
       case 'date': setActiveTab('date'); return
       case 'football': setActiveTab('soccer'); return
@@ -3020,13 +3027,29 @@ async function handleSelectTab(k: TabKey) {
                 />
               )}
 
-              {activeTab !== 'frame' && activeTab !== 'settings' && (
+              {activeTab === 'connect' && (
+                <ConnectAppsScreen
+                  language={language}
+                  modulesJson={modulesJson}
+                  activeDeviceId={activeDeviceId}
+                  onBack={() => setActiveTab('reminders')}
+                  asTab
+                  remindersVisibleOnFrame={!activeDeviceId || remindersShownOnFrame}
+                  onIntegrationChanged={(key, config = { enabled: true }, legacyEnabled = []) => {
+                    const nextModules = integrationModulesAfterChange(modulesJson, key, config, legacyEnabled)
+                    setModulesJson(nextModules)
+                    markDirty({ modulesJson: nextModules })
+                  }}
+                />
+              )}
+
+              {activeTab !== 'frame' && activeTab !== 'connect' && activeTab !== 'settings' && (
                 <div className="relative h-full">
                   <div className="absolute right-0 -top-4 z-20 flex items-center gap-2">
-                    {activeTab === 'reminders' && !remindersConnectScreenOpen && (
+                    {activeTab === 'reminders' && (
                       <button
                         type="button"
-                        onClick={() => setRemindersConnectScreenOpen(true)}
+                        onClick={() => void handleSelectTab('connect')}
                         className="inline-flex h-7 items-center justify-center rounded-full border border-[color:var(--bd-20)] px-3 text-[10px] tracking-widest text-[color:var(--fg-70)] bg-[color:var(--app-bg)]/80"
                       >
                         {language === 'no' ? 'KOBLE TIL' : 'CONNECT'}
@@ -3063,18 +3086,6 @@ async function handleSelectTab(k: TabKey) {
 
                   {activeTab === 'assistant' ? (
                     <AIAssistantTab language={language} activeDeviceId={activeDeviceId} deepLink={assistantDeepLink} onDeepLinkHandled={finishAssistantDeepLink} onOpenPlans={() => { stickySettingsRef.current = true; preferInstantScrollRef.current = true; setSettingsSubpage('subscription'); setActiveTab('settings') }} />
-                  ) : activeTab === 'reminders' && remindersConnectScreenOpen ? (
-                    <ConnectAppsScreen
-                      language={language}
-                      modulesJson={modulesJson}
-                      activeDeviceId={activeDeviceId}
-                      onBack={() => setRemindersConnectScreenOpen(false)}
-                      onIntegrationChanged={(key, config = { enabled: true }, legacyEnabled = []) => {
-                        const nextModules = integrationModulesAfterChange(modulesJson, key, config, legacyEnabled)
-                        setModulesJson(nextModules)
-                        markDirty({ modulesJson: nextModules })
-                      }}
-                    />
                   ) : (
                     <ModuleSettingsTab
                       language={language}
@@ -3231,6 +3242,8 @@ function ConnectAppsScreen({
   activeDeviceId = null,
   onBack,
   startup = false,
+  asTab = false,
+  remindersVisibleOnFrame = true,
   onIntegrationChanged,
 }: {
   language: AppLanguage
@@ -3238,6 +3251,8 @@ function ConnectAppsScreen({
   activeDeviceId?: string | null
   onBack: () => void
   startup?: boolean
+  asTab?: boolean
+  remindersVisibleOnFrame?: boolean
   onIntegrationChanged?: (key: ConnectAppKey, config?: Record<string, unknown>, legacyEnabled?: ConnectAppKey[]) => void
 }) {
   const initialTeamsOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('teams')
@@ -3749,18 +3764,28 @@ function ConnectAppsScreen({
   return (
     <div className="h-full min-h-0 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
       <div className="pt-5 pb-6">
-        {!startup && <div className="flex items-center justify-between gap-3 px-1">
-          <button
-            type="button"
-            onClick={onBack}
-            className="h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[11px] tracking-widest text-[color:var(--fg-70)]"
-          >
-            {language === 'no' ? 'TILBAKE' : 'BACK'}
-          </button>
+        {!startup && <div className={`flex items-center ${asTab ? 'justify-start' : 'justify-between'} gap-3 px-1`}>
+          {!asTab && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[11px] tracking-widest text-[color:var(--fg-70)]"
+            >
+              {language === 'no' ? 'TILBAKE' : 'BACK'}
+            </button>
+          )}
           <div className="text-[color:var(--fg-90)] text-sm font-semibold">
             {language === 'no' ? 'Koble til apper' : 'Connect Apps'}
           </div>
         </div>}
+
+        {asTab && !remindersVisibleOnFrame && (
+          <div role="note" className="mt-4 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 py-3 text-xs leading-snug text-[color:var(--fg-70)]">
+            {language === 'no'
+              ? 'Påminnelser fra tilkoblede apper vises ikke på rammen før du legger til Påminnelser-modulen i oppsettet.'
+              : 'Reminders from connected apps will not appear on the frame until you add the Reminders module to your layout.'}
+          </div>
+        )}
 
         <div className={`${startup ? '' : 'mt-4'} space-y-2.5`}>
           {sortedApps.map(({ app, connected }) => {
