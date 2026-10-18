@@ -844,7 +844,14 @@ function reminderBoundaries(source, now) {
         timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit',
       }).formatToParts(new Date(guess)).filter((p) => p.type !== 'literal').map((p) => [p.type, Number(p.value)]))
       const offset = Date.UTC(oslo.year, oslo.month - 1, oslo.day, oslo.hour, oslo.minute) - guess
-      const at = guess - offset
+      let at = guess - offset
+      // Oslo's autumn clock repeats 02:00–02:59. A reminder expires at the
+      // FIRST occurrence of its local HH:mm; do not schedule its removal at
+      // the repeated hour (one real hour late).
+      const firstCandidate = at - 60 * 60_000
+      const earlier = osloParts(firstCandidate)
+      if (earlier.year === year && earlier.month === month && earlier.day === day &&
+          earlier.hour === hour && earlier.minute === minute) at = firstCandidate
       if (Number.isFinite(at) && at > now) result.push(at)
     }
   }
