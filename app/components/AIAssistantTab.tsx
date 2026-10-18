@@ -89,7 +89,7 @@ function friendlyAssistantTime(value: string | null, language: AppLanguage) {
   if (!value) return assistantCopy(language).never
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return assistantCopy(language).never
-  return new Intl.DateTimeFormat(language === 'no' ? 'nb-NO' : 'en-US', { dateStyle: 'medium', timeStyle: 'short', hour12: false }).format(date)
+  return new Intl.DateTimeFormat(language === 'no' ? 'nb-NO' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short', hour12: false }).format(date)
 }
 
 function sourceUrls(input: unknown): string[] {
