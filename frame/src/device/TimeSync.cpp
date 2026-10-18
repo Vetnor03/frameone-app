@@ -12,12 +12,11 @@ static bool timeValid() {
 }
 
 bool ensure(uint32_t timeoutMs) {
-  // Oslo timezone with DST
-  setenv("TZ", "CET-1CEST,M3.5.0/02,M10.5.0/03", 1);
-  tzset();
-
-  // Start NTP (safe to call multiple times)
-  configTime(0, 0, "pool.ntp.org", "time.google.com", "time.nist.gov");
+  // NTP time is UTC, but rendered clock/calendar must follow Oslo DST rules.
+  // configTime(offset, dstOffset) overwrites TZ in Arduino-ESP32 2.0.14.
+  // configTzTime keeps the POSIX rule across winter/summer transitions.
+  configTzTime("CET-1CEST,M3.5.0/02,M10.5.0/03",
+               "pool.ntp.org", "time.google.com", "time.nist.gov");
 
   uint32_t t0 = millis();
   while (millis() - t0 < timeoutMs) {
