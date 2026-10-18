@@ -7,6 +7,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { fetchSurfScore } from './lib/fetchSurfScore'
 import { findSpotByLabel } from './lib/surf/spots'
+import { formatAppDate, formatAppNumericDate } from './lib/dateDisplay'
 import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/customSpotMath'
 import { normalizeSurfRating1to6, surfRatingColor, surfRatingIsExperienceBased, surfRatingLabel } from './lib/surf/ratings'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
@@ -4463,7 +4464,7 @@ function frameModuleDetail(
 
   if (module === 'date') {
     return {
-      primary: new Intl.DateTimeFormat(language === 'no' ? 'nb-NO' : 'en-US', {
+      primary: new Intl.DateTimeFormat(language === 'no' ? 'nb-NO' : 'en-GB', {
         weekday: 'short',
         month: 'short',
         day: 'numeric',
@@ -4537,7 +4538,7 @@ function frameModuleDetail(
 
 
 function formatSmallMirrorDate(language: AppLanguage) {
-  const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  const locale = language === 'no' ? 'nb-NO' : 'en-GB'
   const now = new Date()
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(now)
   const month = new Intl.DateTimeFormat(locale, { month: 'short' }).format(now)
@@ -4546,7 +4547,7 @@ function formatSmallMirrorDate(language: AppLanguage) {
 }
 
 function mirrorMediumDateParts(language: AppLanguage) {
-  const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  const locale = language === 'no' ? 'nb-NO' : 'en-GB'
   const now = new Date()
   const month = new Intl.DateTimeFormat(locale, { month: 'long' }).format(now)
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(now)
@@ -4717,7 +4718,7 @@ function parseMirrorCountdownDate(date: string | undefined) {
 }
 
 function mirrorCountdownWeekdayName(date: Date) {
-  return new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(date)
+  return new Intl.DateTimeFormat('en-GB', { weekday: 'long' }).format(date)
 }
 
 function formatMirrorCountdownShortStatus(daysLeft: number) {
@@ -4731,7 +4732,7 @@ function formatMirrorCountdownMediumBadge(language: AppLanguage, daysLeft: numbe
   if (!date) return ''
   if (daysLeft <= 0) return language === 'no' ? 'I dag' : 'Today'
   if (daysLeft === 1) return language === 'no' ? 'I morgen' : 'Tomorrow'
-  const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  const locale = language === 'no' ? 'nb-NO' : 'en-GB'
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date)
   if (daysLeft <= 6) return weekday
   if (daysLeft <= 13) return language === 'no' ? `Neste ${weekday}` : `Next ${weekday}`
@@ -4809,7 +4810,7 @@ function MirrorCountdownCalendarMonth({
   const target = mirrorCountdownTargetParts(targetDate)
   const todayKey = mirrorCountdownYmdNumber(now.getFullYear(), now.getMonth(), now.getDate())
   const targetKey = target ? mirrorCountdownYmdNumber(target.year, target.month, target.day) : null
-  const monthTitle = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(targetMonth)
+  const monthTitle = new Intl.DateTimeFormat('en-GB', { month: 'long' }).format(targetMonth)
   const year = targetMonth.getFullYear()
   const month = targetMonth.getMonth()
 
@@ -5120,7 +5121,7 @@ function MirrorMonthCalendar({
   const target = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
   const today = monthOffset === 0 ? now.getDate() : -1
   const { days, usedRows } = mirrorCalendarDays(now, monthOffset)
-  const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  const locale = language === 'no' ? 'nb-NO' : 'en-GB'
   const monthTitle = new Intl.DateTimeFormat(locale, { month: 'long' }).format(target).toLocaleUpperCase(locale)
   const year = target.getFullYear()
   const month = target.getMonth()
@@ -5347,7 +5348,7 @@ function mirrorGroceriesEmptyMessage(language: AppLanguage) {
 }
 
 function mirrorGroceriesHeader(detail: MirrorModuleDetail, language: AppLanguage) {
-  const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  const locale = language === 'no' ? 'nb-NO' : 'en-GB'
   const dinnerTitle = typeof detail.dinnerTodayTitle === 'string' ? detail.dinnerTodayTitle.trim() : ''
   if (dinnerTitle) return dinnerTitle.toLocaleUpperCase(locale)
   const listHeader = language === 'no' ? 'Handleliste:' : 'Grocery List:'
@@ -5377,7 +5378,7 @@ function mirrorGroceriesOverflowLabel(detail: MirrorModuleDetail, language: AppL
 }
 
 function mirrorGroceriesUppercase(value: string, language: AppLanguage) {
-  const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  const locale = language === 'no' ? 'nb-NO' : 'en-GB'
   return value.toLocaleUpperCase(locale)
 }
 
@@ -5439,7 +5440,7 @@ function mirrorGroceriesDinnerPlan(detail: MirrorModuleDetail) {
 function mirrorGroceriesDinnerDayLabel(date: string, language: AppLanguage) {
   const parsed = new Date(`${date}T00:00:00Z`)
   if (Number.isNaN(parsed.getTime())) return date.slice(5)
-  const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  const locale = language === 'no' ? 'nb-NO' : 'en-GB'
   return new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(parsed).replace('.', '')
 }
 
@@ -10649,7 +10650,7 @@ function formatReminderDateLabel(language: AppLanguage, ymd: string) {
   if (valueYmd === todayYmd) return language === 'no' ? 'I dag' : 'Today'
   if (valueYmd === tomorrowYmd) return language === 'no' ? 'I morgen' : 'Tomorrow'
 
-  return `${pad2(dt.getDate())}.${pad2(dt.getMonth() + 1)}.${dt.getFullYear()}`
+  return formatAppNumericDate(ymd)
 }
 
 function reminderRepeatLabel(language: AppLanguage, key: ReminderRepeatKey, customRepeatDays?: number | null) {
@@ -10664,23 +10665,11 @@ function reminderRepeatLabel(language: AppLanguage, key: ReminderRepeatKey, cust
 }
 
 function formatReminderFullDateLabel(language: AppLanguage, ymd: string) {
-  const dt = parseYmdToLocalDate(ymd)
-  if (!dt) return ymd || '--'
-
-  const locale = language === 'no' ? 'nb-NO' : 'en-US'
-  const weekday = dt.toLocaleDateString(locale, { weekday: 'long' })
-  return `${weekday} ${toLocalYmd(dt)}`
+  return formatAppDate(ymd, language, { weekday: true })
 }
 
 function formatReminderPickerDateLabel(language: AppLanguage, ymd: string) {
-  const dt = parseYmdToLocalDate(ymd)
-  if (!dt) return ymd || '--'
-
-  return dt.toLocaleDateString(language === 'no' ? 'nb-NO' : 'en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  })
+  return formatAppDate(ymd, language)
 }
 
 function addDaysLocal(d: Date, days: number) {
@@ -11827,7 +11816,7 @@ function CountdownDraftSheet({
               onClick={() => setDatePickerOpen(true)}
               className="mt-2 w-full h-12 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 text-left text-[color:var(--fg-90)]"
             >
-              {date}
+              {formatAppDate(date, language)}
             </button>
           </div>
 
@@ -14979,7 +14968,7 @@ const manualItems: ReminderUiItem[] = (data || [])
   }
 
   const monthLabel = useMemo(() => {
-    return new Date(viewYear, viewMonth, 1).toLocaleDateString(language === 'no' ? 'nb-NO' : undefined, {
+    return new Date(viewYear, viewMonth, 1).toLocaleDateString(language === 'no' ? 'nb-NO' : 'en-GB', {
       month: 'long',
       year: 'numeric',
     })
@@ -15728,9 +15717,8 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, selec
     } catch { setFailed(true) } finally { setSaving(false) }
   }
 
-  const locale = language === 'no' ? 'nb-NO' : 'en-GB'
-  const selectedDateLabel = selectedDate ? new Date(`${selectedDate}T12:00:00`).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' }) : null
-  const previewDate = parsed?.due_date ? new Date(`${parsed.due_date}T12:00:00`).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' }) : null
+  const selectedDateLabel = selectedDate ? formatAppDate(selectedDate, language, { weekday: true }) : null
+  const previewDate = parsed?.due_date ? formatAppDate(parsed.due_date, language, { weekday: true }) : null
   return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
     <div className="w-full max-w-[420px] rounded-t-3xl border-t border-[color:var(--bd-10)] bg-[color:var(--sheet-bg)] px-5 pb-8 pt-5">
       <div className="flex items-center justify-between"><div className="text-sm tracking-widest text-[color:var(--fg-70)]">{language === 'no' ? 'NY PÅMINNELSE' : 'NEW REMINDER'}</div><button onClick={onClose} className="text-xl text-[color:var(--fg-60)]">✕</button></div>
@@ -17786,7 +17774,7 @@ function SurfExperienceEditor({
                     onClick={() => setDatePickerOpen(true)}
                     className="mt-2 flex w-full h-11 items-center rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 text-left text-[color:var(--fg-90)]"
                   >
-                    {dateYmd}
+                    {formatAppDate(dateYmd, language)}
                   </button>
                 </div>
 
@@ -18113,7 +18101,7 @@ function DatePickerSheet({
   const [viewYear, setViewYear] = useState<number>(value.getFullYear())
   const [viewMonth, setViewMonth] = useState<number>(value.getMonth())
 
-  const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString(language === 'no' ? 'nb-NO' : undefined, {
+  const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString(language === 'no' ? 'nb-NO' : 'en-GB', {
     month: 'long',
     year: 'numeric',
   })
@@ -19227,7 +19215,7 @@ function weatherDetailDayLabel(language: AppLanguage, dateKey: string) {
   if (!dateKey) return '--'
   const date = new Date(`${dateKey}T12:00:00`)
   if (Number.isNaN(date.getTime())) return dateKey.slice(5) || '--'
-  return date.toLocaleDateString(language === 'no' ? 'nb-NO' : 'en-US', { weekday: 'short' }).replace('.', '')
+  return date.toLocaleDateString(language === 'no' ? 'nb-NO' : 'en-GB', { weekday: 'short' }).replace('.', '')
 }
 
 function weatherDetailPeriodIndexes(hourlyTimes: unknown[], dateKey: string, startHour: number, endHour: number) {
