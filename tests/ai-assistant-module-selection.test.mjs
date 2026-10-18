@@ -7,7 +7,7 @@ const assistant = readFileSync(new URL('../app/components/AIAssistantTab.tsx', i
 const pickerCatalog = readFileSync(new URL('../app/lib/modulePickerCatalog.mjs', import.meta.url), 'utf8')
 
 test('AI Follow implementation remains intact behind the release UI switch', () => {
-  assert.match(home, /type CoreTabKey = 'frame' \| 'settings'/)
+  assert.match(home, /type CoreTabKey = 'frame' \| 'connect' \| 'settings'/)
   assert.match(home, /type ModuleKey = 'assistant' \| 'date'/)
   assert.match(home, /value === 'assistant'/)
   assert.match(home, /const SHOW_AI_FOLLOW_UI = false/)
@@ -61,4 +61,15 @@ test('Power Save helper tip uses the approved concise copy', () => {
   const tips = readFileSync(new URL('../app/lib/assistant/tips.ts', import.meta.url), 'utf8')
   assert.match(tips, /Longer battery life, less responsive\./)
   assert.match(tips, /Lengre batteritid, mindre responsiv\./)
+})
+
+test('Connect is a permanent tab before Settings and reuses the theme-aware integrations screen', () => {
+  const tabsBlock = home.match(/const tabs = useMemo\(\(\) => \{[\s\S]*?\}, \[dynamicTabs, language\]\)/)?.[0] ?? ''
+  assert.match(tabsBlock, /key: 'connect' as const, label: 'CONNECT'/)
+  assert.ok(tabsBlock.indexOf("key: 'connect'") < tabsBlock.indexOf("key: 'settings'"))
+  assert.match(home, /activeTab === 'connect' && \(\s*<ConnectAppsScreen/)
+  assert.match(home, /onClick=\{\(\) => void handleSelectTab\('connect'\)\}/)
+  assert.match(home, /activeTab !== 'frame' && activeTab !== 'connect' && activeTab !== 'settings'/)
+  assert.match(home, /asTab && !remindersVisibleOnFrame/)
+  assert.match(home, /bg-\[color:var\(--panel-05\)\]/)
 })
