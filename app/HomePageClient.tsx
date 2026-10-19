@@ -2611,7 +2611,7 @@ export default function HomePage() {
     markDirty({ cellsByLayout: nextCellsByLayout })
   }
 
-  async function performSettingsSave(deviceId: string, overrides: { powerSaver?: boolean; modulesJson?: Record<string, any> } = {}): Promise<boolean> {
+  async function performSettingsSave(deviceId: string, overrides: { powerSaver?: boolean; modulesJson?: Record<string, unknown> } = {}): Promise<boolean> {
     try {
       setPersisting(true)
 
