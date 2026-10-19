@@ -10564,7 +10564,7 @@ type ReminderRepeatKey =
   | 'custom'
 
 type ReminderTag = 'work' | 'personal' | 'sports' | 'chores' | 'event'
-type ReminderSource = 'remind' | 'spond' | 'teams' | 'waste' | 'local-events'
+type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'waste' | 'local-events'
 type ReminderSourceFilter = ReminderSource
 
 type ReminderUiItem = {
@@ -10665,7 +10665,7 @@ function isReminderTag(v: any): v is ReminderTag {
 function integrationProviderToReminderSource(provider: any): ReminderSource | null {
   const value = String(provider ?? '').trim().toLowerCase()
   if (value === 'edge-of-norway') return 'local-events'
-  if (value === 'spond' || value === 'teams' || value === 'waste') return value
+  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'waste') return value
   return null
 }
 
@@ -10699,6 +10699,7 @@ function integrationReminderTitle(row: any, source: ReminderSource, language: Ap
 
 function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
   if (source === 'teams') return 'work'
+  if (source === 'google-calendar') return 'event'
   if (source === 'spond') return 'sports'
   if (source === 'waste') return 'chores'
   if (source === 'local-events') return 'event'
@@ -10707,6 +10708,7 @@ function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
 
 function integrationReminderSourceLabel(language: AppLanguage, source?: ReminderSource) {
   if (source === 'teams') return 'Teams'
+  if (source === 'google-calendar') return 'Google Calendar'
   if (source === 'spond') return 'Spond'
   if (source === 'waste') return language === 'no' ? 'Renovasjon' : 'Waste'
   if (source === 'local-events') return 'Events'
@@ -14939,7 +14941,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           const source = integrationProviderToReminderSource(connection.provider)
           if (source) connectedSources.add(source)
         }
-        setAvailableSources(['remind', 'teams', 'spond', 'local-events', 'waste'].filter((source) => connectedSources.has(source as ReminderSourceFilter)) as ReminderSourceFilter[])
+        setAvailableSources(['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste'].filter((source) => connectedSources.has(source as ReminderSourceFilter)) as ReminderSourceFilter[])
 
         if (connectedSources.has('teams')) {
           try {
@@ -14960,13 +14962,27 @@ const manualItems: ReminderUiItem[] = (data || [])
           }
         }
 
+        if (connectedSources.has('google-calendar')) {
+          try {
+            const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+            if (accessToken) {
+              const syncResp = await fetch('/api/integrations/google-calendar/sync', {
+                method: 'POST', headers: { Authorization: 'Bearer ' + accessToken }, cache: 'no-store',
+              })
+              if (!syncResp.ok) console.warn('[reminders] Google Calendar refresh failed', syncResp.status)
+            }
+          } catch (error) {
+            console.warn('[reminders] Google Calendar refresh failed', error)
+          }
+        }
+
         const nowIso = new Date().toISOString()
         let localEventSkippedIds = new Set<string>()
         let localEventHiddenSkippedIds = new Set<string>()
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
-          .in('provider', ['spond', 'teams', 'waste', 'edge-of-norway'])
+          .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway'])
           .or(activeDeviceId ? `user_id.eq.${userId},device_id.eq.${activeDeviceId}` : `user_id.eq.${userId}`)
           .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso}`)
           .order('starts_at', { ascending: true, nullsFirst: false })
@@ -15065,7 +15081,7 @@ const manualItems: ReminderUiItem[] = (data || [])
   // Keep all timed integration filters current at the exact minute boundary.
   // This timer updates the phone UI only; it does not trigger any API polling.
   useEffect(() => {
-    if (sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'spond') return
+    if (sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'google-calendar' && sourceFilter !== 'spond') return
     setEventNowMs(Date.now())
     let interval: number | undefined
     const delayUntilNextMinute = 60_000 - (Date.now() % 60_000) + 50
