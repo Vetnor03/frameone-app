@@ -113,8 +113,8 @@ function uniqueFuture(rows, primaryTitles, anchorDay) {
 
 /**
  * Follow the actual primary date bucket (Today, Tomorrow, or a later date).
- * A sparse primary bucket may preview real plans in the following seven days;
- * never remove, duplicate, or crowd a visible reminder to create an insight.
+ * A primary bucket may preview real plans in the following seven days when
+ * space permits; never remove, duplicate, or crowd a visible reminder.
  *
  * localHour is supplied by the device's configured time zone. During the
  * evening, tomorrow deserves precedence when the primary bucket is Today.
@@ -130,7 +130,8 @@ export function buildReminderComingUp(items, language = 'en', { localHour = -1 }
     : dayNumber(dated[0]?.days_until)
   if (anchorDay == null || anchorDay < 0) return ''
   const primary = dated.filter(row => row.days_until === anchorDay)
-  if (primary.length < 1 || primary.length > 2) return ''
+  const visibleCapacity = anchorDay <= 1 ? 4 : 3
+  if (primary.length < 1 || primary.length > visibleCapacity) return ''
 
   const no = norwegian(language)
   const upcoming = uniqueFuture(rows, new Set(primary.map(row => titleKey(row.title))), anchorDay)
