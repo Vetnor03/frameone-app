@@ -9584,7 +9584,7 @@ function FrameSetupFlow({
   const customWeatherSelected = customModules.includes('weather')
   const customNewsSelected = customModules.includes('news')
   const customSelection = validateCustomSetup(customLayout, customCells, weatherLocationChosen)
-  const connectedAppCount = Object.values(modules.integrations || {}).filter((config) => config && typeof config === 'object' && config.enabled === true).length
+  const connectedAppCount = Object.values(modules.integrations || {}).filter((config) => config && typeof config === 'object' && (config as Record<string, unknown>).enabled === true).length
   const progressTotal = purpose === 'normal' ? guidedModules.length + 1 : 2
   const progressCurrent = step === 'connect' ? progressTotal : step === 'custom' ? 1 : moduleIndex + 1
 
