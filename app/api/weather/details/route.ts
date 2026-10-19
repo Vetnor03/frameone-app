@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { fetchWeatherForecast, fetchWeatherMarine } from '@/app/lib/server/weatherForecast'
 import { resolveWeatherInsight } from '@/app/lib/server/weatherInsight.mjs'
+import { buildTomorrowWeatherSummary } from '@/app/lib/weatherTomorrow.mjs'
 import { fetchSharedFrameWeatherForecast } from '@/app/lib/server/weatherSharedCache'
 
 export const runtime = 'nodejs'
@@ -67,7 +68,7 @@ function pickFields(source: unknown, fields: readonly string[]) {
   return compact
 }
 
-function compactFrameWeatherPayload(payload: unknown, compactVersion = 1, insight = '') {
+function compactFrameWeatherPayload(payload: unknown, compactVersion = 1, insight = '', tomorrowInsight = '') {
   if (!payload || typeof payload !== 'object') return payload
 
   const weather = payload as Record<string, unknown>
@@ -84,6 +85,7 @@ function compactFrameWeatherPayload(payload: unknown, compactVersion = 1, insigh
 
   return {
     insight,
+    tomorrow_insight: tomorrowInsight,
     current: pickFields(weather.current, FRAME_WEATHER_CURRENT_FIELDS),
     daily: pickFields(weather.daily, FRAME_WEATHER_DAILY_FIELDS),
     hourly,
@@ -139,7 +141,10 @@ export async function GET(req: Request) {
       console.error('[weather-details]', { stage: 'invalid-frame-payload-shape', lat, lon, missingFields })
     }
     const insight = await resolveWeatherInsight(weather.payload, { locationKey: `${lat.toFixed(3)},${lon.toFixed(3)}` })
-    return NextResponse.json(compactFrameWeatherPayload(weather.payload, frameCompactVersion, insight))
+    // Generate tomorrow's full-day summary before compact v2 removes
+    // the future hourly rows. Reuses the same cached weather response.
+    const tomorrowInsight = buildTomorrowWeatherSummary(weather.payload)
+    return NextResponse.json(compactFrameWeatherPayload(weather.payload, frameCompactVersion, insight, tomorrowInsight))
   }
 
   const missingFields = validateAppWeatherPayload(weather.payload)

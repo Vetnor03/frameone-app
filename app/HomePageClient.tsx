@@ -453,6 +453,7 @@ type MirrorModuleDetail = {
   weatherHumidityLine?: string
   weatherWmo?: number | null
   weatherIsTomorrow?: boolean
+  weatherTomorrowSummary?: string
   weatherDays?: MirrorWeatherDay[]
   surfAirMinC?: number
   surfAirMaxC?: number
@@ -8470,36 +8471,56 @@ function LandscapeFrameMirror({
     }
 
     if (module === 'weather' && size === 'medium' && detail.weatherLowTemp && detail.weatherHighTemp) {
-      // The medium label uses the existing insight area below temperatures,
-      // matching the frame without squeezing text into the top margin.
-      const advice = detail.weatherIsTomorrow
-        ? (language === 'no' ? 'I morgen' : 'Tomorrow')
-        : detail.weatherAdvice || ''
-      const hasAdvice = advice.trim().length > 0
+      const isTomorrow = detail.weatherIsTomorrow === true
+      // Daytime keeps its existing weather insight; only the evening
+      // composition moves the temperatures down and replaces wind/rain
+      // with a full-day Good to know summary.
+      const advice = !isTomorrow ? detail.weatherAdvice || '' : ''
+      const hasInsightRow = isTomorrow || advice.trim().length > 0
 
       return (
         <div className="relative flex h-full w-full flex-col items-center overflow-hidden px-[clamp(0.55rem,1.7vw,1.2rem)] pt-[clamp(0.55rem,1.45vw,0.95rem)] pb-[clamp(0.55rem,1.45vw,0.95rem)] text-center leading-tight">
           <div className="flex shrink-0 items-center justify-center border-b border-current pb-[clamp(0.06rem,0.18vw,0.12rem)] text-[clamp(0.88rem,2.05vw,1.35rem)] font-semibold tracking-[0.08em]">
-            <span className="min-w-0 truncate px-[clamp(0.32rem,0.8vw,0.62rem)]">{detail.weatherLowTemp}</span>
-            <span className="h-[clamp(1.05rem,2.25vw,1.45rem)] w-px shrink-0" style={{ backgroundColor: textColor }} aria-hidden="true" />
-            <span className="min-w-0 truncate px-[clamp(0.32rem,0.8vw,0.62rem)]">{detail.weatherHighTemp}</span>
+            {isTomorrow ? (
+              <span className="min-w-0 truncate px-[clamp(0.32rem,0.8vw,0.62rem)]">{language === 'no' ? 'I morgen' : 'Tomorrow'}</span>
+            ) : (
+              <>
+                <span className="min-w-0 truncate px-[clamp(0.32rem,0.8vw,0.62rem)]">{detail.weatherLowTemp}</span>
+                <span className="h-[clamp(1.05rem,2.25vw,1.45rem)] w-px shrink-0" style={{ backgroundColor: textColor }} aria-hidden="true" />
+                <span className="min-w-0 truncate px-[clamp(0.32rem,0.8vw,0.62rem)]">{detail.weatherHighTemp}</span>
+              </>
+            )}
           </div>
 
-          {hasAdvice ? (
+          {hasInsightRow ? (
             <div className="mt-[clamp(0.28rem,0.75vw,0.5rem)] flex min-h-[clamp(1.7rem,4.2vw,2.55rem)] w-full shrink-0 items-center justify-center px-[clamp(0.25rem,0.8vw,0.55rem)] text-[clamp(0.66rem,1.55vw,1rem)] font-medium tracking-[0.035em]">
-              <div className={`line-clamp-2 max-w-full ${detail.weatherIsTomorrow ? 'text-[clamp(0.55rem,1.15vw,0.76rem)]' : ''}`}>{advice}</div>
+              {isTomorrow ? (
+                <div className="flex items-center justify-center gap-[clamp(0.4rem,1.25vw,0.7rem)] whitespace-nowrap text-[clamp(0.84rem,1.9vw,1.25rem)] font-semibold">
+                  <span>{detail.weatherLowTemp}</span>
+                  <span className="h-[clamp(0.82rem,1.7vw,1.12rem)] w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+                  <span>{detail.weatherHighTemp}</span>
+                </div>
+              ) : (
+                <div className="line-clamp-2 max-w-full">{advice}</div>
+              )}
             </div>
           ) : null}
 
           <div className="flex min-h-0 w-full flex-1 items-center justify-center py-[clamp(0.14rem,0.45vw,0.35rem)]">
-            <div className={`aspect-square h-[clamp(2.4rem,7vw,4.8rem)] max-h-full overflow-hidden ${hasAdvice ? 'max-w-[34%]' : 'max-w-[48%]'}`}>
+            <div className={`aspect-square h-[clamp(2.4rem,7vw,4.8rem)] max-h-full overflow-hidden ${hasInsightRow ? 'max-w-[34%]' : 'max-w-[48%]'}`}>
               <MirrorWeatherIcon wmo={detail.weatherWmo} />
             </div>
           </div>
 
           <div className="flex shrink-0 flex-col items-center justify-center gap-[clamp(0.1rem,0.35vw,0.24rem)] text-[clamp(0.55rem,1.25vw,0.82rem)] font-medium tracking-[0.06em]">
-            <div className="max-w-full truncate">{detail.weatherWindLine || 'Calm winds'}</div>
-            <div className="max-w-full truncate">{detail.weatherPrecipLine || 'Mostly dry'}</div>
+            {isTomorrow ? (
+              <div className="line-clamp-2 w-full max-w-[96%] text-center leading-snug">{detail.weatherTomorrowSummary || 'Forecast details unavailable.'}</div>
+            ) : (
+              <>
+                <div className="max-w-full truncate">{detail.weatherWindLine || 'Calm winds'}</div>
+                <div className="max-w-full truncate">{detail.weatherPrecipLine || 'Mostly dry'}</div>
+              </>
+            )}
           </div>
         </div>
       )

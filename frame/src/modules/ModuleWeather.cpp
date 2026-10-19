@@ -50,6 +50,7 @@ struct DayForecast {
 struct WeatherCache {
   bool valid = false;
   char aiInsight[96] = {0};
+  char tomorrowInsight[96] = {0};
   uint32_t fetchedAtMs = 0;
 
   float tempC = NAN;
@@ -971,6 +972,7 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
   DynamicJsonDocument filter(WEATHER_FILTER_CAPACITY);
   if (filter.capacity() == 0) return false;
   filter["insight"] = true;
+  filter["tomorrow_insight"] = true;
   filter["current"]["time"] = true;
   filter["current"]["temperature_2m"] = true;
   filter["current"]["relative_humidity_2m"] = true;
@@ -1051,6 +1053,7 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
   out.dayCount = 0;
   out.todayHourCount = 0;
   FrameText::normalizeUtf8ForDisplay(out.aiInsight, sizeof(out.aiInsight), doc["insight"] | "");
+  FrameText::normalizeUtf8ForDisplay(out.tomorrowInsight, sizeof(out.tomorrowInsight), doc["tomorrow_insight"] | "");
   for (int i = 0; i < WeatherCache::MAX_DAYS; i++) out.days[i] = DayForecast();
 
   out.sunriseHHMM[0] = 0;
@@ -1452,7 +1455,7 @@ static void buildWindStr(char* out, size_t n, float windMaxMs) {
 // Only use tomorrow's dated forecast after 20:00 local time. Stale weather
 // caches must not be labeled as tomorrow.
 static bool shouldShowTomorrowForecast(const WeatherCache& data) {
-  if (data.dayCount < 2 || !data.days[1].valid ||
+  if (data.dayCount < 2 || !data.days[1].valid || !data.tomorrowInsight[0] ||
       isnan(data.days[1].loC) || isnan(data.days[1].hiC)) return false;
   struct tm localNow;
   if (!getLocalTime(&localNow, 10) || localNow.tm_hour < 20) return false;
@@ -1620,13 +1623,7 @@ static void renderMedium(const Cell& c,
   buildPrecipStr(precipStr, sizeof(precipStr), medPrecip, medWmo, medLoC, medHiC);
 
   char insightStr[96] = {0};
-  if (useTomorrow) {
-    // Reuse the existing insight area instead of squeezing a new line
-    // above the temperature range. Icon space adapts automatically.
-    strlcpy(insightStr, "Tomorrow", sizeof(insightStr));
-  } else {
-    buildWeatherInsight(insightStr, sizeof(insightStr), data);
-  }
+  if (!useTomorrow) buildWeatherInsight(insightStr, sizeof(insightStr), data);
 
   int16_t b12Y1; uint16_t b12H;
   int16_t b9Y1;  uint16_t b9H;
@@ -1649,15 +1646,25 @@ static void renderMedium(const Cell& c,
   int tempTop = c.y + topPad;
   int tempBaseline = tempTop - b12Y1;
 
-  int tx = tempStartX;
-  drawLeft(tx, tempBaseline, loBuf, FONT_B12, ink);
-  tx += (int)lw + mmGap;
-  drawDividerAtXShort(tx, tempBaseline, FONT_B12, ink);
-  tx += dividerW + mmGap;
-  drawLeft(tx, tempBaseline, hiBuf, FONT_B12, ink);
+  // The title uses the existing temperature row, so no new height is added.
+  int topHeaderWidth = totalTempW;
+  if (useTomorrow) {
+    int16_t x1, y1; uint16_t tomorrowWidth, tomorrowHeight;
+    measureText("Tomorrow", FONT_B12, x1, y1, tomorrowWidth, tomorrowHeight);
+    topHeaderWidth = (int)tomorrowWidth;
+    drawTextCenteredAt(c.x + c.w / 2, tempBaseline, "Tomorrow", FONT_B12, ink);
+  } else {
+    int tx = tempStartX;
+    drawLeft(tx, tempBaseline, loBuf, FONT_B12, ink);
+    tx += (int)lw + mmGap;
+    drawDividerAtXShort(tx, tempBaseline, FONT_B12, ink);
+    tx += dividerW + mmGap;
+    drawLeft(tx, tempBaseline, hiBuf, FONT_B12, ink);
+  }
 
   int tempUnderlineY = tempTop + (int)b12H + tempUnderlineGap;
-  d.fillRect(tempStartX, tempUnderlineY, totalTempW, tempUnderlineH, ink);
+  d.fillRect(c.x + (c.w - topHeaderWidth) / 2,
+             tempUnderlineY, topHeaderWidth, tempUnderlineH, ink);
 
   const int bottomPad = 35;
   const int gapWindToPrecip = 5;
@@ -1671,12 +1678,20 @@ static void renderMedium(const Cell& c,
   int windTop        = precipTop - gapWindToPrecip - (int)b9H;
   int windBaseline   = windTop - b9Y1;
 
-  drawTextCenteredAt(c.x + c.w / 2, windBaseline, windStr, FONT_B9, ink);
-  drawTextCenteredAt(c.x + c.w / 2, precipBaseline, precipStr, FONT_B9, ink);
+  if (useTomorrow) {
+    // Use the former wind/rain area for a guaranteed, max-two-line
+    // Good to know summary of tomorrow's full-day forecast.
+    drawWrappedTextBox(c.x + 10, windTop - 4, c.w - 20,
+                       precipTop + (int)b9H - windTop + 7,
+                       data.tomorrowInsight, FONT_B9, ink, 1);
+  } else {
+    drawTextCenteredAt(c.x + c.w / 2, windBaseline, windStr, FONT_B9, ink);
+    drawTextCenteredAt(c.x + c.w / 2, precipBaseline, precipStr, FONT_B9, ink);
+  }
 
   int insightTop = tempTop + (int)b12H + gapTempToInsight;
   int iconBottomLimit = windTop - gapIconToWind;
-  const bool hasInsight = insightStr[0] != 0;
+  const bool hasInsight = useTomorrow || insightStr[0] != 0;
 
   int availableMidH = iconBottomLimit - insightTop;
   if (availableMidH < 30) availableMidH = 30;
@@ -1688,16 +1703,30 @@ static void renderMedium(const Cell& c,
     if (insightBlockH < 18) insightBlockH = 18;
     if (insightBlockH > 34) insightBlockH = 34;
 
-    drawWrappedTextBox(
-      c.x + 12,
-      insightTop,
-      c.w - 24,
-      insightBlockH,
-      insightStr,
-      FONT_B9,
-      ink,
-      0
-    );
+    if (useTomorrow) {
+      // Min/max move to the old insight region, leaving the icon in its
+      // usual area below. Keep the same font as the original temperature row.
+      int16_t minY1; uint16_t minH;
+      fontBoxMetrics(FONT_B12, minY1, minH);
+      int movedBaseline = insightTop + (insightBlockH - (int)minH) / 2 - minY1;
+      int tx = tempStartX;
+      drawLeft(tx, movedBaseline, loBuf, FONT_B12, ink);
+      tx += (int)lw + mmGap;
+      drawDividerAtXShort(tx, movedBaseline, FONT_B12, ink);
+      tx += dividerW + mmGap;
+      drawLeft(tx, movedBaseline, hiBuf, FONT_B12, ink);
+    } else {
+      drawWrappedTextBox(
+        c.x + 12,
+        insightTop,
+        c.w - 24,
+        insightBlockH,
+        insightStr,
+        FONT_B9,
+        ink,
+        0
+      );
+    }
 
     iconRegionTop = insightTop + insightBlockH + gapInsightToIcon;
   }

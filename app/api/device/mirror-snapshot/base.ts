@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { SURF_SPOTS, spotIdFromLabel } from '@/app/lib/surf/spots'
+import { buildTomorrowWeatherSummary } from '@/app/lib/weatherTomorrow.mjs'
 import { buildMediumWeatherDetail, shouldShowTomorrowWeather, buildWeatherPrecipLine, buildWeatherWindLine, formatWeatherTemp, normalizeDisplayWmoForTemps } from '@/app/lib/weatherMirror'
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/surf/ratings'
 import { buildFrameConfigPayload, deviceHasOwnerAccessLink, pairRequiredPayload } from '@/app/api/device/frame-config/builder'
@@ -85,6 +86,7 @@ type Detail = {
   weatherHumidityLine?: string
   weatherWmo?: number | null
   weatherIsTomorrow?: boolean
+  weatherTomorrowSummary?: string
   weatherDays?: WeatherMirrorDay[]
   surfAirMinC?: number
   surfAirMaxC?: number
@@ -1446,7 +1448,8 @@ async function weatherDetail(cfg: UnknownRecord, language: string, configUpdated
   const dailyTime = Array.isArray(daily.time) ? daily.time : []
   const tomorrowLoC = arrayNumberAt(daily.temperature_2m_min, 1)
   const tomorrowHiC = arrayNumberAt(daily.temperature_2m_max, 1)
-  const useTomorrow = tomorrowLoC != null && tomorrowHiC != null &&
+  const tomorrowSummary = buildTomorrowWeatherSummary(data)
+  const useTomorrow = tomorrowLoC != null && tomorrowHiC != null && tomorrowSummary.length > 0 &&
     shouldShowTomorrowWeather(dailyTime.map(value => asString(value)), new Date(), asString(data.timezone, 'Europe/Oslo'))
   const selectedPeriods = computeSelectedWeatherPeriods(data, { hiC, loC, windMaxMs, precipMm, wmo })
   const selectedCompactPeriod = useTomorrow
@@ -1494,6 +1497,7 @@ async function weatherDetail(cfg: UnknownRecord, language: string, configUpdated
     tertiary: `${formatTemp(loC, units)} / ${formatTemp(hiC, units)}`,
     ...medium,
     weatherIsTomorrow: useTomorrow,
+    weatherTomorrowSummary: useTomorrow ? tomorrowSummary : '',
     weatherSunLine: `Sun ${sunriseHHMM || '--:--'} / ${sunsetHHMM || '--:--'}`,
     weatherHumidityLine: humidity != null ? `Humidity ${Math.round(humidity)}%` : 'Humidity --%',
     weatherDays,
