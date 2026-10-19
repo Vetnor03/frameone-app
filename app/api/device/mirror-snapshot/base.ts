@@ -58,6 +58,7 @@ type Detail = {
   groceryItems?: string[]
   reminderItems?: string[]
   reminderMediumItems?: string[]
+  reminderComingUp?: string
   reminderCalendarDates?: string[]
   reminderNextItems?: Array<{ date: string; title: string }>
   reminderHeader?: string
@@ -2028,6 +2029,9 @@ async function remindersDetail(origin: string, deviceId: string, deviceToken: st
     tertiary: first ? asString(first.display_date || first.display_time, '') : undefined,
     reminderItems,
     reminderMediumItems,
+    reminderComingUp: firstDaysUntil === 0 && primaryBucketItems.length >= 1 && primaryBucketItems.length <= 2
+      ? asString(data.coming_up).trim()
+      : '',
     reminderCalendarDates,
     reminderNextItems,
     reminderHeader: formatReminderMirrorHeader(first, language),

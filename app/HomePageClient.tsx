@@ -426,6 +426,7 @@ type MirrorModuleDetail = {
   groceryItems?: string[]
   reminderItems?: string[]
   reminderMediumItems?: string[]
+  reminderComingUp?: string
   reminderCalendarDates?: string[]
   reminderNextItems?: Array<{ date: string; title: string }>
   reminderHeader?: string
@@ -6365,8 +6366,10 @@ function MirrorMediumRemindersCard({
   const showBottomBadge = !headerIsToday && !headerIsTomorrow
   const overflowCount = Math.max(0, Math.floor(Number(detail.reminderMediumOverflowCount ?? detail.reminderOverflowCount) || 0))
   const tomorrowCount = Math.max(0, Math.floor(Number(detail.reminderTomorrowCount) || 0))
+  const comingUp = headerIsToday && visibleItems.length > 0 && visibleItems.length <= 2
+    ? String(detail.reminderComingUp || '').trim() : ''
   const moreLabel = overflowCount > 0 ? `+${overflowCount} ${language === 'no' ? 'til' : 'more'}` : ''
-  const tomorrowLabel = headerIsToday && tomorrowCount > 0 ? `${language === 'no' ? 'I morgen' : 'Tomorrow'}: ${tomorrowCount}` : ''
+  const tomorrowLabel = !comingUp && headerIsToday && tomorrowCount > 0 ? `${language === 'no' ? 'I morgen' : 'Tomorrow'}: ${tomorrowCount}` : ''
   const badgeLabel = typeof detail.reminderDateBadge === 'string' && detail.reminderDateBadge.trim() ? detail.reminderDateBadge.trim() : header
 
   if (visibleItems.length <= 0) {
@@ -6392,8 +6395,8 @@ function MirrorMediumRemindersCard({
         <MirrorModuleHeader title={header} />
       </div>
 
-      <div className={`flex min-h-0 flex-1 items-center justify-center ${showBottomBadge ? 'pb-[clamp(1.35rem,3vw,1.9rem)] pt-[clamp(0.55rem,1.35vw,0.9rem)]' : tomorrowLabel ? 'pb-[clamp(0.95rem,2.2vw,1.35rem)] pt-[clamp(0.62rem,1.55vw,0.98rem)]' : 'pb-[clamp(0.18rem,0.55vw,0.38rem)] pt-[clamp(0.68rem,1.65vw,1.05rem)]'}`}>
-        <div className="flex max-w-full flex-col items-start gap-[clamp(0.42rem,1.05vw,0.72rem)] text-left">
+      <div className={`flex min-h-0 flex-1 ${comingUp ? 'flex-col items-center justify-center pb-[clamp(0.2rem,0.55vw,0.4rem)] pt-[clamp(0.45rem,1.1vw,0.75rem)]' : showBottomBadge ? 'items-center justify-center pb-[clamp(1.35rem,3vw,1.9rem)] pt-[clamp(0.55rem,1.35vw,0.9rem)]' : tomorrowLabel ? 'items-center justify-center pb-[clamp(0.95rem,2.2vw,1.35rem)] pt-[clamp(0.62rem,1.55vw,0.98rem)]' : 'items-center justify-center pb-[clamp(0.18rem,0.55vw,0.38rem)] pt-[clamp(0.68rem,1.65vw,1.05rem)]'}`}>
+        <div className={`flex max-w-full flex-col items-start gap-[clamp(0.42rem,1.05vw,0.72rem)] text-left ${comingUp ? 'min-h-0 flex-1 justify-center' : ''}`}>
           {visibleItems.map((item, index) => (
             <div key={`${item}-${index}`} className="grid max-w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.42rem,1.05vw,0.68rem)]">
               <span className="h-[clamp(0.24rem,0.55vw,0.36rem)] w-[clamp(0.24rem,0.55vw,0.36rem)] rounded-full bg-current" aria-hidden="true" />
@@ -6401,6 +6404,12 @@ function MirrorMediumRemindersCard({
             </div>
           ))}
         </div>
+        {comingUp && (
+          <div className="flex w-full max-w-[94%] shrink-0 flex-col items-center gap-[clamp(0.18rem,0.4vw,0.26rem)] text-center">
+            <span className="text-[clamp(0.5rem,1vw,0.66rem)] font-semibold tracking-[0.06em]" style={{ color: mutedColor }}>{language === 'no' ? 'KOMMER' : 'COMING UP'}</span>
+            <span className="line-clamp-2 max-w-full text-[clamp(0.58rem,1.23vw,0.78rem)] font-medium leading-snug">{comingUp}</span>
+          </div>
+        )}
       </div>
 
       {showBottomBadge && (
