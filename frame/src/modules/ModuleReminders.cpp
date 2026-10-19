@@ -1976,7 +1976,7 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
         if (idx < 0 || idx >= g_cache->count) { showComingUp = false; break; }
         char title[128] = {0};
         buildReminderTitleWithTime(g_cache->items[idx], title, sizeof(title));
-        if (textWidth(title, FONT_B9) > c.w - 36) {
+        if (textWidth(title, FONT_B9) > c.w - 54) {
           showComingUp = false;
           break;
         }
