@@ -48,8 +48,8 @@ namespace ModuleReminders {
 static const FrameConfig* g_cfg = nullptr;
 
 static const int MAX_REMINDERS = 10;
-// Leave room for the optional short outlook alongside the ten existing items.
-static const size_t REMINDERS_MAX_BODY_BYTES = 4352;
+// Allow a fuller grounded outlook without rejecting the ten reminder entries.
+static const size_t REMINDERS_MAX_BODY_BYTES = 4608;
 static const size_t REMINDERS_JSON_CAPACITY = 6144;
 static const size_t REMINDERS_FILTER_CAPACITY = 512;
 static const int MAX_BUCKETS = 10;
@@ -81,7 +81,7 @@ struct ReminderCache {
   bool ok = false;
   int count = 0;
   ReminderItem items[MAX_REMINDERS];
-  char comingUp[96] = {0};
+  char comingUp[180] = {0};
 };
 
 static_assert(sizeof(ReminderCache) <= 4096,
@@ -1023,7 +1023,7 @@ static int wrapTextToLines(const char* src,
   for (int i = 0; i < maxLines; i++) lines[i][0] = '\0';
   if (!src || !src[0]) return 0;
 
-  char work[160];
+  char work[240];
   safeCopy(work, sizeof(work), src);
 
   int lineCount = 0;
@@ -1956,31 +1956,36 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
   d.fillRect(underlineX, underlineY, (int)hw, titleUnderlineH, ink);
 
   const int visibleCount = min(bucket.count, isTodayOrTomorrow ? 4 : 3);
+  const int contentTop = underlineY + titleUnderlineH + 12;
 
-  // Spare-space insight is exclusive to the actual medium tile, not the
-  // medium sub-panels reused by LARGE and XL. Do not crowd real reminders.
+  // Only a standalone medium tile may use its unused space for an insight.
+  // Measure the actual text (1-4 lines), then preflight ALL reminders using
+  // their real optimized titles. If anything is tight, omit the insight.
   bool showComingUp = c.size == CELL_MEDIUM && headerIsToday &&
       bucket.count >= 1 && bucket.count <= 2 && g_cache->comingUp[0];
-  char outlookLines[2][128] = {{0}};
+  char outlookLines[4][128] = {{0}};
   int outlookLineCount = 0;
+  int outlookTop = c.y + c.h - 12;
   if (showComingUp) {
+    const int maxLines = bucket.count == 1 ? 4 : 3;
+    const int lineStep = smartLineStep(FONT_B9);
     bool complete = false;
     outlookLineCount = wrapTextToLines(g_cache->comingUp, outlookLines,
-                                        2, c.w - 36, FONT_B9, complete);
-    showComingUp = complete && outlookLineCount > 0;
-    // When there are two reminders, both must fit on single lines so
-    // the reserved insight area cannot hide a real reminder.
-    if (showComingUp && bucket.count == 2) {
-      for (int i = 0; i < 2; ++i) {
-        const int idx = bucket.itemIdx[i];
-        if (idx < 0 || idx >= g_cache->count) { showComingUp = false; break; }
-        char title[128] = {0};
-        buildReminderTitleWithTime(g_cache->items[idx], title, sizeof(title));
-        if (textWidth(title, FONT_B9) > c.w - 54) {
-          showComingUp = false;
-          break;
-        }
-      }
+                                       maxLines, c.w - 36, FONT_B9, complete);
+    showComingUp = complete && outlookLineCount > 0 && ensureSmartReminderLayoutScratch();
+    if (showComingUp) {
+      outlookTop = c.y + c.h - 12 - outlookLineCount * lineStep;
+      const int reminderSpace = outlookTop - 12 - contentTop;
+      const int minReminderSpace = bucket.count == 1 ? 32 : 61;
+      const int dotR = 3, gap = 10, sidePad = 18;
+      const int reminderWidth = c.w - sidePad * 2 -
+                                (bucket.count > 1 ? dotR * 2 + gap : 0);
+      SmartReminderLayout& measured = g_smartLayoutScratch[1];
+      showComingUp = reminderSpace >= minReminderSpace &&
+          (buildSmartReminderLayout(bucket, visibleCount, reminderWidth, reminderSpace,
+                                    "", REMINDER_CONTENT_FONT, false, false, measured) ||
+           buildSmartReminderLayout(bucket, visibleCount, reminderWidth, reminderSpace,
+                                    "", REMINDER_CONTENT_FONT, false, true, measured));
     }
   }
 
@@ -2026,13 +2031,11 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
     d.setFont(nullptr);
   }
 
-  const int contentTop = underlineY + titleUnderlineH + 12;
-
   int contentBottom;
   if (showBottomBadge) {
     contentBottom = rectY - 14;
   } else if (showComingUp) {
-    contentBottom = c.y + c.h - 88;
+    contentBottom = outlookTop - 12;
   } else if (showTomorrowNote) {
     contentBottom = c.y + c.h - 34;
   } else {
@@ -2049,10 +2052,9 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
   }
 
   if (showComingUp && drawnCount == visibleCount) {
-    const int outlookTop = c.y + c.h - 76;
-    drawCenteredSmallNoteAtY(c, "COMING UP", outlookTop);
     for (int i = 0; i < outlookLineCount; ++i) {
-      drawCenteredSmallNoteAtY(c, outlookLines[i], outlookTop + 22 + i * 21);
+      drawCenteredSmallNoteAtY(c, outlookLines[i],
+                               outlookTop + i * smartLineStep(FONT_B9));
     }
   }
 
