@@ -1958,54 +1958,12 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
   const int visibleCount = min(bucket.count, isTodayOrTomorrow ? 4 : 3);
   const int contentTop = underlineY + titleUnderlineH + 12;
 
-  // Only a standalone medium tile may use its unused space for an insight.
-  // Measure the actual text (1-4 lines), then preflight ALL reminders using
-  // their real optimized titles. If anything is tight, omit the insight.
-  bool showComingUp = c.size == CELL_MEDIUM && headerIsToday &&
-      bucket.count >= 1 && bucket.count <= 2 && g_cache->comingUp[0];
-  char outlookLines[4][128] = {{0}};
-  int outlookLineCount = 0;
-  int outlookTop = c.y + c.h - 12;
-  if (showComingUp) {
-    const int maxLines = bucket.count == 1 ? 4 : 3;
-    const int lineStep = smartLineStep(FONT_B9);
-    bool complete = false;
-    outlookLineCount = wrapTextToLines(g_cache->comingUp, outlookLines,
-                                       maxLines, c.w - 36, FONT_B9, complete);
-    showComingUp = complete && outlookLineCount > 0 && ensureSmartReminderLayoutScratch();
-    if (showComingUp) {
-      outlookTop = c.y + c.h - 12 - outlookLineCount * lineStep;
-      const int reminderSpace = outlookTop - 12 - contentTop;
-      const int minReminderSpace = bucket.count == 1 ? 32 : 61;
-      const int dotR = 3, gap = 10, sidePad = 18;
-      const int reminderWidth = c.w - sidePad * 2 -
-                                (bucket.count > 1 ? dotR * 2 + gap : 0);
-      SmartReminderLayout& measured = g_smartLayoutScratch[1];
-      showComingUp = reminderSpace >= minReminderSpace &&
-          (buildSmartReminderLayout(bucket, visibleCount, reminderWidth, reminderSpace,
-                                    "", REMINDER_CONTENT_FONT, false, false, measured) ||
-           buildSmartReminderLayout(bucket, visibleCount, reminderWidth, reminderSpace,
-                                    "", REMINDER_CONTENT_FONT, false, true, measured));
-    }
-  }
-
-  const bool showTomorrowNote = headerIsToday && isEveningHour() && !showComingUp;
-
-  if (showTomorrowNote) {
-    int tomorrowIdx = findBucketByDaysUntil(buckets, bucketCount, 1);
-    if (tomorrowIdx >= 0 && buckets[tomorrowIdx].count > 0) {
-      char tomorrowBuf[36];
-      snprintf(tomorrowBuf, sizeof(tomorrowBuf), "Tomorrow: %d", buckets[tomorrowIdx].count);
-      drawCenteredSmallNoteAtY(c, tomorrowBuf, c.y + c.h - 26);
-    }
-  }
-
+  // Keep the relative-date badge on future-date tiles. The outlook can use
+  // the remaining space above it, but must never overlap the badge.
+  const bool showBottomBadge = !isTodayOrTomorrow;
   char badgeBuf[32];
   int rectY = c.y + c.h;
-  bool showBottomBadge = !isTodayOrTomorrow;
-
   buildRelativeDateText(bucket.daysUntil, bucket.isOverdue, badgeBuf, sizeof(badgeBuf));
-
   if (showBottomBadge) {
     int16_t bx1, by1; uint16_t bw, bh;
     measureText(badgeBuf, FONT_B9, bx1, by1, bw, bh);
@@ -2031,11 +1989,53 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
     d.setFont(nullptr);
   }
 
+  // Date never gates a useful insight: Today, Tomorrow and later buckets
+  // get the same measured-space check. Do not crowd any real reminder.
+  bool showComingUp = c.size == CELL_MEDIUM &&
+      bucket.count >= 1 && bucket.count <= 2 && g_cache->comingUp[0];
+  char outlookLines[4][128] = {{0}};
+  int outlookLineCount = 0;
+  const int outlookBottom = showBottomBadge ? rectY - 14 : c.y + c.h - 12;
+  int outlookTop = outlookBottom;
+  if (showComingUp) {
+    const int maxLines = bucket.count == 1 ? 4 : 3;
+    const int lineStep = smartLineStep(FONT_B9);
+    bool complete = false;
+    outlookLineCount = wrapTextToLines(g_cache->comingUp, outlookLines,
+                                       maxLines, c.w - 36, FONT_B9, complete);
+    showComingUp = complete && outlookLineCount > 0 && ensureSmartReminderLayoutScratch();
+    if (showComingUp) {
+      outlookTop = outlookBottom - outlookLineCount * lineStep;
+      const int reminderSpace = outlookTop - 12 - contentTop;
+      const int minReminderSpace = bucket.count == 1 ? 32 : 61;
+      const int dotR = 3, gap = 10, sidePad = 18;
+      const int reminderWidth = c.w - sidePad * 2 -
+                                (bucket.count > 1 ? dotR * 2 + gap : 0);
+      SmartReminderLayout& measured = g_smartLayoutScratch[1];
+      showComingUp = reminderSpace >= minReminderSpace &&
+          (buildSmartReminderLayout(bucket, visibleCount, reminderWidth, reminderSpace,
+                                    "", REMINDER_CONTENT_FONT, false, false, measured) ||
+           buildSmartReminderLayout(bucket, visibleCount, reminderWidth, reminderSpace,
+                                    "", REMINDER_CONTENT_FONT, false, true, measured));
+    }
+  }
+
+  const bool showTomorrowNote = headerIsToday && isEveningHour() && !showComingUp;
+
+  if (showTomorrowNote) {
+    int tomorrowIdx = findBucketByDaysUntil(buckets, bucketCount, 1);
+    if (tomorrowIdx >= 0 && buckets[tomorrowIdx].count > 0) {
+      char tomorrowBuf[36];
+      snprintf(tomorrowBuf, sizeof(tomorrowBuf), "Tomorrow: %d", buckets[tomorrowIdx].count);
+      drawCenteredSmallNoteAtY(c, tomorrowBuf, c.y + c.h - 26);
+    }
+  }
+
   int contentBottom;
-  if (showBottomBadge) {
-    contentBottom = rectY - 14;
-  } else if (showComingUp) {
+  if (showComingUp) {
     contentBottom = outlookTop - 12;
+  } else if (showBottomBadge) {
+    contentBottom = rectY - 14;
   } else if (showTomorrowNote) {
     contentBottom = c.y + c.h - 34;
   } else {
