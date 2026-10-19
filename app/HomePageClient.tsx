@@ -6366,7 +6366,7 @@ function MirrorMediumRemindersCard({
   const showBottomBadge = !headerIsToday && !headerIsTomorrow
   const overflowCount = Math.max(0, Math.floor(Number(detail.reminderMediumOverflowCount ?? detail.reminderOverflowCount) || 0))
   const tomorrowCount = Math.max(0, Math.floor(Number(detail.reminderTomorrowCount) || 0))
-  const comingUp = visibleItems.length > 0 && visibleItems.length <= 2
+  const comingUp = overflowCount === 0 && visibleItems.length > 0
     ? String(detail.reminderComingUp || '').trim() : ''
   const moreLabel = overflowCount > 0 ? `+${overflowCount} ${language === 'no' ? 'til' : 'more'}` : ''
   const tomorrowLabel = !comingUp && headerIsToday && tomorrowCount > 0 ? `${language === 'no' ? 'I morgen' : 'Tomorrow'}: ${tomorrowCount}` : ''
@@ -6406,7 +6406,7 @@ function MirrorMediumRemindersCard({
         </div>
         {comingUp && (
           <div className="mt-[clamp(0.4rem,1.1vw,0.75rem)] flex min-h-0 w-full max-w-[94%] shrink flex-col items-center justify-center overflow-hidden text-center">
-            <span className={`${visibleItems.length === 1 ? 'line-clamp-4' : 'line-clamp-3'} max-w-full text-[clamp(0.58rem,1.23vw,0.78rem)] font-medium leading-snug`}>{comingUp}</span>
+            <span className={`${visibleItems.length === 1 ? 'line-clamp-4' : visibleItems.length === 2 ? 'line-clamp-3' : 'line-clamp-2'} max-w-full text-[clamp(0.58rem,1.23vw,0.78rem)] font-medium leading-snug`}>{comingUp}</span>
           </div>
         )}
       </div>
