@@ -1650,7 +1650,7 @@ export default function HomePage() {
       setAssistantDeepLink({ watchId, updateId: searchParams?.get('update')?.trim() || null })
       return
     }
-    if (tab === 'connect' || searchParams?.has('teams')) {
+    if (tab === 'connect' || searchParams?.has('teams') || searchParams?.has('google_calendar')) {
       preferInstantScrollRef.current = true
       setActiveTab('connect')
       return
@@ -3208,7 +3208,7 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type DisconnectableConnectAppKey = 'spond' | 'teams'
+type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -3257,8 +3257,12 @@ function ConnectAppsScreen({
 }) {
   const initialTeamsOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('teams')
   const initialTeamsOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
-  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>(() => initialTeamsOAuthStatus === 'error' ? 'error' : 'info')
+  const initialGoogleOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('google_calendar')
+  const initialGoogleOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
+  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>(() => initialTeamsOAuthStatus === 'error' || initialGoogleOAuthStatus === 'error' ? 'error' : 'info')
   const [status, setStatus] = useState<string | null>(() => {
+    if (initialGoogleOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Google Calendar-tilkobling…' : 'Finishing Google Calendar connection…'
+    if (initialGoogleOAuthStatus === 'error') return initialGoogleOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Google Calendar' : 'Could not connect Google Calendar')
     if (initialTeamsOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Teams-tilkobling…' : 'Finishing Teams connection…'
     if (initialTeamsOAuthStatus === 'error') return initialTeamsOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Teams' : 'Could not connect Teams')
     return null
@@ -3284,10 +3288,21 @@ function ConnectAppsScreen({
     return initiatingDeviceId === activeDeviceId && (initialTeamsOAuthStatus === 'connected' || storedResult === 'connected')
   })
   const [teamsLoading, setTeamsLoading] = useState(false)
+  const [googleConnected, setGoogleConnected] = useState(false)
+  const [googleAccountConnected, setGoogleAccountConnected] = useState(false)
+  const [googleAccount, setGoogleAccount] = useState<string | null>(null)
+  const [googleStatusResolved, setGoogleStatusResolved] = useState(false)
+  const [googleStatusFailed, setGoogleStatusFailed] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+  const [pendingGoogleEnableAfterOAuth, setPendingGoogleEnableAfterOAuth] = useState(() => {
+    if (typeof window === 'undefined' || !activeDeviceId) return false
+    return sessionStorage.getItem('remind:google-oauth-device') === activeDeviceId &&
+      new URLSearchParams(window.location.search).get('google_calendar') === 'connected'
+  })
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
   const [disconnectConfirmApp, setDisconnectConfirmApp] = useState<DisconnectableConnectAppKey | null>(null)
-  const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams', string>>>({})
+  const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams' | 'google-calendar', string>>>({})
   const [localEventsOpen, setLocalEventsOpen] = useState(false)
   const [wasteModalOpen, setWasteModalOpen] = useState(false)
   const [wasteConnected, setWasteConnected] = useState(() => connectAppIsConnected(modulesJson, 'waste'))
@@ -3355,10 +3370,29 @@ function ConnectAppsScreen({
   }
 
 
+  async function fetchGoogleCalendarStatus() {
+    const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+    if (!accessToken) { setGoogleStatusResolved(true); setGoogleConnected(false); return }
+    const response = await fetch('/api/integrations/google-calendar/status', {
+      headers: { Authorization: 'Bearer ' + accessToken },
+      cache: 'no-store',
+    })
+    if (!response.ok) { setGoogleStatusFailed(true); setGoogleConnected(false); setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere Google Calendar-status' : 'Could not check Google Calendar status'); return }
+    const json = await response.json()
+    setGoogleStatusResolved(true)
+    setGoogleStatusFailed(false)
+    setLocallyDisconnectedApps(current => ({ ...current, 'google-calendar': json?.connected === true ? false : current['google-calendar'] }))
+    setGoogleAccountConnected(json?.connected === true)
+    setGoogleConnected(modulesJson?.integration_selection_explicit === true ? frameUsesIntegration(modulesJson, 'google-calendar') && json?.connected === true : json?.connected === true)
+    setGoogleAccount(typeof json?.account === 'string' ? json.account : null)
+    setIntegrationSetupErrors(current => ({ ...current, 'google-calendar': typeof json?.setup_error?.message === 'string' ? json.setup_error.message : undefined }))
+  }
+
   function legacyEnabledIntegrations(): ConnectAppKey[] {
     return [
       ...(spondAccountConnected ? ['spond' as const] : []),
       ...(teamsAccountConnected ? ['teams' as const] : []),
+      ...(googleAccountConnected ? ['google-calendar' as const] : []),
       ...(localEventsAccountConnected && localEventsStatusDeviceId === activeDeviceId ? ['local-events' as const] : []),
       ...(connectAppIsConnected(modulesJson, 'waste') ? ['waste' as const] : []),
     ]
@@ -3369,14 +3403,46 @@ function ConnectAppsScreen({
   }
 
   const localEventsResolvedForActiveDevice = !!activeDeviceId && localEventsStatusResolved && localEventsStatusDeviceId === activeDeviceId
-  const legacyIntegrationDiscoveryPending = modulesJson?.integration_selection_explicit !== true && !(spondStatusResolved && teamsStatusResolved && localEventsResolvedForActiveDevice)
-  const providerDiscoveryFailed = spondStatusFailed || teamsStatusFailed || localEventsStatusFailed
+  const legacyIntegrationDiscoveryPending = modulesJson?.integration_selection_explicit !== true && !(spondStatusResolved && teamsStatusResolved && googleStatusResolved && localEventsResolvedForActiveDevice)
+  const providerDiscoveryFailed = spondStatusFailed || teamsStatusFailed || googleStatusFailed || localEventsStatusFailed
 
   function retryProviderDiscovery() {
     setStatus(null)
     if (!spondStatusResolved) void fetchSpondStatus().catch(() => setSpondStatusFailed(true))
     if (!teamsStatusResolved) void fetchTeamsStatus().catch(() => setTeamsStatusFailed(true))
+    if (!googleStatusResolved) void fetchGoogleCalendarStatus().catch(() => setGoogleStatusFailed(true))
     if (!localEventsResolvedForActiveDevice && activeDeviceId) void fetchLocalEventsStatus(activeDeviceId, localEventsRequestGenerationRef.current).catch(() => setLocalEventsStatusFailed(true))
+  }
+
+  async function connectGoogleCalendar() {
+    if (googleLoading || googleConnected) return
+    if (integrationSetupErrors['google-calendar']) {
+      setStatusTone('error')
+      setStatus(integrationSetupErrors['google-calendar'] || '')
+      return
+    }
+    setGoogleLoading(true)
+    setStatus(null)
+    trackProductEvent({ event: 'connection_started', surface: 'connect', metadata: { provider: 'google-calendar' } })
+    try {
+      const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+      if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble til Google Calendar' : 'Sign in to connect Google Calendar')
+      if (!activeDeviceId) throw new Error(language === 'no' ? 'Velg en ramme først' : 'Select a frame first')
+      sessionStorage.setItem('remind:google-oauth-device', activeDeviceId)
+      const response = await fetch('/api/integrations/google-calendar/connect', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + accessToken, 'x-remind-timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Oslo' },
+        cache: 'no-store',
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || !result.url) throw new Error(result?.error || 'Could not start Google Calendar sign-in')
+      window.location.assign(result.url)
+    } catch (error) {
+      setStatusTone('error')
+      setStatus(error instanceof Error ? error.message : 'Could not connect Google Calendar')
+      trackProductEvent({ event: 'connection_failed', surface: 'connect', metadata: { provider: 'google-calendar' } })
+      setGoogleLoading(false)
+    }
   }
 
   async function connectTeams() {
@@ -3590,8 +3656,8 @@ function ConnectAppsScreen({
   }
 
   async function disconnectIntegration(provider: DisconnectableConnectAppKey) {
-    const appName = provider === 'teams' ? 'Microsoft Calendar' : 'Spond'
-    const setProviderLoading = provider === 'teams' ? setTeamsLoading : setSpondLoading
+    const appName = provider === 'teams' ? 'Microsoft Calendar' : provider === 'google-calendar' ? 'Google Calendar' : 'Spond'
+    const setProviderLoading = provider === 'teams' ? setTeamsLoading : provider === 'google-calendar' ? setGoogleLoading : setSpondLoading
     if (disconnectingApp === provider) return
     setProviderLoading?.(true)
     setDisconnectingApp(provider)
@@ -3611,6 +3677,11 @@ function ConnectAppsScreen({
         setTeamsAccountConnected(false)
         changeFrameIntegration('teams', { enabled: false })
         setTeamsAccount(null)
+      } else if (provider === 'google-calendar') {
+        setGoogleConnected(false)
+        setGoogleAccountConnected(false)
+        changeFrameIntegration('google-calendar', { enabled: false })
+        setGoogleAccount(null)
       } else if (provider === 'spond') {
         setSpondConnected(false)
         setSpondAccountConnected(false)
@@ -3632,9 +3703,10 @@ function ConnectAppsScreen({
   }
 
   useEffect(() => {
-    void Promise.allSettled([fetchSpondStatus(), fetchTeamsStatus()]).then(results => {
+    void Promise.allSettled([fetchSpondStatus(), fetchTeamsStatus(), fetchGoogleCalendarStatus()]).then(results => {
       if (results[0].status === 'rejected') setSpondStatusFailed(true)
       if (results[1].status === 'rejected') setTeamsStatusFailed(true)
+      if (results[2].status === 'rejected') setGoogleStatusFailed(true)
     })
     const params = new URLSearchParams(window.location.search)
     if (initialTeamsOAuthStatus === 'connected') {
@@ -3644,13 +3716,28 @@ function ConnectAppsScreen({
       sessionStorage.removeItem('remind:teams-oauth-result')
       setPendingTeamsEnableAfterOAuth(false)
     }
-    if (params.has('teams')) window.history.replaceState({}, '', window.location.pathname)
+    if (initialGoogleOAuthStatus === 'connected') {
+      sessionStorage.setItem('remind:google-oauth-result', 'connected')
+    } else if (initialGoogleOAuthStatus === 'error') {
+      sessionStorage.removeItem('remind:google-oauth-result')
+      sessionStorage.removeItem('remind:google-oauth-device')
+      setPendingGoogleEnableAfterOAuth(false)
+    }
+    if (params.has('teams') || params.has('google_calendar')) window.history.replaceState({}, '', window.location.pathname)
+    // Run OAuth callback handling once: functions and URL state intentionally reflect the initial page load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     const initiatingDeviceId = sessionStorage.getItem('remind:teams-oauth-device')
     const storedResult = sessionStorage.getItem('remind:teams-oauth-result')
     setPendingTeamsEnableAfterOAuth(!!activeDeviceId && initiatingDeviceId === activeDeviceId && storedResult === 'connected')
+  }, [activeDeviceId])
+
+  useEffect(() => {
+    const initiatingDeviceId = sessionStorage.getItem('remind:google-oauth-device')
+    const result = sessionStorage.getItem('remind:google-oauth-result')
+    setPendingGoogleEnableAfterOAuth(!!activeDeviceId && initiatingDeviceId === activeDeviceId && result === 'connected')
   }, [activeDeviceId])
 
   useEffect(() => {
@@ -3666,7 +3753,11 @@ function ConnectAppsScreen({
         (modulesJson?.integration_selection_explicit !== true || frameUsesIntegration(modulesJson, 'teams')),
       )
     }
-  }, [activeDeviceId, modulesJson, spondStatusResolved, spondAccountConnected, teamsStatusResolved, teamsAccountConnected])
+    if (googleStatusResolved) {
+      setGoogleConnected(googleAccountConnected &&
+        (modulesJson?.integration_selection_explicit !== true || frameUsesIntegration(modulesJson, 'google-calendar')))
+    }
+  }, [activeDeviceId, modulesJson, spondStatusResolved, spondAccountConnected, teamsStatusResolved, teamsAccountConnected, googleStatusResolved, googleAccountConnected])
 
   useEffect(() => {
     if (!pendingTeamsEnableAfterOAuth || !teamsStatusResolved || !teamsAccountConnected) return
@@ -3679,6 +3770,21 @@ function ConnectAppsScreen({
     sessionStorage.removeItem('remind:teams-oauth-result')
     setPendingTeamsEnableAfterOAuth(false)
   }, [pendingTeamsEnableAfterOAuth, teamsStatusResolved, teamsAccountConnected, legacyIntegrationDiscoveryPending])
+
+  useEffect(() => {
+    if (!pendingGoogleEnableAfterOAuth || !googleStatusResolved || !googleAccountConnected) return
+    if (modulesJson?.integration_selection_explicit !== true && legacyIntegrationDiscoveryPending) return
+    setGoogleConnected(true)
+    changeFrameIntegration('google-calendar', { enabled: true })
+    setStatusTone('success')
+    setStatus(language === 'no' ? 'Google Calendar er tilkoblet' : 'Google Calendar connected')
+    sessionStorage.removeItem('remind:google-oauth-device')
+    sessionStorage.removeItem('remind:google-oauth-result')
+    setPendingGoogleEnableAfterOAuth(false)
+    window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
+    // Activation is a one-time OAuth completion action; changeFrameIntegration intentionally follows this render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingGoogleEnableAfterOAuth, googleStatusResolved, googleAccountConnected, legacyIntegrationDiscoveryPending, modulesJson?.integration_selection_explicit, language])
 
   useEffect(() => {
     const requestGeneration = ++localEventsRequestGenerationRef.current
@@ -3707,6 +3813,7 @@ function ConnectAppsScreen({
     if (locallyDisconnectedApps[app.key]) return false
     if (app.key === 'spond') return spondConnected
     if (app.key === 'teams') return teamsConnected
+    if (app.key === 'google-calendar') return googleConnected
     if (app.key === 'local-events') return !!localEventsSavedArea
     if (app.key === 'waste') return wasteConnected
     return connectAppIsConnected(modulesJson, app.key)
@@ -3789,13 +3896,13 @@ function ConnectAppsScreen({
 
         <div className={`${startup ? '' : 'mt-4'} space-y-2.5`}>
           {sortedApps.map(({ app, connected }) => {
-            const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : null
+            const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : app.key === 'google-calendar' ? integrationSetupErrors['google-calendar'] : null
             const localEventsSelectedName = localEventsSavedArea ? (localEventsSavedArea.placeLabel || getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || '') : null
             const description = app.key === 'local-events' && localEventsSyncIssue
               ? (language === 'no' ? `Events valgt, men ingen synkronisering ennå: ${localEventsSyncIssue}` : `Events selected but not synced yet: ${localEventsSyncIssue}`)
               : app.key === 'local-events' && localEventsSelectedName
               ? (language === 'no' ? `Arrangementer nær ${localEventsSelectedName}` : `Events near ${localEventsSelectedName}`)
-              : !connected && ((app.key === 'spond' && spondAccountConnected) || (app.key === 'teams' && teamsAccountConnected))
+              : !connected && ((app.key === 'spond' && spondAccountConnected) || (app.key === 'teams' && teamsAccountConnected) || (app.key === 'google-calendar' && googleAccountConnected))
                 ? (language === 'no' ? 'Konto tilkoblet · ikke aktiv på denne framen' : 'Account connected · not enabled on this frame')
                 : app.description
             return (
@@ -3824,8 +3931,8 @@ function ConnectAppsScreen({
                         </button>
                       </div>
                     ) : (
-                      modulesJson?.integration_selection_explicit === true && (app.key === 'spond' || app.key === 'teams') ? (
-                      <button type="button" onClick={() => { if (app.key === 'spond') setSpondConnected(false); else setTeamsConnected(false); changeFrameIntegration(app.key, { enabled: false }) }} className="shrink-0 h-8 rounded-xl border border-[color:var(--bd-20)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)]">
+                      modulesJson?.integration_selection_explicit === true && (app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar') ? (
+                      <button type="button" onClick={() => { if (app.key === 'spond') setSpondConnected(false); else if (app.key === 'teams') setTeamsConnected(false); else setGoogleConnected(false); changeFrameIntegration(app.key, { enabled: false }) }} className="shrink-0 h-8 rounded-xl border border-[color:var(--bd-20)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)]">
                         {language === 'no' ? 'DEAKTIVER PÅ FRAMEN' : 'DISABLE ON THIS FRAME'}
                       </button>
                     ) : (
@@ -3837,7 +3944,7 @@ function ConnectAppsScreen({
                   ) : (
                     <button
                       type="button"
-                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'teams' && teamsLoading)}
+                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading)}
                       onClick={() => {
                         if (app.key === 'spond') {
                           if (spondAccountConnected) { setSpondConnected(true); changeFrameIntegration('spond', { enabled: true }) }
@@ -3847,6 +3954,9 @@ function ConnectAppsScreen({
                           } else setSpondModalOpen(true)
                         } else if (app.key === 'teams') {
                           if (teamsAccountConnected) { setTeamsConnected(true); changeFrameIntegration('teams', { enabled: true }) } else connectTeams()
+                        } else if (app.key === 'google-calendar') {
+                          if (googleAccountConnected) { setGoogleConnected(true); changeFrameIntegration('google-calendar', { enabled: true }) }
+                          else void connectGoogleCalendar()
                         } else if (app.key === 'local-events') {
                           setLocalEventsDraftArea(localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA)
                           setLocalEventsOpen(true)
@@ -3856,7 +3966,7 @@ function ConnectAppsScreen({
                       }}
                       className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-20)] text-[11px] tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
                     >
-                      {app.key === 'local-events' ? (language === 'no' ? 'KOBLE TIL' : 'CONNECT') : ((app.key === 'teams' && teamsLoading)) ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
+                      {app.key === 'local-events' ? (language === 'no' ? 'KOBLE TIL' : 'CONNECT') : ((app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading)) ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
                     </button>
                   )}
                 </div>
@@ -3874,6 +3984,16 @@ function ConnectAppsScreen({
                       className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)] transition hover:border-[#d94b4b]/35 hover:text-[#d94b4b] disabled:opacity-60"
                     >
                       {spondLoading ? (language === 'no' ? 'KOBLER FRA…' : 'DISCONNECTING…') : (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')}
+                    </button>
+                  </div>
+                )}
+                {app.key === 'google-calendar' && googleConnected && (
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
+                    <span className="min-w-0 truncate">{googleAccount || 'Google Calendar'}</span>
+                    <button type="button" onClick={() => setDisconnectConfirmApp('google-calendar')}
+                      disabled={googleLoading}
+                      className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)] transition hover:border-[#d94b4b]/35 hover:text-[#d94b4b] disabled:opacity-60">
+                      {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
                     </button>
                   </div>
                 )}
@@ -3924,8 +4044,8 @@ function ConnectAppsScreen({
           <div className="w-full max-w-sm rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] p-5 shadow-2xl">
             <div className="text-base font-semibold text-[color:var(--fg-90)]">
               {language === 'no'
-                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : 'Spond'}?`
-                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : 'Spond'}?`}
+                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : 'Spond'}?`
+                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : 'Spond'}?`}
             </div>
             <div className="mt-2 text-xs leading-snug text-[color:var(--fg-45)]">
               {language === 'no'
@@ -10448,7 +10568,7 @@ type ReminderRepeatKey =
   | 'custom'
 
 type ReminderTag = 'work' | 'personal' | 'sports' | 'chores' | 'event'
-type ReminderSource = 'remind' | 'spond' | 'teams' | 'waste' | 'local-events'
+type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'waste' | 'local-events'
 type ReminderSourceFilter = ReminderSource
 
 type ReminderUiItem = {
@@ -10549,7 +10669,7 @@ function isReminderTag(v: any): v is ReminderTag {
 function integrationProviderToReminderSource(provider: any): ReminderSource | null {
   const value = String(provider ?? '').trim().toLowerCase()
   if (value === 'edge-of-norway') return 'local-events'
-  if (value === 'spond' || value === 'teams' || value === 'waste') return value
+  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'waste') return value
   return null
 }
 
@@ -10583,6 +10703,7 @@ function integrationReminderTitle(row: any, source: ReminderSource, language: Ap
 
 function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
   if (source === 'teams') return 'work'
+  if (source === 'google-calendar') return 'event'
   if (source === 'spond') return 'sports'
   if (source === 'waste') return 'chores'
   if (source === 'local-events') return 'event'
@@ -10591,6 +10712,7 @@ function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
 
 function integrationReminderSourceLabel(language: AppLanguage, source?: ReminderSource) {
   if (source === 'teams') return 'Teams'
+  if (source === 'google-calendar') return 'Google Calendar'
   if (source === 'spond') return 'Spond'
   if (source === 'waste') return language === 'no' ? 'Renovasjon' : 'Waste'
   if (source === 'local-events') return 'Events'
@@ -14823,7 +14945,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           const source = integrationProviderToReminderSource(connection.provider)
           if (source) connectedSources.add(source)
         }
-        setAvailableSources(['remind', 'teams', 'spond', 'local-events', 'waste'].filter((source) => connectedSources.has(source as ReminderSourceFilter)) as ReminderSourceFilter[])
+        setAvailableSources(['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste'].filter((source) => connectedSources.has(source as ReminderSourceFilter)) as ReminderSourceFilter[])
 
         if (connectedSources.has('teams')) {
           try {
@@ -14844,13 +14966,27 @@ const manualItems: ReminderUiItem[] = (data || [])
           }
         }
 
+        if (connectedSources.has('google-calendar')) {
+          try {
+            const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+            if (accessToken) {
+              const syncResp = await fetch('/api/integrations/google-calendar/sync', {
+                method: 'POST', headers: { Authorization: 'Bearer ' + accessToken }, cache: 'no-store',
+              })
+              if (!syncResp.ok) console.warn('[reminders] Google Calendar refresh failed', syncResp.status)
+            }
+          } catch (error) {
+            console.warn('[reminders] Google Calendar refresh failed', error)
+          }
+        }
+
         const nowIso = new Date().toISOString()
         let localEventSkippedIds = new Set<string>()
         let localEventHiddenSkippedIds = new Set<string>()
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
-          .in('provider', ['spond', 'teams', 'waste', 'edge-of-norway'])
+          .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway'])
           .or(activeDeviceId ? `user_id.eq.${userId},device_id.eq.${activeDeviceId}` : `user_id.eq.${userId}`)
           .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso}`)
           .order('starts_at', { ascending: true, nullsFirst: false })
@@ -14949,7 +15085,7 @@ const manualItems: ReminderUiItem[] = (data || [])
   // Keep all timed integration filters current at the exact minute boundary.
   // This timer updates the phone UI only; it does not trigger any API polling.
   useEffect(() => {
-    if (sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'spond') return
+    if (sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'google-calendar' && sourceFilter !== 'spond') return
     setEventNowMs(Date.now())
     let interval: number | undefined
     const delayUntilNextMinute = 60_000 - (Date.now() % 60_000) + 50

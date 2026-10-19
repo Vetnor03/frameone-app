@@ -4,7 +4,8 @@ import { after, NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsIfStaleForUser } from '@/app/lib/integrations/teams/server'
-import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
+import { syncGoogleCalendarFromStoredConnection } from '@/app/lib/integrations/google-calendar/server'
+import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildWasteCollectionItems, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
 import { reminderClockBoundaryReached } from '@/app/lib/device/reminderClockBoundary'
@@ -669,6 +670,7 @@ export async function GET(req: Request) {
 
     let spondItems: DeviceReminderItem[] = []
     let teamsItems: DeviceReminderItem[] = []
+    let googleCalendarItems: DeviceReminderItem[] = []
     let wasteItems: DeviceReminderItem[] = []
     let localEventItems: DeviceReminderItem[] = []
     const settingsJson = (deviceSettingsData?.settings_json || null) as {
@@ -692,6 +694,7 @@ export async function GET(req: Request) {
           const syncResults = await Promise.allSettled([
             providerEnabled('spond') ? syncSpondIfStaleForUsers(memberUserIds) : Promise.resolve(),
             Promise.allSettled((providerEnabled('teams') ? memberUserIds : []).map((userId) => syncTeamsIfStaleForUser(userId, { horizonDays }))),
+            Promise.allSettled((providerEnabled('google-calendar') ? memberUserIds : []).map((userId) => syncGoogleCalendarFromStoredConnection(userId))),
           ])
           syncResults.forEach((result) => {
             if (result.status === 'rejected') logOptionalReminderProviderFailure('integration-sync', result.reason)
@@ -743,6 +746,18 @@ export async function GET(req: Request) {
         )
       } catch (error) {
         logOptionalReminderProviderFailure('teams', error)
+      } })(), (async () => { try {
+        if (!providerEnabled('google-calendar')) return
+        const { data, error } = await supabase.from('integration_items')
+          .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
+          .eq('provider', 'google-calendar').in('user_id', memberUserIds)
+          .order('starts_at', { ascending: true, nullsFirst: false })
+        if (error) throw error
+        googleCalendarItems = buildGoogleCalendarItems(
+          Array.isArray(data) ? data as IntegrationItemRow[] : [], todayYmd, horizonEndYmd, timeZone, now
+        )
+      } catch (error) {
+        logOptionalReminderProviderFailure('google-calendar', error)
       } })(), (async () => { try {
         if (!providerEnabled('waste')) return
 
@@ -825,6 +840,7 @@ export async function GET(req: Request) {
     const integrationItems = sortReminderItems([
       ...spondItems,
       ...teamsItems,
+      ...googleCalendarItems,
       ...wasteItems,
       ...localEventItems,
     ])
