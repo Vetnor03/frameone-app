@@ -167,7 +167,12 @@ export async function optimizeFrameContent(items: FrameContentInput[], options: 
   const results = new Map<string, string>()
 
   // Most reminder/news titles already fit. Keep them verbatim and spend no AI.
-  normalized.forEach((item) => { if (item.title.length <= maxChars) results.set(item.id, item.title) })
+  // Google Calendar data stays entirely on RE:MIND infrastructure: never send event titles
+  // to the external AI title optimizer, even if a long title would otherwise qualify.
+  normalized.forEach((item) => {
+    if (item.source === 'google-calendar') results.set(item.id, fallbackTitle(item.title, maxChars))
+    else if (item.title.length <= maxChars) results.set(item.id, item.title)
+  })
   keys.forEach((key, index) => { if (!results.has(normalized[index].id)) { const hit = titleCache.get(key); if (hit) results.set(normalized[index].id, hit) } })
   const missingKeys = keys.filter((key, index) => !results.has(normalized[index].id))
   let persistentReadSucceeded = true
