@@ -3277,7 +3277,7 @@ function ConnectAppsScreen({
     if (initialTeamsOAuthStatus === 'error') return initialTeamsOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Teams' : 'Could not connect Teams')
     return null
   })
-  const [spondConnected, setSpondConnected] = useState(false)
+  const [, setSpondConnected] = useState(false)
   const [spondAccount, setSpondAccount] = useState<string | null>(null)
   const [spondAccountConnected, setSpondAccountConnected] = useState(false)
   const [spondStatusResolved, setSpondStatusResolved] = useState(false)
