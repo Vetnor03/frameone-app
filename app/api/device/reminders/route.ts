@@ -894,7 +894,7 @@ export async function GET(req: Request) {
     } : item)
     // Use the full filtered reminder feed, not the 10-item display cap, so
     // a sparse today can still surface a useful future event.
-    const comingUp = buildReminderComingUp(displayItems, frameLanguage)
+    const comingUp = buildReminderComingUp(displayItems, frameLanguage, { localHour: Number(nowHm.slice(0, 2)) })
     const compactJsonByteSize = Buffer.byteLength(JSON.stringify({ items: physicalItems, coming_up: comingUp }), 'utf8')
 
     console.info('[device/reminders] compact response', {
