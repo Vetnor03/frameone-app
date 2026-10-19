@@ -6405,9 +6405,8 @@ function MirrorMediumRemindersCard({
           ))}
         </div>
         {comingUp && (
-          <div className="flex w-full max-w-[94%] shrink-0 flex-col items-center gap-[clamp(0.18rem,0.4vw,0.26rem)] text-center">
-            <span className="text-[clamp(0.5rem,1vw,0.66rem)] font-semibold tracking-[0.06em]" style={{ color: mutedColor }}>{language === 'no' ? 'KOMMER' : 'COMING UP'}</span>
-            <span className="line-clamp-2 max-w-full text-[clamp(0.58rem,1.23vw,0.78rem)] font-medium leading-snug">{comingUp}</span>
+          <div className="mt-[clamp(0.4rem,1.1vw,0.75rem)] flex min-h-0 w-full max-w-[94%] shrink flex-col items-center justify-center overflow-hidden text-center">
+            <span className={`${visibleItems.length === 1 ? 'line-clamp-4' : 'line-clamp-3'} max-w-full text-[clamp(0.58rem,1.23vw,0.78rem)] font-medium leading-snug`}>{comingUp}</span>
           </div>
         )}
       </div>
