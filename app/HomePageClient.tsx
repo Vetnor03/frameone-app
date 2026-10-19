@@ -426,6 +426,7 @@ type MirrorModuleDetail = {
   groceryItems?: string[]
   reminderItems?: string[]
   reminderMediumItems?: string[]
+  reminderComingUp?: string
   reminderCalendarDates?: string[]
   reminderNextItems?: Array<{ date: string; title: string }>
   reminderHeader?: string
