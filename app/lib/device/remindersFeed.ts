@@ -14,7 +14,7 @@ export type ReminderRepeatKey =
   | '2years'
   | 'custom'
 
-export type DeviceReminderSource = 'spond' | 'teams' | 'waste' | 'remind' | 'local-events'
+export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events'
 
 export type DeviceReminderItem = {
   reminder_id: string
@@ -212,6 +212,40 @@ export function buildTeamsMeetingItems(
       due_time: displayTime,
       display_time: displayTime,
       source: 'teams' as const,
+      external_id: externalId,
+    }]
+  })
+}
+
+export function buildGoogleCalendarItems(
+  rows: IntegrationItemRow[],
+  todayYmd: string,
+  horizonEndYmd: string,
+  timeZone: string,
+  now = new Date()
+): DeviceReminderItem[] {
+  return rows.flatMap((row) => {
+    const title = String(row.title || '').trim()
+    const externalId = String(row.external_id || '').trim()
+    const allDay = row.raw?.all_day === true
+    const occurrenceDate = allDay && typeof row.raw?.date === 'string'
+      ? row.raw.date
+      : row.starts_at ? isoToYmdInTimeZone(row.starts_at, timeZone) : ''
+    if (!title || !externalId || !occurrenceDate || occurrenceDate < todayYmd || occurrenceDate > horizonEndYmd) return []
+    if (!allDay && (!row.starts_at || !isTeamsMeetingVisibleAt(row.starts_at, now))) return []
+    const displayTime = allDay ? null : isoToHmInTimeZone(row.starts_at as string, timeZone)
+    const daysUntil = diffDaysFromYmd(todayYmd, occurrenceDate)
+    return [{
+      reminder_id: 'google-calendar:' + externalId,
+      title,
+      occurrence_date: occurrenceDate,
+      display_date: formatDisplayDate(occurrenceDate, todayYmd),
+      days_until: daysUntil,
+      is_overdue: false,
+      repeat: 'none' as ReminderRepeatKey,
+      due_time: displayTime,
+      display_time: displayTime,
+      source: 'google-calendar' as const,
       external_id: externalId,
     }]
   })
