@@ -111,7 +111,7 @@ function uniqueFuture(rows, todayTitles) {
  * localHour is supplied by the device's configured time zone. During the
  * evening, tomorrow deserves precedence over less urgent later-week events.
  */
-export function buildReminderComingUp(items, language = 'en', { localHour = null } = {}) {
+export function buildReminderComingUp(items, language = 'en', { localHour = -1 } = {}) {
   const rows = Array.isArray(items) ? items : []
   const today = rows.filter(row => dayNumber(row?.days_until) === 0 && text(row?.title))
   if (today.length < 1 || today.length > 2) return ''
