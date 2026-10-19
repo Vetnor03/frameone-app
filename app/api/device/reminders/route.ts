@@ -5,7 +5,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsIfStaleForUser } from '@/app/lib/integrations/teams/server'
 import { syncGoogleCalendarFromStoredConnection } from '@/app/lib/integrations/google-calendar/server'
-import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildWasteCollectionItems, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
+import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildWasteCollectionItems, preferTomorrowAfterSingleAllDayEvent, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
 import { reminderClockBoundaryReached } from '@/app/lib/device/reminderClockBoundary'
@@ -853,11 +853,19 @@ export async function GET(req: Request) {
         seenKeys.add(key)
         return true
       })
+    // Present tomorrow instead of a lone all-day calendar entry after 18:00
+    // in the frame's configured local time zone. No stored event is changed.
+    const displayItems = preferTomorrowAfterSingleAllDayEvent(
+      allItems,
+      todayYmd,
+      toLocalYmd(addDaysLocal(today, 1)),
+      nowHm
+    )
     const requestedProfiles = String(url.searchParams.get('display_profiles') || url.searchParams.get('display_profile') || 'standard')
       .split(',').map(value => value.trim()).filter((value): value is DisplayCapacityProfile => value === 'compact' || value === 'standard' || value === 'spacious')
     const displayProfiles = [...new Set<DisplayCapacityProfile>(requestedProfiles.length ? requestedProfiles : ['standard'])]
     const selectedItems = prioritizeReminderVisiblePrefix(
-      selectReminderDisplayGroups(allItems, limit),
+      selectReminderDisplayGroups(displayItems, limit),
       displayProfiles
     )
     const optimizerItems = selectedItems.map((item, index) => ({
