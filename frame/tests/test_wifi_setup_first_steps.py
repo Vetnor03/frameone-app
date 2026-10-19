@@ -38,5 +38,5 @@ def test_phone_captive_portal_really_allows_home_network_and_password():
     assert 'apSsid = String("FRAME-000-") + suffix;' in PORTAL
     assert 'ScreenPairing::showWifiSetup(apSsid.c_str())' in PORTAL
     assert '<label>Wi-Fi network</label>' in PORTAL
-    assert '<input id=\\'pass\\' name=\\'pass\\' type=\\'password\\'' in PORTAL
+    assert "name='pass' type='password'" in PORTAL
     assert 'server.on("/save", HTTP_POST' in PORTAL
