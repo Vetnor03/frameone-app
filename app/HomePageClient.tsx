@@ -3844,7 +3844,7 @@ function ConnectAppsScreen({
       setLocalEventsStatusFailed(true)
     })
   }, [activeDeviceId])
-  const apps = INTEGRATION_CATALOGUE.filter(definition => !startup || (definition.connectable && definition.status === 'available')).map(definition => ({
+  const apps = INTEGRATION_CATALOGUE.filter(definition => !startup || (definition.connectable && (definition.status === 'available' || definition.key === 'spond'))).map(definition => ({
     ...definition,
     name: definition.name[language],
     description: definition.description[language],
