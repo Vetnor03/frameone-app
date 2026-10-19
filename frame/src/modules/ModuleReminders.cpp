@@ -80,6 +80,7 @@ struct ReminderCache {
   bool ok = false;
   int count = 0;
   ReminderItem items[MAX_REMINDERS];
+  char comingUp[96] = {0};
 };
 
 static_assert(sizeof(ReminderCache) <= 4096,
@@ -693,6 +694,7 @@ static bool fetchReminders() {
     return false;
   }
 
+  filter["coming_up"] = true;
   JsonObject itemFilter = filter["items"][0].to<JsonObject>();
   itemFilter["title"] = true;
   itemFilter["occurrence_date"] = true;
@@ -733,6 +735,7 @@ static bool fetchReminders() {
     return false;
   }
 
+  utf8ToLatin1(g_cache->comingUp, sizeof(g_cache->comingUp), doc["coming_up"] | "");
   JsonArray items = doc["items"].as<JsonArray>();
   if (items.isNull()) {
     g_cache->loaded = true;
@@ -1953,7 +1956,34 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
 
   const int visibleCount = min(bucket.count, isTodayOrTomorrow ? 4 : 3);
 
-  const bool showTomorrowNote = headerIsToday && isEveningHour();
+  // Spare-space insight is exclusive to the actual medium tile, not the
+  // medium sub-panels reused by LARGE and XL. Do not crowd real reminders.
+  bool showComingUp = c.size == CELL_MEDIUM && headerIsToday &&
+      bucket.count >= 1 && bucket.count <= 2 && g_cache->comingUp[0];
+  char outlookLines[2][128] = {{0}};
+  int outlookLineCount = 0;
+  if (showComingUp) {
+    bool complete = false;
+    outlookLineCount = wrapTextToLines(g_cache->comingUp, outlookLines,
+                                        2, c.w - 36, FONT_B9, complete);
+    showComingUp = complete && outlookLineCount > 0;
+    // When there are two reminders, both must fit on single lines so
+    // the reserved insight area cannot hide a real reminder.
+    if (showComingUp && bucket.count == 2) {
+      for (int i = 0; i < 2; ++i) {
+        const int idx = bucket.itemIdx[i];
+        if (idx < 0 || idx >= g_cache->count) { showComingUp = false; break; }
+        char title[128] = {0};
+        buildReminderTitleWithTime(g_cache->items[idx], title, sizeof(title));
+        if (textWidth(title, FONT_B9) > c.w - 36) {
+          showComingUp = false;
+          break;
+        }
+      }
+    }
+  }
+
+  const bool showTomorrowNote = headerIsToday && isEveningHour() && !showComingUp;
 
   if (showTomorrowNote) {
     int tomorrowIdx = findBucketByDaysUntil(buckets, bucketCount, 1);
@@ -2000,6 +2030,8 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
   int contentBottom;
   if (showBottomBadge) {
     contentBottom = rectY - 14;
+  } else if (showComingUp) {
+    contentBottom = c.y + c.h - 88;
   } else if (showTomorrowNote) {
     contentBottom = c.y + c.h - 34;
   } else {
@@ -2013,6 +2045,14 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
     drawnCount = drawBucketLinesCentered(
       c, bucket, visibleCount, contentTop, contentH, REMINDER_CONTENT_FONT
     );
+  }
+
+  if (showComingUp && drawnCount == visibleCount) {
+    const int outlookTop = c.y + c.h - 76;
+    drawCenteredSmallNoteAtY(c, "COMING UP", outlookTop);
+    for (int i = 0; i < outlookLineCount; ++i) {
+      drawCenteredSmallNoteAtY(c, outlookLines[i], outlookTop + 22 + i * 21);
+    }
   }
 
   if (bucket.count > drawnCount) {
