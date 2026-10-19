@@ -1,5 +1,38 @@
 export type WeatherUnits = 'metric' | 'imperial'
 
+/**
+ * The next-day compact preview begins at 20:00 in the forecast location's
+ * timezone, but only when the forecast's dates match today and tomorrow.
+ */
+export function shouldShowTomorrowWeather(
+  dailyDates: readonly string[],
+  now: Date,
+  timeZone: string = 'Europe/Oslo'
+): boolean {
+  if (dailyDates.length < 2) return false
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(now)
+    const part = (name: string) => parts.find(p => p.type === name)?.value || ''
+    const year = Number(part('year'))
+    const month = Number(part('month'))
+    const day = Number(part('day'))
+    const hour = Number(part('hour'))
+    if (![year, month, day, hour].every(Number.isFinite) || hour < 20) return false
+    const todayYmd = [String(year).padStart(4, '0'), String(month).padStart(2, '0'), String(day).padStart(2, '0')].join('-')
+    const tomorrowYmd = new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10)
+    return dailyDates[0] === todayYmd && dailyDates[1] === tomorrowYmd
+  } catch {
+    return false
+  }
+}
+
 export type WeatherInsightHour = { hour: number; tempC?: number | null; precipMm?: number | null; windMs?: number | null; wmo?: number | null }
 
 export type MediumWeatherInput = {
