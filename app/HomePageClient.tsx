@@ -3724,6 +3724,8 @@ function ConnectAppsScreen({
       setPendingGoogleEnableAfterOAuth(false)
     }
     if (params.has('teams') || params.has('google_calendar')) window.history.replaceState({}, '', window.location.pathname)
+    // Run OAuth callback handling once: functions and URL state intentionally reflect the initial page load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -3780,7 +3782,7 @@ function ConnectAppsScreen({
     sessionStorage.removeItem('remind:google-oauth-result')
     setPendingGoogleEnableAfterOAuth(false)
     window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
-  }, [pendingGoogleEnableAfterOAuth, googleStatusResolved, googleAccountConnected, legacyIntegrationDiscoveryPending])
+  }, [pendingGoogleEnableAfterOAuth, googleStatusResolved, googleAccountConnected, legacyIntegrationDiscoveryPending, modulesJson?.integration_selection_explicit, language, changeFrameIntegration])
 
   useEffect(() => {
     const requestGeneration = ++localEventsRequestGenerationRef.current
