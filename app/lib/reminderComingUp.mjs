@@ -61,8 +61,8 @@ function deadlineDescription(row, no) {
   if (!day) return ''
   const title = shorten(row.title)
   // The word "deadline" comes from the actual title, not a speculative rule.
-  if (no) return cap((row.days_until === 1 ? 'Frist i morgen' : 'Viktig ' + day.toLowerCase()) + ': ' + title + '.')
-  return cap((row.days_until === 1 ? 'Deadline tomorrow' : 'Deadline ' + day.toLowerCase()) + ': ' + title + '.')
+  if (no) return cap((row.days_until === 1 ? 'Frist i morgen' : 'Frist på ' + weekday(text(row.occurrence_date).slice(0, 10), true)) + ': ' + title + '.')
+  return cap((row.days_until === 1 ? 'Deadline tomorrow' : 'Deadline ' + weekday(text(row.occurrence_date).slice(0, 10), false)) + ': ' + title + '.')
 }
 function earlyDescription(row, no) {
   const at = clockOf(row)
@@ -83,8 +83,8 @@ function busyDescription(dayRows, no, day, early = null) {
     : 'Tomorrow is busy, with ' + count + ' things scheduled.'
   const label = labelForDay(dayRows[0], no)
   return cap(no
-    ? label + ' blir travel med ' + count + ' planer.'
-    : label + ' looks busy, with ' + count + ' things planned.')
+    ? 'Det blir travelt ' + label.toLowerCase() + ': ' + count + ' planer.'
+    : label.replace(/^On /, '') + ' looks busy, with ' + count + ' things planned.')
 }
 function uniqueFuture(rows, todayTitles) {
   const seen = new Set()
