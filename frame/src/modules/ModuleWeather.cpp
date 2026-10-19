@@ -1620,7 +1620,13 @@ static void renderMedium(const Cell& c,
   buildPrecipStr(precipStr, sizeof(precipStr), medPrecip, medWmo, medLoC, medHiC);
 
   char insightStr[96] = {0};
-  if (!useTomorrow) buildWeatherInsight(insightStr, sizeof(insightStr), data);
+  if (useTomorrow) {
+    // Reuse the existing insight area instead of squeezing a new line
+    // above the temperature range. Icon space adapts automatically.
+    strlcpy(insightStr, "Tomorrow", sizeof(insightStr));
+  } else {
+    buildWeatherInsight(insightStr, sizeof(insightStr), data);
+  }
 
   int16_t b12Y1; uint16_t b12H;
   int16_t b9Y1;  uint16_t b9H;
@@ -1642,7 +1648,6 @@ static void renderMedium(const Cell& c,
   int tempStartX = c.x + (c.w - totalTempW) / 2;
   int tempTop = c.y + topPad;
   int tempBaseline = tempTop - b12Y1;
-  if (useTomorrow) drawTomorrowWeatherLabel(c, ink);
 
   int tx = tempStartX;
   drawLeft(tx, tempBaseline, loBuf, FONT_B12, ink);

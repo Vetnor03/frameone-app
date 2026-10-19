@@ -8470,14 +8470,15 @@ function LandscapeFrameMirror({
     }
 
     if (module === 'weather' && size === 'medium' && detail.weatherLowTemp && detail.weatherHighTemp) {
-      const advice = detail.weatherAdvice || ''
+      // The medium label uses the existing insight area below temperatures,
+      // matching the frame without squeezing text into the top margin.
+      const advice = detail.weatherIsTomorrow
+        ? (language === 'no' ? 'I morgen' : 'Tomorrow')
+        : detail.weatherAdvice || ''
       const hasAdvice = advice.trim().length > 0
 
       return (
         <div className="relative flex h-full w-full flex-col items-center overflow-hidden px-[clamp(0.55rem,1.7vw,1.2rem)] pt-[clamp(0.55rem,1.45vw,0.95rem)] pb-[clamp(0.55rem,1.45vw,0.95rem)] text-center leading-tight">
-          {detail.weatherIsTomorrow && (
-            <span className="absolute top-[clamp(0.05rem,0.42vw,0.27rem)] left-1/2 -translate-x-1/2 whitespace-nowrap text-[clamp(0.52rem,1.1vw,0.72rem)] font-medium tracking-[0.05em]">{language === 'no' ? 'I morgen' : 'Tomorrow'}</span>
-          )}
           <div className="flex shrink-0 items-center justify-center border-b border-current pb-[clamp(0.06rem,0.18vw,0.12rem)] text-[clamp(0.88rem,2.05vw,1.35rem)] font-semibold tracking-[0.08em]">
             <span className="min-w-0 truncate px-[clamp(0.32rem,0.8vw,0.62rem)]">{detail.weatherLowTemp}</span>
             <span className="h-[clamp(1.05rem,2.25vw,1.45rem)] w-px shrink-0" style={{ backgroundColor: textColor }} aria-hidden="true" />
@@ -8486,7 +8487,7 @@ function LandscapeFrameMirror({
 
           {hasAdvice ? (
             <div className="mt-[clamp(0.28rem,0.75vw,0.5rem)] flex min-h-[clamp(1.7rem,4.2vw,2.55rem)] w-full shrink-0 items-center justify-center px-[clamp(0.25rem,0.8vw,0.55rem)] text-[clamp(0.66rem,1.55vw,1rem)] font-medium tracking-[0.035em]">
-              <div className="line-clamp-2 max-w-full">{advice}</div>
+              <div className={`line-clamp-2 max-w-full ${detail.weatherIsTomorrow ? 'text-[clamp(0.55rem,1.15vw,0.76rem)]' : ''}`}>{advice}</div>
             </div>
           ) : null}
 

@@ -51,8 +51,20 @@ test('physical small and medium renderers use the same date guards and label', (
   const medium = fw.slice(fw.indexOf('static void renderMedium'), fw.indexOf('static void renderMiniDay'))
   for (const renderer of [small, medium]) {
     assert.match(renderer, /shouldShowTomorrowForecast\(data\)/)
-    assert.match(renderer, /drawTomorrowWeatherLabel\(c, ink\)/)
   }
-  assert.match(medium, /if \(!useTomorrow\) buildWeatherInsight\(insightStr/)
+  assert.match(small, /drawTomorrowWeatherLabel\(c, ink\)/)
+  assert.doesNotMatch(medium, /drawTomorrowWeatherLabel\(c, ink\)/)
+  assert.match(medium, /strlcpy\(insightStr, "Tomorrow", sizeof\(insightStr\)\)/)
+  assert.match(medium, /if \(hasInsight\) \{/)
+  assert.match(medium, /iconRegionTop = insightTop \+ insightBlockH \+ gapInsightToIcon/)
   assert.doesNotMatch(fw.slice(fw.indexOf('static void renderLargeXL')), /drawTomorrowWeatherLabel\(c, ink\)/)
+})
+
+test('medium Mirror View labels tomorrow in the reserved insight region, not above temperatures', () => {
+  const app = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  const medium = app.slice(app.indexOf("if (module === 'weather' && size === 'medium'"), app.indexOf("if (module === 'date' && size === 'large'"))
+  assert.match(medium, /const advice = detail\.weatherIsTomorrow/)
+  assert.match(medium, /I morgen/)
+  assert.match(medium, /line-clamp-2 max-w-full/)
+  assert.doesNotMatch(medium, /absolute top-\[/)
 })
