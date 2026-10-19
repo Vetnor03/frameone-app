@@ -22,7 +22,7 @@ namespace DisplayCore {
   void drawCenteredTextInFrame(const char* text, int big);
 
   // New: boxed / shelf screen
-  void drawShelfScreen(const String& deviceId);
+  void drawShelfScreen();
   void drawRechargeScreen();
   // Temporary acknowledgement shown only after an explicit app Update is detected.
   void drawUpdatingScreen();
