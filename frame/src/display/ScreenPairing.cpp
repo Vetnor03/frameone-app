@@ -74,7 +74,7 @@ static void drawWifiSetup(void* vctx) {
   char connectLine[64];
   snprintf(connectLine, sizeof(connectLine), "Connect to %s", ctx->ssid);
 
-  drawCenteredInFrame("Connect to frame Wi-Fi", FRAME_Y + 68, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("Connect your frame to Wi-Fi", FRAME_Y + 68, &FreeMonoBold12pt7b);
   drawCenteredInFrame(ctx->ssid, FRAME_Y + 150, &FreeMonoBold18pt7b);
 
   // Four readable actions, each on its own line (no jargon or tiny text).
