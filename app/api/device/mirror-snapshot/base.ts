@@ -1450,8 +1450,9 @@ async function weatherDetail(cfg: UnknownRecord, language: string, configUpdated
   const dailyTime = Array.isArray(daily.time) ? daily.time : []
   const tomorrowLoC = arrayNumberAt(daily.temperature_2m_min, 1)
   const tomorrowHiC = arrayNumberAt(daily.temperature_2m_max, 1)
+  const tomorrowSummary = buildTomorrowWeatherSummary(data)
   const weekendSummary = buildWeekendWeatherHighlight(data)
-  const tomorrowSummary = weekendSummary || buildTomorrowWeatherSummary(data)
+  const shownTomorrowSummary = weekendSummary || tomorrowSummary
   const useTomorrow = tomorrowLoC != null && tomorrowHiC != null && tomorrowSummary.length > 0 &&
     shouldShowTomorrowWeather(dailyTime.map(value => asString(value)), new Date(), asString(data.timezone, 'Europe/Oslo'))
   const selectedPeriods = computeSelectedWeatherPeriods(data, { hiC, loC, windMaxMs, precipMm, wmo })
@@ -1500,7 +1501,7 @@ async function weatherDetail(cfg: UnknownRecord, language: string, configUpdated
     tertiary: `${formatTemp(loC, units)} / ${formatTemp(hiC, units)}`,
     ...medium,
     weatherIsTomorrow: useTomorrow,
-    weatherTomorrowSummary: useTomorrow ? tomorrowSummary : '',
+    weatherTomorrowSummary: useTomorrow ? shownTomorrowSummary : '',
     weatherSunLine: `Sun ${sunriseHHMM || '--:--'} / ${sunsetHHMM || '--:--'}`,
     weatherHumidityLine: humidity != null ? `Humidity ${Math.round(humidity)}%` : 'Humidity --%',
     weatherDays,
