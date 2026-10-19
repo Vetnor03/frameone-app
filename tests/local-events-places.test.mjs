@@ -124,12 +124,14 @@ test('calendar imports Local Events as Events category without source URL action
   assert.doesNotMatch(home, /Open event page/)
 })
 
-test('calendar hides Local Events after they have been skipped for 24 hours', () => {
+test('calendar retains frame-skipped Local Events in app with undo while frame feed hides them', () => {
   const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
-  assert.match(home, /LOCAL_EVENT_CALENDAR_SKIP_HIDE_AFTER_MS = 24 \* 60 \* 60 \* 1000/)
-  assert.match(home, /localEventSkipIsHiddenFromCalendar\(row\.updated_at\)/)
-  assert.match(home, /localEventHiddenSkippedIds\.has\(externalEventId\)/)
-  assert.match(home, /\.select\('external_event_id, skipped, updated_at'\)/)
+  const frame = readFileSync(new URL('../app/lib/device/remindersFeed.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(home, /LOCAL_EVENT_CALENDAR_SKIP_HIDE_AFTER_MS|localEventSkipIsHiddenFromCalendar|localEventHiddenSkippedIds/)
+  assert.match(home, /\.select\('external_event_id, skipped'\)/)
+  assert.match(home, /skippedOnFrame: source === 'local-events'/)
+  assert.match(home, /toggleLocalEventFrameSkip\(item, !item\.skippedOnFrame\)/)
+  assert.match(frame, /!skipped\.has\(externalId\) && !skipped\.has\(groupSkipId\(groupKey\)\)/)
 })
 
 test('Local Events frame feed is limited and mirror stays decoupled', () => {
