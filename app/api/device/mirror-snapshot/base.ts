@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { SURF_SPOTS, spotIdFromLabel } from '@/app/lib/surf/spots'
-import { buildMediumWeatherDetail, buildWeatherPrecipLine, buildWeatherWindLine, formatWeatherTemp, normalizeDisplayWmoForTemps } from '@/app/lib/weatherMirror'
+import { buildMediumWeatherDetail, shouldShowTomorrowWeather, buildWeatherPrecipLine, buildWeatherWindLine, formatWeatherTemp, normalizeDisplayWmoForTemps } from '@/app/lib/weatherMirror'
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/surf/ratings'
 import { buildFrameConfigPayload, deviceHasOwnerAccessLink, pairRequiredPayload } from '@/app/api/device/frame-config/builder'
 import { fetchWeatherForecast } from '@/app/lib/server/weatherForecast'
@@ -84,6 +84,7 @@ type Detail = {
   weatherSunLine?: string
   weatherHumidityLine?: string
   weatherWmo?: number | null
+  weatherIsTomorrow?: boolean
   weatherDays?: WeatherMirrorDay[]
   surfAirMinC?: number
   surfAirMaxC?: number
@@ -1442,19 +1443,34 @@ async function weatherDetail(cfg: UnknownRecord, language: string, configUpdated
   const currentTime = asString(current.time)
   const sunriseHHMM = hhmmFromIso(arrayStringAt(daily.sunrise, 0))
   const sunsetHHMM = hhmmFromIso(arrayStringAt(daily.sunset, 0))
+  const dailyTime = Array.isArray(daily.time) ? daily.time : []
+  const tomorrowLoC = arrayNumberAt(daily.temperature_2m_min, 1)
+  const tomorrowHiC = arrayNumberAt(daily.temperature_2m_max, 1)
+  const useTomorrow = tomorrowLoC != null && tomorrowHiC != null &&
+    shouldShowTomorrowWeather(dailyTime.map(value => asString(value)), new Date(), asString(data.timezone, 'Europe/Oslo'))
   const selectedPeriods = computeSelectedWeatherPeriods(data, { hiC, loC, windMaxMs, precipMm, wmo })
+  const selectedCompactPeriod = useTomorrow
+    ? {
+        hiC: tomorrowHiC,
+        loC: tomorrowLoC,
+        windMaxMs: arrayNumberAt(daily.wind_speed_10m_max, 1),
+        precipMm: arrayNumberAt(daily.precipitation_sum, 1),
+        wmo: arrayNumberAt(daily.weather_code, 1),
+        restValid: false,
+      }
+    : selectedPeriods
   const medium = buildMediumWeatherDetail({
     units,
     showHiLo,
-    currentTempC,
-    ...selectedPeriods,
+    currentTempC: useTomorrow ? tomorrowHiC : currentTempC,
+    ...selectedCompactPeriod,
     sunriseHHMM,
     sunsetHHMM,
-    localHour: localHourFromIso(currentTime),
-    todayHours: buildTodayWeatherInsightHours(data),
+    localHour: useTomorrow ? null : localHourFromIso(currentTime),
+    todayHours: useTomorrow ? [] : buildTodayWeatherInsightHours(data),
   })
-  medium.weatherAdvice = await resolveWeatherInsight(data, { locationKey: `${lat.toFixed(3)},${lon.toFixed(3)}` })
-  const dailyTime = Array.isArray(daily.time) ? daily.time : []
+  // Do not display an insight about this evening alongside tomorrow's weather.
+  medium.weatherAdvice = useTomorrow ? '' : await resolveWeatherInsight(data, { locationKey: `${lat.toFixed(3)},${lon.toFixed(3)}` })
   const weatherDays: WeatherMirrorDay[] = Array.from({ length: Math.min(5, Math.max(1, dailyTime.length)) }, (_, index) => {
     const dayLoC = index === 0 && selectedPeriods.restValid ? selectedPeriods.restLoC : arrayNumberAt(daily.temperature_2m_min, index)
     const dayHiC = index === 0 && selectedPeriods.restValid ? selectedPeriods.restHiC : arrayNumberAt(daily.temperature_2m_max, index)
@@ -1477,6 +1493,7 @@ async function weatherDetail(cfg: UnknownRecord, language: string, configUpdated
     secondary: label || (language === 'no' ? 'Vær' : 'Weather'),
     tertiary: `${formatTemp(loC, units)} / ${formatTemp(hiC, units)}`,
     ...medium,
+    weatherIsTomorrow: useTomorrow,
     weatherSunLine: `Sun ${sunriseHHMM || '--:--'} / ${sunsetHHMM || '--:--'}`,
     weatherHumidityLine: humidity != null ? `Humidity ${Math.round(humidity)}%` : 'Humidity --%',
     weatherDays,
