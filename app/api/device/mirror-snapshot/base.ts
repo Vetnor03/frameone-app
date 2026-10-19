@@ -2029,7 +2029,7 @@ async function remindersDetail(origin: string, deviceId: string, deviceToken: st
     tertiary: first ? asString(first.display_date || first.display_time, '') : undefined,
     reminderItems,
     reminderMediumItems,
-    reminderComingUp: firstDaysUntil === 0 && primaryBucketItems.length >= 1 && primaryBucketItems.length <= 2
+    reminderComingUp: primaryBucketItems.length >= 1 && primaryBucketItems.length <= visibleMediumItems.length
       ? asString(data.coming_up).trim()
       : '',
     reminderCalendarDates,

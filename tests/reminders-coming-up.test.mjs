@@ -9,21 +9,35 @@ const row = (title, days_until, display_time = '', date = '2026-10-20') => ({
 })
 const sparse = [row('Take out the bins', 0, '09:00', '2026-10-19')]
 
-test('Coming up appears only for sparse today and a genuinely upcoming item', () => {
+test('Coming up requires a date bucket that fits and a separate, genuinely upcoming item', () => {
   const future = row('Dentist appointment', 1, '08:00')
   assert.equal(buildReminderComingUp([...sparse, future]), 'Early tomorrow: Dentist appointment at 08:00.')
   assert.equal(buildReminderComingUp([...sparse, future], 'no'), 'Tidlig i morgen: Dentist appointment kl. 08:00.')
   assert.equal(buildReminderComingUp([...sparse, row('Pick up parcel', 0), future]), 'Early tomorrow: Dentist appointment at 08:00.')
-  assert.equal(buildReminderComingUp([...sparse, row('Pick up parcel', 0), row('Check car', 0), future]), '')
+  assert.equal(buildReminderComingUp([...sparse, row('Pick up parcel', 0), row('Check car', 0), future]), 'Early tomorrow: Dentist appointment at 08:00.')
   assert.equal(buildReminderComingUp([future]), '')
   assert.equal(buildReminderComingUp(sparse), '')
 })
 
-test('Coming up looks no further than seven days, never copies today, and skips unsupported dates', () => {
+test('Coming up looks seven days ahead of the visible date, never copies it, and skips unsupported dates', () => {
   const rows = [...sparse, row('Future', 8), row('Review loan', 3, '', '2026-10-22')]
   assert.equal(buildReminderComingUp(rows), 'On Thursday: Review loan.')
   assert.equal(buildReminderComingUp([sparse[0], row('Future', 8)]), '')
   assert.equal(buildReminderComingUp([sparse[0], row('Broken', 2, '', 'not-a-date')]), '')
+})
+
+test('Tomorrow and next Friday may both use spare space without predicting nonexistent work', () => {
+  const tomorrowOnly = row('Collect parcel', 1, '', '2026-10-20')
+  const wednesday = row('Review loan', 2, '', '2026-10-21')
+  assert.equal(buildReminderComingUp([tomorrowOnly, wednesday]), 'On Wednesday: Review loan.')
+  const friday = row('Collect parcel', 4, '', '2026-10-23')
+  const monday = row('Review contract', 7, '', '2026-10-26')
+  assert.equal(buildReminderComingUp([friday, monday]), 'On Monday: Review contract.')
+  assert.equal(buildReminderComingUp([friday, monday], 'no'), 'På mandag: Review contract.')
+  assert.equal(buildReminderComingUp([friday]), '')
+  assert.equal(buildReminderComingUp([friday, friday, monday, row('One more', 4, '', '2026-10-23')]), 'On Monday: Review contract.')
+  assert.equal(buildReminderComingUp([friday, friday, friday, friday, monday]), '')
+  assert.equal(buildReminderComingUp([friday, row('Too far away', 12, '', '2026-10-31')]), '')
 })
 
 test('Coming up prioritizes busy tomorrow over a routine task and early timing over later events', () => {
@@ -46,26 +60,28 @@ test('Coming up is capped in length and does not make speculative suggestions', 
   assert.doesNotMatch(insight, /prepare|leave early|travel|bring|remember to/i)
 })
 
-test('physical and Mirror medium UI reserve space only when there is a real insight', () => {
+test('physical and Mirror medium UI measure available space for insights on any primary date', () => {
   const firmware = readFileSync(new URL('../frame/src/modules/ModuleReminders.cpp', import.meta.url), 'utf8')
   const medium = firmware.slice(firmware.indexOf('static void renderMedium('), firmware.indexOf('static void renderLarge('))
   assert.match(firmware, /filter\["coming_up"\] = true/)
   assert.match(firmware, /doc\["coming_up"\]/)
-  assert.match(medium, /c\.size == CELL_MEDIUM && headerIsToday/)
-  assert.match(medium, /bucket\.count >= 1 && bucket\.count <= 2/)
+  assert.match(medium, /c\.size == CELL_MEDIUM &&/)
+  assert.doesNotMatch(medium, /c\.size == CELL_MEDIUM && headerIsToday/)
+  assert.match(medium, /bucket\.count >= 1 && bucket\.count <= visibleCount/)
   assert.match(medium, /char outlookLines\[4\]\[128\]/)
-  assert.match(medium, /const int maxLines = bucket\.count == 1 \? 4 : 3/)
+  assert.match(medium, /const int maxLines = bucket\.count == 1 \? 4 : bucket\.count == 2 \? 3 : 2/)
   assert.match(medium, /wrapTextToLines\(g_cache->comingUp, outlookLines,[\s\S]*?maxLines,/)
   assert.match(medium, /showComingUp = reminderSpace >= minReminderSpace/)
   assert.match(medium, /buildSmartReminderLayout\(bucket, visibleCount,/)
   assert.match(medium, /contentBottom = outlookTop - 12/)
+  assert.match(medium, /const int outlookBottom = showBottomBadge \? rectY - 14 : c\.y \+ c\.h - 12/)
   assert.match(medium, /drawBucketLinesCentered/)
   assert.doesNotMatch(medium, /drawCenteredSmallNoteAtY\(c, "COMING UP"/)
   assert.match(medium, /drawnCount == visibleCount/)
   const mirror = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   const card = mirror.slice(mirror.indexOf('function MirrorMediumRemindersCard('), mirror.indexOf('function MirrorSmallRemindersCard('))
   assert.match(card, /detail\.reminderComingUp/)
-  assert.match(card, /visibleItems\.length === 1 \? 'line-clamp-4' : 'line-clamp-3'/)
+  assert.match(card, /visibleItems\.length === 1 \? 'line-clamp-4' : visibleItems\.length === 2 \? 'line-clamp-3' : 'line-clamp-2'/)
   assert.doesNotMatch(card, />COMING UP<|>KOMMER</)
   assert.match(card, /!comingUp && headerIsToday/)
 })
@@ -75,11 +91,11 @@ test('connected future reminders are included through the authorized feed with n
   const snapshot = readFileSync(new URL('../app/api/device/mirror-snapshot/base.ts', import.meta.url), 'utf8')
   assert.match(backend, /buildReminderComingUp\(displayItems, frameLanguage, \{ localHour: Number\(nowHm\.slice\(0, 2\)\) \}\)/)
   assert.match(backend, /return NextResponse\.json\(\{ items: physicalItems, coming_up: comingUp \}\)/)
-  assert.match(snapshot, /reminderComingUp: firstDaysUntil === 0/)
+  assert.match(snapshot, /reminderComingUp: primaryBucketItems\.length >= 1/)
   assert.match(snapshot, /asString\(data\.coming_up\)/)
 })
 
-test('medium physical render hashes include Coming up; small and large are unchanged', () => {
+test('medium physical render hashes include insights on Today and later dates; small and large are unchanged', () => {
   const today = { items: [row('Take out the bins', 0, '09:00', '2026-10-19')], ok: true }
   const changed = { ...today, coming_up: 'Early tomorrow: Dentist appointment at 08:00.' }
   const cell = size => ({ size, w: 400, h: 240 })
@@ -87,6 +103,12 @@ test('medium physical render hashes include Coming up; small and large are uncha
   const after = physicalRenderProjection('reminders', changed, cell('MEDIUM')).visible
   assert.equal(before.comingUp, undefined)
   assert.equal(after.comingUp, changed.coming_up)
+  const later = { items: [row('Collect parcel', 4, '', '2026-10-23')], ok: true }
+  const laterWithInsight = { ...later, coming_up: 'On Monday: Review contract.' }
+  const laterBefore = physicalRenderProjection('reminders', later, cell('MEDIUM')).visible
+  const laterAfter = physicalRenderProjection('reminders', laterWithInsight, cell('MEDIUM')).visible
+  assert.equal(laterBefore.comingUp, undefined)
+  assert.equal(laterAfter.comingUp, laterWithInsight.coming_up)
   assert.deepEqual(physicalRenderProjection('reminders', today, cell('SMALL')),
     physicalRenderProjection('reminders', changed, cell('SMALL')))
   assert.deepEqual(physicalRenderProjection('reminders', today, cell('LARGE')),

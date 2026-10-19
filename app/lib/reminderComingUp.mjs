@@ -93,12 +93,12 @@ function busyDescription(dayRows, no, day, early = null) {
     ? 'Det blir travelt ' + label.toLowerCase() + ': ' + count + ' planer.'
     : label.replace(/^On /, '') + ' looks busy, with ' + count + ' things planned.')
 }
-function uniqueFuture(rows, todayTitles) {
+function uniqueFuture(rows, primaryTitles, anchorDay) {
   const seen = new Set()
   return rows.filter(row => {
     const days = dayNumber(row?.days_until)
     const title = titleKey(row?.title)
-    if (days == null || days < 1 || days > 7 || !title || todayTitles.has(title)) return false
+    if (days == null || days <= anchorDay || days > anchorDay + 7 || !title || primaryTitles.has(title)) return false
     // Require a plausible future date to avoid ungrounded weekday claims.
     if (!weekday(text(row.occurrence_date).slice(0, 10), false)) return false
     const key = String(days) + ':' + title + ':' + clockOf(row)
@@ -112,24 +112,34 @@ function uniqueFuture(rows, todayTitles) {
 }
 
 /**
- * Only show when the *whole today list* contains 1–2 reminders; never remove
- * or duplicate a visible reminder just to create an insight.
+ * Follow the actual primary date bucket (Today, Tomorrow, or a later date).
+ * A primary bucket may preview real plans in the following seven days when
+ * space permits; never remove, duplicate, or crowd a visible reminder.
  *
  * localHour is supplied by the device's configured time zone. During the
- * evening, tomorrow deserves precedence over less urgent later-week events.
+ * evening, tomorrow deserves precedence when the primary bucket is Today.
  */
 export function buildReminderComingUp(items, language = 'en', { localHour = -1 } = {}) {
   const rows = Array.isArray(items) ? items : []
-  const today = rows.filter(row => dayNumber(row?.days_until) === 0 && text(row?.title))
-  if (today.length < 1 || today.length > 2) return ''
+  const dated = rows.filter(row => dayNumber(row?.days_until) != null && text(row?.title))
+  // Match the physical renderer: Today first, then Tomorrow, then the
+  // earliest remaining bucket in source order. Never promote a later day just
+  // to manufacture spare space if the visible bucket has three or more items.
+  const anchorDay = dated.some(row => row.days_until === 0) ? 0
+    : dated.some(row => row.days_until === 1) ? 1
+    : dayNumber(dated[0]?.days_until)
+  if (anchorDay == null || anchorDay < 0) return ''
+  const primary = dated.filter(row => row.days_until === anchorDay)
+  const visibleCapacity = anchorDay <= 1 ? 4 : 3
+  if (primary.length < 1 || primary.length > visibleCapacity) return ''
 
   const no = norwegian(language)
-  const upcoming = uniqueFuture(rows, new Set(today.map(row => titleKey(row.title))))
+  const upcoming = uniqueFuture(rows, new Set(primary.map(row => titleKey(row.title))), anchorDay)
   if (!upcoming.length) return ''
 
   const tomorrow = upcoming.filter(row => row.days_until === 1)
   const early = tomorrow.find(row => clockOf(row) && clockOf(row) < '09:00')
-  const soonDeadline = upcoming.find(row => row.days_until <= 3 && explicitDeadline(row))
+  const soonDeadline = upcoming.find(row => row.days_until <= anchorDay + 3 && explicitDeadline(row))
   const anyDeadline = upcoming.find(explicitDeadline)
   const evening = Number.isInteger(localHour) && localHour >= 18 && localHour <= 23
 
@@ -138,7 +148,7 @@ export function buildReminderComingUp(items, language = 'en', { localHour = -1 }
     const urgent = deadlineDescription(soonDeadline, no)
     // A separate early start is worth mentioning alongside a real deadline
     // when today's list has room for a longer outlook.
-    if (today.length === 1 && early && early !== soonDeadline) {
+    if (primary.length === 1 && early && early !== soonDeadline) {
       return withSecondFact(urgent, earlyDescription(early, no))
     }
     return urgent
@@ -155,7 +165,7 @@ export function buildReminderComingUp(items, language = 'en', { localHour = -1 }
     groupDays.set(row.days_until, existing)
   }
   const busyLater = [...groupDays.entries()]
-    .filter(([day, entries]) => day >= 2 && entries.length >= 4)
+    .filter(([day, entries]) => day > anchorDay && day >= 2 && entries.length >= 4)
     .sort((a,b) => a[0] - b[0])[0]
   if (!evening && anyDeadline) return deadlineDescription(anyDeadline, no)
   if (!evening && busyLater) return busyDescription(busyLater[1], no, busyLater[0])
@@ -163,7 +173,7 @@ export function buildReminderComingUp(items, language = 'en', { localHour = -1 }
   // After 18:00 the next morning/day has greater practical value.
   if (tomorrow.length > 0) {
     const next = upcomingDescription(tomorrow[0], no)
-    if (today.length === 1 && busyLater) {
+    if (primary.length === 1 && busyLater) {
       return withSecondFact(next, busyDescription(busyLater[1], no, busyLater[0]))
     }
     return next
