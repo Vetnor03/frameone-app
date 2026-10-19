@@ -558,10 +558,9 @@ function reminderProjection(value, cell, now) {
   const tomorrowNote = (String(cell?.size).toUpperCase() === 'SMALL' || String(cell?.size).toUpperCase() === 'MEDIUM') && primary.daysUntil === 0 && local.hour >= 17 && tomorrow?.rows.length
   const result = { ok: source.ok, primary: { daysUntil: primary.daysUntil, overdue: primary.overdue, visible: visible.map(({ itemIdx: _itemIdx, ...row }) => row), overflow: primary.rows.length - capacity }, tomorrowNote: tomorrowNote ? tomorrow.rows.length : undefined }
   const size = String(cell?.size).toUpperCase()
-  // Physical medium renderer uses the same conditional Coming up footer. Keep
-  // the summary in the render hash so adding/changing a future plan redraws the
-  // frame despite unchanged current-day reminders.
-  if (size === 'MEDIUM' && primary.daysUntil === 0 &&
+  // Physical medium renderer can show the spare-space insight on any primary
+  // date. Hash it to redraw when the outlook changes even if rows do not.
+  if (size === 'MEDIUM' &&
       primary.rows.length >= 1 && primary.rows.length <= 2 &&
       typeof source.coming_up === 'string' && source.coming_up.trim()) {
     result.comingUp = source.coming_up.trim()
