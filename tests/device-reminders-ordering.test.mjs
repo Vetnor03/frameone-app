@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
 
-import { buildSpondReminderItems, buildTeamsMeetingItems, compareReminderItems, selectReminderDisplayGroups, sortReminderItems } from '../app/lib/device/remindersFeed.ts'
+import { buildGoogleCalendarItems, buildSpondReminderItems, buildTeamsMeetingItems, compareReminderItems, preferTomorrowAfterSingleAllDayEvent, selectReminderDisplayGroups, sortReminderItems } from '../app/lib/device/remindersFeed.ts'
 
 const item = ({ id, date, days, source }) => ({
   reminder_id: id, title: id, occurrence_date: date,
@@ -364,4 +364,46 @@ test('physical Spond events expire at their exact start, without waiting for the
   assert.equal(get('2026-10-14T16:59:59.000Z').length, 0)
   // Explicitly requested overdue diagnostics keep the previous historical mode.
   assert.equal(get('2026-10-14T16:00:48.000Z', true).length, 1)
+})
+
+test('Google Calendar all-day entries are distinct from untimed manual reminders', () => {
+  const google = buildGoogleCalendarItems([{
+    id: 'week-row',
+    user_id: 'test-user',
+    provider: 'google-calendar',
+    external_id: 'calendar-week-43',
+    title: 'Uke 43 i 2026',
+    body: null,
+    starts_at: '2026-10-18T22:00:00Z',
+    due_at: null,
+    priority: 0,
+    raw: { all_day: true, date: '2026-10-19' },
+  }], '2026-10-19', '2026-10-25', 'Europe/Oslo')
+
+  assert.equal(google.length, 1)
+  assert.equal(google[0].is_all_day, true)
+  const manual = item({ id: 'manual-untimed', date: '2026-10-19', days: 0, source: 'remind' })
+  assert.equal(manual.is_all_day, undefined)
+})
+
+test('after 18:00 an isolated all-day event makes room for tomorrow', () => {
+  const allDay = { ...item({ id: 'week-number', date: '2026-10-19', days: 0, source: 'google-calendar' }), is_all_day: true }
+  const tomorrow = item({ id: 'waste', date: '2026-10-20', days: 1, source: 'remind' })
+  const view = (items, clock) => preferTomorrowAfterSingleAllDayEvent(items, '2026-10-19', '2026-10-20', clock)
+  assert.deepEqual(view([allDay, tomorrow], '17:59').map(x => x.reminder_id), ['week-number', 'waste'])
+  assert.deepEqual(view([allDay, tomorrow], '18:00').map(x => x.reminder_id), ['waste'])
+  assert.deepEqual(view([allDay, tomorrow], '23:59').map(x => x.reminder_id), ['waste'])
+  assert.deepEqual(view([allDay], '18:00').map(x => x.reminder_id), ['week-number'])
+})
+
+test('evening lookahead retains important today reminders and untimed personal tasks', () => {
+  const allDay = { ...item({ id: 'week-number', date: '2026-10-19', days: 0, source: 'google-calendar' }), is_all_day: true }
+  const manual = item({ id: 'call-home', date: '2026-10-19', days: 0, source: 'remind' })
+  const meeting = { ...item({ id: 'meeting', date: '2026-10-19', days: 0, source: 'teams' }), display_time: '20:00' }
+  const tomorrow = item({ id: 'waste', date: '2026-10-20', days: 1, source: 'remind' })
+  const view = items => preferTomorrowAfterSingleAllDayEvent(items, '2026-10-19', '2026-10-20', '18:30')
+  assert.deepEqual(view([allDay, manual, tomorrow]).map(x => x.reminder_id), ['week-number', 'call-home', 'waste'])
+  assert.deepEqual(view([meeting, allDay, tomorrow]).map(x => x.reminder_id), ['meeting', 'week-number', 'waste'])
+  assert.deepEqual(view([manual, tomorrow]).map(x => x.reminder_id), ['call-home', 'waste'])
+  assert.deepEqual(view([tomorrow]).map(x => x.reminder_id), ['waste'])
 })
