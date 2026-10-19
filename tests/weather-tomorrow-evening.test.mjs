@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import { shouldShowTomorrowWeather, buildMediumWeatherDetail } from '../app/lib/weatherMirror.ts'
+import { buildTomorrowWeatherSummary } from '../app/lib/weatherTomorrow.mjs'
 
 const today = '2026-10-19'
 const tomorrow = '2026-10-20'
@@ -42,29 +43,83 @@ test('tomorrow detail uses next-day min, max, wind, precipitation and icon', () 
   assert.equal(next.weatherAdvice, '')
 })
 
-test('physical small and medium renderers use the same date guards and label', () => {
+test('tomorrow summary covers the full next day and prioritizes hazardous conditions', () => {
+  const weather = (codes, precipitation, wind, hourlyRows) => ({
+    daily: {
+      time: [today, tomorrow],
+      weather_code: [1, codes],
+      precipitation_sum: [0, precipitation],
+      wind_speed_10m_max: [2, wind],
+    },
+    hourly: {
+      time: hourlyRows.map(r => `${tomorrow}T${r[0]}:00`),
+      weather_code: hourlyRows.map(r => r[1]),
+      precipitation: hourlyRows.map(r => r[2]),
+    },
+  })
+  assert.equal(
+    buildTomorrowWeatherSummary(weather(63, 14, 12, [['08', 1, 0], ['15', 65, 3]])),
+    'Heavy rain expected in the afternoon. Strong winds up to 12 m/s.',
+  )
+  assert.equal(
+    buildTomorrowWeatherSummary(weather(95, 6, 4, [['17', 95, 1]])),
+    'Thunderstorms possible in the evening.',
+  )
+  assert.equal(
+    buildTomorrowWeatherSummary(weather(73, 7, 4, [['09', 73, 1]])),
+    'Snow expected in the morning.',
+  )
+  assert.equal(
+    buildTomorrowWeatherSummary(weather(2, 0, 4, [])),
+    'Partly cloudy and mostly dry.',
+  )
+  assert.equal(
+    buildTomorrowWeatherSummary(weather(3, 0, 17, [])),
+    'Very strong winds up to 17 m/s.',
+  )
+  assert.ok(buildTomorrowWeatherSummary(weather(3, 0, 5, [])).length > 0)
+  assert.ok(buildTomorrowWeatherSummary(weather(95, 10, 17, [])).length <= 88)
+})
+
+test('backend computes tomorrow summary before compacting the hourly forecast', () => {
+  const route = readFileSync(new URL('../app/api/weather/details/route.ts', import.meta.url), 'utf8')
+  assert.match(route, /buildTomorrowWeatherSummary\(weather\.payload\)/)
+  assert.match(route, /tomorrow_insight: tomorrowInsight/)
+  assert.match(route, /compactFrameWeatherPayload\(weather\.payload, frameCompactVersion, insight, tomorrowInsight\)/)
+  const mirror = readFileSync(new URL('../app/api/device/mirror-snapshot/base.ts', import.meta.url), 'utf8')
+  assert.match(mirror, /weatherTomorrowSummary: useTomorrow \? tomorrowSummary : ''/)
+  assert.match(mirror, /const tomorrowSummary = buildTomorrowWeatherSummary\(data\)/)
+})
+
+test('physical small weather retains its label; medium weather uses approved evening layout', () => {
   const fw = readFileSync(new URL('../frame/src/modules/ModuleWeather.cpp', import.meta.url), 'utf8')
   assert.match(fw, /localNow\.tm_hour < 20/)
   assert.match(fw, /strcmp\(data\.days\[0\]\.dateYMD, todayYmd\)/)
   assert.match(fw, /strcmp\(data\.days\[1\]\.dateYMD, tomorrowYmd\)/)
+  assert.match(fw, /filter\["tomorrow_insight"\] = true/)
+  assert.match(fw, /out\.tomorrowInsight/)
   const small = fw.slice(fw.indexOf('static void renderSmall'), fw.indexOf('static void renderMedium'))
   const medium = fw.slice(fw.indexOf('static void renderMedium'), fw.indexOf('static void renderMiniDay'))
-  for (const renderer of [small, medium]) {
-    assert.match(renderer, /shouldShowTomorrowForecast\(data\)/)
-  }
+  assert.match(small, /shouldShowTomorrowForecast\(data\)/)
   assert.match(small, /drawTomorrowWeatherLabel\(c, ink\)/)
+  assert.match(medium, /shouldShowTomorrowForecast\(data\)/)
   assert.doesNotMatch(medium, /drawTomorrowWeatherLabel\(c, ink\)/)
-  assert.match(medium, /strlcpy\(insightStr, "Tomorrow", sizeof\(insightStr\)\)/)
-  assert.match(medium, /if \(hasInsight\) \{/)
-  assert.match(medium, /iconRegionTop = insightTop \+ insightBlockH \+ gapInsightToIcon/)
+  assert.match(medium, /drawTextCenteredAt\(c\.x \+ c\.w \/ 2, tempBaseline, "Tomorrow", FONT_B12, ink\)/)
+  assert.match(medium, /if \(useTomorrow\)[\s\S]*?int movedBaseline = insightTop/)
+  assert.match(medium, /if \(useTomorrow\)[\s\S]*?data\.tomorrowInsight, FONT_B9, ink/)
+  assert.match(medium, /if \(!useTomorrow\) buildWeatherInsight\(insightStr/)
   assert.doesNotMatch(fw.slice(fw.indexOf('static void renderLargeXL')), /drawTomorrowWeatherLabel\(c, ink\)/)
 })
 
-test('medium Mirror View labels tomorrow in the reserved insight region, not above temperatures', () => {
+test('medium Mirror View preserves daytime and uses 2-line tomorrow Good to know at bottom', () => {
   const app = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   const medium = app.slice(app.indexOf("if (module === 'weather' && size === 'medium'"), app.indexOf("if (module === 'date' && size === 'large'"))
-  assert.match(medium, /const advice = detail\.weatherIsTomorrow/)
+  assert.match(medium, /const isTomorrow = detail\.weatherIsTomorrow === true/)
+  assert.match(medium, /const advice = !isTomorrow \? detail\.weatherAdvice/)
   assert.match(medium, /I morgen/)
-  assert.match(medium, /line-clamp-2 max-w-full/)
+  assert.match(medium, /detail\.weatherLowTemp/)
+  assert.match(medium, /detail\.weatherHighTemp/)
+  assert.match(medium, /detail\.weatherTomorrowSummary/)
+  assert.match(medium, /line-clamp-2 w-full/)
   assert.doesNotMatch(medium, /absolute top-\[/)
 })
