@@ -9,6 +9,7 @@ import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingIte
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
 import { reminderClockBoundaryReached } from '@/app/lib/device/reminderClockBoundary'
+import { buildReminderComingUp } from '@/app/lib/reminderComingUp.mjs'
 
 export const runtime = 'nodejs'
 
@@ -891,7 +892,10 @@ export async function GET(req: Request) {
       ...item,
       profile_titles: Object.fromEntries(displayProfiles.map(profile => [profile, optimizedByProfile.get(profile)?.get(index) || item.title])),
     } : item)
-    const compactJsonByteSize = Buffer.byteLength(JSON.stringify({ items: physicalItems }), 'utf8')
+    // Use the full filtered reminder feed, not the 10-item display cap, so
+    // a sparse today can still surface a useful future event.
+    const comingUp = buildReminderComingUp(displayItems, frameLanguage)
+    const compactJsonByteSize = Buffer.byteLength(JSON.stringify({ items: physicalItems, coming_up: comingUp }), 'utf8')
 
     console.info('[device/reminders] compact response', {
       device_id,
@@ -905,7 +909,7 @@ export async function GET(req: Request) {
       core_reads_ms: coreReadsMs,
     })
 
-    return NextResponse.json({ items: physicalItems })
+    return NextResponse.json({ items: physicalItems, coming_up: comingUp })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to load reminders' }, { status: 500 })
   }
