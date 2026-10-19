@@ -2611,7 +2611,7 @@ export default function HomePage() {
     markDirty({ cellsByLayout: nextCellsByLayout })
   }
 
-  async function performSettingsSave(deviceId: string, overrides: { powerSaver?: boolean } = {}): Promise<boolean> {
+  async function performSettingsSave(deviceId: string, overrides: { powerSaver?: boolean; modulesJson?: Record<string, unknown> } = {}): Promise<boolean> {
     try {
       setPersisting(true)
 
@@ -2622,7 +2622,7 @@ export default function HomePage() {
       const draftFontSize = fontSize
       const draftLayoutKey = layoutKey
       const draftCellsByLayout = cellsByLayout
-      const draftModules = normalizeModulesForSave(modulesJson)
+      const draftModules = normalizeModulesForSave(overrides.modulesJson ?? modulesJson)
       const draftPinnedTabs = pinnedModuleTabs
       const currentCells = draftCellsByLayout[draftLayoutKey] || emptyCellsFor(draftLayoutKey)
       const nextLayoutModuleMemory = mergeCellsIntoSlotMemory(
@@ -3039,6 +3039,10 @@ async function handleSelectTab(k: TabKey) {
                     const nextModules = integrationModulesAfterChange(modulesJson, key, config, legacyEnabled)
                     setModulesJson(nextModules)
                     markDirty({ modulesJson: nextModules })
+                    // Enabling an already-authorized account must survive reopening the app.
+                    // Save the exact next integration state; React has not applied setModulesJson yet.
+                    // This stores settings without requesting a physical frame redraw.
+                    if (activeDeviceId) void performSettingsSave(activeDeviceId, { modulesJson: nextModules })
                   }}
                 />
               )}
@@ -3944,7 +3948,7 @@ function ConnectAppsScreen({
                   ) : (
                     <button
                       type="button"
-                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading)}
+                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved))}
                       onClick={() => {
                         if (app.key === 'spond') {
                           if (spondAccountConnected) { setSpondConnected(true); changeFrameIntegration('spond', { enabled: true }) }
@@ -3966,7 +3970,15 @@ function ConnectAppsScreen({
                       }}
                       className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-20)] text-[11px] tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
                     >
-                      {app.key === 'local-events' ? (language === 'no' ? 'KOBLE TIL' : 'CONNECT') : ((app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading)) ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
+                      {app.key === 'local-events'
+                        ? (language === 'no' ? 'KOBLE TIL' : 'CONNECT')
+                        : (app.key === 'google-calendar' && !googleStatusResolved) || (app.key === 'teams' && !teamsStatusResolved)
+                          ? (language === 'no' ? 'SJEKKER…' : 'CHECKING…')
+                          : ((app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading))
+                            ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…')
+                            : ((app.key === 'google-calendar' && googleAccountConnected) || (app.key === 'teams' && teamsAccountConnected) || (app.key === 'spond' && spondAccountConnected))
+                              ? (language === 'no' ? 'AKTIVER PÅ FRAMEN' : 'ENABLE ON THIS FRAME')
+                              : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
                     </button>
                   )}
                 </div>
