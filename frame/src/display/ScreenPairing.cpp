@@ -68,12 +68,24 @@ struct WifiCtx {
 static void drawWifiSetup(void* vctx) {
   WifiCtx* ctx = (WifiCtx*)vctx;
 
-  drawCenteredInFrame("Connect to frame Wi-Fi", FRAME_Y + 76, &FreeMonoBold12pt7b);
-  drawCenteredInFrame(ctx->ssid, FRAME_Y + 176, &FreeMonoBold18pt7b);
-  drawCenteredInFrame("Open Wi-Fi settings on your phone", FRAME_Y + 258, &FreeMonoBold12pt7b);
-  drawCenteredInFrame("After connecting, add your Wi-Fi credentials", FRAME_Y + 326, &FreeMonoBold9pt7b);
-  drawCenteredInFrame("Can take up to a minute to receive credentials", FRAME_Y + 386, &FreeMonoBold9pt7b);
-  drawCenteredInFrame("Reconnect charger to restart Wi-Fi setup", FRAME_Y + 414, &FreeMonoBold9pt7b);
+  // Keep the AP name large and repeat the exact same name in the
+  // connection step. The user must select the FRAME network first,
+  // then select their home network on the captive setup page.
+  char connectLine[64];
+  snprintf(connectLine, sizeof(connectLine), "Connect to %s", ctx->ssid);
+
+  drawCenteredInFrame("Connect to frame Wi-Fi", FRAME_Y + 68, &FreeMonoBold12pt7b);
+  drawCenteredInFrame(ctx->ssid, FRAME_Y + 150, &FreeMonoBold18pt7b);
+
+  // Four readable actions, each on its own line (no jargon or tiny text).
+  drawCenteredInFrame("Open Wi-Fi settings on your phone", FRAME_Y + 220, &FreeMonoBold12pt7b);
+  drawCenteredInFrame(connectLine, FRAME_Y + 258, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("Choose your home Wi-Fi", FRAME_Y + 296, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("Enter your Wi-Fi password", FRAME_Y + 334, &FreeMonoBold12pt7b);
+
+  // Supporting information belongs in the footer, not in the steps.
+  drawCenteredInFrame("Setup can take up to 1 minute", FRAME_Y + 393, &FreeMonoBold9pt7b);
+  drawCenteredInFrame("If nothing happens, reconnect the charging cable", FRAME_Y + 432, &FreeMonoBold9pt7b);
 }
 
 void showWifiSetup(const char* ssid) {
