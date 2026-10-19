@@ -40,7 +40,10 @@ test('Skipping is explicit and setup waits for provider discovery and OAuth retu
   assert.match(source, /!teamsStatusResolved && !teamsStatusFailed/)
 })
 
-test('Onboarding hides unavailable integrations but retains main Connect tab order', () => {
-  assert.match(source, /INTEGRATION_CATALOGUE\.filter\(definition => !startup \|\| \(definition\.connectable && definition\.status === 'available'\)\)/)
+test('Onboarding offers working integrations plus experimental Spond, but hides unavailable providers', () => {
+  const catalogue = readFileSync(new URL('../app/lib/integrations/catalog.ts', import.meta.url), 'utf8')
+  assert.match(source, /INTEGRATION_CATALOGUE\.filter\(definition => !startup \|\| \(definition\.connectable && \(definition\.status === 'available' \|\| definition\.key === 'spond'\)\)\)/)
+  assert.match(catalogue, /key: 'spond'[^\n]*status: 'experimental', connectable: true/)
+  assert.match(source, /app\.status === 'experimental' && <span/)
   assert.match(source, /\.\.\.dynamicTabs,\s*\{ key: 'connect'/)
 })
