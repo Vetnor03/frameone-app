@@ -561,7 +561,7 @@ function reminderProjection(value, cell, now) {
   // Physical medium renderer can show the spare-space insight on any primary
   // date. Hash it to redraw when the outlook changes even if rows do not.
   if (size === 'MEDIUM' &&
-      primary.rows.length >= 1 && primary.rows.length <= 2 &&
+      primary.rows.length >= 1 && primary.rows.length <= capacity &&
       typeof source.coming_up === 'string' && source.coming_up.trim()) {
     result.comingUp = source.coming_up.trim()
     result.tomorrowNote = undefined
