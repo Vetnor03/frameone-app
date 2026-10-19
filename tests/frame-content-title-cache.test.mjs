@@ -28,6 +28,19 @@ function ai(counter, title = 'Stable optimized title') {
 }
 const item = (title = 'A source reminder title that is deliberately long enough to need optimization on every display profile', extra = {}) => ({ id: 'visible-id', title, source: 'remind', contentType: 'reminder', ...extra })
 
+test('Google Calendar items use local title shortening without network requests', async () => {
+  clearFrameTitleL1CacheForTests()
+  const store = cache()
+  const counter = { calls: 0 }
+  ai(counter)
+  const result = await optimizeFrameContent([item(undefined, { source: 'google-calendar' })], {
+    displayProfile: 'compact', persistentCache: store,
+  })
+  assert.equal(counter.calls, 0)
+  assert.equal(store.writes, 0)
+  assert.ok(result[0].title.length <= 28)
+})
+
 test('durable cache survives an empty L1 and ignores display metadata', async () => {
   clearFrameTitleL1CacheForTests()
   const persistentCache = cache(), counter = { calls: 0 }; ai(counter)
