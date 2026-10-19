@@ -1448,6 +1448,31 @@ static void buildWindStr(char* out, size_t n, float windMaxMs) {
 // -----------------------------------------------------------------------------
 // Rendering
 // -----------------------------------------------------------------------------
+
+// Only use tomorrow's dated forecast after 20:00 local time. Stale weather
+// caches must not be labeled as tomorrow.
+static bool shouldShowTomorrowForecast(const WeatherCache& data) {
+  if (data.dayCount < 2 || !data.days[1].valid ||
+      isnan(data.days[1].loC) || isnan(data.days[1].hiC)) return false;
+  struct tm localNow;
+  if (!getLocalTime(&localNow, 10) || localNow.tm_hour < 20) return false;
+  char todayYmd[11] = {0};
+  if (!strftime(todayYmd, sizeof(todayYmd), "%Y-%m-%d", &localNow)) return false;
+  if (strcmp(data.days[0].dateYMD, todayYmd) != 0) return false;
+  localNow.tm_mday += 1;
+  localNow.tm_hour = 12;
+  localNow.tm_min = 0;
+  localNow.tm_sec = 0;
+  localNow.tm_isdst = -1;
+  mktime(&localNow);
+  char tomorrowYmd[11] = {0};
+  if (!strftime(tomorrowYmd, sizeof(tomorrowYmd), "%Y-%m-%d", &localNow)) return false;
+  return strcmp(data.days[1].dateYMD, tomorrowYmd) == 0;
+}
+static void drawTomorrowWeatherLabel(const Cell& c, uint16_t ink) {
+  drawTextCenteredAt(c.x + c.w / 2, c.y + 13, "Tomorrow", FONT_B9, ink);
+}
+
 static void renderSmall(const Cell& c,
                         const WeatherInstanceConfig& cfg,
                         const WeatherCache& data) {
@@ -1462,12 +1487,14 @@ static void renderSmall(const Cell& c,
   char locationName[48] = {0};
   getDisplayLocationName(cfg, locationName, sizeof(locationName));
 
-  const bool useRest = data.restValid;
-  float smallHiC     = useRest ? data.restHiC       : data.hiC;
-  float smallLoC     = useRest ? data.restLoC       : data.loC;
-  float smallWindMax = useRest ? data.restWindMaxMs : data.windMaxMs;
-  float smallPrecip  = useRest ? data.restPrecipMm  : data.precipMm;
-  int   smallWmo     = useRest ? data.restWmo       : data.wmo;
+  const bool useTomorrow = shouldShowTomorrowForecast(data);
+  const bool useRest = !useTomorrow && data.restValid;
+  const DayForecast& nextDay = data.days[1];
+  float smallHiC     = useTomorrow ? nextDay.hiC : (useRest ? data.restHiC : data.hiC);
+  float smallLoC     = useTomorrow ? nextDay.loC : (useRest ? data.restLoC : data.loC);
+  float smallWindMax = useTomorrow ? nextDay.windMaxMs : (useRest ? data.restWindMaxMs : data.windMaxMs);
+  float smallPrecip  = useTomorrow ? nextDay.precipMm : (useRest ? data.restPrecipMm : data.precipMm);
+  int   smallWmo     = useTomorrow ? nextDay.wmo : (useRest ? data.restWmo : data.wmo);
 
   const int gap = 18;
   const int dividerW = 1;
@@ -1486,7 +1513,7 @@ static void renderSmall(const Cell& c,
     int h = (int)lroundf(hi);
     snprintf(tempRange, sizeof(tempRange), "%d to %d\xB0%s", l, h, suf);
   } else {
-    formatTemp(tempRange, sizeof(tempRange), data.tempC, cfg.units);
+    formatTemp(tempRange, sizeof(tempRange), useTomorrow ? smallHiC : data.tempC, cfg.units);
   }
 
   char windStr[32] = {0};
@@ -1526,6 +1553,7 @@ static void renderSmall(const Cell& c,
   int titleBaseline = topY - ly1;
 
   drawTextCenteredAt(c.x + c.w / 2, titleBaseline, locationName, FONT_B12, ink);
+  if (useTomorrow) drawTomorrowWeatherLabel(c, ink);
 
   {
     int underlineY = topY + (int)lh + underlineGap;
@@ -1566,13 +1594,14 @@ static void renderMedium(const Cell& c,
     return;
   }
 
-  const bool useRest = data.restValid;
-
-  float medHiC      = useRest ? data.restHiC       : data.hiC;
-  float medLoC      = useRest ? data.restLoC       : data.loC;
-  float medWindMax  = useRest ? data.restWindMaxMs : data.windMaxMs;
-  float medPrecip   = useRest ? data.restPrecipMm  : data.precipMm;
-  int   medWmo      = useRest ? data.restWmo       : data.wmo;
+  const bool useTomorrow = shouldShowTomorrowForecast(data);
+  const bool useRest = !useTomorrow && data.restValid;
+  const DayForecast& nextDay = data.days[1];
+  float medHiC      = useTomorrow ? nextDay.hiC : (useRest ? data.restHiC : data.hiC);
+  float medLoC      = useTomorrow ? nextDay.loC : (useRest ? data.restLoC : data.loC);
+  float medWindMax  = useTomorrow ? nextDay.windMaxMs : (useRest ? data.restWindMaxMs : data.windMaxMs);
+  float medPrecip   = useTomorrow ? nextDay.precipMm : (useRest ? data.restPrecipMm : data.precipMm);
+  int   medWmo      = useTomorrow ? nextDay.wmo : (useRest ? data.restWmo : data.wmo);
 
   char loBuf[16] = {0};
   char hiBuf[16] = {0};
@@ -1580,7 +1609,7 @@ static void renderMedium(const Cell& c,
     formatTemp(loBuf, sizeof(loBuf), medLoC, cfg.units);
     formatTemp(hiBuf, sizeof(hiBuf), medHiC, cfg.units);
   } else {
-    formatTemp(loBuf, sizeof(loBuf), data.tempC, cfg.units);
+    formatTemp(loBuf, sizeof(loBuf), useTomorrow ? medHiC : data.tempC, cfg.units);
     strlcpy(hiBuf, loBuf, sizeof(hiBuf));
   }
 
@@ -1591,7 +1620,7 @@ static void renderMedium(const Cell& c,
   buildPrecipStr(precipStr, sizeof(precipStr), medPrecip, medWmo, medLoC, medHiC);
 
   char insightStr[96] = {0};
-  buildWeatherInsight(insightStr, sizeof(insightStr), data);
+  if (!useTomorrow) buildWeatherInsight(insightStr, sizeof(insightStr), data);
 
   int16_t b12Y1; uint16_t b12H;
   int16_t b9Y1;  uint16_t b9H;
@@ -1613,6 +1642,7 @@ static void renderMedium(const Cell& c,
   int tempStartX = c.x + (c.w - totalTempW) / 2;
   int tempTop = c.y + topPad;
   int tempBaseline = tempTop - b12Y1;
+  if (useTomorrow) drawTomorrowWeatherLabel(c, ink);
 
   int tx = tempStartX;
   drawLeft(tx, tempBaseline, loBuf, FONT_B12, ink);
