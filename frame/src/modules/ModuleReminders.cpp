@@ -1992,13 +1992,13 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
   // Date never gates a useful insight: Today, Tomorrow and later buckets
   // get the same measured-space check. Do not crowd any real reminder.
   bool showComingUp = c.size == CELL_MEDIUM &&
-      bucket.count >= 1 && bucket.count <= 2 && g_cache->comingUp[0];
+      bucket.count >= 1 && bucket.count <= visibleCount && g_cache->comingUp[0];
   char outlookLines[4][128] = {{0}};
   int outlookLineCount = 0;
   const int outlookBottom = showBottomBadge ? rectY - 14 : c.y + c.h - 12;
   int outlookTop = outlookBottom;
   if (showComingUp) {
-    const int maxLines = bucket.count == 1 ? 4 : 3;
+    const int maxLines = bucket.count == 1 ? 4 : bucket.count == 2 ? 3 : 2;
     const int lineStep = smartLineStep(FONT_B9);
     bool complete = false;
     outlookLineCount = wrapTextToLines(g_cache->comingUp, outlookLines,
@@ -2007,7 +2007,7 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
     if (showComingUp) {
       outlookTop = outlookBottom - outlookLineCount * lineStep;
       const int reminderSpace = outlookTop - 12 - contentTop;
-      const int minReminderSpace = bucket.count == 1 ? 32 : 61;
+      const int minReminderSpace = bucket.count == 1 ? 32 : bucket.count * 22 + 17;
       const int dotR = 3, gap = 10, sidePad = 18;
       const int reminderWidth = c.w - sidePad * 2 -
                                 (bucket.count > 1 ? dotR * 2 + gap : 0);
