@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { SURF_SPOTS, spotIdFromLabel } from '@/app/lib/surf/spots'
 import { buildTomorrowWeatherSummary } from '@/app/lib/weatherTomorrow.mjs'
+import { preferWeatherWeekendHighlight } from '@/app/lib/weatherWeekend.mjs'
 import { buildMediumWeatherDetail, shouldShowTomorrowWeather, buildWeatherPrecipLine, buildWeatherWindLine, formatWeatherTemp, normalizeDisplayWmoForTemps } from '@/app/lib/weatherMirror'
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/surf/ratings'
 import { buildFrameConfigPayload, deviceHasOwnerAccessLink, pairRequiredPayload } from '@/app/api/device/frame-config/builder'
@@ -1474,7 +1475,9 @@ async function weatherDetail(cfg: UnknownRecord, language: string, configUpdated
     todayHours: useTomorrow ? [] : buildTodayWeatherInsightHours(data),
   })
   // Do not display an insight about this evening alongside tomorrow's weather.
-  medium.weatherAdvice = useTomorrow ? '' : await resolveWeatherInsight(data, { locationKey: `${lat.toFixed(3)},${lon.toFixed(3)}` })
+  medium.weatherAdvice = useTomorrow ? '' : preferWeatherWeekendHighlight(
+    data, await resolveWeatherInsight(data, { locationKey: `${lat.toFixed(3)},${lon.toFixed(3)}` })
+  )
   const weatherDays: WeatherMirrorDay[] = Array.from({ length: Math.min(5, Math.max(1, dailyTime.length)) }, (_, index) => {
     const dayLoC = index === 0 && selectedPeriods.restValid ? selectedPeriods.restLoC : arrayNumberAt(daily.temperature_2m_min, index)
     const dayHiC = index === 0 && selectedPeriods.restValid ? selectedPeriods.restHiC : arrayNumberAt(daily.temperature_2m_max, index)
@@ -1498,7 +1501,7 @@ async function weatherDetail(cfg: UnknownRecord, language: string, configUpdated
     tertiary: `${formatTemp(loC, units)} / ${formatTemp(hiC, units)}`,
     ...medium,
     weatherIsTomorrow: useTomorrow,
-    weatherTomorrowSummary: useTomorrow ? tomorrowSummary : '',
+    weatherTomorrowSummary: useTomorrow ? preferWeatherWeekendHighlight(data, tomorrowSummary) : '',
     weatherSunLine: `Sun ${sunriseHHMM || '--:--'} / ${sunsetHHMM || '--:--'}`,
     weatherHumidityLine: humidity != null ? `Humidity ${Math.round(humidity)}%` : 'Humidity --%',
     weatherDays,
