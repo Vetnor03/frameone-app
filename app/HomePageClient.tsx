@@ -1216,6 +1216,7 @@ export default function HomePage() {
   const [dirty, setDirty] = useState(false)
 
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null)
+  const [loadedSettingsDeviceId, setLoadedSettingsDeviceId] = useState<string | null>(null)
   const [frames, setFrames] = useState<MemberRow[]>([])
   const [authReady, setAuthReady] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
@@ -2112,6 +2113,7 @@ export default function HomePage() {
   }
 
   async function loadDeviceSettings(deviceId: string) {
+    setLoadedSettingsDeviceId(null)
     if (SHOW_CUSTOM_LAYOUT_UI) {
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
@@ -2224,6 +2226,7 @@ export default function HomePage() {
     setSetupDeviceId(!hasSavedSettings || hasOnboardingDraft ? deviceId : null)
 
     isLoadedRef.current = true
+    setLoadedSettingsDeviceId(deviceId)
   }
 
   // This is the only policy exception to manual Update: a newly paired frame
@@ -3032,6 +3035,7 @@ async function handleSelectTab(k: TabKey) {
                   language={language}
                   modulesJson={modulesJson}
                   activeDeviceId={activeDeviceId}
+                  frameSettingsReady={loadedSettingsDeviceId === activeDeviceId}
                   onBack={() => setActiveTab('reminders')}
                   asTab
                   remindersVisibleOnFrame={!activeDeviceId || remindersShownOnFrame}
@@ -3244,6 +3248,7 @@ function ConnectAppsScreen({
   language,
   modulesJson,
   activeDeviceId = null,
+  frameSettingsReady = false,
   onBack,
   startup = false,
   asTab = false,
@@ -3253,6 +3258,7 @@ function ConnectAppsScreen({
   language: AppLanguage
   modulesJson: Record<string, unknown>
   activeDeviceId?: string | null
+  frameSettingsReady?: boolean
   onBack: () => void
   startup?: boolean
   asTab?: boolean
@@ -3271,7 +3277,7 @@ function ConnectAppsScreen({
     if (initialTeamsOAuthStatus === 'error') return initialTeamsOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Teams' : 'Could not connect Teams')
     return null
   })
-  const [spondConnected, setSpondConnected] = useState(false)
+  const [, setSpondConnected] = useState(false)
   const [spondAccount, setSpondAccount] = useState<string | null>(null)
   const [spondAccountConnected, setSpondAccountConnected] = useState(false)
   const [spondStatusResolved, setSpondStatusResolved] = useState(false)
@@ -3763,6 +3769,25 @@ function ConnectAppsScreen({
     }
   }, [activeDeviceId, modulesJson, spondStatusResolved, spondAccountConnected, teamsStatusResolved, teamsAccountConnected, googleStatusResolved, googleAccountConnected])
 
+  // Credential connection is now the only on/off control. A previously disabled
+  // per-frame provider must become active once its saved frame settings are loaded.
+  // Repair one provider per render so each change uses the latest modules snapshot.
+  useEffect(() => {
+    if (!frameSettingsReady || !activeDeviceId || modulesJson?.integration_selection_explicit !== true) return
+    if (pendingTeamsEnableAfterOAuth || pendingGoogleEnableAfterOAuth) return
+
+    const legacyDisabledProvider = ([
+      ['teams', teamsStatusResolved && teamsAccountConnected],
+      ['google-calendar', googleStatusResolved && googleAccountConnected],
+      ['spond', spondStatusResolved && spondAccountConnected],
+    ] as const).find(([key, isAuthorized]) => isAuthorized && !frameUsesIntegration(modulesJson, key))
+
+    if (legacyDisabledProvider) changeFrameIntegration(legacyDisabledProvider[0], { enabled: true })
+    // changeFrameIntegration is scoped to the current render; modulesJson changes when
+    // the parent persists the repaired integration state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDeviceId, frameSettingsReady, modulesJson, pendingTeamsEnableAfterOAuth, pendingGoogleEnableAfterOAuth, teamsStatusResolved, teamsAccountConnected, googleStatusResolved, googleAccountConnected, spondStatusResolved, spondAccountConnected])
+
   useEffect(() => {
     if (!pendingTeamsEnableAfterOAuth || !teamsStatusResolved || !teamsAccountConnected) return
     if (modulesJson?.integration_selection_explicit !== true && legacyIntegrationDiscoveryPending) return
@@ -3815,9 +3840,9 @@ function ConnectAppsScreen({
   function getAppConnected(app: { key: ConnectAppKey; connectable: boolean }) {
     if (!app.connectable) return false
     if (locallyDisconnectedApps[app.key]) return false
-    if (app.key === 'spond') return spondConnected
-    if (app.key === 'teams') return teamsConnected
-    if (app.key === 'google-calendar') return googleConnected
+    if (app.key === 'spond') return spondAccountConnected
+    if (app.key === 'teams') return teamsAccountConnected
+    if (app.key === 'google-calendar') return googleAccountConnected
     if (app.key === 'local-events') return !!localEventsSavedArea
     if (app.key === 'waste') return wasteConnected
     return connectAppIsConnected(modulesJson, app.key)
@@ -3906,9 +3931,9 @@ function ConnectAppsScreen({
               ? (language === 'no' ? `Events valgt, men ingen synkronisering ennå: ${localEventsSyncIssue}` : `Events selected but not synced yet: ${localEventsSyncIssue}`)
               : app.key === 'local-events' && localEventsSelectedName
               ? (language === 'no' ? `Arrangementer nær ${localEventsSelectedName}` : `Events near ${localEventsSelectedName}`)
-              : !connected && ((app.key === 'spond' && spondAccountConnected) || (app.key === 'teams' && teamsAccountConnected) || (app.key === 'google-calendar' && googleAccountConnected))
-                ? (language === 'no' ? 'Konto tilkoblet · ikke aktiv på denne framen' : 'Account connected · not enabled on this frame')
-                : app.description
+              : app.description
+            const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar'
+            const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : null
             return (
               <div
                 key={app.key}
@@ -3918,6 +3943,11 @@ function ConnectAppsScreen({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 text-sm font-medium text-[color:var(--fg-90)]"><span>{app.name}</span>{app.status === 'experimental' && <span className="rounded-full border border-[#2aa3ff]/35 px-2 py-0.5 text-[9px] uppercase tracking-wider text-[#2aa3ff]">{integrationStatusLabel(app.status, language)}</span>}</div>
                     <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">{description}</div>
+                    {connected && credentialProvider && (
+                      <div className="mt-2 truncate text-xs text-[color:var(--fg-45)]">
+                        {accountLabel ? `${language === 'no' ? 'Konto' : 'Account'}: ${accountLabel}` : (language === 'no' ? 'Tilkoblet' : 'Connected')}
+                      </div>
+                    )}
                   </div>
 
                   {!app.connectable ? (
@@ -3934,16 +3964,19 @@ function ConnectAppsScreen({
                           {language === 'no' ? 'ENDRE' : 'EDIT'}
                         </button>
                       </div>
-                    ) : (
-                      modulesJson?.integration_selection_explicit === true && (app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar') ? (
-                      <button type="button" onClick={() => { if (app.key === 'spond') setSpondConnected(false); else if (app.key === 'teams') setTeamsConnected(false); else setGoogleConnected(false); changeFrameIntegration(app.key, { enabled: false }) }} className="shrink-0 h-8 rounded-xl border border-[color:var(--bd-20)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)]">
-                        {language === 'no' ? 'DEAKTIVER PÅ FRAMEN' : 'DISABLE ON THIS FRAME'}
+                    ) : credentialProvider ? (
+                      <button
+                        type="button"
+                        onClick={() => setDisconnectConfirmApp(app.key as DisconnectableConnectAppKey)}
+                        disabled={disconnectingApp === app.key || (app.key === 'spond' && spondLoading) || (app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading)}
+                        className="shrink-0 h-8 rounded-xl border border-[#d94b4b]/35 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60"
+                      >
+                        {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
                       </button>
                     ) : (
                       <span className="shrink-0 h-8 px-3 rounded-xl border border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[11px] tracking-widest text-[#1f9d4a] inline-flex items-center">
                         {language === 'no' ? 'TILKOBLET' : 'CONNECTED'}
                       </span>
-                    )
                     )
                   ) : (
                     <button
@@ -3976,54 +4009,12 @@ function ConnectAppsScreen({
                           ? (language === 'no' ? 'SJEKKER…' : 'CHECKING…')
                           : ((app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading))
                             ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…')
-                            : ((app.key === 'google-calendar' && googleAccountConnected) || (app.key === 'teams' && teamsAccountConnected) || (app.key === 'spond' && spondAccountConnected))
-                              ? (language === 'no' ? 'AKTIVER PÅ FRAMEN' : 'ENABLE ON THIS FRAME')
-                              : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
+                            : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
                     </button>
                   )}
                 </div>
 
 
-                {app.key === 'spond' && spondConnected && (
-                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
-                    <span className="min-w-0 truncate">
-                      {spondAccount ? `${language === 'no' ? 'Konto' : 'Account'}: ${spondAccount}` : (language === 'no' ? 'Tilkoblet sikkert på serveren' : 'Connected securely on the server')}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setDisconnectConfirmApp('spond')}
-                      disabled={spondLoading}
-                      className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)] transition hover:border-[#d94b4b]/35 hover:text-[#d94b4b] disabled:opacity-60"
-                    >
-                      {spondLoading ? (language === 'no' ? 'KOBLER FRA…' : 'DISCONNECTING…') : (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')}
-                    </button>
-                  </div>
-                )}
-                {app.key === 'google-calendar' && googleConnected && (
-                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
-                    <span className="min-w-0 truncate">{googleAccount || 'Google Calendar'}</span>
-                    <button type="button" onClick={() => setDisconnectConfirmApp('google-calendar')}
-                      disabled={googleLoading}
-                      className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)] transition hover:border-[#d94b4b]/35 hover:text-[#d94b4b] disabled:opacity-60">
-                      {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
-                    </button>
-                  </div>
-                )}
-                {app.key === 'teams' && teamsConnected && (
-                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
-                    <span className="min-w-0 truncate">
-                      {teamsAccount ? `${language === 'no' ? 'Konto' : 'Account'}: ${teamsAccount}` : (language === 'no' ? 'Kalenderen leses sikkert på serveren' : 'Calendar is read securely on the server')}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setDisconnectConfirmApp('teams')}
-                      disabled={teamsLoading}
-                      className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)] transition hover:border-[#d94b4b]/35 hover:text-[#d94b4b] disabled:opacity-60"
-                    >
-                      {teamsLoading ? (language === 'no' ? 'KOBLER FRA…' : 'DISCONNECTING…') : (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')}
-                    </button>
-                  </div>
-                )}
               </div>
             )
           })}
