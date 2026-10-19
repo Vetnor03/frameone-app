@@ -1460,6 +1460,10 @@ void setup() {
   if (normalSyncDue) Serial.println("SmartRefresh: cold boot or module deadline due");
 
 
+  // Manufacturing/QA: read this in the serial monitor after flashing and
+  // print the exact ID on the back label. Never display it on the shelf screen.
+  Serial.print("RE:MIND BACK LABEL - Frame ID: ");
+  Serial.println(DeviceIdentity::getDeviceId());
   Serial.print("device_id: ");
   Serial.println(DeviceIdentity::getDeviceId());
 
@@ -1497,7 +1501,7 @@ void setup() {
         Serial.println("Shelf screen ready: USB is disconnected");
         Theme::set(THEME_DARK);
         ensureDisplay();
-        DisplayCore::drawShelfScreen(DeviceIdentity::getDeviceId());
+        DisplayCore::drawShelfScreen();
         shutdownDisplay();
         prefs.putBool("shelf_done", true);
         prefs.putBool("shelf_pending_disconnect", false);
