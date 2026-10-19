@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { fetchWeatherForecast, fetchWeatherMarine } from '@/app/lib/server/weatherForecast'
 import { resolveWeatherInsight } from '@/app/lib/server/weatherInsight.mjs'
 import { buildTomorrowWeatherSummary } from '@/app/lib/weatherTomorrow.mjs'
+import { preferWeatherWeekendHighlight } from '@/app/lib/weatherWeekend.mjs'
 import { fetchSharedFrameWeatherForecast } from '@/app/lib/server/weatherSharedCache'
 
 export const runtime = 'nodejs'
@@ -140,10 +141,14 @@ export async function GET(req: Request) {
     if (missingFields.length) {
       console.error('[weather-details]', { stage: 'invalid-frame-payload-shape', lat, lon, missingFields })
     }
-    const insight = await resolveWeatherInsight(weather.payload, { locationKey: `${lat.toFixed(3)},${lon.toFixed(3)}` })
-    // Generate tomorrow's full-day summary before compact v2 removes
-    // the future hourly rows. Reuses the same cached weather response.
-    const tomorrowInsight = buildTomorrowWeatherSummary(weather.payload)
+    const usualInsight = await resolveWeatherInsight(weather.payload, { locationKey: `${lat.toFixed(3)},${lon.toFixed(3)}` })
+    // Thursday evening can highlight the coming weekend, but only inside
+    // Weather, and never over a severe near-term forecast warning. Compact
+    // daytime and after-20:00 layouts use these fields exclusively.
+    const insight = preferWeatherWeekendHighlight(weather.payload, usualInsight)
+    // Generate the tomorrow/weekend summary before compact v2 removes
+    // future hourly rows; no new forecast request or separate AI call.
+    const tomorrowInsight = preferWeatherWeekendHighlight(weather.payload, buildTomorrowWeatherSummary(weather.payload))
     return NextResponse.json(compactFrameWeatherPayload(weather.payload, frameCompactVersion, insight, tomorrowInsight))
   }
 
