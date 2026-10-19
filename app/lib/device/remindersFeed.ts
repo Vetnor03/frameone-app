@@ -26,6 +26,8 @@ export type DeviceReminderItem = {
   repeat: ReminderRepeatKey
   due_time: string | null
   display_time: string | null
+  /** Explicit all-day calendar/event marker; untimed manual tasks are not all-day events. */
+  is_all_day?: boolean
   source?: DeviceReminderSource
   is_user_created?: boolean
   external_id?: string
@@ -246,6 +248,7 @@ export function buildGoogleCalendarItems(
       due_time: displayTime,
       display_time: displayTime,
       source: 'google-calendar' as const,
+      is_all_day: allDay,
       external_id: externalId,
     }]
   })
@@ -429,6 +432,28 @@ function isUserCreatedReminder(item: DeviceReminderItem) {
 
 export function reminderSortTimestamp(item: Pick<DeviceReminderItem, 'occurrence_date' | 'display_time' | 'due_time'>) {
   return `${item.occurrence_date} ${normalizedSortTime(item.display_time || item.due_time) || '99:99'}`
+}
+
+/**
+ * Give tomorrow the primary frame space after 18:00 local time only when
+ * today's entire feed is one explicitly all-day event (not an untimed
+ * personal reminder) and at least one reminder is scheduled tomorrow.
+ * The original items remain in their source calendars and in the app.
+ */
+export function preferTomorrowAfterSingleAllDayEvent(
+  items: readonly DeviceReminderItem[],
+  todayYmd: string,
+  tomorrowYmd: string,
+  localTimeHm: string
+): DeviceReminderItem[] {
+  if (!/^\d{2}:\d{2}$/.test(localTimeHm) || localTimeHm < '18:00') return [...items]
+
+  const todayItems = items.filter(item => item.occurrence_date === todayYmd)
+  if (todayItems.length !== 1 || todayItems[0].is_all_day !== true) return [...items]
+
+  if (!items.some(item => item.occurrence_date === tomorrowYmd)) return [...items]
+
+  return items.filter(item => item.occurrence_date !== todayYmd)
 }
 
 export function selectReminderDisplayGroups(items: DeviceReminderItem[], maxItems: number) {
