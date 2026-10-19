@@ -48,7 +48,8 @@ namespace ModuleReminders {
 static const FrameConfig* g_cfg = nullptr;
 
 static const int MAX_REMINDERS = 10;
-static const size_t REMINDERS_MAX_BODY_BYTES = 4096;
+// Leave room for the optional short outlook alongside the ten existing items.
+static const size_t REMINDERS_MAX_BODY_BYTES = 4352;
 static const size_t REMINDERS_JSON_CAPACITY = 6144;
 static const size_t REMINDERS_FILTER_CAPACITY = 512;
 static const int MAX_BUCKETS = 10;
