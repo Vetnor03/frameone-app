@@ -9,20 +9,20 @@ WIFI = SCREEN.split("static void drawWifiSetup(void* vctx) {", 1)[1].split("\nvo
 def test_wifi_setup_has_large_real_ap_name_then_four_clear_steps():
     assert 'drawCenteredInFrame("Connect your frame to Wi-Fi", FRAME_Y + 68, &FreeMonoBold12pt7b);' in WIFI
     assert 'drawCenteredInFrame(ctx->ssid, FRAME_Y + 150, &FreeMonoBold18pt7b);' in WIFI
-    assert 'snprintf(connectLine, sizeof(connectLine), "Connect to %s", ctx->ssid);' in WIFI
+    assert 'snprintf(connectLine, sizeof(connectLine), "2. Connect to %s", ctx->ssid);' in WIFI
     steps = [
-        'Open Wi-Fi settings on your phone',
+        '1. Open Wi-Fi settings on your phone',
         'drawCenteredInFrame(connectLine,',
-        'Choose your home Wi-Fi',
-        'Enter your Wi-Fi password',
+        '3. Choose your home Wi-Fi',
+        '4. Enter your Wi-Fi password',
     ]
     indices = [WIFI.index(value) for value in steps]
     assert indices == sorted(indices)
     for line in (
-        'drawCenteredInFrame("Open Wi-Fi settings on your phone", FRAME_Y + 220, &FreeMonoBold12pt7b);',
+        'drawCenteredInFrame("1. Open Wi-Fi settings on your phone", FRAME_Y + 220, &FreeMonoBold12pt7b);',
         'drawCenteredInFrame(connectLine, FRAME_Y + 258, &FreeMonoBold12pt7b);',
-        'drawCenteredInFrame("Choose your home Wi-Fi", FRAME_Y + 296, &FreeMonoBold12pt7b);',
-        'drawCenteredInFrame("Enter your Wi-Fi password", FRAME_Y + 334, &FreeMonoBold12pt7b);',
+        'drawCenteredInFrame("3. Choose your home Wi-Fi", FRAME_Y + 296, &FreeMonoBold12pt7b);',
+        'drawCenteredInFrame("4. Enter your Wi-Fi password", FRAME_Y + 334, &FreeMonoBold12pt7b);',
     ):
         assert line in WIFI
 

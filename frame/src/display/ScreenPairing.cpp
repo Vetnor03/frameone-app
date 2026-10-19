@@ -72,16 +72,16 @@ static void drawWifiSetup(void* vctx) {
   // connection step. The user must select the FRAME network first,
   // then select their home network on the captive setup page.
   char connectLine[64];
-  snprintf(connectLine, sizeof(connectLine), "Connect to %s", ctx->ssid);
+  snprintf(connectLine, sizeof(connectLine), "2. Connect to %s", ctx->ssid);
 
   drawCenteredInFrame("Connect your frame to Wi-Fi", FRAME_Y + 68, &FreeMonoBold12pt7b);
   drawCenteredInFrame(ctx->ssid, FRAME_Y + 150, &FreeMonoBold18pt7b);
 
   // Four readable actions, each on its own line (no jargon or tiny text).
-  drawCenteredInFrame("Open Wi-Fi settings on your phone", FRAME_Y + 220, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("1. Open Wi-Fi settings on your phone", FRAME_Y + 220, &FreeMonoBold12pt7b);
   drawCenteredInFrame(connectLine, FRAME_Y + 258, &FreeMonoBold12pt7b);
-  drawCenteredInFrame("Choose your home Wi-Fi", FRAME_Y + 296, &FreeMonoBold12pt7b);
-  drawCenteredInFrame("Enter your Wi-Fi password", FRAME_Y + 334, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("3. Choose your home Wi-Fi", FRAME_Y + 296, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("4. Enter your Wi-Fi password", FRAME_Y + 334, &FreeMonoBold12pt7b);
 
   // Supporting information belongs in the footer, not in the steps.
   drawCenteredInFrame("Setup can take up to 1 minute", FRAME_Y + 393, &FreeMonoBold9pt7b);
