@@ -41,7 +41,7 @@ test('Coming up prioritizes busy tomorrow over a routine task and early timing o
 test('Coming up is capped in length and does not make speculative suggestions', () => {
   const long = 'An extremely long appointment with a title that repeats important information about where to go and what to do'
   const insight = buildReminderComingUp([...sparse, row(long, 1)])
-  assert.ok(insight.length <= 78)
+  assert.ok(insight.length <= 154)
   assert.match(insight, /Tomorrow:/)
   assert.doesNotMatch(insight, /prepare|leave early|travel|bring|remember to/i)
 })
@@ -53,15 +53,20 @@ test('physical and Mirror medium UI reserve space only when there is a real insi
   assert.match(firmware, /doc\["coming_up"\]/)
   assert.match(medium, /c\.size == CELL_MEDIUM && headerIsToday/)
   assert.match(medium, /bucket\.count >= 1 && bucket\.count <= 2/)
-  assert.match(medium, /wrapTextToLines\(g_cache->comingUp, outlookLines,[\s\S]*?\b2,/)
-  assert.match(medium, /contentBottom = c\.y \+ c\.h - 88/)
+  assert.match(medium, /char outlookLines\[4\]\[128\]/)
+  assert.match(medium, /const int maxLines = bucket\.count == 1 \? 4 : 3/)
+  assert.match(medium, /wrapTextToLines\(g_cache->comingUp, outlookLines,[\s\S]*?maxLines,/)
+  assert.match(medium, /showComingUp = reminderSpace >= minReminderSpace/)
+  assert.match(medium, /buildSmartReminderLayout\(bucket, visibleCount,/)
+  assert.match(medium, /contentBottom = outlookTop - 12/)
   assert.match(medium, /drawBucketLinesCentered/)
-  assert.match(medium, /drawCenteredSmallNoteAtY\(c, "COMING UP"/)
+  assert.doesNotMatch(medium, /drawCenteredSmallNoteAtY\(c, "COMING UP"/)
   assert.match(medium, /drawnCount == visibleCount/)
   const mirror = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   const card = mirror.slice(mirror.indexOf('function MirrorMediumRemindersCard('), mirror.indexOf('function MirrorSmallRemindersCard('))
   assert.match(card, /detail\.reminderComingUp/)
-  assert.match(card, /line-clamp-2/)
+  assert.match(card, /visibleItems\.length === 1 \? 'line-clamp-4' : 'line-clamp-3'/)
+  assert.doesNotMatch(card, />COMING UP<|>KOMMER</)
   assert.match(card, /!comingUp && headerIsToday/)
 })
 
@@ -116,7 +121,7 @@ test('sparse day can highlight a busy later weekday without losing tomorrow in t
   assert.equal(buildReminderComingUp(items, 'no', { localHour: 13 }),
     'Det blir travelt på torsdag: 4 planer.')
   assert.equal(buildReminderComingUp(items, 'en', { localHour: 20 }),
-    'Tomorrow at 15:00: Dentist appointment.')
+    'Tomorrow at 15:00: Dentist appointment. Thursday looks busy, with 4 things planned.')
 })
 
 test('duplicate calendar sources or recurring items do not manufacture a busy day', () => {
@@ -143,6 +148,29 @@ test('invalid dates and overlong titles never cause fabricated weekday claims', 
   ]), 'On Thursday: Real event.')
   const long = 'Discuss extremely complicated payment and compliance deadline with the committee and several other stakeholders'
   const summary = buildReminderComingUp([...sparse, row(long, 2, '', '2026-10-21')])
-  assert.ok(summary.length <= 78)
+  assert.ok(summary.length <= 154)
   assert.ok(summary.includes('Deadline Wednesday:'))
+})
+
+test('spare medium space can hold a longer, independently grounded two-fact outlook', () => {
+  const items = [...sparse,
+    row('Quarterly tax declaration and invoice deadline', 2, '', '2026-10-21'),
+    row('Annual health check appointment with the specialist', 1, '07:15')]
+  const summary = buildReminderComingUp(items, 'en', { localHour: 19 })
+  assert.match(summary, /^Deadline Wednesday:/)
+  assert.match(summary, /Early tomorrow:/)
+  assert.ok(summary.length > 78 && summary.length <= 154)
+
+  // With two reminders today, avoid a lengthy two-fact paragraph.
+  const twoToday = [...items, row('Collect parcel', 0, '', '2026-10-19')]
+  assert.equal(buildReminderComingUp(twoToday, 'en', { localHour: 19 }),
+    'Deadline Wednesday: Quarterly tax declaration and invoice deadline.')
+})
+
+test('all medium insight text must be accepted by the enlarged firmware buffer', () => {
+  const fw = readFileSync(new URL('../frame/src/modules/ModuleReminders.cpp', import.meta.url), 'utf8')
+  assert.match(fw, /char comingUp\[180\]/)
+  assert.match(fw, /char work\[240\]/)
+  assert.match(fw, /REMINDERS_MAX_BODY_BYTES = 4608/)
+  assert.match(fw, /static_assert\(sizeof\(ReminderCache\) <= 4096/)
 })
