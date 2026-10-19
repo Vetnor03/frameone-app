@@ -3782,7 +3782,9 @@ function ConnectAppsScreen({
     sessionStorage.removeItem('remind:google-oauth-result')
     setPendingGoogleEnableAfterOAuth(false)
     window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
-  }, [pendingGoogleEnableAfterOAuth, googleStatusResolved, googleAccountConnected, legacyIntegrationDiscoveryPending, modulesJson?.integration_selection_explicit, language, changeFrameIntegration])
+    // Activation is a one-time OAuth completion action; changeFrameIntegration intentionally follows this render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingGoogleEnableAfterOAuth, googleStatusResolved, googleAccountConnected, legacyIntegrationDiscoveryPending, modulesJson?.integration_selection_explicit, language])
 
   useEffect(() => {
     const requestGeneration = ++localEventsRequestGenerationRef.current
