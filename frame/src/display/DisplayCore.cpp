@@ -341,7 +341,7 @@ void drawRechargeScreen() {
   } while (display.nextPage());
 }
 
-void drawShelfScreen(const String& deviceId) {
+void drawShelfScreen() {
   display.setFullWindow();
   display.firstPage();
   do {
@@ -350,7 +350,7 @@ void drawShelfScreen(const String& deviceId) {
 
     const char* line1 = "RE:MIND";
     const char* line2 = "Welcome";
-    const char* line3 = "Plug in the frame to begin setup";
+    const char* line3 = "Plug in the charging cable to begin setup";
 
     int16_t x1, y1;
     uint16_t w, h;
@@ -370,15 +370,8 @@ void drawShelfScreen(const String& deviceId) {
     display.setCursor(welcomeX, welcomeY);
     display.print(line2);
 
-    String idLine = String("frame id: ") + deviceId;
-    display.setFont(&FreeMonoBold9pt7b);
-    display.getTextBounds(idLine.c_str(), 0, 0, &x1, &y1, &w, &h);
-    int idX = FRAME_X + (FRAME_W - (int)w) / 2 - x1;
-    int idY = FRAME_Y + FRAME_H - 88;
-    display.setCursor(idX, idY);
-    display.print(idLine);
-
-    // Keep the setup instruction near the bottom with a little more breathing room.
+    // Keep only the first-use instruction near the bottom; never expose
+    // manufacturing identifiers or setup internals on the customer screen.
     display.setFont(&FreeMonoBold9pt7b);
     display.getTextBounds(line3, 0, 0, &x1, &y1, &w, &h);
     int infoX = FRAME_X + (FRAME_W - (int)w) / 2 - x1;
