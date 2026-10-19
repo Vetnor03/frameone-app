@@ -96,7 +96,7 @@ function PrivacyPageContent() {
 
   const pageTitle = language === 'no' ? 'PERSONVERNERKLÆRING' : 'PRIVACY POLICY'
   const updatedText =
-    language === 'no' ? 'Sist oppdatert: 31. juli 2026' : 'Last updated: July 31, 2026'
+    language === 'no' ? 'Sist oppdatert: 19. oktober 2026' : 'Last updated: October 19, 2026'
 
   const sections =
     language === 'no'
@@ -114,6 +114,22 @@ function PrivacyPageContent() {
                 Legg bare inn personopplysninger om andre dersom du har rett til å gjøre det. Du kan slette innhold du har opprettet gjennom appen der denne funksjonen er tilgjengelig, eller kontakte oss for hjelp.
               </>
             ),
+          },
+          {
+            title: 'GOOGLE CALENDAR – TILGANG OG FORMÅL',
+            text: 'Hvis du selv velger å koble Google Calendar til RE:MIND via Connect, ber vi om lesetilgang til Google-kalendere du har tilgang til (Google Calendar API: calendar.readonly). Vi henter kommende hendelser fra kalendere som er valgt for visning i Google, inkludert hendelsestittel, dato, start- og sluttid, heldagsstatus, kalendernavn, sted og lenke til hendelsen der dette finnes. Informasjonen brukes til å synkronisere og vise kalenderavtaler som påminnelser i RE:MIND. Vi kan ikke opprette, endre eller slette hendelser i Google Calendar.',
+          },
+          {
+            title: 'GOOGLE CALENDAR – LAGRING OG SYNLIGHET',
+            text: 'Google-tilkoblingens tilgangs- og oppdateringstokens lagres kryptert på serveren. Importerte kalenderopplysninger mellomlagres i RE:MINDs database slik at de kan vises i appen og på rammen, også mellom synkroniseringer. En RE:MIND-ramme som deles i en husstand, kan vise avtalene til alle som kan se skjermen eller har tilgang til den delte rammen. Koble derfor bare til kalendere med opplysninger du ønsker å vise der. Vi bruker ikke Google Calendar-opplysninger til annonsering, selger dem ikke og bruker dem ikke til å trene generelle KI-modeller. Kalenderhendelser sendes ikke til AI Follow eller ekstern KI-basert tittelforkorting.',
+          },
+          {
+            title: 'GOOGLE CALENDAR – FRAKOBLING OG SLETTING',
+            text: 'Du kan når som helst koble fra Google Calendar i Connect. RE:MIND stanser da videre synkronisering og sletter lagrede Google-tilgangstokens og importerte kalenderhendelser fra den aktive integrasjonsdatabasen. Dette endrer ikke kalenderne dine hos Google. Du kan også trekke tilbake RE:MINDs tilgang fra sikkerhetsinnstillingene i Google-kontoen din. For andre forespørsler om sletting, kontakt support@re-mind.no.',
+          },
+          {
+            title: 'GOOGLE API-DATA OG BEGRENSET BRUK',
+            text: 'RE:MINDs bruk og eventuell overføring av opplysninger mottatt fra Google API-er følger Google API Services User Data Policy, inkludert kravene til Limited Use (begrenset bruk). Google-data brukes kun til den kalenderfunksjonen du uttrykkelig har koblet til, og deles bare med nødvendige tekniske tjenesteleverandører for å levere og sikre funksjonen eller når loven krever det.',
           },
           {
             title: 'EKSTERN KI-BEHANDLING FOR AI FOLLOW',
@@ -176,6 +192,22 @@ function PrivacyPageContent() {
                 Only provide personal data about other people when you have the right to do so. You can delete user-created content through the app where this functionality is available, or contact us for assistance.
               </>
             ),
+          },
+          {
+            title: 'GOOGLE CALENDAR – ACCESS AND PURPOSE',
+            text: 'If you choose to connect Google Calendar through RE:MIND Connect, we request read-only access to calendars available to your Google Account (Google Calendar API: calendar.readonly). We import upcoming events from calendars selected for display in Google, including event titles, dates, start and end times, all-day status, calendar names, locations and event links where available. We use this information to synchronize and display calendar entries as reminders in RE:MIND. We cannot create, edit or delete events in Google Calendar.',
+          },
+          {
+            title: 'GOOGLE CALENDAR – STORAGE AND VISIBILITY',
+            text: 'Google access and refresh tokens are stored encrypted on our server. Imported calendar details are cached in the RE:MIND database so they can appear in the app and on your frame between synchronizations. Events displayed on a shared household frame may be visible to anyone who can see the display or access the shared frame. Connect only calendars containing information you are comfortable showing there. We do not sell Google Calendar data, use it for advertising or use it to train general-purpose AI models. Calendar events are not sent to AI Follow or an external AI title-shortening service.',
+          },
+          {
+            title: 'GOOGLE CALENDAR – DISCONNECTING AND DELETION',
+            text: 'You may disconnect Google Calendar at any time in Connect. RE:MIND then stops future synchronization and deletes stored Google access tokens and imported calendar events from its active integration database. This does not change your calendars at Google. You may also revoke RE:MIND access in your Google Account security settings. For other data deletion requests, contact support@re-mind.no.',
+          },
+          {
+            title: 'GOOGLE API DATA AND LIMITED USE',
+            text: 'RE:MIND’s use and transfer of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements. Google data is used only to provide the calendar feature you expressly connect, and is shared only with technical service providers necessary to operate and protect that feature or when required by law.',
           },
           {
             title: 'EXTERNAL AI PROCESSING FOR AI FOLLOW',
