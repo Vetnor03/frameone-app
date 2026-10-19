@@ -6366,7 +6366,7 @@ function MirrorMediumRemindersCard({
   const showBottomBadge = !headerIsToday && !headerIsTomorrow
   const overflowCount = Math.max(0, Math.floor(Number(detail.reminderMediumOverflowCount ?? detail.reminderOverflowCount) || 0))
   const tomorrowCount = Math.max(0, Math.floor(Number(detail.reminderTomorrowCount) || 0))
-  const comingUp = headerIsToday && visibleItems.length > 0 && visibleItems.length <= 2
+  const comingUp = visibleItems.length > 0 && visibleItems.length <= 2
     ? String(detail.reminderComingUp || '').trim() : ''
   const moreLabel = overflowCount > 0 ? `+${overflowCount} ${language === 'no' ? 'til' : 'more'}` : ''
   const tomorrowLabel = !comingUp && headerIsToday && tomorrowCount > 0 ? `${language === 'no' ? 'I morgen' : 'Tomorrow'}: ${tomorrowCount}` : ''
@@ -6395,7 +6395,7 @@ function MirrorMediumRemindersCard({
         <MirrorModuleHeader title={header} />
       </div>
 
-      <div className={`flex min-h-0 flex-1 ${comingUp ? 'flex-col items-center justify-center pb-[clamp(0.2rem,0.55vw,0.4rem)] pt-[clamp(0.45rem,1.1vw,0.75rem)]' : showBottomBadge ? 'items-center justify-center pb-[clamp(1.35rem,3vw,1.9rem)] pt-[clamp(0.55rem,1.35vw,0.9rem)]' : tomorrowLabel ? 'items-center justify-center pb-[clamp(0.95rem,2.2vw,1.35rem)] pt-[clamp(0.62rem,1.55vw,0.98rem)]' : 'items-center justify-center pb-[clamp(0.18rem,0.55vw,0.38rem)] pt-[clamp(0.68rem,1.65vw,1.05rem)]'}`}>
+      <div className={`flex min-h-0 flex-1 ${comingUp ? (showBottomBadge ? 'flex-col items-center justify-center pb-[clamp(2.6rem,5.9vw,3.6rem)] pt-[clamp(0.25rem,0.7vw,0.5rem)]' : 'flex-col items-center justify-center pb-[clamp(0.2rem,0.55vw,0.4rem)] pt-[clamp(0.45rem,1.1vw,0.75rem)]') : showBottomBadge ? 'items-center justify-center pb-[clamp(1.35rem,3vw,1.9rem)] pt-[clamp(0.55rem,1.35vw,0.9rem)]' : tomorrowLabel ? 'items-center justify-center pb-[clamp(0.95rem,2.2vw,1.35rem)] pt-[clamp(0.62rem,1.55vw,0.98rem)]' : 'items-center justify-center pb-[clamp(0.18rem,0.55vw,0.38rem)] pt-[clamp(0.68rem,1.65vw,1.05rem)]'}`}>
         <div className={`flex max-w-full flex-col items-start gap-[clamp(0.42rem,1.05vw,0.72rem)] text-left ${comingUp ? 'min-h-0 flex-1 justify-center' : ''}`}>
           {visibleItems.map((item, index) => (
             <div key={`${item}-${index}`} className="grid max-w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.42rem,1.05vw,0.68rem)]">
