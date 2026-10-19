@@ -8446,11 +8446,7 @@ function LandscapeFrameMirror({
 
       return (
         <div className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden px-[clamp(0.7rem,1.9vw,1.25rem)] py-[clamp(0.46rem,1.2vw,0.8rem)] text-center leading-none">
-          <MirrorModuleHeader title={locationName} className="max-w-[86%]" />
-          {detail.weatherIsTomorrow && (
-            <span className="absolute top-[clamp(0.12rem,0.52vw,0.32rem)] left-1/2 -translate-x-1/2 whitespace-nowrap text-[clamp(0.52rem,1.08vw,0.72rem)] font-medium tracking-[0.05em]">{language === 'no' ? 'I morgen' : 'Tomorrow'}</span>
-          )}
-
+          <MirrorModuleHeader title={detail.weatherIsTomorrow ? (language === 'no' ? 'I morgen' : 'Tomorrow') : locationName} className="max-w-[86%]" />
           <div className="mt-[clamp(0.55rem,1.42vw,0.95rem)] grid w-full max-w-[96%] shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center overflow-hidden text-[clamp(0.56rem,1.24vw,0.8rem)] font-medium tracking-[0.045em]">
             <div className="min-w-0 truncate px-[clamp(0.08rem,0.34vw,0.28rem)] text-center" title={tempRange}>{tempRange}</div>
             <div className="h-[clamp(0.72rem,1.45vw,0.92rem)] w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />

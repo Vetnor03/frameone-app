@@ -1531,7 +1531,8 @@ static void renderSmall(const Cell& c,
   buildPrecipStr(rainStr, sizeof(rainStr), smallPrecip, smallWmo, smallLoC, smallHiC);
 
   int16_t lx1, ly1; uint16_t lw, lh;
-  measureText(locationName, FONT_B12, lx1, ly1, lw, lh);
+  const char* heading = useTomorrow ? "Tomorrow" : locationName;
+  measureText(heading, FONT_B12, lx1, ly1, lw, lh);
 
   int16_t x1, y1;
   uint16_t wTemp, hTemp, wWind, hWind, wRain, hRain;
@@ -1555,8 +1556,7 @@ static void renderSmall(const Cell& c,
 
   int titleBaseline = topY - ly1;
 
-  drawTextCenteredAt(c.x + c.w / 2, titleBaseline, locationName, FONT_B12, ink);
-  if (useTomorrow) drawTomorrowWeatherLabel(c, ink);
+  drawTextCenteredAt(c.x + c.w / 2, titleBaseline, heading, FONT_B12, ink);
 
   {
     int underlineY = topY + (int)lh + underlineGap;

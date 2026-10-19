@@ -156,11 +156,48 @@ function weatherPrecipLabel(mmValue, code, low, high) {
   if ((Number(code) >= 51 && Number(code) <= 67) || [80, 81, 82].includes(Number(code))) return 'Light rain later'
   return 'Mostly dry'
 }
+// Keep the automatic Weather hash in step with the actual compact firmware
+// renderer. The date and summary checks mirror shouldShowTomorrowForecast().
+function compactWeatherTomorrow(common, now) {
+  const local = osloParts(now)
+  if (local.hour < 20) return null
+  const ymd = (y, m, d) => [String(y).padStart(4, '0'), String(m).padStart(2, '0'), String(d).padStart(2, '0')].join('-')
+  const today = ymd(local.year, local.month, local.day)
+  const tomorrow = new Date(Date.UTC(local.year, local.month - 1, local.day + 1)).toISOString().slice(0, 10)
+  if (common.daily.time?.[0] !== today || common.daily.time?.[1] !== tomorrow ||
+      typeof common.source.tomorrow_insight !== 'string' || !common.source.tomorrow_insight.trim() ||
+      finite(common.daily.temperature_2m_min?.[1]) == null ||
+      finite(common.daily.temperature_2m_max?.[1]) == null) return null
+  return true
+}
+
 function weatherProjectionLegacy(value, cell, config, now) {
   const common = weatherCommon(value, config), size = String(cell?.size).toUpperCase(), rest = weatherRest(common, config)
-  const precipitation = weatherPrecipLabel(rest.precipitation, rest.code, rest.rawLow, rest.rawHigh)
-  if (size === 'SMALL') return { location: config.label, range: config.showHiLo === false ? common.temperature : [rest.low, rest.high], wind: weatherWind(rest.wind), precipitation, code: rest.code }
-  if (size === 'MEDIUM') return { range: config.showHiLo === false ? [common.temperature, common.temperature] : [rest.low, rest.high], wind: weatherWind(rest.wind), precipitation, code: rest.code, insight: weatherInsight(common, now) }
+  const tomorrow = ['SMALL', 'MEDIUM'].includes(size) && compactWeatherTomorrow(common, now)
+  const nextDay = tomorrow ? weatherDay(common, 1, config) : null
+  const chosen = nextDay ? {
+    low: nextDay.low, high: nextDay.high,
+    wind: common.daily.wind_speed_10m_max?.[1],
+    precipitation: common.daily.precipitation_sum?.[1],
+    code: nextDay.code,
+    rawLow: common.daily.temperature_2m_min?.[1], rawHigh: common.daily.temperature_2m_max?.[1],
+  } : rest
+  const precipitation = weatherPrecipLabel(chosen.precipitation, chosen.code, chosen.rawLow, chosen.rawHigh)
+  // A change from today -> tomorrow is a categorical, non-temperature
+  // change. It MUST change both render_hash and weather_stable_hash even
+  // when low/high, wind, and precipitation happen to be identical.
+  const displayDay = tomorrow ? 'tomorrow' : 'today'
+  if (size === 'SMALL') return { displayDay, location: tomorrow ? 'Tomorrow' : config.label,
+    range: config.showHiLo === false ? (tomorrow ? nextDay.high : common.temperature) : [chosen.low, chosen.high],
+    wind: weatherWind(chosen.wind), precipitation, code: chosen.code }
+  if (size === 'MEDIUM') return { displayDay,
+    range: config.showHiLo === false
+      ? [tomorrow ? nextDay.high : common.temperature, tomorrow ? nextDay.high : common.temperature]
+      : [chosen.low, chosen.high],
+    wind: tomorrow ? undefined : weatherWind(chosen.wind),
+    precipitation: tomorrow ? undefined : precipitation,
+    code: chosen.code,
+    insight: tomorrow ? common.source.tomorrow_insight : weatherInsight(common, now) }
   const days = reconstructedWeatherDays(common, config).slice(0, 4); if (days.length) days[0] = { ...days[0], high: rest.high, low: rest.low, wind: weatherWind(rest.wind), precipitation, code: rest.code }
   if (size === 'LARGE') return { location: config.label, days }
   return { current: common.temperature, humidity: rounded(common.current.relative_humidity_2m), today: days[0], sunrise: common.daily.sunrise?.[0], sunset: common.daily.sunset?.[0], insight: weatherInsight(common, now), forecast: days.slice(1) }
@@ -934,16 +971,47 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
       deadlines[ref.key] = [{ at: now + SKI_SOURCE_FRESHNESS_MS, type: 'soft', reason: 'source_freshness' }]
     }
     else if (ref.base === 'weather') {
-      // Advisory insight wording is not a reason to schedule an hourly wake.
-      // Share Surf's three-hour batching in BOTH power modes.
+      // Ordinary source checks stay batched every ~3 hours. The 20:00
+      // Today -> Tomorrow handover and midnight reset, however, are display
+      // changes that must redraw even if the measurements are unchanged.
       const configured = configuredInstance(settings?.modules, 'weather', ref.id)
       const interval = Math.max(WEATHER_SOURCE_FRESHNESS_MS, Number(configured?.refresh) || 0)
-      deadlines[ref.key] = [{ at: powerSaveSourceDeadline(now, interval), type: 'soft', reason: 'source_freshness' }]
+      const freshness = powerSaveSourceDeadline(now, interval)
+      const compact = ['SMALL', 'MEDIUM'].includes(String(ref.cell?.size).toUpperCase())
+      const local = osloParts(now)
+      const evening = osloLocalTime(local.year, local.month, local.day, 20)
+      const today = [local.year, String(local.month).padStart(2, '0'), String(local.day).padStart(2, '0')].join('-')
+      const tomorrow = new Date(Date.UTC(local.year, local.month - 1, local.day + 1)).toISOString().slice(0, 10)
+      const source = object(sources[ref.key])
+      const daily = object(source.daily)
+      const eligible = compact && daily.time?.[0] === today && daily.time?.[1] === tomorrow &&
+        typeof source.tomorrow_insight === 'string' && source.tomorrow_insight.length > 0 &&
+        finite(daily.temperature_2m_min?.[1]) != null && finite(daily.temperature_2m_max?.[1]) != null
+      deadlines[ref.key] = [
+        { at: freshness, type: 'soft', reason: 'source_freshness' },
+        ...(eligible && now < evening ? [{ at: evening, type: 'hard', reason: 'weather_tomorrow' }] : []),
+        ...(compact && now >= evening ? [{ at: midnight, type: 'hard', reason: 'weather_midnight' }] : []),
+      ]
     }
     else {
       const configured = ref.id == null ? null : configuredInstance(settings?.modules, ref.base, ref.id)
       const interval = Math.max(5 * 60_000, Number(configured?.refresh) || 30 * 60_000)
       deadlines[ref.key] = [{ at: now + interval, type: 'soft', reason: 'source_freshness' }]
+    }
+  }
+
+  // Avoid waking twice for the visual handover when another real module
+  // deadline already wakes the frame within 15 minutes after 20:00.
+  // Do not piggyback on News: it explicitly never wakes the frame itself.
+  const lateWindow = 15 * 60_000
+  for (const [key, entries] of Object.entries(deadlines)) {
+    for (const deadline of entries) {
+      if (deadline.reason !== 'weather_tomorrow') continue
+      const candidates = Object.entries(deadlines).flatMap(([otherKey, due]) =>
+        due.filter((d) => !(otherKey === key && d.reason === 'weather_tomorrow') &&
+          otherKey !== 'news' && d.at >= deadline.at && d.at <= deadline.at + lateWindow)
+          .map((d) => d.at))
+      if (candidates.length) deadline.at = Math.min(...candidates)
     }
   }
   return deadlines
