@@ -3252,6 +3252,7 @@ function ConnectAppsScreen({
   onBack,
   startup = false,
   asTab = false,
+  onOnboardingConnectionCheckChange,
   remindersVisibleOnFrame = true,
   onIntegrationChanged,
 }: {
@@ -3262,6 +3263,7 @@ function ConnectAppsScreen({
   onBack: () => void
   startup?: boolean
   asTab?: boolean
+  onOnboardingConnectionCheckChange?: (checking: boolean) => void
   remindersVisibleOnFrame?: boolean
   onIntegrationChanged?: (key: ConnectAppKey, config?: Record<string, unknown>, legacyEnabled?: ConnectAppKey[]) => void
 }) {
@@ -3415,6 +3417,17 @@ function ConnectAppsScreen({
   const localEventsResolvedForActiveDevice = !!activeDeviceId && localEventsStatusResolved && localEventsStatusDeviceId === activeDeviceId
   const legacyIntegrationDiscoveryPending = modulesJson?.integration_selection_explicit !== true && !(spondStatusResolved && teamsStatusResolved && googleStatusResolved && localEventsResolvedForActiveDevice)
   const providerDiscoveryFailed = spondStatusFailed || teamsStatusFailed || googleStatusFailed || localEventsStatusFailed
+
+  useEffect(() => {
+    if (!startup) return
+    onOnboardingConnectionCheckChange?.(
+      (!spondStatusResolved && !spondStatusFailed) ||
+      (!teamsStatusResolved && !teamsStatusFailed) ||
+      (!googleStatusResolved && !googleStatusFailed) ||
+      (pendingTeamsEnableAfterOAuth && !teamsStatusFailed) ||
+      (pendingGoogleEnableAfterOAuth && !googleStatusFailed),
+    )
+  }, [startup, onOnboardingConnectionCheckChange, spondStatusResolved, spondStatusFailed, teamsStatusResolved, teamsStatusFailed, googleStatusResolved, googleStatusFailed, pendingTeamsEnableAfterOAuth, pendingGoogleEnableAfterOAuth])
 
   function retryProviderDiscovery() {
     setStatus(null)
@@ -3773,7 +3786,7 @@ function ConnectAppsScreen({
   // per-frame provider must become active once its saved frame settings are loaded.
   // Repair one provider per render so each change uses the latest modules snapshot.
   useEffect(() => {
-    if (!frameSettingsReady || !activeDeviceId || modulesJson?.integration_selection_explicit !== true) return
+    if ((!frameSettingsReady && !startup) || !activeDeviceId || modulesJson?.integration_selection_explicit !== true) return
     if (pendingTeamsEnableAfterOAuth || pendingGoogleEnableAfterOAuth) return
 
     const legacyDisabledProvider = ([
@@ -3786,7 +3799,7 @@ function ConnectAppsScreen({
     // changeFrameIntegration is scoped to the current render; modulesJson changes when
     // the parent persists the repaired integration state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDeviceId, frameSettingsReady, modulesJson, pendingTeamsEnableAfterOAuth, pendingGoogleEnableAfterOAuth, teamsStatusResolved, teamsAccountConnected, googleStatusResolved, googleAccountConnected, spondStatusResolved, spondAccountConnected])
+  }, [activeDeviceId, frameSettingsReady, startup, modulesJson, pendingTeamsEnableAfterOAuth, pendingGoogleEnableAfterOAuth, teamsStatusResolved, teamsAccountConnected, googleStatusResolved, googleAccountConnected, spondStatusResolved, spondAccountConnected])
 
   useEffect(() => {
     if (!pendingTeamsEnableAfterOAuth || !teamsStatusResolved || !teamsAccountConnected) return
@@ -3831,7 +3844,7 @@ function ConnectAppsScreen({
       setLocalEventsStatusFailed(true)
     })
   }, [activeDeviceId])
-  const apps = INTEGRATION_CATALOGUE.map(definition => ({
+  const apps = INTEGRATION_CATALOGUE.filter(definition => !startup || (definition.connectable && definition.status === 'available')).map(definition => ({
     ...definition,
     name: definition.name[language],
     description: definition.description[language],
@@ -4020,7 +4033,7 @@ function ConnectAppsScreen({
           })}
         </div>
 
-        {providerDiscoveryFailed && legacyIntegrationDiscoveryPending && (
+        {providerDiscoveryFailed && (
           <div className="mt-3 rounded-2xl border border-[#d94b4b]/35 bg-[#d94b4b]/10 px-4 py-3 text-sm text-[#ff7a7a]">
             <div>{language === 'no' ? 'Kunne ikke kontrollere tilkoblede tjenester.' : 'Could not check connected services.'}</div>
             <button type="button" onClick={retryProviderDiscovery} className="mt-2 text-xs font-medium tracking-widest text-[#2aa3ff]">{language === 'no' ? 'PRØV IGJEN' : 'RETRY'}</button>
@@ -9533,11 +9546,13 @@ function FrameSetupFlow({
   activeDeviceId: string
   onComplete: (selection: FrameSetupSelection) => Promise<void>
 }) {
-  const guidedModules = ['reminders', 'weather', 'news'] as const
+  const guidedModules = ['weather', 'news'] as const
   const savedDraft = typeof window === 'undefined' ? null : (() => { try { return JSON.parse(sessionStorage.getItem(`remind:onboarding:${activeDeviceId}`) || 'null') } catch { return null } })()
-  const [step, setStep] = useState<'purpose' | 'guided' | 'custom'>(savedDraft?.step === 'guided' || savedDraft?.step === 'custom' ? savedDraft.step : 'purpose')
+  const [step, setStep] = useState<'purpose' | 'guided' | 'custom' | 'connect'>(
+    savedDraft?.step === 'guided' || savedDraft?.step === 'custom' || savedDraft?.step === 'connect' ? savedDraft.step : 'purpose',
+  )
   const [purpose, setPurpose] = useState<SetupPurpose>(savedDraft?.purpose === 'custom' ? 'custom' : 'normal')
-  const [moduleIndex, setModuleIndex] = useState(Number.isInteger(savedDraft?.moduleIndex) ? Math.max(0, Math.min(2, savedDraft.moduleIndex)) : 0)
+  const [moduleIndex, setModuleIndex] = useState(Number.isInteger(savedDraft?.moduleIndex) ? Math.max(0, Math.min(guidedModules.length - 1, savedDraft.moduleIndex)) : 0)
   const [modules, setModules] = useState<Record<string, any>>({ ...(savedDraft?.modules || {}), integration_selection_explicit: true, integrations: { ...(savedDraft?.modules?.integrations || {}) } })
   const [customLayout, setCustomLayout] = useState<LayoutKey>(() => {
     const key = savedDraft?.customLayout
@@ -9557,6 +9572,9 @@ function FrameSetupFlow({
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Do not finalize a new frame before provider status and any OAuth return
+  // have populated the selected integrations in this onboarding draft.
+  const [connectionsChecking, setConnectionsChecking] = useState(true)
   const isNo = language === 'no'
   const current = guidedModules[moduleIndex]
   const weatherLocationChosen = hasChosenWeatherLocation(modules.weather?.[0])
@@ -9565,6 +9583,9 @@ function FrameSetupFlow({
   const customWeatherSelected = customModules.includes('weather')
   const customNewsSelected = customModules.includes('news')
   const customSelection = validateCustomSetup(customLayout, customCells, weatherLocationChosen)
+  const connectedAppCount = Object.values(modules.integrations || {}).filter((config) => config && typeof config === 'object' && (config as Record<string, unknown>).enabled === true).length
+  const progressTotal = purpose === 'normal' ? guidedModules.length + 1 : 2
+  const progressCurrent = step === 'connect' ? progressTotal : step === 'custom' ? 1 : moduleIndex + 1
 
   function chooseCustomModule(slot: number, module: string) {
     if (saving || !(slot in customCells)) return
@@ -9603,21 +9624,25 @@ function FrameSetupFlow({
       setError(isNo ? 'Velg et sted for værmeldingen før du fortsetter.' : 'Choose a weather location before continuing.')
       return
     }
-    if (moduleIndex < guidedModules.length - 1) { setError(null); setModuleIndex(index => index + 1); return }
-    await finish('normal')
+    setError(null)
+    if (moduleIndex < guidedModules.length - 1) { setModuleIndex(index => index + 1); return }
+    setStep('connect')
   }
 
   function goBack() {
     if (saving) return
     setError(null)
-    if (step === 'custom') setStep('purpose')
+    if (step === 'connect') {
+      if (purpose === 'custom') setStep('custom')
+      else { setModuleIndex(guidedModules.length - 1); setStep('guided') }
+    } else if (step === 'custom') setStep('purpose')
     else if (step === 'guided' && moduleIndex > 0) setModuleIndex(index => index - 1)
     else if (step === 'guided') setStep('purpose')
   }
 
   const shell = (children: React.ReactNode, showProgress = false) => <div className="absolute inset-0 z-40 flex items-center justify-center px-3 text-[color:var(--fg)]" style={{ background: 'radial-gradient(circle at top, rgba(42,163,255,0.12), transparent 34%), var(--app-bg)' }}>
     <div className="flex max-h-[94vh] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] shadow-[0_28px_90px_rgba(0,0,0,0.22)]">
-      <div className="border-b border-[color:var(--bd-10)] px-5 py-4"><div className="flex items-center justify-between"><button type="button" disabled={step === 'purpose' || saving} onClick={goBack} className="text-xs uppercase tracking-widest disabled:opacity-30">← {isNo ? 'Tilbake' : 'Back'}</button>{showProgress && <span className="text-xs text-[color:var(--fg-50)]">{moduleIndex + 1} / {guidedModules.length}</span>}</div>{showProgress && <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[color:var(--bd-10)]"><div className="h-full rounded-full bg-[#2aa3ff]" style={{ width: `${((moduleIndex + 1) / guidedModules.length) * 100}%` }} /></div>}</div>
+      <div className="border-b border-[color:var(--bd-10)] px-5 py-4"><div className="flex items-center justify-between"><button type="button" disabled={step === 'purpose' || saving} onClick={goBack} className="text-xs uppercase tracking-widest disabled:opacity-30">← {isNo ? 'Tilbake' : 'Back'}</button>{showProgress && <span className="text-xs text-[color:var(--fg-50)]">{progressCurrent} / {progressTotal}</span>}</div>{showProgress && <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[color:var(--bd-10)]"><div className="h-full rounded-full bg-[#2aa3ff]" style={{ width: `${(progressCurrent / progressTotal) * 100}%` }} /></div>}</div>
       <div className="overflow-y-auto p-6">{children}</div>
     </div>
   </div>
@@ -9706,13 +9731,39 @@ function FrameSetupFlow({
       <p className="mt-4 text-xs leading-5 text-[color:var(--fg-55)]">{isNo ? 'Sport og investeringer kan trenge flere innstillinger etter oppsettet.' : 'Sports and investments may need additional configuration after setup.'}</p>}
     {customSelection.reason === 'no_modules' && <p className="mt-4 text-xs text-[color:var(--fg-60)]">{isNo ? 'Velg minst én modul.' : 'Select at least one module.'}</p>}
     {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}
-    <button onClick={() => finish('custom')} disabled={saving || !customSelection.valid} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">
-      {saving ? (isNo ? 'Lagrer…' : 'Saving…') : (isNo ? 'Fullfør oppsettet' : 'Finish setup')}
+    <button onClick={() => { if (customSelection.valid) { setError(null); setStep('connect') } }} disabled={saving || !customSelection.valid} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">
+      {isNo ? 'Neste: Koble til apper' : 'Next: Connect Apps'}
     </button>
-  </>)
+  </>, true)
 
-  return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">{current === 'reminders' ? (isNo ? 'Koble til apper' : 'Connect Apps') : current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nyheter' : 'News')}</h1>
-    {current === 'reminders' && <div className="mt-3 h-[min(430px,48vh)]"><ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup onIntegrationChanged={selectIntegration} /></div>}
+  if (step === 'connect') return shell(<>
+    <div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div>
+    <div className="mt-3 flex items-center gap-2">
+      <h1 className="text-2xl font-medium">{isNo ? 'Koble til apper' : 'Connect Apps'}</h1>
+      <span className="rounded-full border border-[color:var(--bd-20)] px-2 py-1 text-[10px] text-[color:var(--fg-60)]">{isNo ? 'Valgfritt' : 'Optional'}</span>
+    </div>
+    <p className="mt-2 text-sm leading-5 text-[color:var(--fg-65)]">
+      {isNo ? 'Koble til tjenestene du bruker, så dukker informasjonen deres opp automatisk i RE:MIND. Du kan gjøre dette senere også.' : 'Connect services you use to bring their information into RE:MIND automatically. You can always do this later.'}
+    </p>
+    {purpose === 'custom' && !customModules.includes('reminders') && (
+      <p role="note" className="mt-3 text-xs leading-5 text-[color:var(--fg-60)]">
+        {isNo ? 'Legg til Påminnelser-modulen senere hvis du vil vise tilkoblede påminnelser på rammen.' : 'Add the Reminders module later to display connected reminders on your frame.'}
+      </p>
+    )}
+    <div className="mt-4 h-[min(430px,43vh)] min-h-[180px]">
+      <ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup onIntegrationChanged={selectIntegration} onOnboardingConnectionCheckChange={setConnectionsChecking} />
+    </div>
+    <p className="mt-3 text-xs text-[color:var(--fg-60)]">
+      {connectedAppCount > 0 ? (isNo ? `${connectedAppCount} tjeneste${connectedAppCount === 1 ? '' : 'r'} valgt` : `${connectedAppCount} service${connectedAppCount === 1 ? '' : 's'} connected`) : (isNo ? 'Ingen tilkoblinger kreves for å komme i gang.' : 'No connections are required to get started.')}
+    </p>
+    {error && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{error}</p>}
+    <button onClick={() => finish(purpose)} disabled={saving || connectionsChecking} className="mt-4 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.15em] text-white disabled:opacity-50">
+      {saving ? (isNo ? 'Lagrer…' : 'Saving…') : connectionsChecking ? (isNo ? 'Sjekker tilkoblinger…' : 'Checking connections…') : connectedAppCount ? (isNo ? 'Fullfør oppsettet' : 'Finish setup') : (isNo ? 'Hopp over og fullfør' : 'Skip for now & finish')}
+    </button>
+    <p className="mt-3 text-center text-[11px] leading-4 text-[color:var(--fg-50)]">{isNo ? 'Du finner alltid tilkoblingene under Connect senere.' : 'You can manage your connections anytime from Connect.'}</p>
+  </>, true)
+
+  return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">{current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nyheter' : 'News')}</h1>
     {current === 'weather' && <div className="mt-6"><div className="mb-3 text-sm text-[color:var(--fg-65)]">{isNo ? 'Velg stedet der rammen skal stå.' : 'Choose the location where your frame will be used.'}</div><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Velg sted' : 'Select location')} cfg={modules.weather?.[0] || null} onPicked={(picked) => { setError(null); setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] })) }} />{!weatherLocationChosen && <p className="mt-3 text-xs leading-5 text-[color:var(--fg-60)]">{isNo ? 'Velg et sted for å få riktig værmelding. Dette kan endres senere.' : 'Choose a location for an accurate forecast. You can change it later.'}</p>}</div>}
     {current === 'news' && <div className="mt-4 h-[min(450px,52vh)]"><NewsModuleSettingsTab
       language={language}
