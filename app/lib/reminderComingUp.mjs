@@ -1,8 +1,8 @@
 // Short, grounded insights for sparse medium Reminders. All reasoning happens
 // server-side using the already-authorized combined Reminders / Connect feed.
 // No additional OpenAI request, client-side setting or firmware change.
-const MAX_OUTLOOK_CHARS = 78
-const MAX_TITLE_CHARS = 40
+const MAX_OUTLOOK_CHARS = 154
+const MAX_TITLE_CHARS = 49
 const weekdaysEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const weekdaysNo = ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag']
 
@@ -32,6 +32,13 @@ function cap(value) {
   const prefix = value.slice(0, MAX_OUTLOOK_CHARS - 3)
   const space = prefix.lastIndexOf(' ')
   return (space > 34 ? prefix.slice(0, space) : prefix).trimEnd().replace(/[.,:;!?]+$/, '') + '...'
+}
+// Longer text is used only when two independent, real upcoming commitments
+// deserve attention. Never append partial or speculative filler.
+function withSecondFact(primary, secondary) {
+  if (!secondary) return primary
+  const combined = primary + ' ' + secondary
+  return combined.length <= MAX_OUTLOOK_CHARS ? combined : primary
 }
 function weekday(date, no) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return ''
@@ -127,7 +134,15 @@ export function buildReminderComingUp(items, language = 'en', { localHour = -1 }
   const evening = Number.isInteger(localHour) && localHour >= 18 && localHour <= 23
 
   // Explicit near-term deadlines and early starts deserve attention.
-  if (soonDeadline) return deadlineDescription(soonDeadline, no)
+  if (soonDeadline) {
+    const urgent = deadlineDescription(soonDeadline, no)
+    // A separate early start is worth mentioning alongside a real deadline
+    // when today's list has room for a longer outlook.
+    if (today.length === 1 && early && early !== soonDeadline) {
+      return withSecondFact(urgent, earlyDescription(early, no))
+    }
+    return urgent
+  }
   if (tomorrow.length >= 3) return busyDescription(tomorrow, no, 1, early)
   if (early) return earlyDescription(early, no)
 
@@ -146,7 +161,13 @@ export function buildReminderComingUp(items, language = 'en', { localHour = -1 }
   if (!evening && busyLater) return busyDescription(busyLater[1], no, busyLater[0])
 
   // After 18:00 the next morning/day has greater practical value.
-  if (tomorrow.length > 0) return upcomingDescription(tomorrow[0], no)
+  if (tomorrow.length > 0) {
+    const next = upcomingDescription(tomorrow[0], no)
+    if (today.length === 1 && busyLater) {
+      return withSecondFact(next, busyDescription(busyLater[1], no, busyLater[0]))
+    }
+    return next
+  }
   if (anyDeadline) return deadlineDescription(anyDeadline, no)
   if (busyLater) return busyDescription(busyLater[1], no, busyLater[0])
 
