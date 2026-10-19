@@ -16,7 +16,10 @@ test('compact frame schema preserves only the optional adaptive Weather facts it
   for (const field of ['apparent_temperature', 'wind_gusts_10m']) {
     assert.doesNotMatch(compactFields, new RegExp(field))
   }
-  assert.match(route, /return \{\s*insight,\s*current:/)
+  // Compact v2 carries one extra short summary for the approved evening layout.
+  // The full future hourly arrays must still remain excluded.
+  assert.match(route, /return \{\s*insight,\s*tomorrow_insight: tomorrowInsight,\s*current:/)
+  assert.match(firmware, /filter\["tomorrow_insight"\] = true/)
 })
 
 test('firmware JSON filter explicitly permits only consumed weather fields and insight', () => {
