@@ -1648,7 +1648,6 @@ static void renderMedium(const Cell& c,
   int tempStartX = c.x + (c.w - totalTempW) / 2;
   int tempTop = c.y + topPad;
   int tempBaseline = tempTop - b12Y1;
-  if (useTomorrow) drawTomorrowWeatherLabel(c, ink);
 
   int tx = tempStartX;
   drawLeft(tx, tempBaseline, loBuf, FONT_B12, ink);
