@@ -9,12 +9,12 @@ const row = (title, days_until, display_time = '', date = '2026-10-20') => ({
 })
 const sparse = [row('Take out the bins', 0, '09:00', '2026-10-19')]
 
-test('Coming up requires a sparse primary date and a separate, genuinely upcoming item', () => {
+test('Coming up requires a date bucket that fits and a separate, genuinely upcoming item', () => {
   const future = row('Dentist appointment', 1, '08:00')
   assert.equal(buildReminderComingUp([...sparse, future]), 'Early tomorrow: Dentist appointment at 08:00.')
   assert.equal(buildReminderComingUp([...sparse, future], 'no'), 'Tidlig i morgen: Dentist appointment kl. 08:00.')
   assert.equal(buildReminderComingUp([...sparse, row('Pick up parcel', 0), future]), 'Early tomorrow: Dentist appointment at 08:00.')
-  assert.equal(buildReminderComingUp([...sparse, row('Pick up parcel', 0), row('Check car', 0), future]), '')
+  assert.equal(buildReminderComingUp([...sparse, row('Pick up parcel', 0), row('Check car', 0), future]), 'Early tomorrow: Dentist appointment at 08:00.')
   assert.equal(buildReminderComingUp([future]), '')
   assert.equal(buildReminderComingUp(sparse), '')
 })
@@ -35,7 +35,8 @@ test('Tomorrow and next Friday may both use spare space without predicting nonex
   assert.equal(buildReminderComingUp([friday, monday]), 'On Monday: Review contract.')
   assert.equal(buildReminderComingUp([friday, monday], 'no'), 'På mandag: Review contract.')
   assert.equal(buildReminderComingUp([friday]), '')
-  assert.equal(buildReminderComingUp([friday, friday, monday, row('One more', 4, '', '2026-10-23')]), '')
+  assert.equal(buildReminderComingUp([friday, friday, monday, row('One more', 4, '', '2026-10-23')]), 'On Monday: Review contract.')
+  assert.equal(buildReminderComingUp([friday, friday, friday, friday, monday]), '')
   assert.equal(buildReminderComingUp([friday, row('Too far away', 12, '', '2026-10-31')]), '')
 })
 
@@ -59,16 +60,16 @@ test('Coming up is capped in length and does not make speculative suggestions', 
   assert.doesNotMatch(insight, /prepare|leave early|travel|bring|remember to/i)
 })
 
-test('physical and Mirror medium UI reserve real space for insights on any primary date', () => {
+test('physical and Mirror medium UI measure available space for insights on any primary date', () => {
   const firmware = readFileSync(new URL('../frame/src/modules/ModuleReminders.cpp', import.meta.url), 'utf8')
   const medium = firmware.slice(firmware.indexOf('static void renderMedium('), firmware.indexOf('static void renderLarge('))
   assert.match(firmware, /filter\["coming_up"\] = true/)
   assert.match(firmware, /doc\["coming_up"\]/)
   assert.match(medium, /c\.size == CELL_MEDIUM &&/)
   assert.doesNotMatch(medium, /c\.size == CELL_MEDIUM && headerIsToday/)
-  assert.match(medium, /bucket\.count >= 1 && bucket\.count <= 2/)
+  assert.match(medium, /bucket\.count >= 1 && bucket\.count <= visibleCount/)
   assert.match(medium, /char outlookLines\[4\]\[128\]/)
-  assert.match(medium, /const int maxLines = bucket\.count == 1 \? 4 : 3/)
+  assert.match(medium, /const int maxLines = bucket\.count == 1 \? 4 : bucket\.count == 2 \? 3 : 2/)
   assert.match(medium, /wrapTextToLines\(g_cache->comingUp, outlookLines,[\s\S]*?maxLines,/)
   assert.match(medium, /showComingUp = reminderSpace >= minReminderSpace/)
   assert.match(medium, /buildSmartReminderLayout\(bucket, visibleCount,/)
@@ -80,7 +81,7 @@ test('physical and Mirror medium UI reserve real space for insights on any prima
   const mirror = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   const card = mirror.slice(mirror.indexOf('function MirrorMediumRemindersCard('), mirror.indexOf('function MirrorSmallRemindersCard('))
   assert.match(card, /detail\.reminderComingUp/)
-  assert.match(card, /visibleItems\.length === 1 \? 'line-clamp-4' : 'line-clamp-3'/)
+  assert.match(card, /visibleItems\.length === 1 \? 'line-clamp-4' : visibleItems\.length === 2 \? 'line-clamp-3' : 'line-clamp-2'/)
   assert.doesNotMatch(card, />COMING UP<|>KOMMER</)
   assert.match(card, /!comingUp && headerIsToday/)
 })
