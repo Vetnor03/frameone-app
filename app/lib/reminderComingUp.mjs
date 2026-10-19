@@ -18,7 +18,7 @@ const clockOf = row => row?.is_all_day ? '' : time(row?.display_time)
 
 // This is a hint only when the source title explicitly identifies a deadline.
 // We do not infer a due date, preparation obligation or travel time.
-const explicitDeadline = row => /(?:^|\W)(?:deadline|due date|due tomorrow|due soon|frist|fristen|forfall|forfallsdato|utløper)(?:$|\W)/i.test(text(row?.title))
+const explicitDeadline = row => /(?:\b(?:deadline|due date|due tomorrow|due soon|forfall|forfallsdato|utløper)\b|frist(?:en)?\b)/i.test(text(row?.title))
 
 function shorten(value, maximum = MAX_TITLE_CHARS) {
   const trimmed = text(value)
@@ -93,7 +93,7 @@ function uniqueFuture(rows, todayTitles) {
     const title = titleKey(row?.title)
     if (days == null || days < 1 || days > 7 || !title || todayTitles.has(title)) return false
     // Require a plausible future date to avoid ungrounded weekday claims.
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(text(row.occurrence_date).slice(0, 10))) return false
+    if (!weekday(text(row.occurrence_date).slice(0, 10), false)) return false
     const key = String(days) + ':' + title + ':' + clockOf(row)
     if (seen.has(key)) return false
     seen.add(key)
