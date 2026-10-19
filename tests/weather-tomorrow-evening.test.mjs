@@ -88,7 +88,8 @@ test('backend computes tomorrow summary before compacting the hourly forecast', 
   assert.match(route, /tomorrow_insight: tomorrowInsight/)
   assert.match(route, /compactFrameWeatherPayload\(weather\.payload, frameCompactVersion, insight, tomorrowInsight\)/)
   const mirror = readFileSync(new URL('../app/api/device/mirror-snapshot/base.ts', import.meta.url), 'utf8')
-  assert.match(mirror, /weatherTomorrowSummary: useTomorrow \? tomorrowSummary : ''/)
+  assert.match(mirror, /weatherTomorrowSummary: useTomorrow \\? shownTomorrowSummary : ''/)
+  assert.match(mirror, /const shownTomorrowSummary = weekendSummary \\|\\| tomorrowSummary/)
   assert.match(mirror, /const tomorrowSummary = buildTomorrowWeatherSummary\(data\)/)
 })
 
