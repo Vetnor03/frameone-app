@@ -3252,7 +3252,7 @@ function ConnectAppsScreen({
   onBack,
   startup = false,
   asTab = false,
-  onOAuthRestoringChange,
+  onOnboardingConnectionCheckChange,
   remindersVisibleOnFrame = true,
   onIntegrationChanged,
 }: {
@@ -3263,7 +3263,7 @@ function ConnectAppsScreen({
   onBack: () => void
   startup?: boolean
   asTab?: boolean
-  onOAuthRestoringChange?: (restoring: boolean) => void
+  onOnboardingConnectionCheckChange?: (checking: boolean) => void
   remindersVisibleOnFrame?: boolean
   onIntegrationChanged?: (key: ConnectAppKey, config?: Record<string, unknown>, legacyEnabled?: ConnectAppKey[]) => void
 }) {
@@ -3419,11 +3419,15 @@ function ConnectAppsScreen({
   const providerDiscoveryFailed = spondStatusFailed || teamsStatusFailed || googleStatusFailed || localEventsStatusFailed
 
   useEffect(() => {
-    if (startup) onOAuthRestoringChange?.(
+    if (!startup) return
+    onOnboardingConnectionCheckChange?.(
+      (!spondStatusResolved && !spondStatusFailed) ||
+      (!teamsStatusResolved && !teamsStatusFailed) ||
+      (!googleStatusResolved && !googleStatusFailed) ||
       (pendingTeamsEnableAfterOAuth && !teamsStatusFailed) ||
       (pendingGoogleEnableAfterOAuth && !googleStatusFailed),
     )
-  }, [startup, onOAuthRestoringChange, pendingTeamsEnableAfterOAuth, teamsStatusFailed, pendingGoogleEnableAfterOAuth, googleStatusFailed])
+  }, [startup, onOnboardingConnectionCheckChange, spondStatusResolved, spondStatusFailed, teamsStatusResolved, teamsStatusFailed, googleStatusResolved, googleStatusFailed, pendingTeamsEnableAfterOAuth, pendingGoogleEnableAfterOAuth])
 
   function retryProviderDiscovery() {
     setStatus(null)
@@ -9568,14 +9572,9 @@ function FrameSetupFlow({
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // OAuth returns to the current onboarding draft; don't allow completion until
-  // the connected account has been added to that draft.
-  const [oauthRestoring, setOauthRestoring] = useState(() => {
-    if (typeof window === 'undefined') return false
-    const params = new URLSearchParams(window.location.search)
-    return (params.get('google_calendar') === 'connected' && sessionStorage.getItem('remind:google-oauth-device') === activeDeviceId)
-      || (params.get('teams') === 'connected' && sessionStorage.getItem('remind:teams-oauth-device') === activeDeviceId)
-  })
+  // Do not finalize a new frame before provider status and any OAuth return
+  // have populated the selected integrations in this onboarding draft.
+  const [connectionsChecking, setConnectionsChecking] = useState(true)
   const isNo = language === 'no'
   const current = guidedModules[moduleIndex]
   const weatherLocationChosen = hasChosenWeatherLocation(modules.weather?.[0])
@@ -9752,14 +9751,14 @@ function FrameSetupFlow({
       </p>
     )}
     <div className="mt-4 h-[min(430px,43vh)] min-h-[180px]">
-      <ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup onIntegrationChanged={selectIntegration} onOAuthRestoringChange={setOauthRestoring} />
+      <ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup onIntegrationChanged={selectIntegration} onOnboardingConnectionCheckChange={setConnectionsChecking} />
     </div>
     <p className="mt-3 text-xs text-[color:var(--fg-60)]">
       {connectedAppCount > 0 ? (isNo ? `${connectedAppCount} tjeneste${connectedAppCount === 1 ? '' : 'r'} valgt` : `${connectedAppCount} service${connectedAppCount === 1 ? '' : 's'} connected`) : (isNo ? 'Ingen tilkoblinger kreves for å komme i gang.' : 'No connections are required to get started.')}
     </p>
     {error && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{error}</p>}
-    <button onClick={() => finish(purpose)} disabled={saving || oauthRestoring} className="mt-4 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.15em] text-white disabled:opacity-50">
-      {saving ? (isNo ? 'Lagrer…' : 'Saving…') : oauthRestoring ? (isNo ? 'Fullfører tilkobling…' : 'Finishing connection…') : connectedAppCount ? (isNo ? 'Fullfør oppsettet' : 'Finish setup') : (isNo ? 'Hopp over og fullfør' : 'Skip for now & finish')}
+    <button onClick={() => finish(purpose)} disabled={saving || connectionsChecking} className="mt-4 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.15em] text-white disabled:opacity-50">
+      {saving ? (isNo ? 'Lagrer…' : 'Saving…') : connectionsChecking ? (isNo ? 'Sjekker tilkoblinger…' : 'Checking connections…') : connectedAppCount ? (isNo ? 'Fullfør oppsettet' : 'Finish setup') : (isNo ? 'Hopp over og fullfør' : 'Skip for now & finish')}
     </button>
     <p className="mt-3 text-center text-[11px] leading-4 text-[color:var(--fg-50)]">{isNo ? 'Du finner alltid tilkoblingene under Connect senere.' : 'You can manage your connections anytime from Connect.'}</p>
   </>, true)
