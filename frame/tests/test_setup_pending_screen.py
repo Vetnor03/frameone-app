@@ -19,24 +19,29 @@ def test_waiting_screen_is_retained_across_short_wakes():
     assert 'Waiting for setup' in SCREEN
 
 
-def test_shelf_screen_has_no_bottom_explanatory_footer():
+def test_shelf_screen_has_only_welcome_and_clear_setup_instruction():
     display = (ROOT / 'src/display/DisplayCore.cpp').read_text()
     shelf = display.split('void drawShelfScreen(', 1)[1].split('} // namespace DisplayCore', 1)[0]
-    assert 'Plug in the frame to begin setup' in shelf
-    assert 'display.print(idLine);' in shelf
+    assert 'const char* line1 = "RE:MIND";' in shelf
+    assert 'const char* line2 = "Welcome";' in shelf
+    assert 'Plug in the charging cable to begin setup' in shelf
+    assert 'idLine' not in shelf
+    assert 'deviceId' not in shelf
+    assert 'frame id' not in shelf
     assert 'This display stays visible without power' not in shelf
     assert 'line4' not in shelf
 
 
-def test_shelf_welcome_is_centered_and_setup_instruction_is_in_footer():
+def test_shelf_welcome_stays_centered_and_instruction_stays_in_footer():
     display = (ROOT / 'src/display/DisplayCore.cpp').read_text()
     shelf = display.split('void drawShelfScreen(', 1)[1].split('} // namespace DisplayCore', 1)[0]
-    # The welcome remains centered; only the footer lines shift upward.
     assert 'int titleY = FRAME_Y + FRAME_H / 2 - 22;' in shelf
     assert 'int welcomeY = titleY + 56;' in shelf
-    for name in ('titleX', 'welcomeX', 'idX', 'infoX'):
+    for name in ('titleX', 'welcomeX', 'infoX'):
         assert f'int {name} = FRAME_X + (FRAME_W - (int)w) / 2 - x1;' in shelf
-    assert 'int idY = FRAME_Y + FRAME_H - 88;' in shelf
     assert 'int infoY = FRAME_Y + FRAME_H - 42;' in shelf
-    assert shelf.index('display.print(idLine);') < shelf.index('display.print(line3);')
-    assert 'welcomeY + 74' not in shelf
+    assert 'display.print(line1);' in shelf
+    assert 'display.print(line2);' in shelf
+    assert 'display.print(line3);' in shelf
+    assert 'idX' not in shelf
+    assert 'idY' not in shelf
