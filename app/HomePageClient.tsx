@@ -1650,7 +1650,7 @@ export default function HomePage() {
       setAssistantDeepLink({ watchId, updateId: searchParams?.get('update')?.trim() || null })
       return
     }
-    if (tab === 'connect' || searchParams?.has('teams')) {
+    if (tab === 'connect' || searchParams?.has('teams') || searchParams?.has('google_calendar')) {
       preferInstantScrollRef.current = true
       setActiveTab('connect')
       return
@@ -3208,7 +3208,7 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type DisconnectableConnectAppKey = 'spond' | 'teams'
+type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -3257,8 +3257,12 @@ function ConnectAppsScreen({
 }) {
   const initialTeamsOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('teams')
   const initialTeamsOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
-  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>(() => initialTeamsOAuthStatus === 'error' ? 'error' : 'info')
+  const initialGoogleOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('google_calendar')
+  const initialGoogleOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
+  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>(() => initialTeamsOAuthStatus === 'error' || initialGoogleOAuthStatus === 'error' ? 'error' : 'info')
   const [status, setStatus] = useState<string | null>(() => {
+    if (initialGoogleOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Google Calendar-tilkobling…' : 'Finishing Google Calendar connection…'
+    if (initialGoogleOAuthStatus === 'error') return initialGoogleOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Google Calendar' : 'Could not connect Google Calendar')
     if (initialTeamsOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Teams-tilkobling…' : 'Finishing Teams connection…'
     if (initialTeamsOAuthStatus === 'error') return initialTeamsOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Teams' : 'Could not connect Teams')
     return null
@@ -3284,10 +3288,21 @@ function ConnectAppsScreen({
     return initiatingDeviceId === activeDeviceId && (initialTeamsOAuthStatus === 'connected' || storedResult === 'connected')
   })
   const [teamsLoading, setTeamsLoading] = useState(false)
+  const [googleConnected, setGoogleConnected] = useState(false)
+  const [googleAccountConnected, setGoogleAccountConnected] = useState(false)
+  const [googleAccount, setGoogleAccount] = useState<string | null>(null)
+  const [googleStatusResolved, setGoogleStatusResolved] = useState(false)
+  const [googleStatusFailed, setGoogleStatusFailed] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+  const [pendingGoogleEnableAfterOAuth, setPendingGoogleEnableAfterOAuth] = useState(() => {
+    if (typeof window === 'undefined' || !activeDeviceId) return false
+    return sessionStorage.getItem('remind:google-oauth-device') === activeDeviceId &&
+      new URLSearchParams(window.location.search).get('google_calendar') === 'connected'
+  })
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
   const [disconnectConfirmApp, setDisconnectConfirmApp] = useState<DisconnectableConnectAppKey | null>(null)
-  const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams', string>>>({})
+  const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams' | 'google-calendar', string>>>({})
   const [localEventsOpen, setLocalEventsOpen] = useState(false)
   const [wasteModalOpen, setWasteModalOpen] = useState(false)
   const [wasteConnected, setWasteConnected] = useState(() => connectAppIsConnected(modulesJson, 'waste'))
@@ -3355,10 +3370,29 @@ function ConnectAppsScreen({
   }
 
 
+  async function fetchGoogleCalendarStatus() {
+    const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+    if (!accessToken) { setGoogleStatusResolved(true); setGoogleConnected(false); return }
+    const response = await fetch('/api/integrations/google-calendar/status', {
+      headers: { Authorization: 'Bearer ' + accessToken },
+      cache: 'no-store',
+    })
+    if (!response.ok) { setGoogleStatusFailed(true); setGoogleConnected(false); setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere Google Calendar-status' : 'Could not check Google Calendar status'); return }
+    const json = await response.json()
+    setGoogleStatusResolved(true)
+    setGoogleStatusFailed(false)
+    setLocallyDisconnectedApps(current => ({ ...current, 'google-calendar': json?.connected === true ? false : current['google-calendar'] }))
+    setGoogleAccountConnected(json?.connected === true)
+    setGoogleConnected(modulesJson?.integration_selection_explicit === true ? frameUsesIntegration(modulesJson, 'google-calendar') && json?.connected === true : json?.connected === true)
+    setGoogleAccount(typeof json?.account === 'string' ? json.account : null)
+    setIntegrationSetupErrors(current => ({ ...current, 'google-calendar': typeof json?.setup_error?.message === 'string' ? json.setup_error.message : undefined }))
+  }
+
   function legacyEnabledIntegrations(): ConnectAppKey[] {
     return [
       ...(spondAccountConnected ? ['spond' as const] : []),
       ...(teamsAccountConnected ? ['teams' as const] : []),
+      ...(googleAccountConnected ? ['google-calendar' as const] : []),
       ...(localEventsAccountConnected && localEventsStatusDeviceId === activeDeviceId ? ['local-events' as const] : []),
       ...(connectAppIsConnected(modulesJson, 'waste') ? ['waste' as const] : []),
     ]
@@ -3369,14 +3403,46 @@ function ConnectAppsScreen({
   }
 
   const localEventsResolvedForActiveDevice = !!activeDeviceId && localEventsStatusResolved && localEventsStatusDeviceId === activeDeviceId
-  const legacyIntegrationDiscoveryPending = modulesJson?.integration_selection_explicit !== true && !(spondStatusResolved && teamsStatusResolved && localEventsResolvedForActiveDevice)
-  const providerDiscoveryFailed = spondStatusFailed || teamsStatusFailed || localEventsStatusFailed
+  const legacyIntegrationDiscoveryPending = modulesJson?.integration_selection_explicit !== true && !(spondStatusResolved && teamsStatusResolved && googleStatusResolved && localEventsResolvedForActiveDevice)
+  const providerDiscoveryFailed = spondStatusFailed || teamsStatusFailed || googleStatusFailed || localEventsStatusFailed
 
   function retryProviderDiscovery() {
     setStatus(null)
     if (!spondStatusResolved) void fetchSpondStatus().catch(() => setSpondStatusFailed(true))
     if (!teamsStatusResolved) void fetchTeamsStatus().catch(() => setTeamsStatusFailed(true))
+    if (!googleStatusResolved) void fetchGoogleCalendarStatus().catch(() => setGoogleStatusFailed(true))
     if (!localEventsResolvedForActiveDevice && activeDeviceId) void fetchLocalEventsStatus(activeDeviceId, localEventsRequestGenerationRef.current).catch(() => setLocalEventsStatusFailed(true))
+  }
+
+  async function connectGoogleCalendar() {
+    if (googleLoading || googleConnected) return
+    if (integrationSetupErrors['google-calendar']) {
+      setStatusTone('error')
+      setStatus(integrationSetupErrors['google-calendar'] || '')
+      return
+    }
+    setGoogleLoading(true)
+    setStatus(null)
+    trackProductEvent({ event: 'connection_started', surface: 'connect', metadata: { provider: 'google-calendar' } })
+    try {
+      const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+      if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble til Google Calendar' : 'Sign in to connect Google Calendar')
+      if (!activeDeviceId) throw new Error(language === 'no' ? 'Velg en ramme først' : 'Select a frame first')
+      sessionStorage.setItem('remind:google-oauth-device', activeDeviceId)
+      const response = await fetch('/api/integrations/google-calendar/connect', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + accessToken, 'x-remind-timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Oslo' },
+        cache: 'no-store',
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || !result.url) throw new Error(result?.error || 'Could not start Google Calendar sign-in')
+      window.location.assign(result.url)
+    } catch (error) {
+      setStatusTone('error')
+      setStatus(error instanceof Error ? error.message : 'Could not connect Google Calendar')
+      trackProductEvent({ event: 'connection_failed', surface: 'connect', metadata: { provider: 'google-calendar' } })
+      setGoogleLoading(false)
+    }
   }
 
   async function connectTeams() {
