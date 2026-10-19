@@ -1,3 +1,5 @@
+import { buildTomorrowWeatherSummary } from './weatherTomorrow.mjs'
+
 /**
  * Weather-only weekend highlight for the existing compact Weather insight.
  * No new fetch, model call, module or frame setting.
@@ -64,6 +66,8 @@ export function buildWeekendWeatherHighlight(payload, { now = Date.now(), timezo
   const local = localNowParts(now, timezone || weather.timezone)
   if (!local || !((local.weekday === 'Thu' && local.hour >= 18) || local.weekday === 'Fri')) return ''
   if (upcomingHazard(weather, local)) return ''
+  // An urgent next-day forecast outranks pleasant weekend expectations.
+  if (/^(Thunderstorms|Snow expected|Sleet expected|Heavy rain|Very strong|Strong winds)/.test(buildTomorrowWeatherSummary(weather))) return ''
   const saturday = weekendDate(local.date, local.weekday === 'Thu' ? 2 : 1)
   const sunday = weekendDate(local.date, local.weekday === 'Thu' ? 3 : 2)
   const daily = obj(weather.daily)
