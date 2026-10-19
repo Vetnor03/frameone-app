@@ -10673,13 +10673,6 @@ function integrationProviderToReminderSource(provider: any): ReminderSource | nu
   return null
 }
 
-const LOCAL_EVENT_CALENDAR_SKIP_HIDE_AFTER_MS = 24 * 60 * 60 * 1000
-
-function localEventSkipIsHiddenFromCalendar(updatedAt: any, nowMs = Date.now()) {
-  const updatedMs = new Date(String(updatedAt || '')).getTime()
-  return Number.isFinite(updatedMs) && nowMs - updatedMs >= LOCAL_EVENT_CALENDAR_SKIP_HIDE_AFTER_MS
-}
-
 function integrationItemDateTime(row: any) {
   const raw = row?.raw && typeof row.raw === 'object' ? row.raw : {}
   const rawDate = typeof raw.date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw.date) ? raw.date.slice(0, 10) : ''
@@ -14982,7 +14975,6 @@ const manualItems: ReminderUiItem[] = (data || [])
 
         const nowIso = new Date().toISOString()
         let localEventSkippedIds = new Set<string>()
-        let localEventHiddenSkippedIds = new Set<string>()
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
@@ -15012,7 +15004,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           if (activeDeviceId && localEventExternalIds.length > 0) {
             const { data: skipData, error: skipError } = await supabase
               .from('local_event_frame_skips')
-              .select('external_event_id, skipped, updated_at')
+              .select('external_event_id, skipped')
               .eq('device_id', activeDeviceId)
               .eq('provider', 'edge-of-norway')
               // Read both individual IDs and persistent group-skip markers.
@@ -15022,10 +15014,6 @@ const manualItems: ReminderUiItem[] = (data || [])
             } else {
               localEventSkippedIds = new Set((skipData || [])
                 .filter((row: any) => row.skipped !== false)
-                .map((row: any) => String(row.external_event_id || '').trim())
-                .filter(Boolean))
-              localEventHiddenSkippedIds = new Set((skipData || [])
-                .filter((row: any) => row.skipped !== false && localEventSkipIsHiddenFromCalendar(row.updated_at))
                 .map((row: any) => String(row.external_event_id || '').trim())
                 .filter(Boolean))
             }
@@ -15038,7 +15026,6 @@ const manualItems: ReminderUiItem[] = (data || [])
               const externalEventId = source === 'local-events' ? String(row.external_id || '').trim() : ''
               const groupKey = source === 'local-events' ? localEventGroupKeyFromRaw(row) : ''
               if (source === 'local-events' && manualItems.some(item => item.sourceEventGroupKey === groupKey && groupKey)) return null
-              if (externalEventId && (localEventHiddenSkippedIds.has(externalEventId) || localEventHiddenSkippedIds.has(groupSkipId(groupKey)))) return null
               const { date, time } = integrationItemDateTime(row)
               const title = integrationReminderTitle(row, source, language)
               if (!title || !date) return null
@@ -15722,7 +15709,7 @@ const ungroupedSortedReminders = useMemo(() => {
                 <div key={option.id} className="py-3 first:pt-0">
                   <div className="text-sm text-[color:var(--fg-95)]">{formatReminderFullDateLabel(language, option.date)}{normalizeReminderTime(option.time) ? ' · ' + normalizeReminderTime(option.time) : ''}</div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button type="button" disabled={!!bookingEventId || option.skippedOnFrame} onClick={() => markEventPerformanceBooked(option)} className="rounded-xl border border-[#2aa3ff] px-3 py-2 text-xs text-[#2aa3ff] disabled:opacity-40">
+                    <button type="button" disabled={!!bookingEventId} onClick={() => markEventPerformanceBooked(option)} className="rounded-xl border border-[#2aa3ff] px-3 py-2 text-xs text-[#2aa3ff] disabled:opacity-40">
                       {bookingEventId === option.externalEventId ? (language === 'no' ? 'LAGRER…' : 'SAVING…') : (language === 'no' ? 'BESTILT ✓' : 'BOOKED ✓')}
                     </button>
                     {(option.ticketLinks?.length ? option.ticketLinks : option.sourceUrl ? [{ source: 'event', url: option.sourceUrl }] : []).map(link => /^https:\/\//.test(link.url) ? (
