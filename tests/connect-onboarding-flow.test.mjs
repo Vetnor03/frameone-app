@@ -29,13 +29,15 @@ test('Back navigation and progress both handle the new shared step', () => {
   assert.match(onboarding, /savedDraft\?\.step === 'connect'/)
 })
 
-test('Skipping optional connection is explicit and OAuth return cannot be dropped', () => {
+test('Skipping is explicit and setup waits for provider discovery and OAuth return', () => {
   assert.match(onboarding, /Skip for now & finish/)
-  assert.match(onboarding, /oauthRestoring/)
-  assert.match(onboarding, /disabled=\{saving \|\| oauthRestoring\}/)
-  assert.match(onboarding, /onOAuthRestoringChange=\{setOauthRestoring\}/)
-  assert.match(onboarding, /remind:google-oauth-device/)
-  assert.match(onboarding, /remind:teams-oauth-device/)
+  assert.match(onboarding, /connectionsChecking/)
+  assert.match(onboarding, /disabled=\{saving \|\| connectionsChecking\}/)
+  assert.match(onboarding, /onOnboardingConnectionCheckChange=\{setConnectionsChecking\}/)
+  assert.match(source, /pendingGoogleEnableAfterOAuth && !googleStatusFailed/)
+  assert.match(source, /pendingTeamsEnableAfterOAuth && !teamsStatusFailed/)
+  assert.match(source, /!googleStatusResolved && !googleStatusFailed/)
+  assert.match(source, /!teamsStatusResolved && !teamsStatusFailed/)
 })
 
 test('Onboarding hides unavailable integrations but retains main Connect tab order', () => {
