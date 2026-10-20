@@ -1958,10 +1958,12 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
   const int visibleCount = min(bucket.count, isTodayOrTomorrow ? 4 : 3);
   const int contentTop = underlineY + titleUnderlineH + 12;
 
-  // Keep the relative-date badge on future-date tiles. The outlook can use
-  // the remaining space above it, but must never overlap the badge.
+  // Keep future-date badges directly beneath their reminders. When there is
+  // a Smart Coming Up note, reserve space BELOW the badge for that note.
+  // Without an outlook, preserve the original bottom badge position.
   const bool showBottomBadge = !isTodayOrTomorrow;
   char badgeBuf[32];
+  int rectX = 0, rectW = 0, rectH = 0;
   int rectY = c.y + c.h;
   buildRelativeDateText(bucket.daysUntil, bucket.isOverdue, badgeBuf, sizeof(badgeBuf));
   if (showBottomBadge) {
@@ -1970,23 +1972,12 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
 
     const int rectPadX = 14;
     const int rectPadY = 8;
-    int rectW = (int)bw + rectPadX * 2;
-    int rectH = (int)bh + rectPadY * 2;
+    rectW = (int)bw + rectPadX * 2;
+    rectH = (int)bh + rectPadY * 2;
     if (rectW > c.w - 18) rectW = c.w - 18;
 
-    int rectX = c.x + (c.w - rectW) / 2;
+    rectX = c.x + (c.w - rectW) / 2;
     rectY = c.y + c.h - bottomPad - rectH;
-
-    d.fillRect(rectX, rectY, rectW, rectH, GxEPD_WHITE);
-
-    int textX = rectX + (rectW - (int)bw) / 2;
-    int textY = rectY + (rectH - (int)bh) / 2;
-
-    d.setTextColor(GxEPD_BLACK);
-    d.setFont(FONT_B9);
-    d.setCursor(textX - bx1, textY - by1);
-    d.print(badgeBuf);
-    d.setFont(nullptr);
   }
 
   // Date never gates a useful insight: Today, Tomorrow and later buckets
@@ -1995,7 +1986,7 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
       bucket.count >= 1 && bucket.count <= visibleCount && g_cache->comingUp[0];
   char outlookLines[4][128] = {{0}};
   int outlookLineCount = 0;
-  const int outlookBottom = showBottomBadge ? rectY - 14 : c.y + c.h - 12;
+  const int outlookBottom = c.y + c.h - 12;
   int outlookTop = outlookBottom;
   if (showComingUp) {
     const int maxLines = bucket.count == 1 ? 4 : bucket.count == 2 ? 3 : 2;
@@ -2006,7 +1997,9 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
     showComingUp = complete && outlookLineCount > 0 && ensureSmartReminderLayoutScratch();
     if (showComingUp) {
       outlookTop = outlookBottom - outlookLineCount * lineStep;
-      const int reminderSpace = outlookTop - 12 - contentTop;
+      const int proposedBadgeY = showBottomBadge ? outlookTop - 14 - rectH : rectY;
+      const int reminderBottom = showBottomBadge ? proposedBadgeY - 14 : outlookTop - 12;
+      const int reminderSpace = reminderBottom - contentTop;
       const int minReminderSpace = bucket.count == 1 ? 32 : bucket.count * 22 + 17;
       const int dotR = 3, gap = 10, sidePad = 18;
       const int reminderWidth = c.w - sidePad * 2 -
@@ -2018,6 +2011,10 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
            buildSmartReminderLayout(bucket, visibleCount, reminderWidth, reminderSpace,
                                     "", REMINDER_CONTENT_FONT, false, true, measured));
     }
+  }
+
+  if (showComingUp && showBottomBadge) {
+    rectY = outlookTop - 14 - rectH;
   }
 
   const bool showTomorrowNote = headerIsToday && isEveningHour() && !showComingUp;
@@ -2032,10 +2029,10 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
   }
 
   int contentBottom;
-  if (showComingUp) {
-    contentBottom = outlookTop - 12;
-  } else if (showBottomBadge) {
+  if (showBottomBadge) {
     contentBottom = rectY - 14;
+  } else if (showComingUp) {
+    contentBottom = outlookTop - 12;
   } else if (showTomorrowNote) {
     contentBottom = c.y + c.h - 34;
   } else {
@@ -2049,6 +2046,18 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
     drawnCount = drawBucketLinesCentered(
       c, bucket, visibleCount, contentTop, contentH, REMINDER_CONTENT_FONT
     );
+  }
+
+  if (showBottomBadge) {
+    int16_t bx1, by1; uint16_t bw, bh;
+    measureText(badgeBuf, FONT_B9, bx1, by1, bw, bh);
+    d.fillRect(rectX, rectY, rectW, rectH, GxEPD_WHITE);
+    d.setTextColor(GxEPD_BLACK);
+    d.setFont(FONT_B9);
+    d.setCursor(rectX + (rectW - (int)bw) / 2 - bx1,
+                rectY + (rectH - (int)bh) / 2 - by1);
+    d.print(badgeBuf);
+    d.setFont(nullptr);
   }
 
   if (showComingUp && drawnCount == visibleCount) {

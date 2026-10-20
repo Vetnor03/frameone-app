@@ -6395,7 +6395,7 @@ function MirrorMediumRemindersCard({
         <MirrorModuleHeader title={header} />
       </div>
 
-      <div className={`flex min-h-0 flex-1 ${comingUp ? (showBottomBadge ? 'flex-col items-center justify-center pb-[clamp(2.6rem,5.9vw,3.6rem)] pt-[clamp(0.25rem,0.7vw,0.5rem)]' : 'flex-col items-center justify-center pb-[clamp(0.2rem,0.55vw,0.4rem)] pt-[clamp(0.45rem,1.1vw,0.75rem)]') : showBottomBadge ? 'items-center justify-center pb-[clamp(1.35rem,3vw,1.9rem)] pt-[clamp(0.55rem,1.35vw,0.9rem)]' : tomorrowLabel ? 'items-center justify-center pb-[clamp(0.95rem,2.2vw,1.35rem)] pt-[clamp(0.62rem,1.55vw,0.98rem)]' : 'items-center justify-center pb-[clamp(0.18rem,0.55vw,0.38rem)] pt-[clamp(0.68rem,1.65vw,1.05rem)]'}`}>
+      <div className={`flex min-h-0 flex-1 ${comingUp ? (showBottomBadge ? 'flex-col items-center justify-center pb-[clamp(0.2rem,0.55vw,0.4rem)] pt-[clamp(0.25rem,0.7vw,0.5rem)]' : 'flex-col items-center justify-center pb-[clamp(0.2rem,0.55vw,0.4rem)] pt-[clamp(0.45rem,1.1vw,0.75rem)]') : showBottomBadge ? 'items-center justify-center pb-[clamp(1.35rem,3vw,1.9rem)] pt-[clamp(0.55rem,1.35vw,0.9rem)]' : tomorrowLabel ? 'items-center justify-center pb-[clamp(0.95rem,2.2vw,1.35rem)] pt-[clamp(0.62rem,1.55vw,0.98rem)]' : 'items-center justify-center pb-[clamp(0.18rem,0.55vw,0.38rem)] pt-[clamp(0.68rem,1.65vw,1.05rem)]'}`}>
         <div className={`flex max-w-full flex-col items-start gap-[clamp(0.42rem,1.05vw,0.72rem)] text-left ${comingUp ? 'min-h-0 flex-1 justify-center' : ''}`}>
           {visibleItems.map((item, index) => (
             <div key={`${item}-${index}`} className="grid max-w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.42rem,1.05vw,0.68rem)]">
@@ -6404,6 +6404,11 @@ function MirrorMediumRemindersCard({
             </div>
           ))}
         </div>
+        {showBottomBadge && comingUp && (
+          <div className="mt-[clamp(0.3rem,0.8vw,0.52rem)] max-w-[72%] shrink-0 truncate px-[clamp(0.55rem,1.35vw,0.88rem)] py-[clamp(0.32rem,0.8vw,0.5rem)] text-[clamp(0.5rem,1.08vw,0.72rem)] font-semibold tracking-[0.045em]" style={{ backgroundColor: '#ffffff', color: '#000000' }} title={badgeLabel}>
+            {badgeLabel}
+          </div>
+        )}
         {comingUp && (
           <div className="mt-[clamp(0.4rem,1.1vw,0.75rem)] flex min-h-0 w-full max-w-[94%] shrink flex-col items-center justify-center overflow-hidden text-center">
             <span className={`${visibleItems.length === 1 ? 'line-clamp-4' : visibleItems.length === 2 ? 'line-clamp-3' : 'line-clamp-2'} max-w-full text-[clamp(0.58rem,1.23vw,0.78rem)] font-medium leading-snug`}>{comingUp}</span>
@@ -6411,7 +6416,7 @@ function MirrorMediumRemindersCard({
         )}
       </div>
 
-      {showBottomBadge && (
+      {showBottomBadge && !comingUp && (
         <div className="absolute bottom-[clamp(1.05rem,2.55vw,1.55rem)] left-1/2 max-w-[72%] -translate-x-1/2 truncate px-[clamp(0.55rem,1.35vw,0.88rem)] py-[clamp(0.32rem,0.8vw,0.5rem)] text-[clamp(0.5rem,1.08vw,0.72rem)] font-semibold tracking-[0.045em]" style={{ backgroundColor: '#ffffff', color: '#000000' }} title={badgeLabel}>
           {badgeLabel}
         </div>
