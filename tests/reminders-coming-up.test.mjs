@@ -196,3 +196,25 @@ test('all medium insight text must be accepted by the enlarged firmware buffer',
   assert.match(fw, /REMINDERS_MAX_BODY_BYTES = 4608/)
   assert.match(fw, /static_assert\(sizeof\(ReminderCache\) <= 4096/)
 })
+
+test('future medium reminders show their date badge before Coming Up on frame and mirror', () => {
+  const firmware = readFileSync(new URL('../frame/src/modules/ModuleReminders.cpp', import.meta.url), 'utf8')
+  const medium = firmware.split('static void renderMedium(')[1]?.split('// LARGE')[0]
+  assert.ok(medium, 'medium firmware renderer exists')
+  assert.match(medium, /const int outlookBottom = c\.y \+ c\.h - 12;/)
+  assert.match(medium, /const int proposedBadgeY = showBottomBadge \? outlookTop - 14 - rectH : rectY;/)
+  assert.match(medium, /rectY = outlookTop - 14 - rectH;/)
+  assert.match(medium, /contentBottom = rectY - 14;/)
+  assert.ok(medium.indexOf('d.fillRect(rectX, rectY, rectW, rectH, GxEPD_WHITE)') <
+            medium.indexOf('if (showComingUp && drawnCount == visibleCount)'),
+    'date badge is painted before the outlook')
+
+  const preview = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  const mirrored = preview.split('function MirrorMediumRemindersCard(')[1]?.split('function MirrorSmallRemindersCard(')[0]
+  assert.ok(mirrored, 'medium mirror renderer exists')
+  const inlineBadge = mirrored.indexOf('{showBottomBadge && comingUp && (')
+  const outlook = mirrored.indexOf('{comingUp && (')
+  const fallbackBadge = mirrored.indexOf('{showBottomBadge && !comingUp && (')
+  assert.ok(inlineBadge > 0 && inlineBadge < outlook && outlook < fallbackBadge,
+    'mirror puts date badge between the primary reminder and the outlook')
+})
