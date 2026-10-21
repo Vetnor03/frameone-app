@@ -50,10 +50,13 @@ try {
     for(const card of document.querySelectorAll('[data-editorial-cell]')){
       const preview=card.querySelector('svg')
       if(!preview)continue
-      const outer=card.getBoundingClientRect()
-      const inner=preview.getBoundingClientRect()
-      if(inner.left<outer.left-1||inner.right>outer.right+1||
-         inner.top<outer.top-1||inner.bottom>outer.bottom+1)
+      const frame=card.querySelector('[data-editorial-thumbnail]')
+      const container=frame?.parentElement
+      if(!container)continue
+      const outer=container.getBoundingClientRect()
+      const inner=frame.getBoundingClientRect()
+      if(inner.left<outer.left+2||inner.right>outer.right-2||
+         inner.top<outer.top+2||inner.bottom>outer.bottom-2)
         issues.push(card.getAttribute('data-editorial-cell'))
     }
     return issues
