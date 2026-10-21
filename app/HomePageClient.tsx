@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { fetchSurfScore } from './lib/fetchSurfScore'
+import { editorialContentBudget, editorialPlan } from './lib/editorialFrameLayout.mjs'
+import { EditorialBotanicalSprig, EditorialWeatherLandscape } from './components/EditorialEngravings'
 import { findSpotByLabel } from './lib/surf/spots'
 import { formatAppDate, formatAppNumericDate } from './lib/dateDisplay'
 import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/customSpotMath'
@@ -5354,8 +5356,8 @@ function MirrorMonthCalendar({
                         <span
                           className="relative flex aspect-square h-[clamp(1.24rem,3.35vw,2.12rem)] items-center justify-center rounded-full"
                           style={{
-                            backgroundColor: isToday ? '#ffffff' : 'transparent',
-                            color: isToday ? '#061b24' : textColor,
+                            backgroundColor: isToday ? textColor : 'transparent',
+                            color: isToday ? 'var(--mirror-bg)' : textColor,
                             opacity: isToday ? 1 : isWeekend ? 0.42 : 0.88,
                           }}
                         >
@@ -5366,7 +5368,7 @@ function MirrorMonthCalendar({
                                 <span
                                   key={dotIndex}
                                   className="h-[clamp(0.1rem,0.3vw,0.2rem)] w-[clamp(0.1rem,0.3vw,0.2rem)] rounded-full"
-                                  style={{ backgroundColor: isToday ? '#061b24' : textColor }}
+                                  style={{ backgroundColor: isToday ? 'var(--mirror-bg)' : textColor }}
                                 />
                               ))}
                             </span>
@@ -5427,22 +5429,47 @@ function MirrorXLDateView({
   frameBackground: string
   holidays: MirrorHoliday[]
 }) {
+  // Mirror the physical editor's full-frame 48/52 split: an editorial date
+  // with a dedicated art/holiday footer, plus two stacked month calendars.
+  // The botanical is optional, never a replacement for useful date facts.
+  const day = mirrorMediumDateParts(language)
+  const nearHolidays = upcomingMirrorHolidays(holidays).slice(0, 2)
+  const budget = editorialContentBudget(editorialPlan(800, 480), 'dateFacts')
   return (
-    <div className="grid h-full w-full grid-rows-[1fr_1fr] gap-[clamp(0.52rem,1.55vw,0.9rem)] overflow-hidden">
-      <div className="grid min-h-0 grid-cols-[0.42fr_0.58fr] gap-[clamp(0.52rem,1.55vw,0.9rem)] overflow-hidden">
-        <div className="min-w-0 overflow-hidden">
-          <MirrorMediumDateCard language={language} textColor={textColor} frameBackground={frameBackground} />
+    <div
+      className="grid h-full w-full min-h-0 min-w-0 gap-[clamp(0.48rem,1.2vw,0.82rem)] overflow-hidden p-[clamp(0.55rem,1.35vw,1rem)]"
+      style={{ gridTemplateColumns: 'minmax(0,48fr) minmax(0,52fr)' }}
+      data-editorial-module="date"
+      data-editorial-shape="spread"
+    >
+      <div className="flex min-h-0 min-w-0 flex-col overflow-hidden text-center">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden leading-none">
+          <div className="max-w-full truncate text-[clamp(0.54rem,1.25vw,0.78rem)] font-medium tracking-[0.22em] opacity-75">{day.year}</div>
+          <div className="mt-[clamp(0.28rem,0.75vw,0.52rem)] max-w-full truncate font-serif text-[clamp(0.98rem,2.55vw,1.68rem)] tracking-[0.07em]">{day.month}</div>
+          <div className="my-[clamp(0.24rem,0.7vw,0.48rem)] max-w-full font-serif text-[clamp(3rem,9.4vw,6.4rem)] leading-[0.95]">{day.day}</div>
+          <div className="max-w-full truncate text-[clamp(0.68rem,1.65vw,1.05rem)] tracking-[0.14em]">{day.weekday}</div>
+          {budget.illustration && (
+            <div className="mt-[clamp(0.38rem,1.25vw,0.85rem)] h-[clamp(2.3rem,5.7vw,4.25rem)] w-[clamp(3.5rem,9vw,6.8rem)] shrink-0" aria-hidden="true">
+              <EditorialBotanicalSprig />
+            </div>
+          )}
         </div>
-        <div className="min-w-0 overflow-hidden">
+        {nearHolidays.length > 0 && (
+          <div className="mt-1 flex shrink-0 flex-col gap-1.5 px-1 pb-1 text-left">
+            {nearHolidays.map(holiday => (
+              <div key={holiday.date} className="flex min-w-0 items-baseline gap-[clamp(0.3rem,0.7vw,0.55rem)] text-[clamp(0.52rem,1.18vw,0.77rem)]">
+                <span className="shrink-0 opacity-70">{formatMirrorHolidayDate(holiday.date)}</span>
+                <span className="min-w-0 truncate" title={holiday.name}>{holiday.name}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="grid min-h-0 min-w-0 grid-rows-2 gap-[clamp(0.4rem,1.08vw,0.68rem)] overflow-hidden">
+        <div className="min-h-0 min-w-0">
           <MirrorMonthCalendar textColor={textColor} language={language} holidays={holidays} showHolidayDots />
         </div>
-      </div>
-
-      <div className="grid min-h-0 grid-cols-[0.42fr_0.58fr] gap-[clamp(0.52rem,1.55vw,0.9rem)] overflow-hidden">
-        <div className="min-w-0 overflow-hidden">
-          <MirrorHolidayList holidays={holidays} language={language} />
-        </div>
-        <div className="min-w-0 overflow-hidden">
+        <div className="min-h-0 min-w-0">
           <MirrorMonthCalendar textColor={textColor} language={language} monthOffset={1} holidays={holidays} showHolidayDots />
         </div>
       </div>
@@ -8273,7 +8300,9 @@ function MirrorXLWeatherCard({
 
           <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center pt-[clamp(0.28rem,0.8vw,0.52rem)]">
             <div className="aspect-square h-[clamp(2.45rem,7vw,4.75rem)] max-h-[72%] max-w-[52%] overflow-hidden">
-              <MirrorWeatherIcon wmo={detail.weatherWmo} />
+              {editorialContentBudget(editorialPlan(800, 480), 'weatherFacts').illustration
+                ? <EditorialWeatherLandscape wmo={detail.weatherWmo} />
+                : <MirrorWeatherIcon wmo={detail.weatherWmo} />}
             </div>
             <div className="mt-[clamp(0.16rem,0.45vw,0.32rem)] truncate text-[clamp(0.98rem,2.45vw,1.65rem)] font-semibold tracking-[0.06em]">
               {currentTemp}
@@ -8419,15 +8448,15 @@ function LandscapeFrameMirror({
 }) {
   const language = snapshot?.language ?? fallbackLanguage
   const isDark = theme === 'dark'
-  const background = isDark ? '#061b24' : '#f5f6f8'
+  const background = isDark ? '#000000' : '#FFFFFF'
   const frameBackground = background
-  const textColor = isDark ? '#eef8ff' : '#07141c'
-  const mutedColor = isDark ? 'rgba(238,248,255,0.58)' : 'rgba(7,20,28,0.58)'
-  const borderColor = isDark ? 'rgba(238,248,255,0.18)' : 'rgba(7,20,28,0.16)'
+  const textColor = isDark ? '#FFFFFF' : '#000000'
+  const mutedColor = isDark ? '#C8C8C8' : '#555555'
+  const borderColor = isDark ? '#888888' : '#999999'
   const batteryPercent = normalizeBatteryPercent(status?.battery_percent)
   const isCharging = status?.is_usb_present === true || status?.is_charging === true
   const batteryLabel = language === 'no' ? 'Batteri' : 'Battery'
-  const inverseColor = isDark ? '#07141c' : '#f5f6f8'
+  const inverseColor = isDark ? '#000000' : '#FFFFFF'
   const mirrorStyle: React.CSSProperties & Record<'--fg' | '--fg-50' | '--bd-15' | '--mirror-bg' | '--mirror-bg-inverse' | '--mirror-fg-inverse', string> = {
     background,
     color: textColor,
