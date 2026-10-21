@@ -1,6 +1,7 @@
 'use client'
 
 import {useMemo, useState} from 'react'
+import Link from 'next/link'
 import {editorialPlan} from '../lib/editorialFrameLayout.mjs'
 
 type Module = 'date' | 'reminders' | 'weather' | 'news' | 'surf' | 'ski' |
@@ -22,7 +23,7 @@ const content: Record<Module,{heading:string;primary:string;detail:string;extra:
     extra:['Wind 4 m/s NW','Low 9°  ·  High 13°','A brighter weekend ahead']},
   news:{heading:'NEWS',primary:'The world today, at a glance',detail:'A quieter, more considered daily briefing',
     extra:['A second important headline','And a third story, when space allows']},
-  surf:{heading:'HELL ESTØ',primary:'3 / 6',detail:'Fair surf today',
+  surf:{heading:'HELLESTØ',primary:'3 / 6',detail:'Fair surf today',
     extra:['Waves 0.8–1.2 m','Period 10 s','Wind NE 4 m/s']},
   ski:{heading:'SKI CONDITIONS',primary:'15 cm',detail:'Fresh snow',
     extra:['Cloudy · −4°C','Lifts open 9–16']},
@@ -92,7 +93,6 @@ function DesignCanvas({module,width,height,theme}:{
   const figure=p.illustrationsAllowed
   const mainSize=roomy?52:tall?32:wide?36:26
   const headerY=pad+24
-  const detailY=roomy?196:tall?210:wide?78:142
   const normalItemCount=roomy?Math.min(3,v.extra.length):p.shape==='card'?1:0
   const textWidth=width-pad*2
   const clipped=(value:string,max:number)=>value.length>max?value.slice(0,Math.max(1,max-1))+'…':value
@@ -170,7 +170,6 @@ export default function EditorialLabPage(){
   const [theme,setTheme]=useState<FrameTheme>('light')
   const [width,height]=dimensions[dimension]
   const plan=useMemo(()=>editorialPlan(width,height),[width,height])
-  const light=theme==='light'
   return <main className="min-h-screen bg-[#EDEAE4] p-4 text-[#222] sm:p-8">
     <div className="mx-auto max-w-6xl">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -182,7 +181,7 @@ export default function EditorialLabPage(){
             not a pixel-perfect preview of the current firmware.
           </p>
         </div>
-        <a href="/" className="rounded-lg border border-[#C7C0B6] px-4 py-2 text-sm">Back to RE:MIND</a>
+        <Link href="/" className="rounded-lg border border-[#C7C0B6] px-4 py-2 text-sm">Back to RE:MIND</Link>
       </div>
       <div className="mb-5 flex flex-wrap gap-3">
         <label className="text-xs">Module
