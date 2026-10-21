@@ -33,3 +33,18 @@ test('all shipped modules have editorial content kinds and reject near matches',
   for (const name of modules) assert.notEqual(editorialModuleKind(name), 'unknown', name)
   assert.equal(editorialModuleKind('weatherwolf'), 'unknown')
 })
+
+test('every custom 4x4 rectangle has safe adaptive bounds', () => {
+  for (let cols = 1; cols <= 4; cols++) {
+    for (let rows = 1; rows <= 4; rows++) {
+      const plan = editorialPlan(cols * 200, rows * 120)
+      assert.ok(plan.inset >= 0)
+      assert.equal(plan.safeWidth, plan.width - plan.inset * 2)
+      assert.equal(plan.safeHeight, plan.height - plan.inset * 2)
+      assert.ok(plan.columns >= 1 && plan.columns <= 2)
+      assert.ok(editorialRole(plan, EditorialRole.PRIMARY).visible)
+      if (plan.shape !== 'spread')
+        assert.equal(showEditorialRole(plan, EditorialRole.FIGURE, 'decorative'), false)
+    }
+  }
+})
