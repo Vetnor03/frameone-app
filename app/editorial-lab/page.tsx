@@ -1,6 +1,6 @@
 'use client'
 
-import {useMemo, useState} from 'react'
+import {useId, useMemo, useState} from 'react'
 import Link from 'next/link'
 import {editorialContentBudget, editorialModuleKind, editorialPlan} from '../lib/editorialFrameLayout.mjs'
 
@@ -109,6 +109,7 @@ function fitCopy(value:string,width:number,size:number){
 function DesignCanvas({module,width,height,theme}:{
   module:Module;width:number;height:number;theme:FrameTheme
 }) {
+  const clippingId=useId()
   const p=editorialPlan(width,height)
   const budget=editorialContentBudget(p,editorialModuleKind(module))
   const paper=theme==='light'?'#FFFFFF':'#101010'
@@ -129,9 +130,18 @@ function DesignCanvas({module,width,height,theme}:{
   // Keep the lower data band separate from the hero. A medium cell does
   // not have room for the old overlapping hero + footer combination.
   const showExtras=module!=='surf'&&module!=='date'&&normalItemCount>0&&height>=460&&width>=300&&budget.secondary
+  const reservedHeaderBottom=budget.heading?headerY+24:pad
+  const reservedFooterTop=showExtras?height*.60-8:height-pad
+  const visibleBodyTop=Math.min(height-pad,reservedHeaderBottom+7)
+  const visibleBodyHeight=Math.max(1,reservedFooterTop-visibleBodyTop)
   return <svg role="img" aria-label={`${module} · ${p.shape} · ${theme} experimental composition`}
     viewBox={`0 0 ${width} ${height}`}
     style={{width:'100%',height:'auto',display:'block',background:paper,color:ink}}>
+    <defs>
+      <clipPath id={clippingId}>
+        <rect x={pad} y={visibleBodyTop} width={Math.max(1,width-2*pad)} height={visibleBodyHeight}/>
+      </clipPath>
+    </defs>
     <rect width={width} height={height} fill={paper}/>
     {module==='date' ? <>
       {wide ? <>
@@ -166,6 +176,7 @@ function DesignCanvas({module,width,height,theme}:{
     </> : <>
       {budget.heading&&<Label x={cx} y={headerY} ink={muted} size={roomy?17:13} serif>{v.heading}</Label>}
       {budget.heading&&<Ornament x={pad+12} y={headerY+17} w={width-pad*2-24} ink={ink}/>}
+      <g clipPath={`url(#${clippingId})`}>
       {module==='weather' ? <>
         {figure&&<WeatherLandscape x={width*.15} y={90} w={190} h={130} ink={ink}/>}
         <Label x={figure?width*.69:cx} y={figure?160:wide?height/2+14:Math.min(height*.58,180)}
@@ -199,6 +210,7 @@ function DesignCanvas({module,width,height,theme}:{
             ink={muted} size={roomy?16:11}>{fitCopy(v.detail,textWidth,roomy?16:11)}</Label>
         </>}
       </>}
+      </g>
       {showExtras&&<g>
         <Ornament x={pad+10} y={height*.60} w={width-pad*2-20} ink={ink}/>
         {v.extra.slice(0,normalItemCount).map((item,i)=>
