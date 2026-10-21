@@ -34,3 +34,10 @@ test('mirror theme honors actual black and white e-paper ink and paper',()=>{
   assert.match(mirror,/const background = isDark \? '#000000' : '#FFFFFF'/)
   assert.match(mirror,/const textColor = isDark \? '#FFFFFF' : '#000000'/)
 })
+
+test('editorial lab offers all 16 custom-grid rectangles for visual review',()=>{
+  const page=readFileSync(new URL('../app/editorial-lab/page.tsx',import.meta.url),'utf8')
+  assert.match(page,/gridSpans: Span\[\] = \[1,2,3,4\]/)
+  assert.match(page,/gridSpans\.flatMap\(columns=>gridSpans\.map\(rows=>/)
+  assert.match(page,/useState<Dimension>\('4x4'\)/)
+})

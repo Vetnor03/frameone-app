@@ -7,12 +7,17 @@ import {editorialContentBudget, editorialModuleKind, editorialPlan} from '../lib
 type Module = 'date' | 'reminders' | 'weather' | 'news' | 'surf' | 'ski' |
   'countdown' | 'soccer' | 'stocks' | 'groceries' | 'assistant'
 type FrameTheme = 'light' | 'dark'
-type Dimension = 'compact' | 'ribbon' | 'card' | 'column' | 'spread'
+type Span = 1 | 2 | 3 | 4
+type Dimension = `${Span}x${Span}`
 
-const dimensions: Record<Dimension,[number,number]> = {
-  compact:[200,120], ribbon:[800,120], card:[400,240],
-  column:[200,480], spread:[800,480],
-}
+// The original 4×4 physical grid supports every rectangle, not only the four
+// named layout presets. Show all sixteen width/height combinations in the lab.
+const gridSpans: Span[] = [1,2,3,4]
+const dimensions = Object.fromEntries(
+  gridSpans.flatMap(columns=>gridSpans.map(rows=>
+    [`${columns}x${rows}`,[columns*200,rows*120] as [number,number]]
+  ))
+) as Record<Dimension,[number,number]>
 const modules: Module[]=['date','reminders','weather','news','surf','ski',
   'countdown','soccer','stocks','groceries','assistant']
 const content: Record<Module,{heading:string;primary:string;detail:string;extra:string[]}> = {
@@ -167,7 +172,7 @@ function DesignCanvas({module,width,height,theme}:{
 
 export default function EditorialLabPage(){
   const [module,setModule]=useState<Module>('date')
-  const [dimension,setDimension]=useState<Dimension>('spread')
+  const [dimension,setDimension]=useState<Dimension>('4x4')
   const [theme,setTheme]=useState<FrameTheme>('light')
   const [width,height]=dimensions[dimension]
   const plan=useMemo(()=>editorialPlan(width,height),[width,height])
@@ -195,7 +200,7 @@ export default function EditorialLabPage(){
           <select value={dimension} onChange={e=>setDimension(e.target.value as Dimension)}
             className="mt-1 block rounded-md border border-[#BAB0A4] bg-white px-3 py-2 text-sm">
             {(Object.keys(dimensions) as Dimension[]).map(k=><option key={k} value={k}>
-              {k} · {dimensions[k].join('×')}
+              {k.replace('x','×')} grid · {dimensions[k].join('×')} px
             </option>)}
           </select>
         </label>
