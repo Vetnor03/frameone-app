@@ -4,7 +4,7 @@ import test from 'node:test'
 
 const root = new URL('../', import.meta.url)
 
-test('reminder entries always use 9pt across frame sizes, while headings retain their original font', async () => {
+test('reminder entries always use 9pt across frame sizes, with editorial responsive headings', async () => {
   const firmware = await readFile(new URL('frame/src/modules/ModuleReminders.cpp', root), 'utf8')
 
   assert.match(firmware, /REMINDER_CONTENT_FONT = FONT_B9/)
@@ -17,7 +17,7 @@ test('reminder entries always use 9pt across frame sizes, while headings retain 
   assert.match(firmware, /const GFXfont\* f1 = FONT_B12/)
   assert.match(firmware, /measureText\(mname, FONT_B12/)
   assert.match(firmware, /measureText\(headerBuf, FONT_B12/)
-  assert.match(firmware, /drawAdaptiveLabel\(\{rect\.x, rect\.y, rect\.w, headingH\}, headingText, FONT_B12\)/)
+  assert.match(firmware, /drawAdaptiveLabel\(\{rect\.x, rect\.y, rect\.w, headingH\}, headingText, headingFont\)/)
   assert.match(firmware, /drawAdaptiveLabel\(\{inner\.x, inner\.y, inner\.w, headingH\}, heading, FONT_B12\)/)
 })
 

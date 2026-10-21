@@ -15,7 +15,7 @@ test('adaptive-only physical header polish is present across the grouped modules
 })
 
 test('adaptive Date padding, Soccer table width and Groceries rhythm are geometry-aware',()=>{
-  assert.match(read('frame/src/modules/ModuleDate.cpp'),/adaptiveMicro \? 8 : 10/)
+  assert.match(read('frame/src/modules/ModuleDate.cpp'), /EditorialDesign::planFor\(c\.w, c\.h\)\.inset/)
   assert.match(read('app/lib/dateResponsive.mjs'),/micro\?8:10/)
   assert.match(read('frame/src/modules/ModuleSoccer.cpp'),/teamW = max\(1, r\.w - factW \* \(columns - 1\)\)/)
   assert.match(read('frame/src/modules/ModuleGroceries.cpp'),/headerH \+ 8/)
