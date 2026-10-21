@@ -11,7 +11,7 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-const emailPattern = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const noStore = { 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer' }
 
 function readField(value: unknown, maxLength: number) {
