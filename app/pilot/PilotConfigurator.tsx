@@ -33,32 +33,29 @@ const mattes: MatteOption[] = [
 const inputClass =
   'h-11 w-full rounded-[10px] border border-black/15 bg-white px-3.5 text-[16px] text-[#1d1d1b] outline-none transition placeholder:text-black/35 focus:border-black/45 focus:ring-2 focus:ring-black/5'
 
+// Material imagery is generated for the pilot selector; the colours are illustrative,
+ // not colour-calibrated photographs of the HFS Rammer product samples.
+function materialTexture(id: string) {
+  return `url("/pilot-materials/${id}.webp")`
+}
+
 function frameMaterial(frame: FrameOption): CSSProperties {
-  const grain = 'repeating-linear-gradient(94deg, transparent 0 7px, rgba(255,255,255,.07) 7px 8px, transparent 8px 16px), repeating-linear-gradient(2deg, rgba(0,0,0,.06) 0 1px, transparent 1px 8px)'
   return {
     backgroundColor: frame.swatch,
-    backgroundImage: grain,
+    backgroundImage: materialTexture(frame.id),
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
     boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.14), 0 18px 38px rgba(29,27,23,.13)',
   }
 }
 
 function matteMaterial(matte: MatteOption): CSSProperties {
-  if (matte.id === 'midnight-blue-velour') {
-    return {
-      backgroundColor: matte.swatch,
-      backgroundImage: 'radial-gradient(circle at 25% 20%, rgba(255,255,255,.08) 0 1px, transparent 1.5px), radial-gradient(circle at 70% 65%, rgba(255,255,255,.05) 0 1px, transparent 1.5px)',
-      backgroundSize: '7px 7px, 9px 9px',
-    }
+  return {
+    backgroundColor: matte.swatch,
+    backgroundImage: materialTexture(matte.id),
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
   }
-
-  if (matte.id === 'silver-birch') {
-    return {
-      backgroundColor: matte.swatch,
-      backgroundImage: 'repeating-linear-gradient(92deg, rgba(255,255,255,.2) 0 1px, transparent 1px 5px), repeating-linear-gradient(2deg, rgba(70,65,58,.08) 0 1px, transparent 1px 9px)',
-    }
-  }
-
-  return { backgroundColor: matte.swatch }
 }
 
 function ProductPreview({ frame, matte }: { frame: FrameOption; matte: MatteOption }) {
@@ -88,12 +85,14 @@ function SelectionButton({
   selected,
   label,
   swatch,
+  textureId,
   limited,
   onClick,
 }: {
   selected: boolean
   label: string
   swatch: string
+  textureId: string
   limited?: boolean
   onClick: () => void
 }) {
@@ -106,7 +105,11 @@ function SelectionButton({
         selected ? 'border-black bg-white shadow-[0_1px_4px_rgba(0,0,0,.05)]' : 'border-black/10 bg-white/55 hover:border-black/25 hover:bg-white'
       }`}
     >
-      <span className="mb-1.5 block h-4 w-full rounded-[5px] border border-black/10 sm:h-6" style={{ backgroundColor: swatch }} />
+      <span
+        className="mb-1.5 block h-9 w-full rounded-[5px] border border-black/10 sm:h-12"
+        style={{ backgroundColor: swatch, backgroundImage: materialTexture(textureId), backgroundPosition: 'center', backgroundSize: 'cover' }}
+        aria-hidden="true"
+      />
       <span className="flex min-w-0 items-start justify-between gap-1">
         <span className="min-w-0 text-[10px] font-medium leading-[1.15] text-[#1d1d1b] sm:text-[11px]">{label}</span>
         {selected ? <span className="shrink-0 text-[10px] font-semibold sm:text-[11px]">✓</span> : null}
@@ -264,7 +267,7 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
             <div className="rounded-[16px] border border-black/8 bg-[#e8e5de] p-2 sm:rounded-[20px] sm:p-3 lg:p-5">
               <ProductPreview frame={frame} matte={matte} />
             </div>
-            <p className="mt-1 px-1 text-center text-[9px] leading-3 text-black/35 sm:mt-1.5 sm:text-[10px] sm:leading-4">Illustrative preview · colours and material textures may differ slightly in person.</p>
+            <p className="mt-1 px-1 text-center text-[9px] leading-3 text-black/35 sm:mt-1.5 sm:text-[10px] sm:leading-4">AI-generated material previews · colours and textures may differ from the actual HFS samples.</p>
           </section>
 
           <section className="min-w-0 rounded-[16px] border border-black/10 bg-[#faf9f6] p-3 sm:rounded-[20px] sm:p-4 lg:p-5">
@@ -288,6 +291,7 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
                         selected={frameId === option.id}
                         label={option.name}
                         swatch={option.swatch}
+                        textureId={option.id}
                         onClick={() => setFrameId(option.id)}
                       />
                     ))}
@@ -306,6 +310,7 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
                         selected={matteId === option.id}
                         label={option.name}
                         swatch={option.swatch}
+                        textureId={option.id}
                         limited={option.limited}
                         onClick={() => setMatteId(option.id)}
                       />
