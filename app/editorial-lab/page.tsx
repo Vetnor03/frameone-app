@@ -145,8 +145,8 @@ function DesignCanvas({module,width,height,theme}:{
       </>:<>
         {height>=280&&<Label x={dateCx} y={pad+25} ink={muted} size={14}>2026</Label>}
         <Label x={dateCx} y={pad+59} ink={ink} size={22} serif>October</Label>
-        <Label x={dateCx} y={roomy?177:Math.min(height*.6,170)}
-          ink={ink} size={roomy?100:Math.min(height*.38,70)} serif>21</Label>
+        <Label x={dateCx} y={roomy?177:Math.min(height*.63,170)}
+          ink={ink} size={roomy?100:Math.min(70,Math.max(28,(height-110)*.55))} serif>21</Label>
         <Label x={dateCx} y={roomy?209:Math.min(height*.8,215)}
           ink={muted} size={roomy?17:13}>WEDNESDAY</Label>
         {dateWithCalendar&&figure&&<Botanical x={width*.31-54} y={height-132} w={108} h={70} ink={ink}/>}
@@ -170,8 +170,8 @@ function DesignCanvas({module,width,height,theme}:{
         {figure&&<WeatherLandscape x={width*.15} y={90} w={190} h={130} ink={ink}/>}
         <Label x={figure?width*.69:cx} y={figure?160:wide?height/2+14:Math.min(height*.58,180)}
           ink={ink} size={mainSize+12} serif>{v.primary}</Label>
-        <Label x={figure?width*.69:cx} y={figure?194:wide?height/2+36:Math.min(height*.7,210)}
-          ink={muted} size={roomy?16:11}>{clipped(v.detail,textCap)}</Label>
+        {height>=165&&<Label x={figure?width*.69:cx} y={figure?194:wide?height/2+36:Math.min(height*.7,210)}
+          ink={muted} size={roomy?16:11}>{fitCopy(v.detail,figure?width*.52:textWidth,roomy?16:11)}</Label>}
       </> : <>
         {module==='reminders' ? <>
           <Label x={pad+10} y={roomy?130:wide?height/2+4:Math.min(height*.45,114)}
