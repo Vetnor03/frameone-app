@@ -1508,16 +1508,52 @@ static void renderSmall(const Cell& c,
     buildWindStr(summary, sizeof(summary), wind);
   }
 
+  const float low = tomorrow ? data.days[1].loC :
+                    (data.restValid ? data.restLoC : data.loC);
+  const float high = tomorrow ? data.days[1].hiC :
+                     (data.restValid ? data.restHiC : data.hiC);
+  const float wind = tomorrow ? data.days[1].windMaxMs :
+                     (data.restValid ? data.restWindMaxMs : data.windMaxMs);
+  const float rain = tomorrow ? data.days[1].precipMm :
+                     (data.restValid ? data.restPrecipMm : data.precipMm);
+  const int wmo = tomorrow ? data.days[1].wmo :
+                  (data.restValid ? data.restWmo : data.wmo);
+
+  char rangeText[32] = {0};
+  if (cfg.showHiLo && !isnan(low) && !isnan(high)) {
+    char lowText[12] = {0}, highText[12] = {0};
+    formatTemp(lowText, sizeof(lowText), low, cfg.units);
+    formatTemp(highText, sizeof(highText), high, cfg.units);
+    snprintf(rangeText, sizeof(rangeText), "%s - %s", lowText, highText);
+  }
+  char windText[32] = {0};
+  char rainText[24] = {0};
+  buildWindStr(windText, sizeof(windText), wind);
+  buildPrecipStr(rainText, sizeof(rainText), rain, wmo, low, high);
+
   const int heroW = (c.w * 35) / 100;
   const int rightX = c.x + heroW;
   const int rightW = c.w - heroW;
-  // Font is constant, content density adapts; never shrink the temperature.
+  // Keep the temperature readable at a distance while preserving the wind,
+  // precipitation and optional high/low facts people use in Weather.
   drawCenteredBox(c.x + 8, c.y + 10, heroW - 12, c.h - 20,
                   temperature, FONT_B18, ink);
-  drawCenteredBox(rightX + 8, c.y + 12, rightW - 16, 23,
+  drawCenteredBox(rightX + 8, c.y + 10, rightW - 16, 24,
                   context, FONT_B9, ink);
   drawWrappedTextBox(rightX + 10, c.y + 38, rightW - 20,
-                     max(20, c.h - 50), summary, FONT_B12, ink, 4);
+                     max(24, c.h - 75), summary, FONT_B12, ink, 4);
+
+  // These details are deliberately smaller than the hero temperature.
+  // Three compact columns make all three facts available without cramming
+  // them into the important summary area or adding divider lines.
+  const int factsY = c.y + c.h - 29;
+  const int factsW = rightW / 3;
+  if (rangeText[0])
+    drawCenteredBox(rightX, factsY, factsW, 20, rangeText, FONT_B9, ink);
+  drawCenteredBox(rightX + factsW, factsY, factsW, 20,
+                  windText, FONT_B9, ink);
+  drawCenteredBox(rightX + factsW * 2, factsY,
+                  rightW - factsW * 2, 20, rainText, FONT_B9, ink);
 }
 
 static void renderMedium(const Cell& c,
