@@ -1,4 +1,5 @@
 #include "EditorialDesign.h"
+#include "EditorialTypography.h"
 #include "ModuleNews.h"
 
 #include "Config.h"
@@ -213,8 +214,9 @@ static int drawHeader(const Cell& c) {
   auto& d = DisplayCore::get();
   const char* header = headerText();
   const EditorialDesign::Plan editorial = EditorialDesign::planFor(c.w, c.h);
-  const EditorialDesign::RoleSpec role = EditorialDesign::specFor(editorial, EditorialDesign::HEADING);
-  const GFXfont* headingFont = role.font == EditorialDesign::BOLD_12 ? NEWS_FONT_HEADER : NEWS_FONT_BODY;
+  const GFXfont* headingFont = EditorialTypography::choose(
+    editorial, EditorialDesign::HEADING,
+    NEWS_FONT_BODY, NEWS_FONT_BODY, NEWS_FONT_HEADER, NEWS_FONT_HEADER);
   int16_t x1, y1;
   uint16_t tw, th;
   measureText(header, headingFont, x1, y1, tw, th);
