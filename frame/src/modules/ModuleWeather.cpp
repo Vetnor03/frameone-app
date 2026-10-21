@@ -1502,11 +1502,8 @@ static void renderSmall(const Cell& c,
   else buildWeatherInsight(summary, sizeof(summary), data);
   if (!summary[0] && cfg.showCondition && data.condition[0] && !tomorrow)
     strlcpy(summary, data.condition, sizeof(summary));
-  if (!summary[0]) {
-    const float wind = tomorrow ? data.days[1].windMaxMs :
-                       (data.restValid ? data.restWindMaxMs : data.windMaxMs);
-    buildWindStr(summary, sizeof(summary), wind);
-  }
+  // Do not repeat wind in the main message: it has a dedicated metric below.
+  // An empty insight is preferable to duplicate facts.
 
   const float low = tomorrow ? data.days[1].loC :
                     (data.restValid ? data.restLoC : data.loC);
