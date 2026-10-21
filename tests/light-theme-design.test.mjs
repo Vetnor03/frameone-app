@@ -23,7 +23,8 @@ test('light material treatments stay scoped away from dark mode', () => {
   assert.match(home, /<main className=\{`remind-app h-screen/)
 })
 
-test('browser chrome and mirror share the new light canvas', () => {
+test('app chrome remains separate from faithful monochrome physical mirror canvas', () => {
   assert.match(home, /applyDocumentTheme\(appTheme\)/)
-  assert.match(home, /const background = isDark \? '#061b24' : '#f5f6f8'/)
+  assert.match(home, /const background = isDark \? '#000000' : '#FFFFFF'/)
+  assert.match(home, /const textColor = isDark \? '#FFFFFF' : '#000000'/)
 })
