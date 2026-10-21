@@ -1,3 +1,4 @@
+#include "EditorialDesign.h"
 #include "FrameText.h"
 // ModuleWeather.cpp
 #include "ModuleWeather.h"
@@ -2340,9 +2341,7 @@ static void renderAdaptiveWeather(const Cell& c,
   const bool showInsight = large && forecastRows == 0 && insight[0];
   const bool hasDetails = showRange || showWind || showProbability || showInsight;
 
-  int pad = (int)lroundf((float)(c.w < c.h ? c.w : c.h) * 0.08f);
-  if (pad < 9) pad = 9;
-  if (pad > 18) pad = 18;
+  const int pad = EditorialDesign::planFor(c.w, c.h).inset;
   WeatherRect inner = {c.x + pad, c.y + pad, c.w - 2 * pad, c.h - 2 * pad};
   int headerH = showLocation ? (int)lroundf(inner.h * 0.12f) : 0;
   if (headerH && headerH < 25) headerH = 25;

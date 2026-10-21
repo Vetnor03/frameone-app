@@ -1,3 +1,4 @@
+#include "EditorialDesign.h"
 #include "FrameText.h"
 #include "FrameLayout.h"
 // ===============================
@@ -2517,7 +2518,7 @@ static void buildAdaptiveFallbackHeading(const ReminderBucket& bucket, char* out
 }
 
 static void renderAdaptiveFallbackBucket(const Cell& c, const ReminderBucket& bucket) {
-  const int pad = max(9, min(18, (int)lroundf(min(c.w, c.h) * .08f)));
+  const int pad = EditorialDesign::planFor(c.w, c.h).inset;
   ReminderRect inner = {c.x + pad, c.y + pad, max(1, c.w - pad * 2), max(1, c.h - pad * 2)};
   const bool shallow = c.h <= 150 && c.w > c.h;
   const int capacity = shallow
@@ -2564,7 +2565,7 @@ static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets
   const ReminderBucket* today = todayIdx >= 0 ? &buckets[todayIdx] : nullptr;
   const ReminderBucket* tomorrow = tomorrowIdx >= 0 ? &buckets[tomorrowIdx] : nullptr;
   const AdaptiveReminderComposition comp = adaptiveComposition(c, today, tomorrow);
-  const int pad = max(9, min(18, (int)lroundf(min(c.w, c.h) * .08f)));
+  const int pad = EditorialDesign::planFor(c.w, c.h).inset;
   ReminderRect inner = {c.x + pad, c.y + pad, max(1, c.w - pad * 2), max(1, c.h - pad * 2)};
   if (comp.todayItems + comp.tomorrowItems <= 0) {
     drawAdaptiveOverflow(inner, todayCount + tomorrowCount);

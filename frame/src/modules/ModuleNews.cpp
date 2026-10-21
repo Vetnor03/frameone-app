@@ -1,3 +1,4 @@
+#include "EditorialDesign.h"
 #include "ModuleNews.h"
 
 #include "Config.h"
@@ -215,7 +216,8 @@ static int drawHeader(const Cell& c) {
   uint16_t tw, th;
   measureText(header, NEWS_FONT_HEADER, x1, y1, tw, th);
 
-  const int topPad = c.h <= 150 ? 20 : 26;
+  const EditorialDesign::Plan editorial = EditorialDesign::planFor(c.w, c.h);
+  const int topPad = editorial.inset + (c.h <= 150 ? 12 : 10);
   const int baseline = c.y + topPad - y1;
   const int x = c.x + c.w / 2 - (int)tw / 2 - x1;
 
@@ -297,12 +299,9 @@ static bool shallowLayout(const Cell& c) {
 
 static int capacityForCell(const Cell& c) {
   if (shallowLayout(c)) return 3;
-  if (c.size == CELL_MEDIUM) return 6;
-  if (c.size == CELL_LARGE) return 12;
-  if (c.size == CELL_XL) return 14;
-  const int columns = c.w >= 600 && c.h >= 180 ? 2 : 1;
-  const int rows = max(1, max(28, c.h - 60) / 28);
-  return min(MAX_NEWS_ITEMS, columns * rows);
+  const EditorialDesign::Plan editorial = EditorialDesign::planFor(c.w, c.h);
+  const int rows = EditorialDesign::listCapacity(editorial, max(0, c.h - 60), 28);
+  return max(1, min(MAX_NEWS_ITEMS, editorial.columns * rows));
 }
 
 static void drawEmpty(const Cell& c) {

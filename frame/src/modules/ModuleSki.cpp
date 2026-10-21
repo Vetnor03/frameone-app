@@ -1,3 +1,4 @@
+#include "EditorialDesign.h"
 #include "ModuleSki.h"
 #include "DisplayCore.h"
 #include "Theme.h"
@@ -403,11 +404,12 @@ void render(const Cell& c, const String& moduleName) {
   const int rowSpan = c.rowSpan > 0 ? c.rowSpan : max(1, c.h / 120);
   const int area = colSpan * rowSpan;
 
-  if (c.h <= 150) {
+  const EditorialDesign::Plan editorial = EditorialDesign::planFor(c.w, c.h);
+  if (editorial.shape == EditorialDesign::RIBBON || editorial.shape == EditorialDesign::COMPACT) {
     drawShallow(c, data);
-  } else if (c.w <= 240) {
+  } else if (editorial.shape == EditorialDesign::COLUMN) {
     drawNarrow(c, data);
-  } else if (area <= 4 && c.w < 600 && c.h < 300) {
+  } else if (editorial.shape == EditorialDesign::CARD && area <= 4) {
     drawReference(c, data);
   } else {
     drawExpanded(c, data);

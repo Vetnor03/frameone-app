@@ -93,7 +93,8 @@ inline RoleSpec specFor(const Plan& p, Role role) {
     case HERO:
       return {spacious ? BOLD_18 : BOLD_12, 2, p.safeHeight >= 24, false};
     case HEADING:
-      return {spacious ? BOLD_12 : REGULAR_9, 1, p.safeHeight >= 38, false};
+      return {(spacious || (p.shape == RIBBON && p.safeWidth >= 440)) ? BOLD_12 : REGULAR_9,
+              1, p.safeHeight >= 38, false};
     case PRIMARY:
       return {spacious ? REGULAR_12 : REGULAR_9, tight ? 2 : 3,
               p.safeHeight >= 16, true};
@@ -130,9 +131,9 @@ inline bool shouldShow(const Plan& p, Role role, Priority priority) {
 }
 
 inline int listCapacity(const Plan& p, int contentHeight, int minimumRow = 28) {
-  if (contentHeight <= 0 || minimumRow <= 0 || p.safeWidth < 60) return 0;
+  if (contentHeight < minimumRow || minimumRow <= 0 || p.safeWidth < 60) return 0;
   const int rows = contentHeight / (minimumRow + p.gap);
-  return maxInt(1, minInt(8, rows));
+  return maxInt(0, minInt(8, rows));
 }
 
 inline bool matchesModule(const char* name, const char* base) {
