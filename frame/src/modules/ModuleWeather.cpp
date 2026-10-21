@@ -1476,114 +1476,48 @@ static void drawTomorrowWeatherLabel(const Cell& c, uint16_t ink) {
   drawTextCenteredAt(c.x + c.w / 2, c.y + 13, "Tomorrow", FONT_B9, ink);
 }
 
+// Compact Weather is a glance tile: temperature is the headline.
+// A large generic WEATHER label would compete with what people came to see.
 static void renderSmall(const Cell& c,
                         const WeatherInstanceConfig& cfg,
                         const WeatherCache& data) {
-  uint16_t ink = Theme::ink();
-  auto& d = DisplayCore::get();
-
+  const uint16_t ink = Theme::ink();
   if (!data.valid) {
     drawCenteredBox(c.x, c.y, c.w, c.h, "Weather unavailable", FONT_B12, ink);
     return;
   }
 
-  char locationName[48] = {0};
-  getDisplayLocationName(cfg, locationName, sizeof(locationName));
+  const bool tomorrow = shouldShowTomorrowForecast(data);
+  const float mainC = tomorrow ? data.days[1].hiC : data.tempC;
+  char temperature[16] = {0};
+  formatTemp(temperature, sizeof(temperature), mainC, cfg.units);
 
-  const bool useTomorrow = shouldShowTomorrowForecast(data);
-  const bool useRest = !useTomorrow && data.restValid;
-  const DayForecast& nextDay = data.days[1];
-  float smallHiC     = useTomorrow ? nextDay.hiC : (useRest ? data.restHiC : data.hiC);
-  float smallLoC     = useTomorrow ? nextDay.loC : (useRest ? data.restLoC : data.loC);
-  float smallWindMax = useTomorrow ? nextDay.windMaxMs : (useRest ? data.restWindMaxMs : data.windMaxMs);
-  float smallPrecip  = useTomorrow ? nextDay.precipMm : (useRest ? data.restPrecipMm : data.precipMm);
-  int   smallWmo     = useTomorrow ? nextDay.wmo : (useRest ? data.restWmo : data.wmo);
+  char location[48] = {0};
+  getDisplayLocationName(cfg, location, sizeof(location));
+  char context[64] = {0};
+  snprintf(context, sizeof(context), "%s - %s", tomorrow ? "Tomorrow" : "Today", location);
 
-  const int gap = 18;
-  const int dividerW = 1;
-  const float EPS_WIND = 0.20f;
-
-  char tempRange[28] = {0};
-  if (cfg.showHiLo && !isnan(smallLoC) && !isnan(smallHiC)) {
-    float lo = smallLoC, hi = smallHiC;
-    const char* suf = "C";
-    if (cfg.units && strcmp(cfg.units, "imperial") == 0) {
-      lo = (smallLoC * 9.0f / 5.0f) + 32.0f;
-      hi = (smallHiC * 9.0f / 5.0f) + 32.0f;
-      suf = "F";
-    }
-    int l = (int)lroundf(lo);
-    int h = (int)lroundf(hi);
-    snprintf(tempRange, sizeof(tempRange), "%d to %d\xB0%s", l, h, suf);
-  } else {
-    formatTemp(tempRange, sizeof(tempRange), useTomorrow ? smallHiC : data.tempC, cfg.units);
+  char summary[96] = {0};
+  if (tomorrow) strlcpy(summary, data.tomorrowInsight, sizeof(summary));
+  else buildWeatherInsight(summary, sizeof(summary), data);
+  if (!summary[0] && cfg.showCondition && data.condition[0] && !tomorrow)
+    strlcpy(summary, data.condition, sizeof(summary));
+  if (!summary[0]) {
+    const float wind = tomorrow ? data.days[1].windMaxMs :
+                       (data.restValid ? data.restWindMaxMs : data.windMaxMs);
+    buildWindStr(summary, sizeof(summary), wind);
   }
 
-  char windStr[32] = {0};
-  if (!isnan(smallWindMax) && smallWindMax > EPS_WIND) {
-    int w = (int)lroundf(smallWindMax);
-    snprintf(windStr, sizeof(windStr), "Wind up to %d m/s", w);
-  } else {
-    strlcpy(windStr, "Calm winds", sizeof(windStr));
-  }
-
-  char rainStr[24] = {0};
-  buildPrecipStr(rainStr, sizeof(rainStr), smallPrecip, smallWmo, smallLoC, smallHiC);
-
-  int16_t lx1, ly1; uint16_t lw, lh;
-  const char* heading = useTomorrow ? "Tomorrow" : locationName;
-  measureText(heading, FONT_B12, lx1, ly1, lw, lh);
-
-  int16_t x1, y1;
-  uint16_t wTemp, hTemp, wWind, hWind, wRain, hRain;
-  measureText(tempRange, FONT_B12, x1, y1, wTemp, hTemp);
-  measureText(windStr,  FONT_B12, x1, y1, wWind, hWind);
-  measureText(rainStr,  FONT_B12, x1, y1, wRain, hRain);
-
-  int totalLineW = (int)wTemp + gap + dividerW + gap
-                 + (int)wWind + gap + dividerW + gap
-                 + (int)wRain;
-
-  int16_t fy1; uint16_t fh;
-  fontBoxMetrics(FONT_B12, fy1, fh);
-
-  const int underlineGap = 4;
-  const int underlineH = 2;
-  const int lineGap = 20;
-
-  int totalH = (int)lh + underlineGap + underlineH + lineGap + (int)fh;
-  int topY = c.y + (c.h - totalH) / 2;
-
-  int titleBaseline = topY - ly1;
-
-  drawTextCenteredAt(c.x + c.w / 2, titleBaseline, heading, FONT_B12, ink);
-
-  {
-    int underlineY = topY + (int)lh + underlineGap;
-    int underlineX = c.x + c.w / 2 - (int)lw / 2;
-    d.fillRect(underlineX, underlineY, (int)lw, underlineH, ink);
-  }
-
-  int lineBaseline = topY + (int)lh + underlineGap + underlineH + lineGap - fy1;
-
-  int contentW = (int)lroundf(c.w * 0.95f);
-  int contentX = c.x + (c.w - contentW) / 2;
-  int startX = contentX + (contentW - totalLineW) / 2;
-
-  int cx = startX;
-  drawLeft(cx, lineBaseline, tempRange, FONT_B12, ink);
-  cx += (int)wTemp + gap;
-
-  drawDividerAtX(cx, lineBaseline, FONT_B12, ink);
-  cx += dividerW + gap;
-
-  drawLeft(cx, lineBaseline, windStr, FONT_B12, ink);
-  cx += (int)wWind + gap;
-
-  drawDividerAtX(cx, lineBaseline, FONT_B12, ink);
-  cx += dividerW + gap;
-
-  drawLeft(cx, lineBaseline, rainStr, FONT_B12, ink);
+  const int heroW = (c.w * 35) / 100;
+  const int rightX = c.x + heroW;
+  const int rightW = c.w - heroW;
+  // Font is constant, content density adapts; never shrink the temperature.
+  drawCenteredBox(c.x + 8, c.y + 10, heroW - 12, c.h - 20,
+                  temperature, FONT_B18, ink);
+  drawCenteredBox(rightX + 8, c.y + 12, rightW - 16, 23,
+                  context, FONT_B9, ink);
+  drawWrappedTextBox(rightX + 10, c.y + 38, rightW - 20,
+                     max(20, c.h - 50), summary, FONT_B12, ink, 4);
 }
 
 static void renderMedium(const Cell& c,
