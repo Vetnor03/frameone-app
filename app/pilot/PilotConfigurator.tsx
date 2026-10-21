@@ -124,7 +124,7 @@ type PilotInvitation = {
   orderStatus: string | null
 }
 
-export default function PilotConfigurator({ inviteId }: { inviteId: string }) {
+export default function PilotConfigurator({ inviteId, demoMode = false }: { inviteId: string; demoMode?: boolean }) {
   const [frameId, setFrameId] = useState<FrameOption['id']>('american-walnut')
   const [matteId, setMatteId] = useState<MatteOption['id']>('beige')
   const [step, setStep] = useState<1 | 2>(1)
@@ -138,6 +138,11 @@ export default function PilotConfigurator({ inviteId }: { inviteId: string }) {
   const [savedAddress, setSavedAddress] = useState<Record<string, string>>({})
 
   useEffect(() => {
+    if (demoMode) {
+      setInvitation({ fullName: 'Preview', email: 'preview@example.invalid', frameId: null, matteId: null, orderStatus: null })
+      setLoadingInvite(false)
+      return
+    }
     if (!inviteId) {
       setInviteError('Please use the personal link sent to you by RE:MIND.')
       setLoadingInvite(false)
@@ -170,7 +175,7 @@ export default function PilotConfigurator({ inviteId }: { inviteId: string }) {
         setLoadingInvite(false)
       })
     return () => controller.abort()
-  }, [inviteId])
+  }, [inviteId, demoMode])
 
   const isLocked = Boolean(invitation?.orderStatus && invitation.orderStatus !== 'submitted')
 
@@ -179,7 +184,7 @@ export default function PilotConfigurator({ inviteId }: { inviteId: string }) {
 
   async function submitOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!invitation || isLocked || submitting) return
+    if (!invitation || isLocked || submitting || demoMode) return
     setSubmitting(true)
     setError('')
 
@@ -242,7 +247,7 @@ export default function PilotConfigurator({ inviteId }: { inviteId: string }) {
     <main className="pilot-page min-h-screen overflow-x-hidden bg-[#f3f1ec] text-[#1d1d1b]">
       <header className="flex h-12 items-center justify-between border-b border-black/10 px-4 sm:h-14 sm:px-8 lg:px-10">
         <span className="text-[16px] font-semibold tracking-[0.16em] sm:text-[17px]">RE:MIND</span>
-        <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-black/45 sm:text-[11px]">Pilot selection</span>
+        <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-black/45 sm:text-[11px]">{demoMode ? 'Preview only' : 'Pilot selection'}</span>
       </header>
 
       <div className="mx-auto flex w-full max-w-[1280px] flex-1 items-start px-3 py-2 sm:px-6 sm:py-4 lg:min-h-[calc(100vh-56px)] lg:items-center lg:px-8 lg:py-4 xl:px-10">
@@ -308,14 +313,16 @@ export default function PilotConfigurator({ inviteId }: { inviteId: string }) {
                   </div>
                 </div>
 
+                {demoMode ? <p className="mt-3 text-[11px] leading-4 text-black/50">Preview mode · Choose any combination. Only invited pilot testers can submit their selection.</p> : null}
                 <div className="mt-3 flex items-center justify-between gap-2 border-t border-black/10 pt-3 sm:mt-4 sm:gap-3 sm:pt-4">
                   <p className="min-w-0 truncate text-[10px] text-black/50 sm:text-[12px]"><span className="font-medium text-black/75">Selected:</span> {frame.name} + {matte.name}</p>
                   <button
                     type="button"
                     onClick={() => setStep(2)}
-                    className="h-10 shrink-0 rounded-[10px] bg-[#1d1d1b] px-4 text-[11px] font-semibold text-white transition hover:bg-black focus:outline-none focus:ring-2 focus:ring-black/30 focus:ring-offset-2 sm:h-11 sm:rounded-[11px] sm:px-5 sm:text-[12px]"
+                    disabled={demoMode}
+                    className="h-10 shrink-0 rounded-[10px] bg-[#1d1d1b] px-4 text-[11px] font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-45 focus:outline-none focus:ring-2 focus:ring-black/30 focus:ring-offset-2 sm:h-11 sm:rounded-[11px] sm:px-5 sm:text-[12px]"
                   >
-                    Continue
+                    {demoMode ? 'Preview only' : 'Continue'}
                   </button>
                 </div>
               </>
