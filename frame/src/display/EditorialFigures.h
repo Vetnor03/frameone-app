@@ -50,4 +50,35 @@ inline void weatherLandscape(Canvas& d, int x, int y, int w, int h,
   d.drawLine(x+w/12,horizon+12,x+w/3,horizon+12,ink);
   d.drawLine(x+w/2,horizon+12,x+w*9/10,horizon+12,ink);
 }
+// Small botanical sprig, inspired by vintage field guides and bookplates.
+// Every point stays inside the allocated rectangle. Never overlay useful text.
+template <class Canvas>
+inline void botanicalSprig(Canvas& d, int x, int y, int w, int h, uint16_t ink) {
+  if (w < 72 || h < 60) return;
+  const int stemX = x + w/2;
+  const int baseY = y + h - 3;
+  const int middleY = y + h * 54 / 100;
+  const int crownY = y + h * 12 / 100;
+  d.drawLine(stemX, baseY, stemX-2, middleY, ink);
+  d.drawLine(stemX-2, middleY, stemX+2, crownY, ink);
+  // Paired, outlined leaves: neither large solids nor delicate gray strokes.
+  for (int index=0; index<3; ++index) {
+    const int by = y + h * (72 - index * 20) / 100;
+    const int sign = index % 2 ? 1 : -1;
+    const int fromX = stemX - (index ? 1 : 0);
+    const int branchX = fromX + sign * (w/5);
+    const int tipX = fromX + sign * (w/3);
+    const int tipY = by - h/5;
+    d.drawLine(fromX, by, branchX, by - h/11, ink);
+    d.drawLine(fromX, by, tipX, tipY, ink);
+    d.drawLine(tipX, tipY, fromX + sign * (w/4), by - h/16, ink);
+    d.drawLine(fromX + sign * (w/4), by - h/16, fromX, by, ink);
+    const int otherX = fromX - sign*(w/4);
+    const int otherTipY = by - h/8;
+    d.drawLine(fromX, by - h/12, otherX, otherTipY, ink);
+    d.drawLine(otherX, otherTipY, fromX - sign * (w/6), by + h/24, ink);
+    d.drawLine(fromX - sign * (w/6), by + h/24, fromX, by - h/12, ink);
+  }
+  d.drawLine(stemX - 7, baseY, stemX + 7, baseY, ink);
+}
 } // namespace EditorialFigures

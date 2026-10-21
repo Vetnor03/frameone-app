@@ -2429,15 +2429,15 @@ static void drawAdaptiveItem(const ReminderItem& item, const ReminderRect& row, 
   if (row.w < 1 || row.h < 1) return;
   const int inset = 2, x = row.x + inset, y = row.y + inset;
   const int w = max(1, row.w - inset * 2), h = max(1, row.h - inset * 2);
-  const int timeW = min(density.timeW, w);
-  const int gap = 7;
+  const int timeW = item.time[0] ? min(density.timeW, max(0, w - 65)) : 0;
+  const int gap = timeW ? 7 : 0;
   const ReminderRect timeRect = {x, y, timeW, h};
   const ReminderRect titleRect = {
     x + timeW + gap, y,
     max(1, w - timeW - gap), h
   };
 
-  if (item.time[0]) drawAdaptiveLabel(timeRect, item.time, FONT_B9);
+  if (timeW && item.time[0]) drawAdaptiveLabel(timeRect, item.time, FONT_B9);
 
   const int lineStep = 21;
   const int maxLines = min(5, max(1, titleRect.h / lineStep));

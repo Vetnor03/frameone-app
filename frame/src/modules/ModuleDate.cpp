@@ -1,4 +1,5 @@
 #include "EditorialDesign.h"
+#include "EditorialFigures.h"
 #include "FrameText.h"
 #include "ModuleDate.h"
 #include "DisplayCore.h"
@@ -1000,7 +1001,8 @@ static int adaptiveUpcomingHolidayCount(int todayYear, int todayMonth0, int toda
 static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
                              int year, int month0, int dayNum) {
   const bool adaptiveMicro = c.w < 150 || c.h < 88 || (c.w < 230 && c.h < 140);
-  const int pad = EditorialDesign::planFor(c.w, c.h).inset;
+  const EditorialDesign::Plan editorial = EditorialDesign::planFor(c.w, c.h);
+  const int pad = editorial.inset;
   const int x = c.x + pad, y = c.y + pad;
   const int w = c.w - pad * 2, h = c.h - pad * 2;
   if (w <= 0 || h <= 0) return;
@@ -1045,6 +1047,14 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
     if (holidayRows) heroH -= min(82, 42 + holidayRows * 22) + 12;
   }
 
+  // Reserve a dedicated margin for decorative line art; it never overlays
+  // the date, calendar or the upcoming-holidays area.
+  const int holidayStartY = heroY + heroH + 12;
+  const bool botanical = editorial.illustrationsAllowed && expanded &&
+                         heroW >= 230 && heroH >= 280;
+  const int botanicalReserve = botanical ? 78 : 0;
+  if (botanical) heroH -= botanicalReserve;
+
   if (micro) {
     const int weekdayH = 30;
     const int dayH = max(1, heroH - weekdayH);
@@ -1074,6 +1084,11 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
     drawAdaptiveWeekdayBadge(wday, heroX, top, heroW, weekdayH);
   }
 
+  if (botanical) {
+    EditorialFigures::botanicalSprig(DisplayCore::get(),
+      heroX + (heroW - 108)/2, heroY + heroH + 3, 108, 70, Theme::ink());
+  }
+
   if (calW >= 154 && calH >= 92) {
     if (expanded) {
       const int gap = 14, rowH = (calH - gap) / 2;
@@ -1092,7 +1107,7 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
   }
   if (holidayRows) {
     const int holidayH = min(82, 42 + holidayRows * 22);
-    drawAdaptiveHolidays(heroX, heroY + heroH + 12, heroW, holidayH, holidayRows,
+    drawAdaptiveHolidays(heroX, holidayStartY, heroW, holidayH, holidayRows,
                          year, month0, dayNum);
   }
 }
