@@ -1000,7 +1000,6 @@ static int adaptiveUpcomingHolidayCount(int todayYear, int todayMonth0, int toda
 // share this grammar rather than owning independent render functions.
 static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
                              int year, int month0, int dayNum) {
-  const bool adaptiveMicro = c.w < 150 || c.h < 88 || (c.w < 230 && c.h < 140);
   const EditorialDesign::Plan editorial = EditorialDesign::planFor(c.w, c.h);
   const int pad = editorial.inset;
   const int x = c.x + pad, y = c.y + pad;
