@@ -1,4 +1,5 @@
 #include "EditorialDesign.h"
+#include "EditorialFigures.h"
 #include "FrameText.h"
 // ModuleWeather.cpp
 #include "ModuleWeather.h"
@@ -2341,7 +2342,8 @@ static void renderAdaptiveWeather(const Cell& c,
   const bool showInsight = large && forecastRows == 0 && insight[0];
   const bool hasDetails = showRange || showWind || showProbability || showInsight;
 
-  const int pad = EditorialDesign::planFor(c.w, c.h).inset;
+  const EditorialDesign::Plan editorial = EditorialDesign::planFor(c.w, c.h);
+  const int pad = editorial.inset;
   WeatherRect inner = {c.x + pad, c.y + pad, c.w - 2 * pad, c.h - 2 * pad};
   int headerH = showLocation ? (int)lroundf(inner.h * 0.12f) : 0;
   if (headerH && headerH < 25) headerH = 25;
@@ -2380,8 +2382,14 @@ static void renderAdaptiveWeather(const Cell& c,
   formatTemp(temperature, sizeof(temperature), data.tempC, cfg.units);
   const int iconSize = primary.h > 120 ? 56 : 38;
   if (landscape) {
-    ModuleIcons::drawWeatherIcon(primary.x + primary.w / 4, primary.y + primary.h / 2,
-                                 iconSize, data.wmo);
+    if (editorial.illustrationsAllowed && primary.w >= 270 && primary.h >= 115) {
+      EditorialFigures::weatherLandscape(DisplayCore::get(),
+        primary.x + primary.w / 4 - 62, primary.y + primary.h / 2 - 43,
+        124, 86, data.wmo, ink);
+    } else {
+      ModuleIcons::drawWeatherIcon(primary.x + primary.w / 4, primary.y + primary.h / 2,
+                                   iconSize, data.wmo);
+    }
     drawCenteredBox(primary.x + primary.w / 2, primary.y, primary.w / 2,
                     showCondition ? primary.h * 2 / 3 : primary.h, temperature, FONT_B18, ink);
     if (showCondition) drawWrappedTextBox(primary.x + primary.w / 2,
