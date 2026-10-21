@@ -212,16 +212,18 @@ static int wrapTextToLines(const char* src,
 static int drawHeader(const Cell& c) {
   auto& d = DisplayCore::get();
   const char* header = headerText();
+  const EditorialDesign::Plan editorial = EditorialDesign::planFor(c.w, c.h);
+  const EditorialDesign::RoleSpec role = EditorialDesign::specFor(editorial, EditorialDesign::HEADING);
+  const GFXfont* headingFont = role.font == EditorialDesign::BOLD_12 ? NEWS_FONT_HEADER : NEWS_FONT_BODY;
   int16_t x1, y1;
   uint16_t tw, th;
-  measureText(header, NEWS_FONT_HEADER, x1, y1, tw, th);
+  measureText(header, headingFont, x1, y1, tw, th);
 
-  const EditorialDesign::Plan editorial = EditorialDesign::planFor(c.w, c.h);
   const int topPad = editorial.inset + (c.h <= 150 ? 12 : 10);
   const int baseline = c.y + topPad - y1;
   const int x = c.x + c.w / 2 - (int)tw / 2 - x1;
 
-  d.setFont(NEWS_FONT_HEADER);
+  d.setFont(headingFont);
   d.setTextSize(1);
   d.setTextColor(Theme::ink());
   d.setCursor(x, baseline);
