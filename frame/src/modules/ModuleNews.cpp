@@ -352,7 +352,7 @@ static void renderShallow(const Cell& c) {
   const int maxLines = min(NEWS_MAX_WRAP_LINES, max(1, contentH / lineStep));
   const int candidateCount = min(g_cache->count, capacityForCell(c));
 
-  // Prefer three columns; reduce to two or one if whole headlines need room.
+  // Prefer two columns only when both headlines fit at a readable size.
   int visible = 0;
   int selected[3] = {0};
   for (int columns = candidateCount; columns >= 1 && visible == 0; --columns) {
