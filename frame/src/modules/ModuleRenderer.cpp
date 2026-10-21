@@ -1,5 +1,6 @@
 #include "ModuleRenderer.h"
 #include "AdaptiveModuleCapability.h"
+#include "EditorialDesign.h"
 #include "DisplayCore.h"
 #include "Theme.h"
 
@@ -94,6 +95,14 @@ void ModuleRenderer::renderPlaceholders(const SlotModule* assigns, int assignCou
   for (int i = 0; i < n; i++) {
     const Cell& c = cells[i];
     String mod = moduleForSlot(assigns, assignCount, c.slot);
+
+    // Editorial prototype: route every supported module through its already
+    // geometry-aware presentation path (not a legacy fixed-size layout).
+    // Production main retains the old Small/Medium/Large/XL appearances.
+    Cell editorialCell = c;
+    if (EditorialDesign::kindFor(mod.c_str()) != EditorialDesign::UNKNOWN) {
+      editorialCell.size = CELL_ADAPTIVE;
+    }
     const uint32_t moduleStartedAtMs = millis();
 
     // Empty cell -> centered "+"
@@ -104,67 +113,67 @@ void ModuleRenderer::renderPlaceholders(const SlotModule* assigns, int assignCou
 
     // Dispatch modules here
     if (mod.equalsIgnoreCase("date")) {
-      ModuleDate::render(c);
+      ModuleDate::render(editorialCell);
       Serial.printf("Render timing module=date slot=%u ms=%lu\n", c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (AdaptiveModuleCapability::exactOnly(mod.c_str(), "assistant")) {
-      ModuleAssistant::render(c);
+      ModuleAssistant::render(editorialCell);
       Serial.printf("Render timing module=assistant slot=%u ms=%lu\n", c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (mod.startsWith("weather")) {
-      ModuleWeather::render(c, mod);
+      ModuleWeather::render(editorialCell, mod);
       Serial.printf("Render timing module=%s slot=%u ms=%lu\n", mod.c_str(), c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (AdaptiveModuleCapability::numericInstance(mod.c_str(), "surf")) {
-      ModuleSurf::render(c, mod);
+      ModuleSurf::render(editorialCell, mod);
       Serial.printf("Render timing module=%s slot=%u ms=%lu\n", mod.c_str(), c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (AdaptiveModuleCapability::numericInstance(mod.c_str(), "ski", 4)) {
-      ModuleSki::render(c, mod);
+      ModuleSki::render(editorialCell, mod);
       Serial.printf("Render timing module=%s slot=%u ms=%lu\n", mod.c_str(), c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (mod.startsWith("reminders")) {
-      ModuleReminders::render(c, mod);
+      ModuleReminders::render(editorialCell, mod);
       Serial.printf("Render timing module=reminders slot=%u ms=%lu\n", c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (mod.equalsIgnoreCase("news")) {
-      ModuleNews::render(c, mod);
+      ModuleNews::render(editorialCell, mod);
       Serial.printf("Render timing module=news slot=%u ms=%lu\n", c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (mod.startsWith("countdown")) {
-      ModuleCountdown::render(c, mod);
+      ModuleCountdown::render(editorialCell, mod);
       Serial.printf("Render timing module=countdown slot=%u ms=%lu\n", c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (mod.startsWith("soccer")) {
-      ModuleSoccer::render(c, mod);
+      ModuleSoccer::render(editorialCell, mod);
       Serial.printf("Render timing module=%s slot=%u ms=%lu\n", mod.c_str(), c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (mod.startsWith("stocks")) {
-      ModuleStocks::render(c, mod);
+      ModuleStocks::render(editorialCell, mod);
       Serial.printf("Render timing module=%s slot=%u ms=%lu\n", mod.c_str(), c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (mod.startsWith("groceries")) {
-      ModuleGroceries::render(c, mod);
+      ModuleGroceries::render(editorialCell, mod);
       Serial.printf("Render timing module=groceries slot=%u ms=%lu\n", c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
