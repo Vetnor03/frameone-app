@@ -155,7 +155,13 @@ function contentComposition(module,p){
   const budget=editorialContentBudget(p,editorialModuleKind(module))
   const showHeader=Boolean(budget.heading&&p.height>=190)
   const body=paddedRegion(p,showHeader)
-  const width=body.w
+  // A spacious Weather cell gets an illustration column, and the information
+  // stays centered in a separate column. No illustration can cover data.
+  const withWeatherArt=module==='weather'&&budget.illustration&&body.w>=540&&body.h>=240
+  const artWidth=withWeatherArt?Math.floor(body.w*.39):0
+  const rightX=withWeatherArt?body.x+artWidth+18:body.x
+  const contentArea=withWeatherArt?rect(rightX,body.y,body.w-artWidth-18,body.h):body
+  const width=contentArea.w
   const compact=body.h<125
   const roomy=p.shape==='spread'
   const blocks=[]
@@ -195,7 +201,12 @@ function contentComposition(module,p){
     remaining-=row.h+9
     count++
   }
-  const content=stackCentered(blocks,body,{gap:compact?6:9})
+  const content=stackCentered(blocks,contentArea,{gap:compact?6:9})
+  if(withWeatherArt){
+    const artwork=graphicBlock('weather-landscape',Math.min(210,artWidth-16),Math.min(142,body.h*.46))
+    content.push({...artwork,x:body.x+(artWidth-artwork.w)/2,
+      y:body.y+(body.h-artwork.h)/2})
+  }
   const header=showHeader?{...textBlock('heading',info.heading,p.safeWidth,14,
     {role:'heading',serif:true}),x:p.inset,y:p.inset+4}:null
   if(header)content.unshift(header)

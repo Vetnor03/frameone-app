@@ -37,6 +37,20 @@ function Botanical({x,y,w,h,ink}:{x:number;y:number;w:number;h:number;ink:string
     <path d="M47 67 H61"/>
   </svg>
 }
+function WeatherEngraving({x,y,w,h,ink}:{
+  x:number;y:number;w:number;h:number;ink:string
+}){
+  return <svg x={x} y={y} width={w} height={h} viewBox="0 0 124 86"
+    fill="none" stroke={ink} strokeWidth="1.25" strokeLinecap="round"
+    strokeLinejoin="round" aria-label="Decorative coastal weather engraving">
+    <circle cx="31" cy="24" r="10"/>
+    <path d="M31 7 V3 M31 41 V45 M14 24 H10 M48 24 H52"/>
+    <path d="M6 58 L26 46 L43 52 L65 39 L85 52 L119 58
+      M7 65 H118 M11 72 H48 M63 72 H115"/>
+    <path d="M71 20 Q82 9 95 20 Q108 13 117 27
+      M83 31 Q98 25 115 33"/>
+  </svg>
+}
 function RatingBlocks({x,y,w,ink,theme}:{x:number;y:number;w:number;ink:string;theme:FrameTheme}){
   const gap=4
   const blockW=Math.min(22,(w-5*gap)/6)
@@ -91,8 +105,11 @@ function EditorialCanvas({module,width,height,theme}:{
       lines?:string[];fontSize?:number;serif?:boolean
     })=>{
       if(block.type==='figure')
-        return <Botanical key={block.id} x={block.x} y={block.y}
-          w={block.w} h={block.h} ink={ink}/>
+        return block.id==='weather-landscape'
+          ? <WeatherEngraving key={block.id} x={block.x} y={block.y}
+              w={block.w} h={block.h} ink={ink}/>
+          : <Botanical key={block.id} x={block.x} y={block.y}
+              w={block.w} h={block.h} ink={ink}/>
       if(block.type==='score')
         return <RatingBlocks key={block.id} x={block.x} y={block.y}
           w={block.w} ink={ink} theme={theme}/>
