@@ -5438,7 +5438,7 @@ function MirrorXLDateView({
   return (
     <div
       className="grid h-full w-full min-h-0 min-w-0 gap-[clamp(0.48rem,1.2vw,0.82rem)] overflow-hidden p-[clamp(0.55rem,1.35vw,1rem)]"
-      style={{ gridTemplateColumns: 'minmax(0,48fr) minmax(0,52fr)' }}
+      style={{ gridTemplateColumns: 'minmax(0,48fr) minmax(0,52fr)', background: frameBackground }}
       data-editorial-module="date"
       data-editorial-shape="spread"
     >

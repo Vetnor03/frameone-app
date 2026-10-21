@@ -1,7 +1,5 @@
 'use client'
 
-import React from 'react'
-
 // Both engravings use only the inherited foreground ink, echoing the e-paper
 // renderer's 1-bit line work. Decorative marks never communicate new facts.
 export function EditorialBotanicalSprig() {

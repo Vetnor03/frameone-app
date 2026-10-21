@@ -69,3 +69,39 @@ test('module content disclosure protects reading density and reserves figures on
     }
   }
 })
+
+test('JS and physical C++ agree on module disclosure for all custom-grid dimensions', async () => {
+  const {execFileSync} = await import('node:child_process')
+  const {mkdtempSync,writeFileSync,rmSync} = await import('node:fs')
+  const {tmpdir} = await import('node:os')
+  const {join} = await import('node:path')
+  const directory=mkdtempSync(join(tmpdir(),'editorial-budget-parity-'))
+  try {
+    const source=join(directory,'budget.cpp'), exe=join(directory,'budget')
+    writeFileSync(source,`#include "EditorialDesign.h"
+#include <cstdio>
+int main() {
+ for(int k=0;k<11;k++) for(int c=1;c<=4;c++) for(int r=1;r<=4;r++) {
+   auto p=EditorialDesign::planFor(c*200,r*120);
+   auto b=EditorialDesign::budgetFor(p,(EditorialDesign::ContentKind)k);
+   std::printf("%d,%d,%d,%d,%d,%d,%d,%d\\n",k,c,r,b.heading,b.secondary,b.illustration,b.splitColumns,b.listItems);
+ }
+ return 0;
+}
+`)
+    execFileSync('g++',['-std=c++11','-Wall','-Wextra','-Werror',
+      '-I',new URL('../frame/src/display/',import.meta.url).pathname,
+      source,'-o',exe])
+    const lines=execFileSync(exe,{encoding:'utf8'}).trim().split('\n')
+    const kinds=['dateFacts','reminderList','weatherFacts','newsList','surfFacts',
+      'skiFacts','countdownFacts','soccerList','stocksFacts','groceryList','assistantText']
+    assert.equal(lines.length,11*16)
+    for(const line of lines){
+      const [k,c,r,heading,secondary,illustration,splitColumns,listItems]=line.split(',').map(Number)
+      const b=editorialContentBudget(editorialPlan(c*200,r*120),kinds[k])
+      assert.deepEqual([Number(b.heading),Number(b.secondary),Number(b.illustration),
+        Number(b.splitColumns),b.listItems],
+        [heading,secondary,illustration,splitColumns,listItems],line)
+    }
+  }finally {rmSync(directory,{recursive:true,force:true})}
+})
