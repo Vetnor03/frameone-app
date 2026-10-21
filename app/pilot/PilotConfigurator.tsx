@@ -36,7 +36,7 @@ const inputClass =
 // Material imagery is generated for the pilot selector; the colours are illustrative,
  // not colour-calibrated photographs of the HFS Rammer product samples.
 function materialTexture(id: string) {
-  return `url("/pilot-materials/${id}.webp")`
+  return `url("/pilot-materials/${id}-sharp.webp")`
 }
 
 function frameMaterial(frame: FrameOption): CSSProperties {
