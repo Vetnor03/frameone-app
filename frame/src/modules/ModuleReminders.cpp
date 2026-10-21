@@ -2473,7 +2473,8 @@ static void drawAdaptiveItem(const ReminderItem& item, const ReminderRect& row, 
     max(1, w - timeW - gap), h
   };
 
-  if (item.time[0]) drawAdaptiveLabel(timeRect, item.time, FONT_B12);
+  // Time is useful context, but the task itself stays visually dominant.
+  if (item.time[0]) drawAdaptiveLabel(timeRect, item.time, FONT_B9);
 
   const int lineStep = smartLineStep(REMINDER_CONTENT_FONT);
   const int maxLines = min(5, max(1, titleRect.h / lineStep));
@@ -2568,6 +2569,22 @@ static void renderAdaptiveFallbackBucket(const Cell& c, const ReminderBucket& bu
   const int headingH = min(30, max(20, inner.h / 4));
   char heading[40]; buildAdaptiveFallbackHeading(bucket, heading, sizeof(heading));
   drawAdaptiveLabel({inner.x, inner.y, inner.w, headingH}, heading, FONT_B12);
+  if (visible <= 0 && bucket.count > 0) {
+    const int idx = bucket.itemIdx[0];
+    if (idx >= 0 && idx < g_cache->count) {
+      char teaser[128] = {0};
+      fitTextToWidth(g_cache->items[idx].title, teaser, sizeof(teaser),
+                     inner.w - 12, REMINDER_CONTENT_FONT);
+      if (teaser[0])
+        drawAdaptiveLabel({inner.x, inner.y + headingH, inner.w,
+                           max(1, inner.h - headingH - 24)}, teaser,
+                          REMINDER_CONTENT_FONT);
+      if (bucket.count > 1)
+        drawAdaptiveOverflow({inner.x, inner.y + inner.h - 22,
+                              inner.w, 22}, bucket.count - 1);
+      return;
+    }
+  }
   const int footerH = overflow ? 22 : 0;
   ReminderRect content = {inner.x, inner.y + headingH, inner.w,
                           max(1, inner.h - headingH - footerH - (footerH ? 4 : 0))};
@@ -2605,7 +2622,24 @@ static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets
   const int pad = max(9, min(18, (int)lroundf(min(c.w, c.h) * .08f)));
   ReminderRect inner = {c.x + pad, c.y + pad, max(1, c.w - pad * 2), max(1, c.h - pad * 2)};
   if (comp.todayItems + comp.tomorrowItems <= 0) {
-    drawAdaptiveOverflow(inner, todayCount + tomorrowCount);
+    // A long title must not leave a custom module with only '+N more'.
+    // Show a readable first item teaser and report any remaining items.
+    const ReminderBucket* primary = todayCount > 0 ? today : tomorrow;
+    const int idx = primary && primary->count > 0 ? primary->itemIdx[0] : -1;
+    if (idx >= 0 && idx < g_cache->count) {
+      char teaser[128] = {0};
+      fitTextToWidth(g_cache->items[idx].title, teaser, sizeof(teaser),
+                     inner.w - 12, REMINDER_CONTENT_FONT);
+      if (teaser[0]) {
+        const int footerH = todayCount + tomorrowCount > 1 ? 24 : 0;
+        drawAdaptiveLabel({inner.x, inner.y, inner.w,
+                           max(1, inner.h - footerH)}, teaser,
+                          REMINDER_CONTENT_FONT);
+        if (footerH) drawAdaptiveOverflow({inner.x, inner.y + inner.h - footerH,
+                                            inner.w, footerH},
+                                           todayCount + tomorrowCount - 1);
+      }
+    } else drawAdaptiveOverflow(inner, todayCount + tomorrowCount);
     return;
   }
   if (comp.family == REM_SPLIT_SECTIONS) {
