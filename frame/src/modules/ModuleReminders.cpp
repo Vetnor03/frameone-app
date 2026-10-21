@@ -1854,7 +1854,26 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
     if (allFit) selectedCount = columns;
   }
 
-  if (selectedCount <= 0) return;
+  if (selectedCount <= 0) {
+    // Long titles must still have a legible presence on a short tile.
+    // Keep the full title in the app rather than silently shrinking it.
+    const int idx = bucket.itemIdx[0];
+    if (idx >= 0 && idx < g_cache->count) {
+      char full[128], teaser[128];
+      buildReminderTitleWithTime(g_cache->items[idx], full, sizeof(full));
+      fitTextToWidth(full, teaser, sizeof(teaser), c.w - 36,
+                     REMINDER_CONTENT_FONT);
+      if (teaser[0]) drawCenteredLine(c.x + 18, contentTop,
+                                     c.w - 36, contentH, teaser,
+                                     REMINDER_CONTENT_FONT, ink);
+      if (bucket.count > 1) {
+        char moreBuf[24];
+        snprintf(moreBuf, sizeof(moreBuf), "+%d more", bucket.count - 1);
+        drawTopRightSmallNote(c, moreBuf, c.y + 12);
+      }
+    }
+    return;
+  }
 
   if (bucket.count > selectedCount) {
     char moreBuf[24];
