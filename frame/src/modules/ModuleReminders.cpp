@@ -1,4 +1,5 @@
 #include "EditorialDesign.h"
+#include "EditorialTypography.h"
 #include "FrameText.h"
 #include "FrameLayout.h"
 // ===============================
@@ -2473,8 +2474,8 @@ static void drawAdaptiveSection(const ReminderBucket* bucket, int visible, int o
   const int footerH = sectionFooter && overflow ? 24 : 0;
   if (heading) {
     const EditorialDesign::Plan editorial = EditorialDesign::planFor(rect.w, rect.h);
-    const EditorialDesign::RoleSpec role = EditorialDesign::specFor(editorial, EditorialDesign::HEADING);
-    const GFXfont* headingFont = role.font == EditorialDesign::BOLD_12 ? FONT_B12 : FONT_B9;
+    const GFXfont* headingFont = EditorialTypography::choose(
+      editorial, EditorialDesign::HEADING, FONT_B9, FONT_B9, FONT_B12, FONT_B12);
     drawAdaptiveLabel({rect.x, rect.y, rect.w, headingH}, headingText, headingFont);
     int16_t x1, y1; uint16_t tw, th; measureText(headingText, headingFont, x1, y1, tw, th);
     const int lineW = min(rect.w, (int)tw);
