@@ -242,11 +242,16 @@ export default function EditorialLabPage(){
 
       <div className="mb-4 flex flex-wrap gap-4 rounded bg-white p-3 text-sm">
         <strong>Automatic layout audit</strong>
-        <span>{audit.checked} module × grid × theme combinations checked</span>
+        <span data-testid="editorial-geometry-audit" data-issues={audit.issues.length}
+          data-checked={audit.checked}>
+          {audit.checked} module × grid × theme combinations checked
+        </span>
         <span className={hasProblems?'text-red-700':'text-[#476242]'}>
           {audit.issues.length} geometric issues
         </span>
-        <span className={browserAudit?.issues.length?'text-red-700':'text-[#476242]'}>
+        <span data-testid="editorial-browser-audit" data-issues={browserAudit?.issues.length??-1}
+          data-checked={browserAudit?.checked??0}
+          className={browserAudit?.issues.length?'text-red-700':'text-[#476242]'}>
           {browserAudit
             ? browserAudit.checked+' browser renderings · '+browserAudit.issues.length+' glyph issues'
             : 'Measuring rendered browser glyphs…'}
