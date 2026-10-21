@@ -5388,36 +5388,6 @@ function MirrorMonthCalendar({
 }
 
 
-function MirrorHolidayList({ holidays, language }: { holidays: MirrorHoliday[]; language: AppLanguage }) {
-  const upcoming = upcomingMirrorHolidays(holidays)
-  const emptyLabel = language === 'no' ? 'Ingen helligdager' : 'No holidays'
-
-  if (upcoming.length === 0) {
-    return (
-      <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.8rem,2vw,1.6rem)] text-center text-[clamp(0.76rem,1.9vw,1.2rem)] font-semibold tracking-[0.08em] opacity-75">
-        {emptyLabel}
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.8rem,2vw,1.6rem)] py-[clamp(0.75rem,1.9vw,1.45rem)]">
-      <div className="grid w-fit max-w-full gap-[clamp(0.22rem,0.65vw,0.42rem)]">
-        {upcoming.map((holiday) => (
-          <div key={`${holiday.date}-${holiday.name}`} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-baseline gap-[clamp(0.5rem,1.45vw,1rem)] leading-none">
-            <div className="shrink-0 text-[clamp(0.56rem,1.35vw,0.86rem)] font-medium tracking-[0.08em] opacity-80">
-              {formatMirrorHolidayDate(holiday.date)}
-            </div>
-            <div className="min-w-0 truncate text-[clamp(0.7rem,1.8vw,1.16rem)] font-semibold tracking-[0.02em]">
-              {holiday.name}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function MirrorXLDateView({
   language,
   textColor,
