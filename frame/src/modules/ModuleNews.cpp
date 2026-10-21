@@ -14,8 +14,9 @@
 #include <string.h>
 #include <new>
 
-#define NEWS_FONT_BODY (&FreeSans9pt8b)
-#define NEWS_FONT_HEADER (&FreeSansBold12pt8b)
+// News headlines are primary content, not small explanatory text.
+#define NEWS_FONT_BODY (&FreeSansBold12pt8b)
+#define NEWS_FONT_HEADER (&FreeSans9pt8b)
 
 namespace ModuleNews {
 
@@ -296,12 +297,12 @@ static bool shallowLayout(const Cell& c) {
 }
 
 static int capacityForCell(const Cell& c) {
-  if (shallowLayout(c)) return 3;
-  if (c.size == CELL_MEDIUM) return 6;
-  if (c.size == CELL_LARGE) return 12;
-  if (c.size == CELL_XL) return 14;
+  if (shallowLayout(c)) return 2;
+  if (c.size == CELL_MEDIUM) return 3;
+  if (c.size == CELL_LARGE) return 5;
+  if (c.size == CELL_XL) return 7;
   const int columns = c.w >= 600 && c.h >= 180 ? 2 : 1;
-  const int rows = max(1, max(28, c.h - 60) / 28);
+  const int rows = max(1, max(28, c.h - 60) / 32);
   return min(MAX_NEWS_ITEMS, columns * rows);
 }
 
@@ -316,14 +317,40 @@ static void drawEmpty(const Cell& c) {
   drawLeft(c.x + (c.w - (int)tw) / 2 - x1, baseline, message, NEWS_FONT_BODY);
 }
 
+// Never show an empty News tile just because every headline is too long for
+// the fixed readable font. Show an ellipsized first headline as a teaser.
+static void drawNewsTeaser(const Cell& c, int top, int height) {
+  if (!g_cache || g_cache->count <= 0 || height <= 0) return;
+  char teaser[NEWS_TITLE_BYTES];
+  safeCopy(teaser, sizeof(teaser), g_cache->items[0].title);
+  const int width = max(24, c.w - 36);
+  if (textWidth(teaser, NEWS_FONT_BODY) > width) {
+    const size_t len = strlen(teaser);
+    if (len > 3) teaser[len - 3] = '\\0';
+    while (teaser[0]) {
+      char candidate[NEWS_TITLE_BYTES];
+      snprintf(candidate, sizeof(candidate), "%s...", teaser);
+      if (textWidth(candidate, NEWS_FONT_BODY) <= width) {
+        safeCopy(teaser, sizeof(teaser), candidate);
+        break;
+      }
+      teaser[strlen(teaser) - 1] = '\\0';
+    }
+  }
+  int16_t x1, y1; uint16_t tw, th;
+  measureText(teaser, NEWS_FONT_BODY, x1, y1, tw, th);
+  drawLeft(c.x + (c.w - (int)tw) / 2 - x1,
+           top + max(0, (height - (int)th) / 2) - y1, teaser, NEWS_FONT_BODY);
+}
+
 static void renderShallow(const Cell& c) {
   auto& d = DisplayCore::get();
   const int contentTop = drawHeader(c);
   const int contentBottom = c.y + c.h - 8;
   const int contentH = max(1, contentBottom - contentTop);
-  const int lineStep = 21;
+  const int lineStep = 29;
   const int maxLines = min(NEWS_MAX_WRAP_LINES, max(1, contentH / lineStep));
-  const int candidateCount = min(g_cache->count, 3);
+  const int candidateCount = min(g_cache->count, capacityForCell(c));
 
   // Prefer three columns; reduce to two or one if whole headlines need room.
   int visible = 0;
@@ -340,7 +367,7 @@ static void renderShallow(const Cell& c) {
     }
     if (found == columns) visible = found;
   }
-  if (!visible) { drawEmpty(c); return; }
+  if (!visible) { drawNewsTeaser(c, contentTop, contentH); return; }
 
   for (int i = 1; i < visible; ++i) {
     const int x = c.x + (c.w * i) / visible;
@@ -383,8 +410,8 @@ static void renderList(const Cell& c) {
   const int dotR = 3;
   const int gap = 10;
   const int sidePad = 18;
-  const int lineStep = 21;
-  const int itemGap = 7;
+  const int lineStep = 29;
+  const int itemGap = 11;
   const int candidateCount = min(g_cache->count, capacityForCell(c));
   const int maxTextW = max(24, c.w - sidePad * 2 - dotR * 2 - gap);
   const int availableH = max(1, contentBottom - contentTop);
@@ -418,7 +445,7 @@ static void renderList(const Cell& c) {
     selected[visible++] = i;
   }
 
-  if (visible <= 0) return;
+  if (visible <= 0) { drawNewsTeaser(c, contentTop, availableH); return; }
 
   const bool drawBullets = visible > 1;
   const int bulletSpace = drawBullets ? dotR * 2 + gap : 0;
