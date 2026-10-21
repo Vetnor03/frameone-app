@@ -9,7 +9,7 @@ INO = (ROOT / "src" / "frame_v2.5.1.ino").read_text(encoding="utf-8")
 
 def test_news_module_is_wired_into_renderer_and_preload():
     assert '#include "ModuleNews.h"' in RENDERER
-    assert 'ModuleNews::render(c, mod);' in RENDERER
+    assert 'ModuleNews::render(editorialCell, mod);' in RENDERER
     assert 'ModuleNews::setConfig(&g_cfg);' in INO
     assert 'ModuleNews::preload();' in INO
 
