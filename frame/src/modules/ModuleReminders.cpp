@@ -2277,7 +2277,9 @@ static bool adaptivePrefixFits(const ReminderBucket* bucket, int count, int widt
   for (int i = 0; i < count; ++i) {
     const int itemIdx = bucket->itemIdx[i];
     if (itemIdx < 0 || itemIdx >= g_cache->count) return false;
-    if (!adaptiveTitleFits(g_cache->items[itemIdx], width)) return false;
+    const ReminderItem& item = g_cache->items[itemIdx];
+    const int itemWidth = item.time[0] ? width : width + 55;
+    if (!adaptiveTitleFits(item, itemWidth)) return false;
   }
   return true;
 }
@@ -2299,7 +2301,9 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
   const bool shallow = landscape && usable.height < 126;
   const bool split = !shallow && landscape && usable.width >= 464 && usable.height >= 164;
   out.family = shallow ? REM_SHALLOW_HORIZONTAL : split ? REM_SPLIT_SECTIONS : REM_VERTICAL_LIST;
-  out.showHeading = !shallow && usable.height >= 104;
+  const EditorialDesign::ContentBudget budget = EditorialDesign::budgetFor(
+    EditorialDesign::planFor(c.w, c.h), EditorialDesign::REMINDER_LIST);
+  out.showHeading = !shallow && usable.height >= 104 && budget.heading;
 
   const int totalCount = todayCount + tomorrowCount;
   const int headingH = out.showHeading ? 30 : 0;

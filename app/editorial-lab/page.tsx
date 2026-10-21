@@ -2,7 +2,7 @@
 
 import {useMemo, useState} from 'react'
 import Link from 'next/link'
-import {editorialPlan} from '../lib/editorialFrameLayout.mjs'
+import {editorialContentBudget, editorialModuleKind, editorialPlan} from '../lib/editorialFrameLayout.mjs'
 
 type Module = 'date' | 'reminders' | 'weather' | 'news' | 'surf' | 'ski' |
   'countdown' | 'soccer' | 'stocks' | 'groceries' | 'assistant'
@@ -84,20 +84,21 @@ function DesignCanvas({module,width,height,theme}:{
   module:Module;width:number;height:number;theme:FrameTheme
 }) {
   const p=editorialPlan(width,height)
+  const budget=editorialContentBudget(p,editorialModuleKind(module))
   const paper=theme==='light'?'#FFFFFF':'#101010'
   const ink=theme==='light'?'#171717':'#F7F7F7'
   const muted=theme==='light'?'#555555':'#CCCCCC'
   const v=content[module]
   const cx=width/2, pad=p.inset
   const roomy=p.shape==='spread',wide=p.shape==='ribbon',tall=p.shape==='column'
-  const figure=p.illustrationsAllowed
+  const figure=budget.illustration
   const mainSize=roomy?52:tall?32:wide?36:26
   const headerY=pad+24
-  const normalItemCount=roomy?Math.min(3,v.extra.length):p.shape==='card'?1:0
+  const normalItemCount=Math.min(v.extra.length,budget.listItems || (roomy?3:p.shape==='card'?1:0))
   const textWidth=width-pad*2
   const clipped=(value:string,max:number)=>value.length>max?value.slice(0,Math.max(1,max-1))+'…':value
   const textCap=roomy?42:wide?32:tall?17:Math.max(12,Math.floor(textWidth/10))
-  const showExtras=normalItemCount>0&&height>190
+  const showExtras=normalItemCount>0&&height>190&&budget.secondary
   return <svg role="img" aria-label={`${module} · ${p.shape} · ${theme} experimental composition`}
     viewBox={`0 0 ${width} ${height}`}
     style={{width:'100%',height:'auto',display:'block',background:paper,color:ink}}>
@@ -129,8 +130,8 @@ function DesignCanvas({module,width,height,theme}:{
         </g>}
       </>}
     </> : <>
-      {p.shape!=='compact'&&<Label x={cx} y={headerY} ink={muted} size={roomy?17:13} serif>{v.heading}</Label>}
-      {p.shape!=='compact'&&<Ornament x={pad+12} y={headerY+17} w={width-pad*2-24} ink={ink}/>}
+      {budget.heading&&<Label x={cx} y={headerY} ink={muted} size={roomy?17:13} serif>{v.heading}</Label>}
+      {budget.heading&&<Ornament x={pad+12} y={headerY+17} w={width-pad*2-24} ink={ink}/>}
       {module==='weather' ? <>
         {figure&&<WeatherLandscape x={width*.15} y={90} w={190} h={130} ink={ink}/>}
         <Label x={figure?width*.69:cx} y={figure?160:wide?height/2+14:Math.min(height*.58,180)}

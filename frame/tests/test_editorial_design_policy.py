@@ -49,6 +49,17 @@ int main() {
   assert(kindFor("weatherwolf") == UNKNOWN);
   assert(planFor(0, 0).safeWidth == 0);
   assert(planFor(0, 0).safeHeight == 0);
+  // Module-specific budgets are lower-density than a naive font scale.
+  assert(budgetFor(compact, REMINDER_LIST).listItems <=
+         budgetFor(spread, REMINDER_LIST).listItems);
+  assert(!budgetFor(compact, DATE_FACTS).illustration);
+  assert(budgetFor(spread, DATE_FACTS).illustration);
+  assert(budgetFor(spread, WEATHER_FACTS).illustration);
+  assert(!budgetFor(spread, NEWS_LIST).illustration);
+  assert(!budgetFor(compact, NEWS_LIST).heading);
+  assert(budgetFor(spread, NEWS_LIST).heading);
+  assert(budgetFor(spread, NEWS_LIST).splitColumns);
+
   return 0;
 }
 """

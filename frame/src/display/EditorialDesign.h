@@ -178,4 +178,43 @@ inline ContentKind kindFor(const char* module) {
   return UNKNOWN;
 }
 
+struct ContentBudget {
+  bool heading;            // Visible section header, if useful for this module
+  bool secondary;          // Context after primary facts
+  bool illustration;       // Purely decorative line art
+  bool splitColumns;       // Geometry has enough width for real columns
+  int listItems;           // Safe maximum rows (not a mandate to fill)
+};
+
+// A single geometry-based disclosure policy for all content categories.
+// Module data decides WHAT is important; this decides HOW MUCH can fit.
+// The budget is intentionally conservative for 1-bit 800x480 output.
+inline ContentBudget budgetFor(const Plan& p, ContentKind kind) {
+  const bool ribbon = p.shape == RIBBON;
+  const bool compact = p.shape == COMPACT;
+  const bool roomy = p.shape == SPREAD;
+  const bool list = kind == REMINDER_LIST || kind == NEWS_LIST ||
+                    kind == SOCCER_LIST || kind == GROCERY_LIST;
+  const bool measurement = kind == WEATHER_FACTS || kind == SURF_FACTS ||
+                           kind == SKI_FACTS || kind == STOCKS_FACTS;
+  const int headerFloor = list ? 95 : 110;
+  const bool heading = kind != DATE_FACTS && !compact &&
+                       p.safeHeight >= headerFloor && (!ribbon || p.safeHeight >= 120);
+  const bool secondary = p.safeHeight >= (measurement ? 85 : 125) &&
+                         p.safeWidth >= 145;
+  const bool illustration = p.illustrationsAllowed &&
+                            (kind == DATE_FACTS || kind == WEATHER_FACTS);
+  const bool split = p.columns == 2 && p.safeWidth >= 420 &&
+                     (list || kind == DATE_FACTS || measurement);
+  const int listHeight = p.safeHeight - (heading ? 34 : 0) -
+                         (secondary ? 18 : 0);
+  const int rowPixels = kind == REMINDER_LIST ? 88 :
+                        kind == NEWS_LIST ? 45 :
+                        kind == GROCERY_LIST ? 35 : 38;
+  const int listItems = list
+      ? minInt(8, maxInt(0, listHeight / (rowPixels + p.gap)) * (split ? 2 : 1))
+      : 0;
+  return {heading, secondary, illustration, split, listItems};
+}
+
 } // namespace EditorialDesign

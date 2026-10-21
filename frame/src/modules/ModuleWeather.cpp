@@ -2382,7 +2382,7 @@ static void renderAdaptiveWeather(const Cell& c,
   formatTemp(temperature, sizeof(temperature), data.tempC, cfg.units);
   const int iconSize = primary.h > 120 ? 56 : 38;
   if (landscape) {
-    if (editorial.illustrationsAllowed && primary.w >= 270 && primary.h >= 115) {
+    if (EditorialDesign::budgetFor(editorial, EditorialDesign::WEATHER_FACTS).illustration && primary.w >= 270 && primary.h >= 115) {
       EditorialFigures::weatherLandscape(DisplayCore::get(),
         primary.x + primary.w / 4 - 62, primary.y + primary.h / 2 - 43,
         124, 86, data.wmo, ink);

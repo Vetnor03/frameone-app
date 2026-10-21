@@ -1049,7 +1049,7 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
   // Reserve a dedicated margin for decorative line art; it never overlays
   // the date, calendar or the upcoming-holidays area.
   const int holidayStartY = heroY + heroH + 12;
-  const bool botanical = editorial.illustrationsAllowed && expanded &&
+  const bool botanical = EditorialDesign::budgetFor(editorial, EditorialDesign::DATE_FACTS).illustration && expanded &&
                          heroW >= 230 && heroH >= 280;
   const int botanicalReserve = botanical ? 78 : 0;
   if (botanical) heroH -= botanicalReserve;

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  EditorialRole, editorialPlan, editorialRole,
+  EditorialRole, editorialPlan, editorialRole, editorialContentBudget,
   showEditorialRole, editorialListCapacity, editorialModuleKind,
 } from '../app/lib/editorialFrameLayout.mjs'
 
@@ -45,6 +45,27 @@ test('every custom 4x4 rectangle has safe adaptive bounds', () => {
       assert.ok(editorialRole(plan, EditorialRole.PRIMARY).visible)
       if (plan.shape !== 'spread')
         assert.equal(showEditorialRole(plan, EditorialRole.FIGURE, 'decorative'), false)
+    }
+  }
+})
+
+test('module content disclosure protects reading density and reserves figures only where allowed',()=>{
+  const micro=editorialPlan(200,120)
+  const spread=editorialPlan(800,480)
+  assert.equal(editorialContentBudget(micro,'dateFacts').illustration,false)
+  assert.equal(editorialContentBudget(spread,'dateFacts').illustration,true)
+  assert.equal(editorialContentBudget(spread,'weatherFacts').illustration,true)
+  assert.equal(editorialContentBudget(spread,'newsList').illustration,false)
+  assert.equal(editorialContentBudget(spread,'newsList').heading,true)
+  assert.equal(editorialContentBudget(micro,'newsList').heading,false)
+  assert.ok(editorialContentBudget(spread,'reminderList').listItems>=
+            editorialContentBudget(micro,'reminderList').listItems)
+  for(const kind of ['dateFacts','reminderList','weatherFacts','newsList',
+    'surfFacts','skiFacts','countdownFacts','soccerList','stocksFacts','groceryList','assistantText']){
+    for(let cw=1;cw<=4;cw++)for(let rh=1;rh<=4;rh++){
+      const b=editorialContentBudget(editorialPlan(cw*200,rh*120),kind)
+      assert.ok(b.listItems>=0&&b.listItems<=8)
+      assert.ok(!b.illustration||['dateFacts','weatherFacts'].includes(kind))
     }
   }
 })

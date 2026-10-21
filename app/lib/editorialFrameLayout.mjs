@@ -95,3 +95,26 @@ export function editorialModuleKind(module) {
     assistant: 'assistantText',
   }[kind] || 'unknown'
 }
+
+// Disclosure matches EditorialDesign::budgetFor in the physical firmware.
+// Keep these two implementations in lockstep and exercise geometry parity tests.
+export function editorialContentBudget(plan, kind) {
+  const ribbon = plan.shape === 'ribbon'
+  const compact = plan.shape === 'compact'
+  const list = ['reminderList', 'newsList', 'soccerList', 'groceryList'].includes(kind)
+  const measurement = ['weatherFacts', 'surfFacts', 'skiFacts', 'stocksFacts'].includes(kind)
+  const headerFloor = list ? 95 : 110
+  const heading = kind !== 'dateFacts' && !compact &&
+    plan.safeHeight >= headerFloor && (!ribbon || plan.safeHeight >= 120)
+  const secondary = plan.safeHeight >= (measurement ? 85 : 125) && plan.safeWidth >= 145
+  const illustration = plan.illustrationsAllowed &&
+    (kind === 'dateFacts' || kind === 'weatherFacts')
+  const splitColumns = plan.columns === 2 && plan.safeWidth >= 420 &&
+    (list || kind === 'dateFacts' || measurement)
+  const listHeight = plan.safeHeight - (heading ? 34 : 0) - (secondary ? 18 : 0)
+  const rowPixels = kind === 'reminderList' ? 88 : kind === 'newsList' ? 45
+    : kind === 'groceryList' ? 35 : 38
+  const listItems = list ? Math.min(8,
+    Math.max(0, Math.trunc(listHeight / (rowPixels + plan.gap))) * (splitColumns ? 2 : 1)) : 0
+  return { heading, secondary, illustration, splitColumns, listItems }
+}
