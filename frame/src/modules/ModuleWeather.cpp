@@ -1559,15 +1559,15 @@ static void renderMedium(const Cell& c,
   char insightStr[96] = {0};
   if (!useTomorrow) buildWeatherInsight(insightStr, sizeof(insightStr), data);
 
-  int16_t b12Y1; uint16_t b12H;
+  int16_t b18Y1; uint16_t b18H;
   int16_t b9Y1;  uint16_t b9H;
-  fontBoxMetrics(FONT_B12, b12Y1, b12H);
+  fontBoxMetrics(FONT_B18, b18Y1, b18H);
   fontBoxMetrics(FONT_B9,  b9Y1,  b9H);
 
   int16_t lx1, ly1; uint16_t lw, lh;
   int16_t rx1, ry1; uint16_t rw, rh;
-  measureText(loBuf, FONT_B12, lx1, ly1, lw, lh);
-  measureText(hiBuf, FONT_B12, rx1, ry1, rw, rh);
+  measureText(loBuf, FONT_B18, lx1, ly1, lw, lh);
+  measureText(hiBuf, FONT_B18, rx1, ry1, rw, rh);
 
   const int topPad = 20;
   const int mmGap = 10;
@@ -1578,7 +1578,7 @@ static void renderMedium(const Cell& c,
   int totalTempW = (int)lw + mmGap + dividerW + mmGap + (int)rw;
   int tempStartX = c.x + (c.w - totalTempW) / 2;
   int tempTop = c.y + topPad;
-  int tempBaseline = tempTop - b12Y1;
+  int tempBaseline = tempTop - b18Y1;
 
   // The title uses the existing temperature row, so no new height is added.
   int topHeaderWidth = totalTempW;
@@ -1589,14 +1589,14 @@ static void renderMedium(const Cell& c,
     drawTextCenteredAt(c.x + c.w / 2, tempBaseline, "Tomorrow", FONT_B12, ink);
   } else {
     int tx = tempStartX;
-    drawLeft(tx, tempBaseline, loBuf, FONT_B12, ink);
+    drawLeft(tx, tempBaseline, loBuf, FONT_B18, ink);
     tx += (int)lw + mmGap;
-    drawDividerAtXShort(tx, tempBaseline, FONT_B12, ink);
+    drawDividerAtXShort(tx, tempBaseline, FONT_B18, ink);
     tx += dividerW + mmGap;
-    drawLeft(tx, tempBaseline, hiBuf, FONT_B12, ink);
+    drawLeft(tx, tempBaseline, hiBuf, FONT_B18, ink);
   }
 
-  int tempUnderlineY = tempTop + (int)b12H + tempUnderlineGap;
+  int tempUnderlineY = tempTop + (int)b18H + tempUnderlineGap;
   d.fillRect(c.x + (c.w - topHeaderWidth) / 2,
              tempUnderlineY, topHeaderWidth, tempUnderlineH, ink);
 
@@ -1623,7 +1623,7 @@ static void renderMedium(const Cell& c,
     drawTextCenteredAt(c.x + c.w / 2, precipBaseline, precipStr, FONT_B9, ink);
   }
 
-  int insightTop = tempTop + (int)b12H + gapTempToInsight;
+  int insightTop = tempTop + (int)b18H + gapTempToInsight;
   int iconBottomLimit = windTop - gapIconToWind;
   const bool hasInsight = useTomorrow || insightStr[0] != 0;
 
@@ -1641,14 +1641,14 @@ static void renderMedium(const Cell& c,
       // Min/max move to the old insight region, leaving the icon in its
       // usual area below. Keep the same font as the original temperature row.
       int16_t minY1; uint16_t minH;
-      fontBoxMetrics(FONT_B12, minY1, minH);
+      fontBoxMetrics(FONT_B18, minY1, minH);
       int movedBaseline = insightTop + (insightBlockH - (int)minH) / 2 - minY1;
       int tx = tempStartX;
-      drawLeft(tx, movedBaseline, loBuf, FONT_B12, ink);
+      drawLeft(tx, movedBaseline, loBuf, FONT_B18, ink);
       tx += (int)lw + mmGap;
-      drawDividerAtXShort(tx, movedBaseline, FONT_B12, ink);
+      drawDividerAtXShort(tx, movedBaseline, FONT_B18, ink);
       tx += dividerW + mmGap;
-      drawLeft(tx, movedBaseline, hiBuf, FONT_B12, ink);
+      drawLeft(tx, movedBaseline, hiBuf, FONT_B18, ink);
     } else {
       drawWrappedTextBox(
         c.x + 12,
@@ -2069,9 +2069,9 @@ static void renderLargeXL(const Cell& c,
 
   int16_t titleX1, titleY1;
   uint16_t titleW, titleH;
-  measureText(title, FONT_B18, titleX1, titleY1, titleW, titleH);
+  measureText(title, FONT_B12, titleX1, titleY1, titleW, titleH);
 
-  drawCenteredBox(midX, headerY, midW, headerH, title, FONT_B18, ink);
+  drawCenteredBox(midX, headerY, midW, headerH, title, FONT_B12, ink);
 
   int titleBottomY = 0;
   {
