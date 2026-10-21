@@ -1,6 +1,6 @@
 'use client'
 
-import {useMemo,useState} from 'react'
+import {useEffect,useMemo,useRef,useState} from 'react'
 import Link from 'next/link'
 import {editorialPlan} from '../lib/editorialFrameLayout.mjs'
 import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition} from '../lib/editorialComposition.mjs'
@@ -83,6 +83,7 @@ function EditorialCanvas({module,width,height,theme}:{
   return <svg role="img"
     aria-label={module+' '+width+'×'+height+' editorial concept, '+theme+' theme'}
     viewBox={'0 0 '+width+' '+height} preserveAspectRatio="xMidYMid meet"
+    data-editorial-probe="true" data-module={module} data-width={width} data-height={height}
     className="block h-auto w-full" style={{backgroundColor:paper}}>
     <rect width={width} height={height} fill={paper}/>
     {layout.blocks.map((block: {
@@ -102,7 +103,7 @@ function EditorialCanvas({module,width,height,theme}:{
       const lineHeight=size*1.24
       const lines=block.lines??[]
       return <g key={block.id} data-role={block.role} data-block={block.id}>
-        {lines.map((line,i)=><text key={i}
+        {lines.map((line,i)=><text key={i} data-audit-block={block.id}
           x={block.x+block.w/2}
           y={block.y+(i+.5)*lineHeight}
           textAnchor="middle" dominantBaseline="middle"
@@ -125,6 +126,45 @@ export default function EditorialLabPage(){
   const [cell,setCell]=useState<Cell>('4x4')
   const [theme,setTheme]=useState<FrameTheme>('light')
   const [matrix,setMatrix]=useState(false)
+  const browserProbes=useRef<HTMLDivElement|null>(null)
+  const [browserAudit,setBrowserAudit]=useState<{checked:number;issues:string[]}|null>(null)
+  const probeCases=useMemo(()=>EDITORIAL_MODULES.flatMap(name=>cells.flatMap(dimension=>
+    (['light','dark'] as const).map(mode=>({name,dimension,mode}))
+  )),[])
+  useEffect(()=>{
+    let cancelled=false
+    const check=()=>{
+      if(cancelled||!browserProbes.current)return
+      const problems:string[]=[]
+      const views=browserProbes.current.querySelectorAll<SVGSVGElement>('svg[data-editorial-probe]')
+      for(const view of views){
+        const moduleName=view.dataset.module??'?'
+        const width=Number(view.dataset.width),height=Number(view.dataset.height)
+        const labels=view.querySelectorAll<SVGTextElement>('text[data-audit-block]')
+        const boxes:Array<{name:string;box:DOMRect}>=[]
+        for(const label of labels){
+          const box=label.getBBox()
+          const identity=moduleName+' '+width+'×'+height+' '+(label.dataset.auditBlock??'?')
+          if(box.width>0&&box.height>0){
+            if(box.x<-.5||box.y<-.5||box.x+box.width>width+.5||box.y+box.height>height+.5)
+              problems.push(identity+': glyphs outside frame')
+            boxes.push({name:identity,box:box as DOMRect})
+          }
+        }
+        for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){
+          const a=boxes[i],b=boxes[j]
+          const dx=Math.min(a.box.x+a.box.width,b.box.x+b.box.width)-Math.max(a.box.x,b.box.x)
+          const dy=Math.min(a.box.y+a.box.height,b.box.y+b.box.height)-Math.max(a.box.y,b.box.y)
+          if(dx>1&&dy>1)problems.push(a.name+' / '+b.name+': glyph overlap')
+        }
+      }
+      if(!cancelled)setBrowserAudit({checked:views.length,issues:problems})
+    }
+    void document.fonts.ready.then(check,()=>{
+      if(!cancelled)setBrowserAudit({checked:0,issues:['Browser font measurements unavailable']})
+    })
+    return ()=>{cancelled=true}
+  },[])
   const selected=cells.find(item=>item.key===cell)??cells[cells.length-1]
   const plan=editorialPlan(selected.width,selected.height)
   const audit=useMemo(()=>{
@@ -189,7 +229,12 @@ export default function EditorialLabPage(){
         <span className={hasProblems?'text-red-700':'text-[#476242]'}>
           {audit.issues.length} geometric issues
         </span>
-        <span className="text-[#81776D]">Text uses conservative font-width estimates; real e-paper QA remains.</span>
+        <span className={browserAudit?.issues.length?'text-red-700':'text-[#476242]'}>
+          {browserAudit
+            ? browserAudit.checked+' browser renderings · '+browserAudit.issues.length+' glyph issues'
+            : 'Measuring rendered browser glyphs…'}
+        </span>
+        <span className="text-[#81776D]">Real e-paper QA still required.</span>
       </div>
 
       {matrix?<div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -213,10 +258,24 @@ export default function EditorialLabPage(){
           </div>
         </div>
       </div>}
+      {browserAudit&&browserAudit.issues.length>0&&
+        <div className="mt-4 rounded border border-amber-300 bg-white p-3 text-xs">
+          <strong>Browser typography issues detected</strong>
+          <ul>{browserAudit.issues.slice(0,8).map((issue,index)=>
+            <li key={index}>{issue}</li>)}</ul>
+        </div>}
       {hasProblems&&<div className="mt-4 rounded border border-red-300 bg-white p-3">
         <p className="font-medium text-red-800">Composition issues need fixing before pilot</p>
         <ul className="mt-2 text-xs">{audit.issues.slice(0,12).map(msg=><li key={msg}>{msg}</li>)}</ul>
       </div>}
+      <div ref={browserProbes} aria-hidden="true"
+        style={{position:'absolute',left:'-100000px',top:0,visibility:'hidden',pointerEvents:'none'}}>
+        {probeCases.map(({name,dimension,mode})=><div key={name+dimension.key+mode}
+          style={{width:dimension.width,height:dimension.height}}>
+          <EditorialCanvas module={name} width={dimension.width}
+            height={dimension.height} theme={mode}/>
+        </div>)}
+      </div>
       <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
         <div className="rounded bg-white p-4"><b>Composition</b><p>{plan.shape} · {plan.columns} column(s)</p></div>
         <div className="rounded bg-white p-4"><b>Safe inset</b><p>{plan.inset}px · {plan.gap}px spacing</p></div>
