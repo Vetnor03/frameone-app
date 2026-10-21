@@ -5211,8 +5211,8 @@ function MirrorMediumDateCard({
         </div>
 
         <div
-          className="flex min-h-[clamp(1.28rem,3.05vw,1.9rem)] shrink-0 items-center justify-center px-[clamp(0.3rem,0.86vw,0.56rem)] py-[clamp(0.28rem,0.72vw,0.5rem)] text-[clamp(0.55rem,1.32vw,0.82rem)] font-bold tracking-[0.18em]"
-          style={{ backgroundColor: '#ffffff', color: '#000000' }}
+          className="flex min-h-[clamp(1.28rem,3.05vw,1.9rem)] shrink-0 items-center justify-center px-[clamp(0.3rem,0.86vw,0.56rem)] py-[clamp(0.28rem,0.72vw,0.5rem)] text-[clamp(0.55rem,1.32vw,0.82rem)] font-medium tracking-[0.15em]"
+          style={{ color: textColor, borderTop: `1px solid ${textColor}` }}
         >
           <span className="max-w-full truncate">{dateParts.weekday}</span>
         </div>

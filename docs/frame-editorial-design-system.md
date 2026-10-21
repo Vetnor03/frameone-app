@@ -102,3 +102,12 @@ Keep the existing renderer as the stable path. Develop the new designs on the
 `feat/editorial-responsive-system` branch. Refactor module presentation into
 content selection and composition, rather than touching network/provisioning
 code. Merge only after all module migrations and QA are complete.
+
+## Editorial design review lab
+
+The experimental branch includes `/editorial-lab`, a self-contained visual
+study of the shared content-role rules across custom-grid cell shapes, both
+Light and Dark modes, and all supported module categories. It uses **sample
+content** only. This review surface is deliberately separate from the real
+app's frame mirror and is **not a pixel-perfect proof of the e-paper firmware**.
+The old inverted weekday treatment has been removed from the app's Date mirror.
