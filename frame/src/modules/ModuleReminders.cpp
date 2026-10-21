@@ -21,15 +21,17 @@
 #include <freertos/task.h>
 
 #include "FreeSans9ptNO.h"
+#include "FreeSans12ptNO.h"
 #include "FreeSansBold12ptNO.h"
 #include "FreeSansBold18ptNO.h"
 
 #define FONT_B9  (&FreeSans9pt8b)
+#define FONT_12  (&FreeSans12ptNO8b)
 #define FONT_B12 (&FreeSansBold12pt8b)
 #define FONT_B18 (&FreeSansBold18pt8b)
 
 // Primary reminder text has one readable floor across all cell sizes.
-static const GFXfont* REMINDER_CONTENT_FONT = FONT_B12;
+static const GFXfont* REMINDER_CONTENT_FONT = FONT_12;
 
 #define REMINDERS_DEBUG 1
 
@@ -169,7 +171,7 @@ static int textWidth(const char* text, const GFXfont* font) {
 
 static int fontLineHeight(const GFXfont* font) {
   if (font == FONT_B18) return 32;
-  if (font == FONT_B12) return 18;
+  if (font == FONT_B12 || font == FONT_12) return 20;
   return 14;
 }
 
@@ -996,7 +998,7 @@ static int measuredTextHeight(const char* text, const GFXfont* font) {
 
 static int smartLineStep(const GFXfont* font) {
   if (font == FONT_B9) return 21;
-  if (font == FONT_B12) return 28;
+  if (font == FONT_B12 || font == FONT_12) return 29;
   if (font == FONT_B18) return 39;
   return fontLineHeight(font) + 3;
 }
