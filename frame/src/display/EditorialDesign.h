@@ -192,7 +192,6 @@ struct ContentBudget {
 inline ContentBudget budgetFor(const Plan& p, ContentKind kind) {
   const bool ribbon = p.shape == RIBBON;
   const bool compact = p.shape == COMPACT;
-  const bool roomy = p.shape == SPREAD;
   const bool list = kind == REMINDER_LIST || kind == NEWS_LIST ||
                     kind == SOCCER_LIST || kind == GROCERY_LIST;
   const bool measurement = kind == WEATHER_FACTS || kind == SURF_FACTS ||
