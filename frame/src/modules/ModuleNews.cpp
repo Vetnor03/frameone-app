@@ -326,7 +326,7 @@ static void drawNewsTeaser(const Cell& c, int top, int height) {
   const int width = max(24, c.w - 36);
   if (textWidth(teaser, NEWS_FONT_BODY) > width) {
     const size_t len = strlen(teaser);
-    if (len > 3) teaser[len - 3] = '\\0';
+    if (len > 3) teaser[len - 3] = '\0';
     while (teaser[0]) {
       char candidate[NEWS_TITLE_BYTES];
       snprintf(candidate, sizeof(candidate), "%s...", teaser);
@@ -334,7 +334,7 @@ static void drawNewsTeaser(const Cell& c, int top, int height) {
         safeCopy(teaser, sizeof(teaser), candidate);
         break;
       }
-      teaser[strlen(teaser) - 1] = '\\0';
+      teaser[strlen(teaser) - 1] = '\0';
     }
   }
   int16_t x1, y1; uint16_t tw, th;
