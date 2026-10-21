@@ -93,7 +93,7 @@ inline RoleSpec specFor(const Plan& p, Role role) {
     case HERO:
       return {spacious ? BOLD_18 : BOLD_12, 2, p.safeHeight >= 24, false};
     case HEADING:
-      return {(spacious || (p.shape == RIBBON && p.safeWidth >= 440)) ? BOLD_12 : REGULAR_9,
+      return {(spacious || p.shape == CARD || (p.shape == RIBBON && p.safeWidth >= 440)) ? BOLD_12 : REGULAR_9,
               1, p.safeHeight >= 38, false};
     case PRIMARY:
       return {spacious ? REGULAR_12 : REGULAR_9, tight ? 2 : 3,
