@@ -113,7 +113,7 @@ function dateComposition(p){
       textBlock('month','October 2026',widths[2],clamp(body.h*.13,11,15),{serif:true,role:'primary'}),
     ]
     let x=body.x
-    const blocks=parts.map((block,index)=>{
+    const blocks=parts.map(block=>{
       const placed={...block,x,y:body.y+(body.h-block.h)/2}
       x+=block.w+gap
       return placed

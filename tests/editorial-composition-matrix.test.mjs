@@ -6,14 +6,14 @@ import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition,
 test('all eleven modules fit and center automatically across every grid and theme',()=>{
   const failures=[]
   let checked=0
-  for(const module of EDITORIAL_MODULES)
+  for(const moduleName of EDITORIAL_MODULES)
     for(let columns=1;columns<=4;columns++)
       for(let rows=1;rows<=4;rows++)
         for(const theme of ['light','dark']){
           const width=columns*200,height=rows*120
-          const composition=composeEditorialModule(module,width,height)
+          const composition=composeEditorialModule(moduleName,width,height)
           const issues=auditEditorialComposition(composition)
-          if(issues.length)failures.push(module+' '+columns+'x'+rows+' '+theme+': '+issues.join(', '))
+          if(issues.length)failures.push(moduleName+' '+columns+'x'+rows+' '+theme+': '+issues.join(', '))
           checked++
         }
   assert.equal(checked,352)
@@ -48,13 +48,13 @@ test('a narrow Surf still has a six-block score and protected primary label',()=
 })
 
 test('all text bounding estimates stay inside their assigned width',()=>{
-  for(const module of EDITORIAL_MODULES)
+  for(const moduleName of EDITORIAL_MODULES)
     for(let c=1;c<=4;c++)for(let r=1;r<=4;r++){
-      const view=composeEditorialModule(module,c*200,r*120)
+      const view=composeEditorialModule(moduleName,c*200,r*120)
       for(const block of view.blocks)if(block.type==='text')
         for(const line of block.lines)assert.ok(
           estimatedTextWidth(line,block.fontSize,block.serif)<=block.w+0.6,
-          module+' '+c+'x'+r+' '+block.id+': '+line
+          moduleName+' '+c+'x'+r+' '+block.id+': '+line
         )
     }
 })

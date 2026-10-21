@@ -1,8 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
-import {EDITORIAL_MODULES,EDITORIAL_SAMPLES,composeEditorialModule,auditEditorialComposition} from
-  '../app/lib/editorialComposition.mjs'
+import {EDITORIAL_SAMPLES} from '../app/lib/editorialComposition.mjs'
 
 const source=readFileSync(new URL('../app/editorial-lab/page.tsx',import.meta.url),'utf8')
 
