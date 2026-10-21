@@ -28,7 +28,7 @@ const content: Record<Module,{heading:string;primary:string;detail:string;extra:
     extra:['Wind 4 m/s NW','Low 9°  ·  High 13°','A brighter weekend ahead']},
   news:{heading:'NEWS',primary:'The world today, at a glance',detail:'A quieter, more considered daily briefing',
     extra:['A second important headline','And a third story, when space allows']},
-  surf:{heading:'HELLESTØ',primary:'3 / 6',detail:'Fair surf today',
+  surf:{heading:'HELLESTØ',primary:'Poor to Fair',detail:'Waves 0.8–1.2 m',
     extra:['Waves 0.8–1.2 m','Period 10 s','Wind NE 4 m/s']},
   ski:{heading:'SKI CONDITIONS',primary:'15 cm',detail:'Fresh snow',
     extra:['Cloudy · −4°C','Lifts open 9–16']},
@@ -85,6 +85,27 @@ function Label({x,y,children,ink,size=12,anchor='middle',serif=false}:
     {children}
   </text>
 }
+
+function SurfRatingBlocks({x,y,width,ink,muted}:{
+  x:number;y:number;width:number;ink:string;muted:string
+}) {
+  const gap=width<165?3:5
+  const blockWidth=Math.min(22,Math.max(8,(width-5*gap)/6))
+  const blockHeight=Math.min(15,Math.max(10,blockWidth*.7))
+  const total=6*blockWidth+5*gap
+  return <g transform={`translate(${x-total/2},${y})`} aria-label="Surf rating, three of six">
+    {Array.from({length:6},(_,i)=>
+      <rect key={i} x={i*(blockWidth+gap)} y={0}
+        width={blockWidth} height={blockHeight} rx={2}
+        stroke={i<3?ink:muted} strokeWidth="1.2" fill={i<3?ink:'none'}/>)}
+  </g>
+}
+
+function fitCopy(value:string,width:number,size:number){
+  const count=Math.max(2,Math.floor((width-8)/(size*.68)))
+  return value.length>count?value.slice(0,Math.max(1,count-1)).trimEnd()+'…':value
+}
+
 function DesignCanvas({module,width,height,theme}:{
   module:Module;width:number;height:number;theme:FrameTheme
 }) {
@@ -102,8 +123,10 @@ function DesignCanvas({module,width,height,theme}:{
   const normalItemCount=Math.min(v.extra.length,budget.listItems || (roomy?3:p.shape==='card'?1:0))
   const textWidth=width-pad*2
   const clipped=(value:string,max:number)=>value.length>max?value.slice(0,Math.max(1,max-1))+'…':value
-  const textCap=roomy?42:wide?32:tall?17:Math.max(12,Math.floor(textWidth/10))
-  const showExtras=normalItemCount>0&&height>190&&budget.secondary
+  const textCap=roomy?42:wide?32:tall?13:Math.max(8,Math.floor(textWidth/12))
+  // Keep the lower data band separate from the hero. A medium cell does
+  // not have room for the old overlapping hero + footer combination.
+  const showExtras=normalItemCount>0&&height>=360&&budget.secondary
   return <svg role="img" aria-label={`${module} · ${p.shape} · ${theme} experimental composition`}
     viewBox={`0 0 ${width} ${height}`}
     style={{width:'100%',height:'auto',display:'block',background:paper,color:ink}}>
@@ -113,15 +136,19 @@ function DesignCanvas({module,width,height,theme}:{
         <Label x={pad+8} y={height/2+8} anchor="start" ink={muted} size={14}>WEDNESDAY</Label>
         <Label x={cx} y={height/2+18} ink={ink} size={60} serif>21</Label>
         <Label x={width-pad-12} y={height/2+7} anchor="start" ink={muted} size={12}>OCTOBER 2026</Label>
+      </>:height<190?<>
+        <Label x={cx} y={pad+18} ink={muted} size={12}>OCTOBER</Label>
+        <Label x={cx} y={height*.65} ink={ink} size={Math.min(56,height*.37)} serif>21</Label>
+        <Label x={cx} y={height-pad-6} ink={muted} size={11}>WEDNESDAY</Label>
       </>:<>
-        <Label x={roomy?width*.31:cx} y={pad+25} ink={muted} size={14}>2026</Label>
+        {height>=280&&<Label x={roomy?width*.31:cx} y={pad+25} ink={muted} size={14}>2026</Label>}
         <Label x={roomy?width*.31:cx} y={pad+59} ink={ink} size={22} serif>October</Label>
         <Label x={roomy?width*.31:cx} y={roomy?177:Math.min(height*.6,170)}
           ink={ink} size={roomy?100:Math.min(height*.38,70)} serif>21</Label>
         <Label x={roomy?width*.31:cx} y={roomy?209:Math.min(height*.8,215)}
           ink={muted} size={roomy?17:13}>WEDNESDAY</Label>
-        {figure&&<Botanical x={width*.31-54} y={height-132} w={108} h={70} ink={ink}/>}
-        {roomy&&<g>
+        {figure&&height>=350&&<Botanical x={width*.31-54} y={height-132} w={108} h={70} ink={ink}/>}
+        {roomy&&height>=350&&<g>
           <Ornament x={width*.57} y={70} w={width*.36} ink={ink}/>
           <Label x={width*.75} y={52} ink={muted} size={13}>OCTOBER 2026</Label>
           {Array.from({length:31},(_,i)=>{
@@ -152,12 +179,22 @@ function DesignCanvas({module,width,height,theme}:{
             {clipped(v.primary,roomy?38:wide?32:tall?16:22)}
           </Label>
           {roomy&&<Label x={pad+100} y={165} anchor="start" ink={muted} size={13}>Friday 23 October</Label>}
+        </> : module==='surf'?<>
+          <Label x={cx} y={wide?height*.36:roomy?156:Math.min(height*.35,120)}
+            ink={ink} size={roomy?24:Math.min(18,Math.max(12,width*.07))} serif>
+            {fitCopy(v.primary,textWidth,roomy?24:16)}
+          </Label>
+          <SurfRatingBlocks x={cx} y={wide?height*.53:roomy?180:height*.48}
+            width={Math.max(48,width-pad*2)} ink={ink} muted={muted}/>
+          {height>=190&&<Label x={cx} y={roomy?250:height*.73} ink={muted} size={roomy?16:11}>
+            {fitCopy(v.detail,textWidth,roomy?16:11)}
+          </Label>}
         </> : <>
           <Label x={cx} y={wide?height/2+10:roomy?174:Math.min(height*.58,150)}
-            ink={ink} size={module==='news'?roomy?29:17:mainSize}
-            serif={module!=='soccer'}>{clipped(v.primary,module==='news'?roomy?45:wide?40:19:textCap)}</Label>
+            ink={ink} size={module==='news'?roomy?29:17:Math.min(mainSize,width<260?19:mainSize)}
+            serif={module!=='soccer'}>{fitCopy(v.primary,textWidth,module==='news'?roomy?29:17:Math.min(mainSize,width<260?19:mainSize))}</Label>
           <Label x={cx} y={wide?height/2+33:roomy?208:Math.min(height*.76,188)}
-            ink={muted} size={roomy?16:11}>{clipped(v.detail,textCap)}</Label>
+            ink={muted} size={roomy?16:11}>{fitCopy(v.detail,textWidth,roomy?16:11)}</Label>
         </>}
       </>}
       {showExtras&&<g>
@@ -183,8 +220,8 @@ export default function EditorialLabPage(){
           <p className="mb-2 text-xs uppercase tracking-[0.25em] text-[#72675C]">RE:MIND · experimental</p>
           <h1 className="font-serif text-3xl sm:text-4xl">Editorial design laboratory</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#6C645A]">
-            Visual study using sample content. This is a composition and art-direction review,
-            not a pixel-perfect preview of the current firmware.
+            Conceptual layout using sample content. Overlap fixes and Surf's original six rating blocks are included,
+            but this is not a pixel-perfect preview of the physical firmware.
           </p>
         </div>
         <Link href="/" className="rounded-lg border border-[#C7C0B6] px-4 py-2 text-sm">Back to RE:MIND</Link>
