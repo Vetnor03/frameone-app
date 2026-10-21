@@ -947,23 +947,12 @@ static void uppercaseAscii(const char* input, char* output, size_t outputSize) {
   output[i] = '\0';
 }
 
+// Editorial weekdays are type, not a solid inverted UI badge.
 static void drawAdaptiveWeekdayBadge(const char* weekday, int x, int y, int w, int h) {
   char uppercase[20];
   uppercaseAscii(weekday, uppercase, sizeof(uppercase));
   const GFXfont* fonts[] = {FONT_B12, FONT_9};
-  for (int i = 0; i < 2; ++i) {
-    int16_t x1, y1; uint16_t tw, th;
-    measureText(uppercase, fonts[i], x1, y1, tw, th);
-    if ((int)tw > w - 18 || (int)th > h - 8) continue;
-    const int badgeW = min(w - 4, max(62, (int)tw + 18));
-    const int badgeH = min(h - 4, (int)th + 10);
-    if (badgeW <= 0 || badgeH <= 0) return;
-    const int badgeX = x + (w - badgeW) / 2;
-    const int badgeY = y + (h - badgeH) / 2;
-    DisplayCore::get().fillRect(badgeX, badgeY, badgeW, badgeH, GxEPD_WHITE);
-    drawAdaptiveFact(uppercase, badgeX, badgeY, badgeW, badgeH, &fonts[i], 1, GxEPD_BLACK);
-    return;
-  }
+  drawAdaptiveFact(uppercase, x, y, w, h, fonts, 2, Theme::ink());
 }
 
 static void drawAdaptiveHolidays(int x, int y, int w, int h, int maxRows,
