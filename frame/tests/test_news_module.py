@@ -14,13 +14,13 @@ def test_news_module_is_wired_into_renderer_and_preload():
     assert 'ModuleNews::preload();' in INO
 
 
-def test_news_module_uses_only_headline_space():
+def test_news_module_reserves_readable_headline_space():
     assert 'MAX_NEWS_ITEMS = 14' in NEWS_CPP
     assert '"Nyheter" : "News"' in NEWS_CPP
     assert '#include "FreeSans9ptNO.h"' in NEWS_CPP
-    assert '#define NEWS_FONT_BODY (&FreeSans9pt8b)' in NEWS_CPP
-    assert NEWS_CPP.count('const int lineStep = 21;') == 2
-    assert '#define NEWS_FONT_HEADER (&FreeSansBold12pt8b)' in NEWS_CPP
+    assert '#define NEWS_FONT_BODY (&FreeSansBold12pt8b)' in NEWS_CPP
+    assert NEWS_CPP.count('const int lineStep = 29;') == 2
+    assert '#define NEWS_FONT_HEADER (&FreeSans9pt8b)' in NEWS_CPP
     assert 'raw_titles=1' in NEWS_CPP
     assert 'profile_titles' not in NEWS_CPP
     assert 'calendar' not in NEWS_CPP
@@ -43,7 +43,7 @@ def test_news_wraps_complete_original_titles_before_reducing_story_count():
     assert 'return 0;' in NEWS_CPP[NEWS_CPP.index('// Even a long single word'):NEWS_CPP.index('static int drawHeader')]
 
 
-def test_news_uses_weather_regular_nine_font_with_norwegian_glyphs():
+def test_news_labels_use_regular_nine_font_with_norwegian_glyphs():
     font = (ROOT / "src" / "assets" / "fonts" / "FreeSans9ptNO.h").read_text(encoding="utf-8")
     weather = (ROOT / "src" / "modules" / "ModuleWeather.cpp").read_text(encoding="utf-8")
     assert '#define FONT_B9  (&FreeSans9pt8b)' in weather
