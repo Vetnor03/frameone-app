@@ -43,6 +43,23 @@ try {
   // One complete contact sheet per module and theme: no manual clicking
   // through 16 individual shapes to review the composition direction.
   await page.getByRole('button',{name:'View all 16 shapes'}).click()
+  // The gallery itself is subject to overflow auditing. The first contact
+  // sheet revealed tall thumbnails bleeding into adjacent rows.
+  const cardIssues=await page.evaluate(()=>{
+    const issues=[]
+    for(const card of document.querySelectorAll('[data-editorial-cell]')){
+      const preview=card.querySelector('svg')
+      if(!preview)continue
+      const outer=card.getBoundingClientRect()
+      const inner=preview.getBoundingClientRect()
+      if(inner.left<outer.left-1||inner.right>outer.right+1||
+         inner.top<outer.top-1||inner.bottom>outer.bottom+1)
+        issues.push(card.getAttribute('data-editorial-cell'))
+    }
+    return issues
+  })
+  console.log('RE:MIND gallery thumbnail overflows:',JSON.stringify(cardIssues))
+  assert.deepEqual(cardIssues,[],'Some custom-grid previews escape their gallery cards')
   mkdirSync('artifacts/editorial/matrix',{recursive:true})
   const moduleNames=['date','reminders','weather','news','surf','ski',
     'countdown','soccer','stocks','groceries','assistant']

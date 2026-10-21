@@ -260,17 +260,22 @@ export default function EditorialLabPage(){
       </div>
 
       {matrix?<div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {cells.map(d=><button key={d.key} type="button"
-          onClick={()=>{setCell(d.key);setMatrix(false)}}
-          className="min-w-0 rounded-lg border border-[#CEC4B7] bg-[#DDD4C7] p-3 text-left">
-          <span className="mb-2 block text-xs font-medium">{d.key.replace('x','×')} · {d.width}×{d.height}</span>
-          <div className="flex h-40 items-center justify-center bg-[#243746] p-3">
-            <div className="w-full max-w-full border-[3px] border-[#ECE6DC]"
-              style={{maxWidth:d.width,aspectRatio:d.width+'/'+d.height}}>
-              <EditorialCanvas module={module} width={d.width} height={d.height} theme={theme}/>
+        {cells.map(d=>{
+          // Fit BOTH width and height within the gallery thumbnail. A tall
+          // 1x4 cell must never spill into the next card row.
+          const scale=Math.min(160/d.width,140/d.height)
+          return <button key={d.key} type="button" data-editorial-cell={d.key}
+            onClick={()=>{setCell(d.key);setMatrix(false)}}
+            className="min-w-0 rounded-lg border border-[#CEC4B7] bg-[#DDD4C7] p-3 text-left">
+            <span className="mb-2 block text-xs font-medium">{d.key.replace('x','×')} · {d.width}×{d.height}</span>
+            <div className="flex h-40 min-w-0 items-center justify-center overflow-hidden bg-[#243746] p-3">
+              <div data-editorial-thumbnail="true" className="shrink border-[3px] border-[#ECE6DC]"
+                style={{width:d.width*scale,aspectRatio:d.width+'/'+d.height,maxWidth:'100%',maxHeight:140}}>
+                <EditorialCanvas module={module} width={d.width} height={d.height} theme={theme}/>
+              </div>
             </div>
-          </div>
-        </button>)}
+          </button>
+        })}
       </div>:<div className="rounded-xl bg-[#82715F] p-3 sm:p-5">
         <div className="flex min-h-[390px] items-center justify-center bg-[#213543] p-4 sm:p-8">
           <div className="w-full border-[6px] border-[#F0EADF] bg-white"
