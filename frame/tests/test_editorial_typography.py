@@ -25,7 +25,7 @@ int main() {
   assert(EditorialTypography::choose(card, HEADING, &r9, &r12, &b12, &b18) == &b12);
   assert(EditorialTypography::choose(spread, PRIMARY, &r9, &r12, &b12, &b18) == &r12);
   assert(EditorialTypography::choose(spread, HERO, &r9, &r12, &b12, &b18) == &b18);
-  assert(EditorialTypography::choose(spread, PRIMARY, &r9, nullptr, &b12, &b18) == &r9);
+  assert(EditorialTypography::choose(spread, PRIMARY, &r9, static_cast<const Font*>(nullptr), &b12, &b18) == &r9);
   assert(EditorialTypography::lineStep(REGULAR_9) < EditorialTypography::lineStep(BOLD_18));
   return 0;
 }
