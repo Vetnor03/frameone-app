@@ -17,7 +17,10 @@ Google Calendar uses the existing Connect tab, encrypted user integrations, and 
 
 ## Scope and behavior
 
-- Read-only OAuth scope: https://www.googleapis.com/auth/calendar.readonly
+- Requests exactly these read-only scopes:
+  - `https://www.googleapis.com/auth/calendar.calendarlist.readonly`: read the user's calendar list so RE:MIND can find their visible/subscribed calendars.
+  - `https://www.googleapis.com/auth/calendar.events.readonly`: read upcoming event details for display in RE:MIND Reminders and on the frame.
+- No Google Calendar write, settings, or ACL permissions are requested.
 - Authorization code flow with PKCE S256, authenticated POST, encrypted time-bound state and short-lived HttpOnly SameSite=Lax nonce/verifier cookie.
 - Refresh token stored encrypted in public.user_integrations; event cache in public.integration_items.
 - Imports visible Google calendars, recurring event instances, all-day events and paginated results.
@@ -29,3 +32,14 @@ Google Calendar uses the existing Connect tab, encrypted user integrations, and 
 
 - User-selectable individual calendars (currently uses calendars selected for display in Google).
 - Faster webhook notifications, account health telemetry and additional QA before a broader rollout.
+
+## Google OAuth verification resubmission (October 2026)
+
+Google requested a new end-to-end demonstration showing why each permission is necessary.
+
+1. In Google Cloud Console → Google Auth Platform → Data Access, add exactly the two scopes listed above and remove the former broad `https://www.googleapis.com/auth/calendar.readonly` scope from the submitted scopes. Confirm the scopes match the app's OAuth request.
+2. Deploy the changed code to a test environment; previously connected Google accounts must disconnect and reconnect to consent to the narrower request. Existing stored grants and refresh tokens do not automatically lose the broad scope when code changes. Optionally revoke the old grant in Google Account settings for a clean demo.
+3. Record RE:MIND login → Connect → Google Calendar → full Google OAuth consent flow, expanding **Show all services** to show both permissions clearly. The Google consent screen should be set to English.
+4. Demonstrate an upcoming event in Google Calendar appearing in RE:MIND Reminders and on the physical frame where available. Explain the calendar-list scope is used to find calendars and the event-read scope to import events. The integration does not edit Google events.
+5. Provide a dedicated accessible RE:MIND reviewer account, exact navigation steps, and a working way to complete the email OTP login without an authentication blocker.
+6. Reply to Google's existing verification email with the video link and review instructions. Keep publishing status **In Production**, and avoid exposing unverified scopes to normal production traffic before approval.
