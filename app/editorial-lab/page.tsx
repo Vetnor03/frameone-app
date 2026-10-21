@@ -117,7 +117,9 @@ function DesignCanvas({module,width,height,theme}:{
   const v=content[module]
   const cx=width/2, pad=p.inset
   const roomy=p.shape==='spread',wide=p.shape==='ribbon',tall=p.shape==='column'
-  const figure=budget.illustration
+  const dateWithCalendar=roomy&&height>=350
+  const dateCx=dateWithCalendar?width*.31:cx
+  const figure=budget.illustration&&height>=350
   const mainSize=roomy?52:tall?32:wide?36:26
   const headerY=pad+24
   const normalItemCount=Math.min(v.extra.length,budget.listItems || (roomy?3:p.shape==='card'?1:0))
@@ -126,7 +128,7 @@ function DesignCanvas({module,width,height,theme}:{
   const textCap=roomy?42:wide?32:tall?13:Math.max(8,Math.floor(textWidth/12))
   // Keep the lower data band separate from the hero. A medium cell does
   // not have room for the old overlapping hero + footer combination.
-  const showExtras=normalItemCount>0&&height>=360&&budget.secondary
+  const showExtras=module!=='surf'&&module!=='date'&&normalItemCount>0&&height>=460&&width>=300&&budget.secondary
   return <svg role="img" aria-label={`${module} · ${p.shape} · ${theme} experimental composition`}
     viewBox={`0 0 ${width} ${height}`}
     style={{width:'100%',height:'auto',display:'block',background:paper,color:ink}}>
@@ -141,14 +143,14 @@ function DesignCanvas({module,width,height,theme}:{
         <Label x={cx} y={height*.65} ink={ink} size={Math.min(56,height*.37)} serif>21</Label>
         <Label x={cx} y={height-pad-6} ink={muted} size={11}>WEDNESDAY</Label>
       </>:<>
-        {height>=280&&<Label x={roomy?width*.31:cx} y={pad+25} ink={muted} size={14}>2026</Label>}
-        <Label x={roomy?width*.31:cx} y={pad+59} ink={ink} size={22} serif>October</Label>
-        <Label x={roomy?width*.31:cx} y={roomy?177:Math.min(height*.6,170)}
+        {height>=280&&<Label x={dateCx} y={pad+25} ink={muted} size={14}>2026</Label>}
+        <Label x={dateCx} y={pad+59} ink={ink} size={22} serif>October</Label>
+        <Label x={dateCx} y={roomy?177:Math.min(height*.6,170)}
           ink={ink} size={roomy?100:Math.min(height*.38,70)} serif>21</Label>
-        <Label x={roomy?width*.31:cx} y={roomy?209:Math.min(height*.8,215)}
+        <Label x={dateCx} y={roomy?209:Math.min(height*.8,215)}
           ink={muted} size={roomy?17:13}>WEDNESDAY</Label>
-        {figure&&height>=350&&<Botanical x={width*.31-54} y={height-132} w={108} h={70} ink={ink}/>}
-        {roomy&&height>=350&&<g>
+        {dateWithCalendar&&figure&&<Botanical x={width*.31-54} y={height-132} w={108} h={70} ink={ink}/>}
+        {dateWithCalendar&&<g>
           <Ornament x={width*.57} y={70} w={width*.36} ink={ink}/>
           <Label x={width*.75} y={52} ink={muted} size={13}>OCTOBER 2026</Label>
           {Array.from({length:31},(_,i)=>{
