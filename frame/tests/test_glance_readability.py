@@ -12,7 +12,8 @@ def module(name: str) -> str:
 
 def test_reminders_use_readable_body_in_anchor_and_adaptive_layouts():
     source = module("ModuleReminders.cpp")
-    assert "REMINDER_CONTENT_FONT = FONT_B12" in source
+    assert "REMINDER_CONTENT_FONT = FONT_12" in source
+    assert "#include \"FreeSans12ptNO.h\"" in source
     assert "return {REMINDER_CONTENT_FONT, 112, 8, 68}" in source
     assert "const int lineStep = smartLineStep(REMINDER_CONTENT_FONT)" in source
     assert "drawLeft(titleRect.x - x1, baseline, lines[line], REMINDER_CONTENT_FONT" in source
