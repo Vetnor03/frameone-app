@@ -42,7 +42,7 @@ export function editorialRole(plan, role) {
     case EditorialRole.HERO:
       return { font: spacious ? 'bold18' : 'bold12', maxLines: 2, visible: plan.safeHeight >= 24, wrap: false }
     case EditorialRole.HEADING:
-      return { font: spacious || (plan.shape === 'ribbon' && plan.safeWidth >= 440) ? 'bold12' : 'regular9',
+      return { font: spacious || plan.shape === 'card' || (plan.shape === 'ribbon' && plan.safeWidth >= 440) ? 'bold12' : 'regular9',
         maxLines: 1, visible: plan.safeHeight >= 38, wrap: false }
     case EditorialRole.PRIMARY:
       return { font: spacious ? 'regular12' : 'regular9', maxLines: tight ? 2 : 3,
