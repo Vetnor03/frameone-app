@@ -1,4 +1,8 @@
-export const GOOGLE_CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'] as const
+// Only request access needed to discover selected calendars and read their events.
+export const GOOGLE_CALENDAR_SCOPES = [
+  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+  'https://www.googleapis.com/auth/calendar.events.readonly',
+] as const
 
 export type GoogleTokenSet = {
   access_token: string
