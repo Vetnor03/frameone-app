@@ -11,7 +11,11 @@ test('Google OAuth requests offline read-only access with PKCE state', () => {
     process.env.GOOGLE_CALENDAR_REDIRECT_URI = 'https://re-mind.no/api/integrations/google-calendar/callback'
     const url = new URL(googleCalendarAuthUrl('opaque-state', 'challenge'))
     assert.equal(url.searchParams.get('access_type'), 'offline')
-    assert.equal(url.searchParams.get('scope'), 'https://www.googleapis.com/auth/calendar.readonly')
+    assert.deepEqual(url.searchParams.get('scope')?.split(' '), [
+      'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+      'https://www.googleapis.com/auth/calendar.events.readonly',
+    ])
+    assert.equal(url.searchParams.get('prompt'), 'consent select_account')
     assert.equal(url.searchParams.get('code_challenge_method'), 'S256')
     assert.equal(url.searchParams.get('state'), 'opaque-state')
   } finally {
