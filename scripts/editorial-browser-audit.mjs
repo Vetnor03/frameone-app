@@ -39,6 +39,23 @@ try {
   await page.screenshot({path:'artifacts/editorial/surf-2x1.png'})
   await grid.selectOption('4x4')
   await page.screenshot({path:'artifacts/editorial/surf-4x4.png'})
+
+  // One complete contact sheet per module and theme: no manual clicking
+  // through 16 individual shapes to review the composition direction.
+  await page.getByRole('button',{name:'View all 16 shapes'}).click()
+  mkdirSync('artifacts/editorial/matrix',{recursive:true})
+  const moduleNames=['date','reminders','weather','news','surf','ski',
+    'countdown','soccer','stocks','groceries','assistant']
+  for(const theme of ['light','dark']){
+    await page.getByRole('button',{name:theme==='light'?'Light':'Dark',exact:true}).click()
+    for(const name of moduleNames){
+      await moduleControl.selectOption(name)
+      await page.screenshot({
+        path:'artifacts/editorial/matrix/'+name+'-'+theme+'.png',
+        fullPage:true,
+      })
+    }
+  }
 } finally {
   await browser.close()
 }
