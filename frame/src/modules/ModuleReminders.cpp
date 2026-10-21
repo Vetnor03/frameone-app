@@ -2290,9 +2290,8 @@ struct AdaptiveReminderDensity {
   int timeW;
 };
 
-// Reminder body text has one physical size: regular 9pt, matching News.
-// Reserve up to four complete 9pt lines (21px advance) for a reminder;
-// if that prevents the next item from fitting, the next item stays hidden.
+// Reminder body text has a fixed regular 12pt floor (29px advance).
+// Fit fewer complete items rather than dropping back to tiny text.
 static AdaptiveReminderDensity adaptiveReminderDensity(int availablePixels, int requiredRows) {
   (void)availablePixels;
   (void)requiredRows;
