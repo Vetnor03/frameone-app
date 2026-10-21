@@ -15,7 +15,7 @@ test('editorial review is a separate concept screen, not the production mirror',
   const page=readFileSync(new URL('../app/editorial-lab/page.tsx',import.meta.url),'utf8')
   assert.match(page,/Editorial design laboratory/)
   assert.match(page,/editorialPlan\(/)
-  assert.match(page,/visual study/i)
+  assert.match(page,/browser concept/i)
 })
 
 
@@ -35,9 +35,10 @@ test('mirror theme honors actual black and white e-paper ink and paper',()=>{
   assert.match(mirror,/const textColor = isDark \? '#FFFFFF' : '#000000'/)
 })
 
-test('editorial lab offers all 16 custom-grid rectangles for visual review',()=>{
-  const page=readFileSync(new URL('../app/editorial-lab/page.tsx',import.meta.url),'utf8')
-  assert.match(page,/gridSpans: Span\[\] = \[1,2,3,4\]/)
-  assert.match(page,/gridSpans\.flatMap\(columns=>gridSpans\.map\(rows=>/)
-  assert.match(page,/useState<Dimension>\('4x4'\)/)
+test('editorial lab builds a 16-rectangle matrix and exposes computed audit',()=>{
+  const source=readFileSync(new URL('../app/editorial-lab/page.tsx',import.meta.url),'utf8')
+  assert.match(source,/spans\.flatMap\(cols=>spans\.map\(rows=>/)
+  assert.match(source,/useState<Cell>\('4x4'\)/)
+  assert.match(source,/auditEditorialComposition/)
+  assert.match(source,/View all 16 shapes/)
 })
