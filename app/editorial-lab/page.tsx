@@ -222,7 +222,7 @@ export default function EditorialLabPage(){
           <p className="mb-2 text-xs uppercase tracking-[0.25em] text-[#72675C]">RE:MIND · experimental</p>
           <h1 className="font-serif text-3xl sm:text-4xl">Editorial design laboratory</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#6C645A]">
-            Conceptual layout using sample content. Overlap fixes and Surf's original six rating blocks are included,
+            Visual study using sample content. Overlap fixes and the original six Surf rating blocks are included,
             but this is not a pixel-perfect preview of the physical firmware.
           </p>
         </div>
