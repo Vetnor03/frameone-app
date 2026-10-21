@@ -8,6 +8,7 @@
 #include "Theme.h"
 
 #include "FreeSans9ptNO.h"
+#include "FreeSans12ptNO.h"
 #include "FreeSansBold12ptNO.h"
 
 #include <ArduinoJson.h>
@@ -15,8 +16,8 @@
 #include <new>
 
 // News headlines are primary content, not small explanatory text.
-#define NEWS_FONT_BODY (&FreeSansBold12pt8b)
-#define NEWS_FONT_HEADER (&FreeSans9pt8b)
+#define NEWS_FONT_BODY (&FreeSans12ptNO8b)
+#define NEWS_FONT_HEADER (&FreeSansBold12pt8b)
 
 namespace ModuleNews {
 
