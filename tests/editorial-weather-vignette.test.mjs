@@ -40,10 +40,12 @@ test('same coastal contour coordinates are used in both JS and firmware',()=>{
     weatherCoastalCurves(73,2),
   ]
   for(const name of names) {
-    const block=cpp.match(new RegExp('static const uint8_t '+name+
-      '\\\\[\\\\]\\\\[8\\\\] = \\\\{([\\\\s\\\\S]*?)\\\\n  \\\\};'))?.[1]
-    assert.ok(block,'C++ array '+name)
-    const points=[...block.matchAll(/\\{([\\d,]+)\\}/g)].map(m=>m[1].split(',').map(Number))
+    const needle='static const uint8_t '+name+'[][8] = {'
+    const start=cpp.indexOf(needle)
+    assert.ok(start>=0,'C++ array '+name)
+    const block=cpp.slice(start+needle.length,cpp.indexOf('\n  };',start))
+    const points=[...block.matchAll(/\{([\d,]+)\}/g)]
+      .map(m=>m[1].split(',').map(Number))
     assert.ok(points.length>=2,name)
     const jsFamily=expected.find(scene=>scene.some(curve=>
       points.some(point=>point.every((n,index)=>n===curve[index]))))
