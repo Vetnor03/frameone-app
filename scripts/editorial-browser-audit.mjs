@@ -75,10 +75,46 @@ try {
   // through 16 individual shapes to review the composition direction.
   await moduleControl.selectOption('weather')
   await grid.selectOption('4x4')
-  for(const scene of Object.keys({clear:1,partly:1,overcast:1,windy:1,rainy:1,snowy:1})){
-    await page.getByTestId('weather-sky-selector').selectOption(scene)
-    await page.screenshot({path:'artifacts/editorial/weather-coast-'+scene+'.png'})
+  // Weather v2 acceptance: all six visual states must be distinct, visible
+  // and monochrome in *both* frame themes, without altering their geometry.
+  const sceneNames=['clear','partly','overcast','windy','rainy','snowy']
+  const lightScenes=new Map()
+  for(const mode of ['Light','Dark']){
+    await page.getByRole('button',{name:mode,exact:true}).click()
+    const seen=new Set()
+    for(const scene of sceneNames){
+      await page.getByTestId('weather-sky-selector').selectOption(scene)
+      const drawing=await page.evaluate(()=>{
+        const frame=document.querySelector(
+          'svg[data-editorial-probe][data-module="weather"][data-width="800"][data-height="480"]')
+        const coast=frame?.querySelector('svg[aria-label="Coastal weather field-guide engraving"]')
+        if(!(coast instanceof SVGSVGElement)||!frame)return null
+        const paths=[...coast.querySelectorAll('path')].map(p=>p.getAttribute('d'))
+        const stroke=coast.getAttribute('stroke')
+        const background=frame.querySelector('rect')?.getAttribute('fill')
+        const box=coast.getBoundingClientRect(), parent=frame.getBoundingClientRect()
+        return {paths,stroke,background,
+          inside:box.left>=parent.left-1&&box.top>=parent.top-1&&
+            box.right<=parent.right+1&&box.bottom<=parent.bottom+1}
+      })
+      assert.ok(drawing,'Missing Weather engraving: '+mode+' '+scene)
+      assert.equal(drawing.background,mode==='Light'?'#FFFFFF':'#000000')
+      assert.equal(drawing.stroke,mode==='Light'?'#000000':'#FFFFFF')
+      assert.ok(drawing.paths.length>=17,'Weather engraving lost its fine contours')
+      assert.equal(drawing.inside,true,'Weather art escapes its content cell')
+      const shape=drawing.paths.join('|')
+      assert.ok(!seen.has(shape),'Duplicate Weather sky artwork: '+mode+' '+scene)
+      seen.add(shape)
+      if(mode==='Light')lightScenes.set(scene,shape)
+      else assert.equal(shape,lightScenes.get(scene),'Weather light/dark structure changed')
+      await page.screenshot({
+        path:'artifacts/editorial/weather-coast-'+scene+(mode==='Dark'?'-dark':'')+'.png',
+      })
+    }
+    assert.equal(seen.size,6)
   }
+  console.log('RE:MIND coastal illustrations: 12/12 state/theme reviews, all distinct, visible and in bounds')
+  await page.getByRole('button',{name:'Light',exact:true}).click()
   await page.getByRole('button',{name:'View all 16 shapes'}).click()
   // The gallery itself is subject to overflow auditing. The first contact
   // sheet revealed tall thumbnails bleeding into adjacent rows.

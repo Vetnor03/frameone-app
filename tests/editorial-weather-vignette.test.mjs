@@ -58,3 +58,18 @@ test('same coastal contour coordinates are used in both JS and firmware',()=>{
   assert.ok(cpp.includes('if(sky==COAST_RAIN)'))
   assert.ok(cpp.includes('else if(sky==COAST_SNOW)'))
 })
+
+test('six hand-composed Weather variants are visually distinct while retaining shared shore',()=>{
+  const scenes=Object.entries(WEATHER_VIGNETTE_SCENES).map(([name,s])=>({
+    name,curves:weatherCoastalCurves(s.wmo,s.windMs)
+  }))
+  const core=scenes[0].curves.slice(0,16)
+  const unique=new Set()
+  for(const {name,curves} of scenes){
+    assert.deepEqual(curves.slice(0,core.length),core,name+' should preserve the engraved coastline')
+    const key=JSON.stringify(curves)
+    assert.ok(!unique.has(key),name+' should have a distinct sky illustration')
+    unique.add(key)
+  }
+  assert.equal(unique.size,6)
+})

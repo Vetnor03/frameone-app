@@ -208,3 +208,26 @@ the hardware samples 12 short integer line segments per curve on the 1-bit
 with no large fills or overlapping content. The six Lab variants and the
 full 352-layout browser audit are required; real e-paper approval still needs
 physical visual testing. Sample content in the Lab is not real weather data.
+
+## Weather v2 approval and release preflight (22 October 2026)
+
+**Approved visual reference:** the rainy coastal engraving shown in the
+Editorial Lab. Date's botanical sprig is unchanged; Surf's established 2×2
+reference remains protected. Preserve the organic fine-line, low-contrast
+composition; do not return to symbolic sun/cloud diagrams or replicate the
+same botanical figure across modules.
+
+The other five skies are part of the same code-defined family, but are
+**not yet individually approved on physical e-paper**. Before pilot use:
+1. The browser audit must check all 6 sky choices in Light **and** Dark
+   (12 review screenshots), ensuring distinct contour paths, correct
+   foreground/background ink, and no content-region escape.
+2. The standard 352-layout audit and stable tests must pass.
+3. Check the physical display from 1–2 metres, verify legibility, normal
+   Weather update behavior, and inspect at least one clear and one rainy
+   display on real hardware. Do not claim all variants are physically
+   tested merely because browser screenshots look correct.
+4. Keep this work in draft PR #1423 until hardware QA passes. No automatic
+   merge, OTA rollout, or reflash of tester frames.
+
+The six condition previews are **sample data**, not forecasts for Stavanger.
