@@ -36,8 +36,10 @@ try {
       const old=el.scrollTop
       const scrollable=el.scrollHeight>el.clientHeight+24&&
         ['auto','scroll'].includes(getComputedStyle(el).overflowY)
-      el.scrollTop=140
-      const moved=el.scrollTop>=100
+      const available=el.scrollHeight-el.clientHeight
+      const target=Math.min(140,Math.max(0,available))
+      el.scrollTop=target
+      const moved=el.scrollTop>=Math.min(16,Math.max(1,target))
       el.scrollTop=old
       return {found:true,scrollable,moved}
     })
