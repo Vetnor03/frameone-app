@@ -55,6 +55,6 @@ test('same coastal contour coordinates are used in both JS and firmware',()=>{
       scene.some(curve=>curve.every((n,index)=>n===point[index]))),
       name+':'+point.join(','))
   }
-  assert.match(cpp,/if\\(sky==COAST_RAIN\\)/)
-  assert.match(cpp,/else if\\(sky==COAST_SNOW\\)/)
+  assert.ok(cpp.includes('if(sky==COAST_RAIN)'))
+  assert.ok(cpp.includes('else if(sky==COAST_SNOW)'))
 })
