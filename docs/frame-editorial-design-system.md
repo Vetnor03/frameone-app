@@ -265,3 +265,31 @@ The Windy illustration's plant is straightened slightly and its motion
 reduced to one delicate high airflow sweep. Its cloud remains elongated so
 it still reads differently from the quiet Partly Cloudy and Overcast motifs.
 Rainy, Snowy, Partly Cloudy, Overcast, Clear, Date and Surf are unchanged.
+
+## Full frame 4×4 composition testing
+
+The Editorial Lab now offers a separate **Full frame · mix modules** mode
+alongside the original single-module inspector. Both reuse the same
+`EditorialCanvas` component and sample data; no saved production layout is
+changed. The frame is an 800×480 logical canvas divided into 4×4 cells.
+
+- 17 valid layout presets including quarters, ribbons, columns, vertical
+  strips, asymmetric editorial mosaics and all sixteen 1×1 cells.
+- Click any visible tile, or use its per-tile selector, to assign one of the
+  eleven real module types. Every module uses its own exact cell width/height
+  when determining content hierarchy and illustrations.
+- **Randomize layout + modules** selects a different curated preset or a
+  novel generated rectangular mosaic of 3–10 cells, then assigns shuffled
+  module names. The seed is displayed and the setup can be copied for QA.
+- **Shuffle modules only** preserves geometry. **Clean preview** hides
+  editing outlines. Light/Dark and Weather sky controls are shared with the
+  individual module inspector.
+- Presets and thousands of seeded scenarios are tested for exactly 16/16
+  coverage, no overlap, no invalid spans, and no out-of-bounds information.
+  Browser CI also verifies physical DOM tile rectangles, per-cell editing,
+  16 interactive randomizations and both themes, plus saved mixed-frame
+  screenshots for visual comparison.
+
+This is a **composition QA tool**, not yet a pixel-perfect firmware emulator.
+Crops between modules, GFX fonts and full-size module content density must
+still be checked on the real frame before merging the redesign.

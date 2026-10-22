@@ -139,6 +139,97 @@ try {
   mkdirSync('artifacts/editorial/matrix',{recursive:true})
   const moduleNames=['date','reminders','weather','news','surf','ski',
     'countdown','soccer','stocks','groceries','assistant']
+  // Mixed full-frame composition audit. Test the *actual* rendered 800×480
+  // canvas and cell selection controls, not just the individual SVG modules.
+  await page.getByTestId('full-frame-tab').click()
+  const frame=page.getByTestId('editorial-full-frame')
+  const assertFrameCoverage=async()=>{
+    const data=await page.evaluate(()=>{
+      const frame=document.querySelector('[data-testid="editorial-full-frame"]')
+      if(!(frame instanceof HTMLElement))return {found:false,issues:['missing frame'],count:0}
+      const outer=frame.getBoundingClientRect()
+      const cells=[...frame.querySelectorAll('[data-frame-tile]')]
+      const issues=[]
+      let area=0
+      for(const cell of cells){
+        const b=cell.getBoundingClientRect()
+        if(b.left<outer.left-1||b.top<outer.top-1||
+           b.right>outer.right+1||b.bottom>outer.bottom+1)
+          issues.push('tile outside frame')
+        area+=b.width*b.height
+        const svg=cell.querySelector('svg[data-editorial-probe]')
+        if(!svg)issues.push('missing module canvas')
+        const expectedW=Number(cell.getAttribute('data-columns'))*200
+        const expectedH=Number(cell.getAttribute('data-rows'))*120
+        if(svg?.getAttribute('data-width')!==String(expectedW)||
+           svg?.getAttribute('data-height')!==String(expectedH))
+          issues.push('module geometry mismatch')
+      }
+      for(let i=0;i<cells.length;i++)for(let j=i+1;j<cells.length;j++){
+        const a=cells[i].getBoundingClientRect(),b=cells[j].getBoundingClientRect()
+        const ix=Math.min(a.right,b.right)-Math.max(a.left,b.left)
+        const iy=Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)
+        if(ix>1&&iy>1)issues.push('neighboring modules overlap')
+      }
+      if(Math.abs(area-outer.width*outer.height)>2)
+        issues.push('incomplete frame coverage')
+      return {found:true,issues,count:cells.length}
+    })
+    assert.equal(data.found,true)
+    assert.deepEqual(data.issues,[])
+    assert.equal(Number(await page.getByTestId('frame-layout-audit').getAttribute('data-issues')),0)
+    return data.count
+  }
+  assert.equal(await assertFrameCoverage(),4)
+  await page.getByTestId('frame-preset').selectOption('sixteen')
+  assert.equal(await assertFrameCoverage(),16)
+  await page.getByTestId('frame-module-cell-1').selectOption('weather')
+  await page.getByTestId('frame-module-cell-2').selectOption('date')
+  await page.getByTestId('frame-module-cell-3').selectOption('surf')
+  assert.equal(await frame.locator('[data-frame-tile="cell-1"]').getAttribute('data-module'),'weather')
+  assert.equal(await frame.locator('[data-frame-tile="cell-2"]').getAttribute('data-module'),'date')
+  assert.equal(await frame.locator('[data-frame-tile="cell-3"]').getAttribute('data-module'),'surf')
+  await page.getByTestId('frame-preset').selectOption('quarters')
+  await page.getByTestId('frame-module-cell-1').selectOption('surf')
+  await page.getByTestId('frame-module-cell-2').selectOption('weather')
+  await page.getByTestId('frame-module-cell-3').selectOption('date')
+  await page.screenshot({path:'artifacts/editorial/full-frame-quarters-light.png'})
+  await page.getByRole('button',{name:'Dark',exact:true}).click()
+  await page.screenshot({path:'artifacts/editorial/full-frame-quarters-dark.png'})
+  await page.getByRole('button',{name:'Light',exact:true}).click()
+  await page.getByTestId('frame-preset').selectOption('feature-left')
+  assert.equal(await assertFrameCoverage(),3)
+  await page.screenshot({path:'artifacts/editorial/full-frame-feature-left.png'})
+  const randomized=new Set()
+  for(let iteration=0;iteration<16;iteration++){
+    await page.getByTestId('frame-randomize').click()
+    const count=await assertFrameCoverage()
+    assert.ok(count>=1&&count<=16)
+    const signature=await frame.evaluate(node=>[
+      node.getAttribute('data-preset'),
+      ...[...node.querySelectorAll('[data-frame-tile]')].map(c=>[
+        c.getAttribute('data-columns'),c.getAttribute('data-rows'),
+        c.getAttribute('data-module'),c.getAttribute('style'),
+      ].join(':')),
+    ].join('|'))
+    randomized.add(signature)
+    if(iteration<4)
+      await page.screenshot({path:'artifacts/editorial/full-frame-random-'+iteration+'.png'})
+  }
+  assert.ok(randomized.size>=12,'Randomize repeated too many identical frames')
+  await page.getByTestId('frame-preset').selectOption('sixteen')
+  await page.getByTestId('frame-shuffle').click()
+  const palette=await frame.locator('[data-frame-tile]').evaluateAll(nodes=>
+    nodes.map(node=>node.getAttribute('data-module')))
+  assert.equal(new Set(palette.slice(0,11)).size,11,'shuffle should not repeat early')
+  await page.getByTestId('frame-clean').click()
+  assert.equal(await frame.locator('button').count(),0)
+  await page.getByTestId('frame-clean').click()
+  assert.equal(await frame.locator('button').count(),16)
+  await assertFrameCoverage()
+  console.log('RE:MIND mixed 4x4 frames: presets, selection, 16 randomizations, no overlap/gaps')
+  await page.getByTestId('single-module-tab').click()
+
   for(const theme of ['light','dark']){
     await page.getByRole('button',{name:theme==='light'?'Light':'Dark',exact:true}).click()
     for(const name of moduleNames){
