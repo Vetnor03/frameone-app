@@ -10,5 +10,5 @@ test('editorial Lab has its own touch-friendly scroll viewport under global over
   assert.match(lab,/h-dvh min-h-0 w-full overflow-x-hidden overflow-y-auto/)
   assert.match(lab,/WebkitOverflowScrolling:'touch'/)
   assert.match(browser,/width:390,height:700/)
-  assert.match(browser,/el\.scrollTop=140/)
+  assert.match(browser,/el\.scrollTop=target/)
 })
