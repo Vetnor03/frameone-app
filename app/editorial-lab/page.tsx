@@ -196,7 +196,7 @@ function FullFrameLab({theme,weatherScene}:{
     return problems
   },[tiles,weatherScene])
   const choosePreset=(id:string)=>{
-    setTiles(previous=>makeEditorialGrid(id).map((tile,index)=>({
+    setTiles(previous=>(makeEditorialGrid(id) as FrameTile[]).map((tile:FrameTile,index:number)=>({
       ...tile,module:(previous[index]?.module??tile.module) as Module,
     })))
     setPresetId(id)

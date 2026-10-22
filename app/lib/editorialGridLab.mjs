@@ -127,6 +127,7 @@ function randomRectangles(next){
   return rects.sort((a,b)=>a[1]-b[1]||a[0]-b[0])
 }
 
+/** @param {number} seed @param {string|null} [previousPresetId] */
 export function randomEditorialGrid(seed,previousPresetId=null){
   const next=randomSource(seed)
   const options=EDITORIAL_GRID_PRESETS.filter(p=>p.id!==previousPresetId)
