@@ -5,6 +5,8 @@ import Link from 'next/link'
 import {editorialPlan} from '../lib/editorialFrameLayout.mjs'
 import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition} from '../lib/editorialComposition.mjs'
 import {WEATHER_VIGNETTE_SCENES,weatherCoastalCurves} from '../lib/editorialWeatherVignette.mjs'
+import {EDITORIAL_GRID_PRESETS,GRID_CELL_WIDTH,GRID_CELL_HEIGHT,
+  makeEditorialGrid,randomEditorialGrid,validateEditorialGrid} from '../lib/editorialGridLab.mjs'
 
 type Module = typeof EDITORIAL_MODULES[number]
 type Span = 1|2|3|4
@@ -167,7 +169,187 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly'}:{
   </svg>
 }
 
+type FrameTile={id:string;x:number;y:number;cols:number;rows:number;module:Module}
+const moduleLabel=(module:Module)=>module==='assistant'
+  ?'AI Follow':module.charAt(0).toUpperCase()+module.slice(1)
+
+// Full-frame editing is a layout-study surface. Every cell uses the *same*
+// EditorialCanvas renderer as the single-cell Lab; no fake thumbnail geometry.
+function FullFrameLab({theme,weatherScene}:{
+  theme:FrameTheme;weatherScene:WeatherScene
+}){
+  const [presetId,setPresetId]=useState('quarters')
+  const [tiles,setTiles]=useState<FrameTile[]>(()=>makeEditorialGrid('quarters') as FrameTile[])
+  const [selectedId,setSelectedId]=useState('cell-1')
+  const [lastSeed,setLastSeed]=useState<number|null>(null)
+  const [clean,setClean]=useState(false)
+  const [copyStatus,setCopyStatus]=useState('')
+  const selected=tiles.find(tile=>tile.id===selectedId)??tiles[0]
+  const validation=useMemo(()=>{
+    const problems=validateEditorialGrid(tiles)
+    for(const tile of tiles){
+      const content=composeEditorialModule(tile.module,
+        tile.cols*GRID_CELL_WIDTH,tile.rows*GRID_CELL_HEIGHT,{weatherScene})
+      for(const issue of auditEditorialComposition(content))
+        problems.push(tile.id+' ('+tile.module+'): '+issue)
+    }
+    return problems
+  },[tiles,weatherScene])
+  const choosePreset=(id:string)=>{
+    setTiles(previous=>makeEditorialGrid(id).map((tile,index)=>({
+      ...tile,module:(previous[index]?.module??tile.module) as Module,
+    })))
+    setPresetId(id)
+    setSelectedId('cell-1')
+    setLastSeed(null)
+  }
+  const randomize=()=>{
+    const seed=Math.floor(Math.random()*0x100000000)
+    const result=randomEditorialGrid(seed,presetId)
+    setTiles(result.tiles as FrameTile[])
+    setPresetId(result.presetId)
+    setSelectedId('cell-1')
+    setLastSeed(result.seed)
+  }
+  const shuffleModules=()=>{
+    const seed=Math.floor(Math.random()*0x100000000)
+    const generated=randomEditorialGrid(seed,presetId)
+    const shuffled=generated.tiles.map(tile=>tile.module)
+    setTiles(previous=>previous.map((tile,i)=>({...tile,
+      module:(shuffled[i%shuffled.length]??tile.module) as Module})))
+    setLastSeed(seed)
+  }
+  const updateModule=(id:string,module:Module)=>{
+    setTiles(previous=>previous.map(tile=>tile.id===id?{...tile,module}:tile))
+    setSelectedId(id)
+    setLastSeed(null)
+  }
+  const copySetup=async()=>{
+    try{
+      await navigator.clipboard.writeText(JSON.stringify({
+        presetId,seed:lastSeed,tiles:tiles.map(({id,x,y,cols,rows,module})=>
+          ({id,x,y,cols,rows,module})),
+      },null,2))
+      setCopyStatus('Copied')
+    }catch{
+      setCopyStatus('Copy unavailable')
+    }
+  }
+  const preset=EDITORIAL_GRID_PRESETS.find(p=>p.id===presetId)
+  return <section data-testid="full-frame-lab" className="space-y-4">
+    <div className="flex flex-wrap items-end gap-3">
+      <label className="text-xs">Full-frame arrangement
+        <select data-testid="frame-preset" value={presetId}
+          onChange={event=>choosePreset(event.target.value)}
+          className="mt-1 block min-w-44 rounded border border-[#A99E93] bg-white px-3 py-2 text-sm">
+          {EDITORIAL_GRID_PRESETS.map(p=><option key={p.id} value={p.id}>{p.label} · {p.rects.length} modules</option>)}
+        </select>
+      </label>
+      <button type="button" data-testid="frame-randomize"
+        onClick={randomize}
+        className="rounded bg-[#29231F] px-4 py-2 text-sm font-medium text-white">
+        Randomize layout + modules
+      </button>
+      <button type="button" data-testid="frame-shuffle"
+        onClick={shuffleModules}
+        className="rounded border border-[#B6A99B] bg-white px-4 py-2 text-sm">
+        Shuffle modules only
+      </button>
+      <button type="button" data-testid="frame-clean"
+        aria-pressed={clean} onClick={()=>setClean(v=>!v)}
+        className="rounded border border-[#B6A99B] bg-white px-4 py-2 text-sm">
+        {clean?'Show editing':'Clean preview'}
+      </button>
+      <button type="button" onClick={()=>void copySetup()}
+        className="rounded border border-[#B6A99B] bg-white px-4 py-2 text-sm">
+        Copy setup
+      </button>
+      {copyStatus&&<span className="text-xs" role="status">{copyStatus}</span>}
+    </div>
+    <p className="text-sm text-[#62584E]">
+      {preset?.description}. Click a cell to edit it, or change modules below.
+      Randomizing creates a new grid and module selection.
+      {lastSeed!==null&&<span data-testid="frame-seed" className="ml-2 font-mono text-xs">Seed {lastSeed}</span>}
+    </p>
+    <div className="rounded-xl bg-[#82715F] p-3 sm:p-5">
+      <div className="flex justify-center bg-[#213543] p-3 sm:p-7">
+        <div className="w-full max-w-[800px] border-[6px] border-[#F0EADF] bg-white">
+          <div data-testid="editorial-full-frame" data-preset={presetId} data-tile-count={tiles.length}
+            className="relative w-full" style={{aspectRatio:'800 / 480'}}>
+            {tiles.map(tile=>{
+              const width=tile.cols*GRID_CELL_WIDTH
+              const height=tile.rows*GRID_CELL_HEIGHT
+              const isSelected=selectedId===tile.id
+              return <div data-frame-tile={tile.id} data-module={tile.module}
+                data-columns={tile.cols} data-rows={tile.rows} key={tile.id}
+                className="absolute overflow-hidden"
+                style={{
+                  left:(tile.x*25)+'%',top:(tile.y*25)+'%',
+                  width:(tile.cols*25)+'%',height:(tile.rows*25)+'%',
+                  backgroundColor:paperFor(theme),
+                  boxShadow:'inset 0 0 0 0.6px '+(theme==='light'?'#BFBAB1':'#696969'),
+                }}>
+                <EditorialCanvas module={tile.module} width={width} height={height}
+                  theme={theme} weatherScene={weatherScene}/>
+                {!clean&&<button type="button"
+                  aria-label={'Edit cell '+tile.id.replace('cell-','')+': '+moduleLabel(tile.module)}
+                  aria-pressed={isSelected}
+                  onClick={()=>setSelectedId(tile.id)}
+                  className={'absolute inset-0 cursor-pointer border-2 transition-colors '+
+                    (isSelected?'border-[#AD7D33]':'border-transparent hover:border-[#AD7D33]/50')}
+                  style={{background:'transparent'}}/>}
+              </div>
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div data-testid="frame-layout-audit" data-issues={validation.length}
+      className={'rounded bg-white p-3 text-sm '+(validation.length?'text-red-700':'text-[#476242]')}>
+      {tiles.length} modules · {16-(validation.some(issue=>issue.startsWith('Uncovered'))?1:0)}/16 grid squares covered ·
+      {' '+validation.length} detected layout problems
+      {validation.length>0&&<ul className="mt-2 list-disc pl-5">
+        {validation.slice(0,8).map((issue,i)=><li key={i}>{issue}</li>)}
+      </ul>}
+    </div>
+    {!clean&&<>
+      <div className="rounded-lg border border-[#D0C5B8] bg-white p-3">
+        <label className="block text-sm font-medium">
+          Editing cell {selected.id.replace('cell-','')} · {selected.cols}×{selected.rows}
+          <select data-testid="frame-selected-module"
+            value={selected.module}
+            onChange={event=>updateModule(selected.id,event.target.value as Module)}
+            className="mt-2 block w-full max-w-sm rounded border border-[#B6A99B] bg-white px-3 py-2">
+            {EDITORIAL_MODULES.map(name=><option key={name} value={name}>{moduleLabel(name)}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {tiles.map(tile=><label key={tile.id}
+          className={'rounded border p-3 text-xs '+(tile.id===selectedId?
+            'border-[#AD7D33] bg-white':'border-[#D0C5B8] bg-[#FAF9F6]')}>
+          <span className="mb-1 block font-semibold">
+            Cell {tile.id.replace('cell-','')} · {tile.cols}×{tile.rows}
+          </span>
+          <select aria-label={'Module in cell '+tile.id.replace('cell-','')}
+            data-testid={'frame-module-'+tile.id}
+            value={tile.module}
+            onChange={event=>updateModule(tile.id,event.target.value as Module)}
+            className="w-full rounded border border-[#B6A99B] bg-white px-2 py-2 text-sm">
+            {EDITORIAL_MODULES.map(name=><option key={name} value={name}>{moduleLabel(name)}</option>)}
+          </select>
+        </label>)}
+      </div>
+    </>}
+    <p className="text-xs text-[#62584E]">
+      This is a conceptual full-frame composition test, using sample module content.
+      It does not modify saved frame layouts or mirror physical firmware pixels.
+    </p>
+  </section>
+}
+
 export default function EditorialLabPage(){
+  const [view,setView]=useState<'single'|'frame'>('single')
   const [module,setModule]=useState<Module>('date')
   const [cell,setCell]=useState<Cell>('4x4')
   const [theme,setTheme]=useState<FrameTheme>('light')
@@ -240,6 +422,40 @@ export default function EditorialLabPage(){
         </div>
         <Link href="/" className="rounded border border-[#B6A99B] px-4 py-2 text-sm">Back to RE:MIND</Link>
       </header>
+      <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Editorial Lab view">
+        <button type="button" data-testid="full-frame-tab"
+          aria-pressed={view==='frame'} onClick={()=>setView('frame')}
+          className={'rounded px-4 py-3 text-sm font-medium '+(view==='frame'
+            ?'bg-[#29231F] text-white':'border border-[#B6A99B] bg-white')}>
+          Full frame · mix modules
+        </button>
+        <button type="button" data-testid="single-module-tab"
+          aria-pressed={view==='single'} onClick={()=>setView('single')}
+          className={'rounded px-4 py-3 text-sm font-medium '+(view==='single'
+            ?'bg-[#29231F] text-white':'border border-[#B6A99B] bg-white')}>
+          Single module · 16 shapes
+        </button>
+      </div>
+      {view==='frame'&&<div className="mb-4 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium">Frame appearance</span>
+        {(['light','dark'] as const).map(mode=><button key={mode}
+          type="button" aria-pressed={theme===mode}
+          onClick={()=>setTheme(mode)}
+          className={'rounded border px-4 py-2 text-sm '+(theme===mode?
+            'border-[#29231F] bg-[#29231F] text-white':'border-[#B6A99B] bg-white')}>
+          {mode==='light'?'Light':'Dark'}
+        </button>)}
+        <label className="text-xs">Weather sky
+          <select data-testid="full-frame-weather-sky" value={weatherScene}
+            onChange={e=>setWeatherScene(e.target.value as WeatherScene)}
+            className="ml-2 rounded border border-[#B6A99B] bg-white px-2 py-2 text-sm">
+            {Object.entries(WEATHER_VIGNETTE_SCENES).map(([key,item])=>
+              <option key={key} value={key}>{item.label}</option>)}
+          </select>
+        </label>
+      </div>}
+      {view==='frame'&&<FullFrameLab theme={theme} weatherScene={weatherScene}/>}
+      {view==='single'&&<>
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <label className="text-xs">Module
           <select value={module} onChange={e=>setModule(e.target.value as Module)}
@@ -336,6 +552,7 @@ export default function EditorialLabPage(){
         <p className="font-medium text-red-800">Composition issues need fixing before pilot</p>
         <ul className="mt-2 text-xs">{audit.issues.slice(0,12).map(msg=><li key={msg}>{msg}</li>)}</ul>
       </div>}
+      </>}
       <div ref={browserProbes} aria-hidden="true"
         style={{position:'absolute',left:'-100000px',top:0,visibility:'hidden',pointerEvents:'none'}}>
         {probeCases.map(({name,dimension,mode})=><div key={name+dimension.key+mode}
@@ -344,11 +561,11 @@ export default function EditorialLabPage(){
             height={dimension.height} theme={mode}/>
         </div>)}
       </div>
-      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+      {view==='single'&&<div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
         <div className="rounded bg-white p-4"><b>Composition</b><p>{plan.shape} · {plan.columns} column(s)</p></div>
         <div className="rounded bg-white p-4"><b>Safe inset</b><p>{plan.inset}px · {plan.gap}px spacing</p></div>
         <div className="rounded bg-white p-4"><b>Editorial rule</b><p>Group centered; secondary text yields to essentials</p></div>
-      </div>
+      </div>}
     </div>
   </main>
 }
