@@ -158,7 +158,7 @@ function dateComposition(p){
 // 2×2 structure (400×240 logical reference), with scale-free proportional
 // regions and measured text widths. Firmware remains authoritative.
 function surfMediumComposition(p){
-  const w=p.width,h=p.height
+  const w=p.width
   const leftW=w/2,rightW=w-leftW
   const label=(id,value,x,top,width,size,role='primary')=>{
     const b=textBlock(id,value,width,size,{role,maxLines:1})
