@@ -46,7 +46,7 @@ inline void weatherCoastalVignette(Canvas& d, int x, int y, int w, int h,
                                    int wmo, float windMs, uint16_t ink) {
   if(w<110 || h<70) return;
   const CoastalSky sky=coastalSkyFor(wmo,windMs);
-  // The slim foreground grasses and long dune are one continuous silhouette.
+  // Shared dunes and broken waterlines are protected in every weather scene.
   static const uint8_t shore[][8] = {
     {7,80,16,78,23,72,31,70},
     {31,70,43,66,51,73,62,75},
@@ -65,65 +65,97 @@ inline void weatherCoastalVignette(Canvas& d, int x, int y, int w, int h,
     {31,34,34,33,38,30,39,27},
     {38,20,41,21,44,21,46,20}
   };
-  // Keep the approved dune/water contours in every state. Wind visibly
-  // bends the grasses themselves rather than adding arbitrary wind icons.
   drawCoastalCurves(d,x,y,w,h,shore,6,ink);
   if(sky==COAST_WIND) {
+    // Wind is movement in the leaning plant, not extra symbolic icons.
     static const uint8_t windPlant[][8] = {
-    {32,70,34,56,48,38,72,27},
-    {56,39,62,30,72,27,81,28},
-    {56,40,64,41,76,38,84,36},
-    {41,55,30,50,19,48,12,49},
-    {41,55,31,54,20,53,14,51},
-    {48,46,50,36,57,33,68,32},
-    {35,65,46,59,57,56,67,57}
-  };
-    drawCoastalCurves(d,x,y,w,h,windPlant,
-                      sizeof(windPlant)/sizeof(windPlant[0]),ink);
+      {32,70,34,56,48,38,72,27},
+      {56,39,62,30,72,27,81,28},
+      {56,40,64,41,76,38,84,36},
+      {41,55,30,50,19,48,12,49},
+      {41,55,31,54,20,53,14,51},
+      {48,46,50,36,57,33,68,32},
+      {35,65,46,59,57,56,67,57}
+    };
+    drawCoastalCurves(d,x,y,w,h,windPlant,sizeof(windPlant)/sizeof(windPlant[0]),ink);
   } else {
     drawCoastalCurves(d,x,y,w,h,shore+6,
                       sizeof(shore)/sizeof(shore[0])-6,ink);
   }
-  // No cartoon round sun or closed "bumpy" cloud outline.
-  // A clear sky is mostly negative space. Partly cloudy keeps one airy bank.
-  if (wmo!=0) {
-  static const uint8_t cloud[][8] = {
-    {58,39,69,38,73,30,84,29},
-    {84,29,96,26,104,30,114,30},
-    {114,30,126,30,131,35,137,37},
-    {72,46,91,44,105,44,124,46},
-    {84,23,96,21,101,23,112,26}
-  };
+  // The approved Rainy cloud bank is untouched. Other conditions get distinct
+  // silhouettes, and the 1-bit output uses the same Bézier points as the Lab.
+  if(wmo!=0) {
     if(sky==COAST_FAIR) {
-      // Partly cloudy: an airy trace with most of the sky left open.
       static const uint8_t partlyCloud[][8] = {
         {87,41,99,36,112,37,126,41},
         {101,33,109,31,119,33,126,36}
       };
-      drawCoastalCurves(d,x,y,w,h,partlyCloud,
-                        sizeof(partlyCloud)/sizeof(partlyCloud[0]),ink);
+      drawCoastalCurves(d,x,y,w,h,partlyCloud,sizeof(partlyCloud)/sizeof(partlyCloud[0]),ink);
+    } else if(sky==COAST_OVERCAST) {
+      static const uint8_t overcastCloud[][8] = {
+        {53,39,70,32,86,28,102,30},
+        {102,30,118,29,130,33,138,36},
+        {62,47,84,44,106,45,130,47},
+        {70,25,88,21,108,23,125,28},
+        {88,53,104,51,121,52,135,51}
+      };
+      drawCoastalCurves(d,x,y,w,h,overcastCloud,sizeof(overcastCloud)/sizeof(overcastCloud[0]),ink);
     } else if(sky==COAST_WIND) {
-    // Two restrained sweeps; the bent plant carries most of the motion.
+      static const uint8_t windCloud[][8] = {
+        {72,39,89,33,111,32,134,37},
+        {91,47,106,45,119,46,133,47}
+      };
+      drawCoastalCurves(d,x,y,w,h,windCloud,sizeof(windCloud)/sizeof(windCloud[0]),ink);
+    } else if(sky==COAST_SNOW) {
+      static const uint8_t snowCloud[][8] = {
+        {63,40,77,34,92,32,111,34},
+        {111,34,124,35,132,38,136,40},
+        {74,47,92,45,111,46,130,48}
+      };
+      drawCoastalCurves(d,x,y,w,h,snowCloud,sizeof(snowCloud)/sizeof(snowCloud[0]),ink);
+    } else {
+      static const uint8_t cloud[][8] = {
+        {58,39,69,38,73,30,84,29},
+        {84,29,96,26,104,30,114,30},
+        {114,30,126,30,131,35,137,37},
+        {72,46,91,44,105,44,124,46},
+        {84,23,96,21,101,23,112,26}
+      };
+      drawCoastalCurves(d,x,y,w,h,cloud,sizeof(cloud)/sizeof(cloud[0]),ink);
+    }
+  }
+  if(sky==COAST_FAIR) {
+    static const uint8_t fair[][8] = {
+      {69,18,82,16,90,18,101,20},
+      {105,21,110,22,117,22,121,23}
+    };
+    drawCoastalCurves(d,x,y,w,h,fair,sizeof(fair)/sizeof(fair[0]),ink);
+  } else if(sky==COAST_WIND) {
+    // Just two fine wind sweeps; the plant and cloud carry the motion.
     static const uint8_t wind[][8] = {
-    {84,17,102,13,120,16,137,20},
-    {94,59,110,56,124,58,136,55}
-  };    drawCoastalCurves(d,x,y,w,h,wind,sizeof(wind)/sizeof(wind[0]),ink);
+      {84,17,102,13,120,16,137,20},
+      {94,59,110,56,124,58,136,55}
+    };
+    drawCoastalCurves(d,x,y,w,h,wind,sizeof(wind)/sizeof(wind[0]),ink);
   } else if(sky==COAST_RAIN) {
-  static const uint8_t rain[][8] = {
-    {79,53,78,56,76,60,74,64},
-    {95,52,93,55,90,59,89,63},
-    {111,54,110,56,108,59,107,62}
-  };
+    // Approved Rainy marks: do not alter without explicit visual approval.
+    static const uint8_t rain[][8] = {
+      {79,53,78,56,76,60,74,64},
+      {95,52,93,55,90,59,89,63},
+      {111,54,110,56,108,59,107,62}
+    };
     drawCoastalCurves(d,x,y,w,h,rain,sizeof(rain)/sizeof(rain[0]),ink);
   } else if(sky==COAST_SNOW) {
+    // Three paired organic floating flecks; not rain slashes or X marks.
     static const uint8_t snow[][8] = {
-    {75,55,76,52,79,52,80,55},
-    {80,55,79,58,77,59,75,55},
-    {94,63,95,60,98,60,99,63},
-    {99,63,98,66,96,67,94,63},
-    {112,54,113,51,116,51,117,54},
-    {117,54,116,57,114,58,112,54}
-  };    drawCoastalCurves(d,x,y,w,h,snow,sizeof(snow)/sizeof(snow[0]),ink);
+      {75,55,76,52,79,52,80,55},
+      {80,55,79,58,77,59,75,55},
+      {94,63,95,60,98,60,99,63},
+      {99,63,98,66,96,67,94,63},
+      {112,54,113,51,116,51,117,54},
+      {117,54,116,57,114,58,112,54}
+    };
+    drawCoastalCurves(d,x,y,w,h,snow,sizeof(snow)/sizeof(snow[0]),ink);
   }
 }
 // Small botanical sprig, inspired by vintage field guides and bookplates.
