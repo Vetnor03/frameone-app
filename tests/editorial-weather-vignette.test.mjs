@@ -30,7 +30,7 @@ test('same coastal contour coordinates are used in both JS and firmware',()=>{
   assert.match(cpp,/coastalSkyFor/)
 
   // Prove every base and weather-variant curve matches the hardware control points.
-  const names=['shore','cloud','fair','overcast','wind','rain','snow']
+  const names=['shore','windPlant','cloud','windCloud','fair','overcast','wind','rain','snow']
   const expected=[
     weatherCoastalCurves(0,2),
     weatherCoastalCurves(2,2),
@@ -63,7 +63,8 @@ test('six hand-composed Weather variants are visually distinct while retaining s
   const scenes=Object.entries(WEATHER_VIGNETTE_SCENES).map(([name,s])=>({
     name,curves:weatherCoastalCurves(s.wmo,s.windMs)
   }))
-  const core=scenes[0].curves.slice(0,16)
+  // The dune and sea stay constant; only Wind has a leaning plant.
+  const core=scenes[0].curves.slice(0,6)
   const unique=new Set()
   for(const {name,curves} of scenes){
     assert.deepEqual(curves.slice(0,core.length),core,name+' should preserve the engraved coastline')
@@ -72,4 +73,35 @@ test('six hand-composed Weather variants are visually distinct while retaining s
     unique.add(key)
   }
   assert.equal(unique.size,6)
+})
+
+test('wind bends coastal grass and stretches cloud without changing approved rain',()=>{
+  const windy=weatherCoastalCurves(2,10)
+  const breezy=weatherCoastalCurves(2,4)
+  const rainy=weatherCoastalCurves(61,4)
+  // Six unchanged water/dune curves, but a different plant and cloud contour.
+  assert.deepEqual(windy.slice(0,6),breezy.slice(0,6))
+  assert.notDeepEqual(windy.slice(6,16),breezy.slice(6,16))
+  assert.notDeepEqual(windy.slice(16,20),breezy.slice(16,20))
+  // Approved rainy control points are strictly unchanged.
+  assert.deepEqual(rainy.slice(-3),[
+    [79,53,78,56,76,60,74,64],
+    [95,52,93,55,90,59,89,63],
+    [111,54,110,56,108,59,107,62],
+  ])
+  // No use of the Snow X-mark glyphs in the Windy plate.
+  assert.equal(windy.length,6+10+4+2)
+})
+test('snow falls as sparse single strokes, never intersecting X-pairs',()=>{
+  const snowy=weatherCoastalCurves(73,3)
+  const snowMarks=snowy.slice(-4)
+  assert.equal(snowMarks.length,4)
+  for(const mark of snowMarks){
+    assert.equal(mark.length,8)
+    // Each mark is a short continuous drifting fall, not a crossed symbol.
+    assert.ok(mark[1]>mark[7], 'snow stroke drifts upwards in control-point ordering')
+    assert.ok(Math.abs(mark[6]-mark[0])<=5)
+  }
+  const base=weatherCoastalCurves(61,3)
+  assert.deepEqual(snowy.slice(0,21),base.slice(0,21))
 })

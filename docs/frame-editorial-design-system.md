@@ -231,3 +231,14 @@ The other five skies are part of the same code-defined family, but are
    merge, OTA rollout, or reflash of tester frames.
 
 The six condition previews are **sample data**, not forecasts for Stavanger.
+
+## Targeted Snow / Wind illustration refinement
+
+After reviewing Weather v2, the **rainy engraving remains the approved reference**.
+Snow removes the intersecting X-shaped marks and uses four short, irregular,
+slightly angled falling strokes. Wind preserves the exact shared shoreline but
+redraws just the coastal grass leaning with the breeze, lightly stretches the
+cloud bank, and uses only two delicate airflow sweeps. Neither changes the
+Rainy, Clear, Partly Cloudy, Overcast, Date, or Surf compositions or any
+forecast-fetch logic. Review Snow/Windy variants again on the protected Lab
+before treating them as aesthetically approved.
