@@ -6,7 +6,7 @@ import {editorialPlan} from '../lib/editorialFrameLayout.mjs'
 import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition} from '../lib/editorialComposition.mjs'
 import {WEATHER_VIGNETTE_SCENES,weatherCoastalCurves} from '../lib/editorialWeatherVignette.mjs'
 import {EDITORIAL_GRID_PRESETS,GRID_CELL_WIDTH,GRID_CELL_HEIGHT,
-  makeEditorialGrid,randomEditorialGrid,validateEditorialGrid} from '../lib/editorialGridLab.mjs'
+  makeEditorialGrid,randomEditorialGrid,randomEditorialModules,validateEditorialGrid} from '../lib/editorialGridLab.mjs'
 
 type Module = typeof EDITORIAL_MODULES[number]
 type Span = 1|2|3|4
@@ -213,10 +213,10 @@ function FullFrameLab({theme,weatherScene}:{
   }
   const shuffleModules=()=>{
     const seed=Math.floor(Math.random()*0x100000000)
-    const generated=randomEditorialGrid(seed,presetId)
-    const shuffled=generated.tiles.map(tile=>tile.module)
-    setTiles(previous=>previous.map((tile,i)=>({...tile,
-      module:(shuffled[i%shuffled.length]??tile.module) as Module})))
+    setTiles(previous=>{
+      const shuffled=randomEditorialModules(seed,previous.length)
+      return previous.map((tile,i)=>({...tile,module:shuffled[i] as Module}))
+    })
     setLastSeed(seed)
   }
   const updateModule=(id:string,module:Module)=>{
@@ -242,6 +242,7 @@ function FullFrameLab({theme,weatherScene}:{
         <select data-testid="frame-preset" value={presetId}
           onChange={event=>choosePreset(event.target.value)}
           className="mt-1 block min-w-44 rounded border border-[#A99E93] bg-white px-3 py-2 text-sm">
+          {presetId==='random'&&<option value="random">Random mosaic · generated</option>}
           {EDITORIAL_GRID_PRESETS.map(p=><option key={p.id} value={p.id}>{p.label} · {p.rects.length} modules</option>)}
         </select>
       </label>
@@ -267,7 +268,7 @@ function FullFrameLab({theme,weatherScene}:{
       {copyStatus&&<span className="text-xs" role="status">{copyStatus}</span>}
     </div>
     <p className="text-sm text-[#62584E]">
-      {preset?.description}. Click a cell to edit it, or change modules below.
+      {preset?.description??'Automatically generated 4×4 mosaic'}. Click a cell to edit it, or change modules below.
       Randomizing creates a new grid and module selection.
       {lastSeed!==null&&<span data-testid="frame-seed" className="ml-2 font-mono text-xs">Seed {lastSeed}</span>}
     </p>
@@ -306,7 +307,7 @@ function FullFrameLab({theme,weatherScene}:{
     </div>
     <div data-testid="frame-layout-audit" data-issues={validation.length}
       className={'rounded bg-white p-3 text-sm '+(validation.length?'text-red-700':'text-[#476242]')}>
-      {tiles.length} modules · {16-(validation.some(issue=>issue.startsWith('Uncovered'))?1:0)}/16 grid squares covered ·
+      {tiles.length} modules · {validation.length===0?'16/16':'Check'} grid squares covered ·
       {' '+validation.length} detected layout problems
       {validation.length>0&&<ul className="mt-2 list-disc pl-5">
         {validation.slice(0,8).map((issue,i)=><li key={i}>{issue}</li>)}

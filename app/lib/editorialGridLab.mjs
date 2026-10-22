@@ -84,17 +84,60 @@ function randomSource(seed){
     return ((t^(t>>>14))>>>0)/4294967296
   }
 }
+// Randomize every assigned module independently of how many tiles another
+// layout happens to contain. Avoid repeats while there are unused modules.
+function shuffledModules(next,count){
+  const result=[]
+  while(result.length<count){
+    const palette=[...EDITORIAL_MODULES]
+    for(let i=palette.length-1;i>0;i--){
+      const j=Math.floor(next()*(i+1))
+      ;[palette[i],palette[j]]=[palette[j],palette[i]]
+    }
+    result.push(...palette.slice(0,Math.min(count-result.length,palette.length)))
+  }
+  return result
+}
+export function randomEditorialModules(seed,count){
+  if(!Number.isInteger(count)||count<1||count>16)
+    throw new RangeError('Module count must be 1–16')
+  return shuffledModules(randomSource(seed),count)
+}
+
+// Recursive rectangle splits yield genuinely new 4×4 mosaics, not just
+// repetitions of the curated preset list. Every split preserves coverage.
+function randomRectangles(next){
+  const rects=[[0,0,4,4]]
+  const target=3+Math.floor(next()*8)
+  while(rects.length<target){
+    const eligible=rects.map((rect,i)=>({rect,i}))
+      .filter(({rect})=>rect[2]>1||rect[3]>1)
+    if(!eligible.length)break
+    const chosen=eligible[Math.floor(next()*eligible.length)]
+    const [x,y,w,h]=chosen.rect
+    const splitVertical=w>1&&(h===1||next()<0.5)
+    if(splitVertical){
+      const cut=1+Math.floor(next()*(w-1))
+      rects.splice(chosen.i,1,[x,y,cut,h],[x+cut,y,w-cut,h])
+    }else{
+      const cut=1+Math.floor(next()*(h-1))
+      rects.splice(chosen.i,1,[x,y,w,cut],[x,y+cut,w,h-cut])
+    }
+  }
+  return rects.sort((a,b)=>a[1]-b[1]||a[0]-b[0])
+}
+
 export function randomEditorialGrid(seed,previousPresetId=null){
   const next=randomSource(seed)
   const options=EDITORIAL_GRID_PRESETS.filter(p=>p.id!==previousPresetId)
-  const preset=options[Math.floor(next()*options.length)]
-  const palette=[...EDITORIAL_MODULES]
-  for(let i=palette.length-1;i>0;i--){
-    const swapIndex=Math.floor(next()*(i+1))
-    ;[palette[i],palette[swapIndex]]=[palette[swapIndex],palette[i]]
-  }
-  const tiles=makeEditorialGrid(preset.id).map((tile,i)=>({
-    ...tile,module:palette[i%palette.length],
+  // Use generated custom mosaics about half the time. 'random' remains a
+  // valid state for the UI but never modifies a user's actual saved layout.
+  const procedural=next()<0.55
+  const preset=procedural?null:options[Math.floor(next()*options.length)]
+  const rects=procedural?randomRectangles(next):preset.rects
+  const modules=shuffledModules(next,rects.length)
+  const tiles=rects.map(([x,y,cols,rows],i)=>({
+    id:'cell-'+(i+1),x,y,cols,rows,module:modules[i],
   }))
-  return {seed:seed>>>0,presetId:preset.id,tiles}
+  return {seed:seed>>>0,presetId:preset?.id??'random',tiles}
 }
