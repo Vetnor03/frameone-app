@@ -10,7 +10,9 @@ MODULES = (
 
 def test_all_supported_modules_use_responsive_editorial_dispatch():
     assert "EditorialDesign::kindFor(mod.c_str())" in RENDERER
-    assert "editorialCell.size = CELL_ADAPTIVE;" in RENDERER
+    assert "EditorialReferences::select(contentKind, c.colSpan, c.rowSpan)" in RENDERER
+    assert "presentation == EditorialReferences::SURF_MEDIUM_REFERENCE" in RENDERER
+    assert "? CELL_MEDIUM : CELL_ADAPTIVE;" in RENDERER
     for module in MODULES:
         assert f"{module}::render(editorialCell" in RENDERER
         assert f"{module}::render(c" not in RENDERER
