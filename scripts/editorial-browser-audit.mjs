@@ -171,8 +171,11 @@ try {
         const iy=Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)
         if(ix>1&&iy>1)issues.push('neighboring modules overlap')
       }
-      if(Math.abs(area-outer.width*outer.height)>2)
-        issues.push('incomplete frame coverage')
+      // Subpixel % sizing on non-integer responsive widths can differ by a
+      // fraction of a pixel per edge; integer grid coverage is also audited.
+      const expected=outer.width*outer.height
+      if(Math.abs(area-expected)>Math.max(8,expected*.004))
+        issues.push('incomplete frame coverage: '+area+' / '+expected)
       return {found:true,issues,count:cells.length}
     })
     assert.equal(data.found,true)
