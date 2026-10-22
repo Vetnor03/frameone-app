@@ -155,7 +155,7 @@ function dateComposition(p){
 // It is not a generic widget. Keep the verdict, six rating rectangles (or
 // experience dice), wave range, and the distinct swell/wind detail columns.
 function surfMediumComposition(p){
-  const w=p.width,h=p.height
+  const w=p.width
   const heading=textBlock('spot','Hellestø',Math.min(240,w-32),18,
     {role:'heading'})
   heading.x=(w-heading.w)/2;heading.y=15
