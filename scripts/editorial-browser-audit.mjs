@@ -35,6 +35,11 @@ try {
     await page.screenshot({path:'artifacts/editorial/date-'+size+'.png'})
   }
   await moduleControl.selectOption('surf')
+  await grid.selectOption('2x2')
+  await page.screenshot({path:'artifacts/editorial/surf-medium-reference-light.png'})
+  await page.getByRole('button',{name:'Dark',exact:true}).click()
+  await page.screenshot({path:'artifacts/editorial/surf-medium-reference-dark.png'})
+  await page.getByRole('button',{name:'Light',exact:true}).click()
   await grid.selectOption('2x1')
   await page.screenshot({path:'artifacts/editorial/surf-2x1.png'})
   await grid.selectOption('4x4')

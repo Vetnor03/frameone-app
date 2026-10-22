@@ -51,9 +51,13 @@ function WeatherEngraving({x,y,w,h,ink}:{
       M83 31 Q98 25 115 33"/>
   </svg>
 }
-function RatingBlocks({x,y,w,ink,theme}:{x:number;y:number;w:number;ink:string;theme:FrameTheme}){
-  const gap=4
-  const blockW=Math.min(22,(w-5*gap)/6)
+function RatingBlocks({x,y,w,ink,theme,reference=false}:{
+  x:number;y:number;w:number;ink:string;theme:FrameTheme;reference?:boolean
+}){
+  // The approved physical Medium template uses 20×14 blocks, a 6px gap
+  // and radius 3. Other shapes remain free to resize these marks.
+  const gap=reference?6:4
+  const blockW=reference?20:Math.min(22,(w-5*gap)/6)
   const blockH=14
   const actual=6*blockW+5*gap
   const left=x+(w-actual)/2
@@ -61,7 +65,7 @@ function RatingBlocks({x,y,w,ink,theme}:{x:number;y:number;w:number;ink:string;t
   return <g role="img" aria-label="Three of six filled Surf rating rectangles">
     {Array.from({length:6},(_,index)=><rect key={index}
       x={left+index*(blockW+gap)} y={y+(16-blockH)/2} width={blockW} height={blockH}
-      rx="2" stroke={index<3?ink:muted} strokeWidth="1.2"
+      rx={reference?3:2} stroke={index<3?ink:muted} strokeWidth="1.2"
       fill={index<3?ink:'none'}/>)}
   </g>
 }
@@ -134,7 +138,8 @@ function EditorialCanvas({module,width,height,theme}:{
         </g>
       if(block.type==='score')
         return <RatingBlocks key={block.id} x={block.x} y={block.y}
-          w={block.w} ink={ink} theme={theme}/>
+          w={block.w} ink={ink} theme={theme}
+          reference={layout.mode==='surf-medium-reference'}/>
       if(block.type==='calendar')
         return <Calendar key={block.id} x={block.x} y={block.y}
           w={block.w} h={block.h} ink={ink}/>
@@ -150,7 +155,7 @@ function EditorialCanvas({module,width,height,theme}:{
           fontSize={size} fill={ink} opacity={['secondary','list'].includes(block.role)?'.72':'1'}>
           {line}
         </text>)}
-        {block.role==='heading' && <BookDivider
+        {block.role==='heading' && layout.mode!=='surf-medium-reference' && <BookDivider
           x={block.x+Math.min(40,block.w*.15)}
           y={block.y+block.h+3}
           width={block.w-Math.min(80,block.w*.3)}

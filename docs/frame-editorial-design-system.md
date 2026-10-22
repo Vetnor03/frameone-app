@@ -136,3 +136,19 @@ Other modules' reference layouts are *candidates* until individually approved.
 Do not indiscriminately freeze every old S/M/L/XL template, and do not overwrite
 Surf Medium to satisfy generic typography guidelines. Geometry/body spacing may be
 adapted elsewhere as long as the module's protected content/visual hierarchy survives.
+
+## Surf Medium visual acceptance
+
+The Lab's approved 2×2 Surf composition now follows the physical Medium
+renderer: Hellestø title/underline, 20×14px rectangles with 6px spacing
+and 3px radius, verdict above the blocks, waves below, and a separate
+Details panel with swell/wind arrows, their icons and measurements. Unlike
+generic editorial sections, the approved reference has **no extra ornamental
+heading divider**. The Lab illustrates the same information and broad pixel
+bands, but the ESP32 GFX font bounds and direction glyphs are not replicated
+exactly. Physical comparison remains required before the final merge.
+
+The browser audit captures two dedicated 2×2 Surf review images:
+`surf-medium-reference-light.png` and `surf-medium-reference-dark.png`,
+in addition to the 11×16×2 matrix. This is an automated artifact, not a
+request for pilot users to click through every grid combination.

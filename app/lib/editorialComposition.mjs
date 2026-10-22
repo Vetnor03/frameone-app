@@ -154,29 +154,37 @@ function dateComposition(p){
 // Approved Surf Medium reference: the existing 2×2 two-column composition.
 // It is not a generic widget. Keep the verdict, six rating rectangles (or
 // experience dice), wave range, and the distinct swell/wind detail columns.
+// Approved Surf Medium layout. Coordinates follow ModuleSurf.cpp's established
+// 2×2 structure (400×240 logical reference), with scale-free proportional
+// regions and measured text widths. Firmware remains authoritative.
 function surfMediumComposition(p){
-  const w=p.width
-  const heading=textBlock('spot','Hellestø',Math.min(240,w-32),18,
-    {role:'heading'})
-  heading.x=(w-heading.w)/2;heading.y=15
-  const bar={id:'spot-underline',role:'divider',type:'divider',x:w/2-39,y:45,w:78,h:2}
-  const rule={id:'column-divider',role:'divider',type:'divider',x:w/2,y:77,w:1,h:132}
-  const text=(id,value,x,y,width,size,role='primary')=>{
+  const w=p.width,h=p.height
+  const leftW=w/2,rightW=w-leftW
+  const label=(id,value,x,top,width,size,role='primary')=>{
     const b=textBlock(id,value,width,size,{role,maxLines:1})
-    return {...b,x,y}
+    return {...b,x,y:top}
   }
+  const spot=label('spot','Hellestø',w*.18,20,w*.64,19,'heading')
+  const underlineW=Math.min(112,estimatedTextWidth('Hellestø',19,false))
+  const bar={id:'spot-underline',role:'divider',type:'divider',
+    x:(w-underlineW)/2,y:50,w:underlineW,h:2}
+  const rule={id:'column-divider',role:'divider',type:'divider',
+    x:leftW,y:89,w:1,h:133}
+  // Existing Medium firmware uses FONT_B12 for the verdict and Details
+  // headings; 20px rating rectangles × 14px with 6px gaps; FONT_B9 for waves.
+  const scoreW=6*20+5*6
   const blocks=[
-    heading,bar,rule,
-    text('rating-verdict','Poor to Fair',17,75,166,18,'primary'),
-    {id:'rating',role:'score',type:'score',x:32,y:117,w:136,h:16},
-    text('wave-range','1.6–2.0 m',17,179,166,18,'measurement'),
-    text('details-heading','Details:',214,75,172,18,'heading'),
-    {id:'swell-arrow',role:'direction',type:'direction',x:235,y:109,w:30,h:27},
-    {id:'wind-arrow',role:'direction',type:'direction',x:334,y:109,w:30,h:27},
-    {id:'wave-period-icon',role:'data-icon',type:'icon',x:240,y:150,w:28,h:18},
-    {id:'wind-speed-icon',role:'data-icon',type:'icon',x:333,y:150,w:33,h:18},
-    text('swell-period','7 s',219,184,76,14,'measurement'),
-    text('wind-speed','8 m/s',314,184,77,14,'measurement'),
+    spot,bar,rule,
+    label('rating-verdict','Poor to Fair',18,89,leftW-36,19,'primary'),
+    {id:'rating',role:'score',type:'score',x:(leftW-scoreW)/2,y:151,w:scoreW,h:14},
+    label('wave-range','1.6–2.0 m',18,205,leftW-36,14,'measurement'),
+    label('details-heading','Details:',rightW+18,89,rightW-36,19,'heading'),
+    {id:'swell-arrow',role:'direction',type:'direction',x:leftW+38,y:128,w:30,h:26},
+    {id:'wind-arrow',role:'direction',type:'direction',x:leftW+137,y:128,w:30,h:26},
+    {id:'wave-period-icon',role:'data-icon',type:'icon',x:leftW+42,y:173,w:28,h:18},
+    {id:'wind-speed-icon',role:'data-icon',type:'icon',x:leftW+135,y:173,w:33,h:18},
+    label('swell-period','7 s',leftW+19,205,76,14,'measurement'),
+    label('wind-speed','8 m/s',leftW+114,205,76,14,'measurement'),
   ]
   return {body:rect(p.inset,p.inset,p.safeWidth,p.safeHeight),
     blocks,centered:false,mode:'surf-medium-reference'}
