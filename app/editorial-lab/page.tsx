@@ -222,7 +222,9 @@ export default function EditorialLabPage(){
     return {checked:EDITORIAL_MODULES.length*cells.length*2,issues}
   },[])
   const hasProblems=audit.issues.length>0
-  return <main className="min-h-screen bg-[#EDEAE4] p-4 text-[#28221C] sm:p-8">
+  return <main data-editorial-scroll="true"
+    className="h-dvh min-h-0 w-full overflow-x-hidden overflow-y-auto overscroll-y-contain bg-[#EDEAE4] p-4 text-[#28221C] sm:p-8"
+    style={{WebkitOverflowScrolling:'touch'}}>
     <div className="mx-auto max-w-6xl">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
