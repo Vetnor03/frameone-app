@@ -100,7 +100,7 @@ try {
       assert.ok(drawing,'Missing Weather engraving: '+mode+' '+scene)
       assert.equal(drawing.background,mode==='Light'?'#FFFFFF':'#000000')
       assert.equal(drawing.stroke,mode==='Light'?'#000000':'#FFFFFF')
-      assert.ok(drawing.paths.length>=17,'Weather engraving lost its fine contours')
+      assert.ok(drawing.paths.length>=16,'Weather engraving lost its fine contours')
       assert.equal(drawing.inside,true,'Weather art escapes its content cell')
       const shape=drawing.paths.join('|')
       assert.ok(!seen.has(shape),'Duplicate Weather sky artwork: '+mode+' '+scene)

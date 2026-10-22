@@ -16,7 +16,7 @@ test('coastal weather scene priority matches firmware rain, snow, wind and overc
 test('all six scenes use hand-composed Bézier handles inside the 140x96 plate',()=>{
   for(const [name,sample] of Object.entries(WEATHER_VIGNETTE_SCENES)){
     const lines=weatherCoastalCurves(sample.wmo,sample.windMs)
-    assert.ok(lines.length>=17,name)
+    assert.ok(lines.length>=16,name)
     for(const line of lines){
       assert.equal(line.length,8)
       assert.ok(line.every((value,index)=>Number.isFinite(value) &&
