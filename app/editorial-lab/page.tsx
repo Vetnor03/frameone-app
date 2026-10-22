@@ -10,6 +10,7 @@ type Module = typeof EDITORIAL_MODULES[number]
 type Span = 1|2|3|4
 type Cell = string
 type FrameTheme = 'light'|'dark'
+type WeatherScene = keyof typeof WEATHER_VIGNETTE_SCENES
 const spans:Span[]=[1,2,3,4]
 const cells=spans.flatMap(cols=>spans.map(rows=>({
   key:cols+'x'+rows,width:cols*200,height:rows*120,
@@ -93,7 +94,7 @@ function Calendar({x,y,w,h,ink}:{x:number;y:number;w:number;h:number;ink:string}
 }
 
 function EditorialCanvas({module,width,height,theme,weatherScene='partly'}:{
-  module:Module;width:number;height:number;theme:FrameTheme;weatherScene?:string
+  module:Module;width:number;height:number;theme:FrameTheme;weatherScene?:WeatherScene
 }) {
   const layout=composeEditorialModule(module,width,height,{weatherScene})
   const weather=WEATHER_VIGNETTE_SCENES[weatherScene]??WEATHER_VIGNETTE_SCENES.partly
@@ -170,7 +171,7 @@ export default function EditorialLabPage(){
   const [module,setModule]=useState<Module>('date')
   const [cell,setCell]=useState<Cell>('4x4')
   const [theme,setTheme]=useState<FrameTheme>('light')
-  const [weatherScene,setWeatherScene]=useState('partly')
+  const [weatherScene,setWeatherScene]=useState<WeatherScene>('partly')
   const [matrix,setMatrix]=useState(false)
   const browserProbes=useRef<HTMLDivElement|null>(null)
   const [browserAudit,setBrowserAudit]=useState<{checked:number;issues:string[]}|null>(null)
@@ -265,7 +266,7 @@ export default function EditorialLabPage(){
           </button>)}
         </fieldset>
         {module==='weather'&&<label className="text-xs">Sky illustration
-          <select value={weatherScene} onChange={e=>setWeatherScene(e.target.value)}
+          <select value={weatherScene} onChange={e=>setWeatherScene(e.target.value as WeatherScene)}
             data-testid="weather-sky-selector"
             className="mt-1 block rounded border border-[#A99E93] bg-white px-3 py-2 text-sm">
             {Object.entries(WEATHER_VIGNETTE_SCENES).map(([key,scene])=>
