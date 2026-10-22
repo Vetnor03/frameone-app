@@ -22,7 +22,8 @@ test('adaptive Weather renders the representative WMO used by its condition',asy
   // The spacious landscape layout now has an icon + botanical branch,
   // in addition to its compact fallback and portrait icon branch.
   assert.equal(iconCalls.length,3)
-  assert.match(adaptive,/EditorialFigures::botanicalSprig\(/)
+  assert.match(adaptive,/EditorialFigures::weatherCoastalVignette\(/)
+  assert.match(adaptive,/data\.wmo, data\.currentWindMs, ink\)/)
   for(const call of iconCalls){
     assert.match(call,/data\.wmo/)
     assert.doesNotMatch(call,/data\.currentWmo/)

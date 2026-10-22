@@ -173,3 +173,15 @@ Weather no longer renders the unrelated mountain/coast landscape concept.
 When there is generous room on the real frame, the actual condition-specific
 weather icon stays visible and a **separate field-guide botanical sprig** sits
 below it. Smaller frames retain the existing condition icon without decoration.
+
+## Weather coastal engraving v1
+
+Weather's large-cell editorial figure is a deliberately quiet Jæren coastal
+field-guide vignette sharing Date's fine 1-bit hand-drawn line language.
+No reuse of Date's botanical sprig and no colored fills. Shore/grass/sea remain
+consistent; WMO and wind drive a limited sky family: fair/partly cloudy,
+overcast, windy (>= 8 m/s), rainy and snowy. Precipitation takes priority over
+wind and small slots show only the established weather-condition icon.
+No extra weather queries and no changes to weather fetch/reliability logic.
+The vignette stays inside a reserved illustration band **below** the real
+weather icon, never over temperature or forecast. Artwork is decorative only.

@@ -4,51 +4,85 @@
 // Small one-colour engravings for the experimental RE:MIND editorial display.
 // Decorative and non-interactive: primary information always wins the space.
 namespace EditorialFigures {
+// A quiet, one-bit coastal field-guide vignette to match the Date botanical.
+// These are hand-drawn contour strokes, not filled weather pictograms. The
+// scene is secondary to the condition-specific icon and measured forecast.
+enum CoastalSky { COAST_FAIR, COAST_OVERCAST, COAST_WIND, COAST_RAIN, COAST_SNOW };
+inline CoastalSky coastalSkyFor(int wmo, float windMs) {
+  if ((wmo >= 71 && wmo <= 77) || wmo == 85 || wmo == 86) return COAST_SNOW;
+  if ((wmo >= 51 && wmo <= 67) || (wmo >= 80 && wmo <= 82) ||
+      wmo >= 95) return COAST_RAIN;
+  if (windMs >= 8.0f) return COAST_WIND;
+  if (wmo >= 3) return COAST_OVERCAST;
+  return COAST_FAIR;
+}
+
 template <class Canvas>
-inline void weatherLandscape(Canvas& d, int x, int y, int w, int h,
-                             int wmo, uint16_t ink) {
-  if (w < 86 || h < 52) return;
-  // Coordinates stay inside the caller-provided box.
-  const int horizon = y + (h * 66) / 100;
-  const int sunX = x + w * 25 / 100;
-  const int sunY = y + h * 28 / 100;
-  const int sunR = (h < 80 ? 8 : 11);
-  const bool rainy = (wmo >= 51 && wmo <= 67) ||
-                     (wmo >= 80 && wmo <= 82) || wmo >= 95;
-  const bool snowy = wmo >= 71 && wmo <= 77;
-  const bool overcast = wmo >= 3 && !rainy && !snowy;
-  if (!overcast && !rainy && !snowy) {
-    d.drawCircle(sunX, sunY, sunR, ink);
-    const int rays = sunR + 4;
-    d.drawLine(sunX - rays - 6, sunY, sunX - rays, sunY, ink);
-    d.drawLine(sunX + rays, sunY, sunX + rays + 6, sunY, ink);
-    d.drawLine(sunX, sunY - rays - 6, sunX, sunY - rays, ink);
-    d.drawLine(sunX, sunY + rays, sunX, sunY + rays + 4, ink);
+inline void weatherCoastalVignette(Canvas& d, int x, int y, int w, int h,
+                                    int wmo, float windMs, uint16_t ink) {
+  if (w < 110 || h < 70) return;
+  // Normalized 140 × 96 field-guide plate, scaled into its reserved cell.
+  // The line-only strokes work on both white and black 1-bit e-paper.
+  const auto line = [&](int a,int b,int c,int e) {
+    d.drawLine(x + a*w/140, y + b*h/96,
+               x + c*w/140, y + e*h/96, ink);
+  };
+  const CoastalSky sky = coastalSkyFor(wmo, windMs);
+  // Very low Jæren shoreline with a little wild coastal grass.
+  static const uint8_t shore[][4] = {
+    {5,70,15,68},{15,68,24,64},{24,64,32,61},
+    {32,61,40,63},{40,63,48,68},{48,68,57,70},
+    {57,70,75,71},{75,71,93,71},{93,71,115,70},{115,70,135,71},
+    {28,61,28,50},{28,56,22,51},{28,54,34,47},
+    {24,58,19,57},{31,57,36,54},
+    {9,81,29,81},{37,84,61,84},{70,80,101,80},
+    {107,85,131,85},{63,89,85,89}
+  };
+  for (unsigned i=0;i<sizeof(shore)/sizeof(shore[0]);++i)
+    line(shore[i][0],shore[i][1],shore[i][2],shore[i][3]);
+
+  // A small sun, drawn as a fine interrupted outline. For clear weather the
+  // sun is fully present; with fair cloud it peeks out from behind the bank.
+  if (sky == COAST_FAIR) {
+    static const uint8_t sun[][4] = {
+      {22,27,24,21},{24,21,29,17},{29,17,35,16},
+      {35,16,42,19},{42,19,45,25},{45,25,44,31},
+      {44,31,40,36},{40,36,34,37},{34,37,27,34},
+      {27,34,22,27},{34,10,34,7},{17,26,13,26},
+      {46,13,49,10}
+    };
+    for (unsigned i=0;i<sizeof(sun)/sizeof(sun[0]);++i)
+      line(sun[i][0],sun[i][1],sun[i][2],sun[i][3]);
   }
-  // Light cloud silhouette is deliberately not filled; no gray/halftone.
-  if (wmo >= 2 || overcast || rainy || snowy) {
-    const int cloudX = x + w * 48 / 100;
-    const int cloudY = y + h * 27 / 100;
-    d.drawLine(cloudX-15, cloudY+9, cloudX+28, cloudY+9, ink);
-    d.drawCircle(cloudX-5, cloudY+4, 9, ink);
-    d.drawCircle(cloudX+9, cloudY, 13, ink);
-    d.drawCircle(cloudX+24, cloudY+5, 8, ink);
-    if (rainy || snowy) for (int i=0;i<3;i++) {
-      const int ax=cloudX-2+i*13;
-      if (rainy) d.drawLine(ax, cloudY+19, ax-4, cloudY+27, ink);
-      else { d.drawLine(ax-2,cloudY+21,ax+2,cloudY+25,ink);
-             d.drawLine(ax+2,cloudY+21,ax-2,cloudY+25,ink); }
-    }
+
+  // Organic cloud bank; segmented curves rather than geometric circles.
+  if (wmo != 0 || sky != COAST_FAIR) {
+    static const uint8_t cloud[][4] = {
+      {54,45,60,43},{60,43,65,42},{65,42,67,36},
+      {67,36,71,32},{71,32,77,30},{77,30,83,31},
+      {83,31,88,35},{88,35,92,34},{92,34,97,35},
+      {97,35,103,38},{103,38,106,43},{106,43,118,45},
+      {58,48,76,48},{80,48,102,48},{107,48,118,48},
+      {74,27,79,25},{79,25,86,26}
+    };
+    for (unsigned i=0;i<sizeof(cloud)/sizeof(cloud[0]);++i)
+      line(cloud[i][0],cloud[i][1],cloud[i][2],cloud[i][3]);
   }
-  // Nordic hillside and soft sea: decorative but recognizable at 1-bit.
-  d.drawLine(x+4,horizon,x+w/5,horizon-h/10,ink);
-  d.drawLine(x+w/5,horizon-h/10,x+w/3,horizon-h/14,ink);
-  d.drawLine(x+w/3,horizon-h/14,x+w/2,horizon-h/5,ink);
-  d.drawLine(x+w/2,horizon-h/5,x+w*2/3,horizon-h/12,ink);
-  d.drawLine(x+w*2/3,horizon-h/12,x+w-4,horizon,ink);
-  d.drawLine(x+4,horizon+6,x+w-4,horizon+6,ink);
-  d.drawLine(x+w/12,horizon+12,x+w/3,horizon+12,ink);
-  d.drawLine(x+w/2,horizon+12,x+w*9/10,horizon+12,ink);
+  if (sky == COAST_OVERCAST) {
+    line(60,26,75,22); line(75,22,93,24);
+    line(97,27,117,30);
+  } else if (sky == COAST_WIND) {
+    // Just three interrupted breeze strokes; never a large wind icon.
+    line(10,22,25,20); line(30,19,48,20);
+    line(95,15,109,13); line(114,14,130,17);
+    line(112,57,126,55);
+  } else if (sky == COAST_RAIN) {
+    line(72,54,68,62);line(86,53,82,61);line(100,54,96,62);
+  } else if (sky == COAST_SNOW) {
+    line(70,56,76,62);line(76,56,70,62);
+    line(87,52,93,58);line(93,52,87,58);
+    line(105,57,111,63);line(111,57,105,63);
+  }
 }
 // Small botanical sprig, inspired by vintage field guides and bookplates.
 // Every point stays inside the allocated rectangle. Never overlay useful text.

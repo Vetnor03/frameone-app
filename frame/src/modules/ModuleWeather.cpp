@@ -2389,8 +2389,11 @@ static void renderAdaptiveWeather(const Cell& c,
       const int artCenterX = primary.x + primary.w / 4;
       const int artCenterY = primary.y + primary.h / 2;
       ModuleIcons::drawWeatherIcon(artCenterX, artCenterY - 44, iconSize, data.wmo);
-      EditorialFigures::botanicalSprig(DisplayCore::get(),
-        artCenterX - 54, artCenterY + 3, 108, 76, ink);
+      // A low coastal field-guide vignette in the same fine-line family as Date.
+      // The WMO condition and actual wind choose the sky; no extra API call.
+      EditorialFigures::weatherCoastalVignette(DisplayCore::get(),
+        artCenterX - 62, artCenterY + 5, 124, 82,
+        data.wmo, data.currentWindMs, ink);
     } else {
       ModuleIcons::drawWeatherIcon(primary.x + primary.w / 4, primary.y + primary.h / 2,
                                    iconSize, data.wmo);
