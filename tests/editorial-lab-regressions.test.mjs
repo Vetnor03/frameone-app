@@ -16,5 +16,5 @@ test('Surf has six physical-style filled rating blocks, not a numeric fraction',
 test('concept Lab is a separate and explicitly non-pixel-perfect preview',()=>{
   assert.match(source,/Editorial design laboratory/)
   assert.match(source,/not a pixel-perfect physical firmware preview/)
-  assert.match(source,/composeEditorialModule\(module,width,height\)/)
+  assert.match(source,/composeEditorialModule\(module,width,height,\{weatherScene\}\)/)
 })

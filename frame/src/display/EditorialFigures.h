@@ -4,9 +4,7 @@
 // Small one-colour engravings for the experimental RE:MIND editorial display.
 // Decorative and non-interactive: primary information always wins the space.
 namespace EditorialFigures {
-// A quiet, one-bit coastal field-guide vignette to match the Date botanical.
-// These are hand-drawn contour strokes, not filled weather pictograms. The
-// scene is secondary to the condition-specific icon and measured forecast.
+// Preserve sky classification; precipitation has priority over wind.
 enum CoastalSky { COAST_FAIR, COAST_OVERCAST, COAST_WIND, COAST_RAIN, COAST_SNOW };
 inline CoastalSky coastalSkyFor(int wmo, float windMs) {
   if ((wmo >= 71 && wmo <= 77) || wmo == 85 || wmo == 86) return COAST_SNOW;
@@ -17,71 +15,106 @@ inline CoastalSky coastalSkyFor(int wmo, float windMs) {
   return COAST_FAIR;
 }
 
+// Weather v2: organic fine-line coastal engraving, matched to Date's plant.
+// Each row is one hand-composed cubic Bézier stroke (start, handles, end) on
+// a 140×96 plate. Curves are approximated with small integer segments so
+// hardware remains strictly one-bit, deterministic and allocation-free.
+template <class Canvas>
+inline void drawCoastalCurves(Canvas& d, int x, int y, int w, int h,
+                              const uint8_t (*curves)[8], unsigned count,
+                              uint16_t ink) {
+  const int steps=12;
+  const int denom=steps*steps*steps;
+  for (unsigned k=0; k<count; ++k) {
+    const uint8_t* c=curves[k];
+    int px=x+c[0]*w/140, py=y+c[1]*h/96;
+    for(int i=1;i<=steps;++i) {
+      const int a=steps-i,b=i;
+      const int u=a*a*a,v=3*a*a*b,z=3*a*b*b,t=b*b*b;
+      const int nx=(c[0]*u+c[2]*v+c[4]*z+c[6]*t);
+      const int ny=(c[1]*u+c[3]*v+c[5]*z+c[7]*t);
+      const int qx=x+(nx*w+(denom*140)/2)/(denom*140);
+      const int qy=y+(ny*h+(denom*96)/2)/(denom*96);
+      if(qx!=px||qy!=py)d.drawLine(px,py,qx,qy,ink);
+      px=qx;py=qy;
+    }
+  }
+}
+
 template <class Canvas>
 inline void weatherCoastalVignette(Canvas& d, int x, int y, int w, int h,
-                                    int wmo, float windMs, uint16_t ink) {
-  if (w < 110 || h < 70) return;
-  // Normalized 140 × 96 field-guide plate, scaled into its reserved cell.
-  // The line-only strokes work on both white and black 1-bit e-paper.
-  const auto line = [&](int a,int b,int c,int e) {
-    d.drawLine(x + a*w/140, y + b*h/96,
-               x + c*w/140, y + e*h/96, ink);
+                                   int wmo, float windMs, uint16_t ink) {
+  if(w<110 || h<70) return;
+  const CoastalSky sky=coastalSkyFor(wmo,windMs);
+  // The slim foreground grasses and long dune are one continuous silhouette.
+  static const uint8_t shore[][8] = {
+    {7,80,16,78,23,72,31,70},
+    {31,70,43,66,51,73,62,75},
+    {62,75,83,78,101,76,133,73},
+    {11,86,24,85,33,83,48,85},
+    {63,87,81,86,92,88,111,85},
+    {119,89,124,88,132,88,137,86},
+    {32,70,30,57,23,43,31,26},
+    {31,26,34,20,39,17,47,16},
+    {28,59,22,52,17,47,10,46},
+    {10,46,16,45,23,48,28,54},
+    {29,49,34,41,42,34,51,33},
+    {51,33,47,40,39,46,31,51},
+    {30,65,21,61,18,59,12,58},
+    {34,58,39,55,45,53,51,53},
+    {31,34,34,33,38,30,39,27},
+    {38,20,41,21,44,21,46,20}
   };
-  const CoastalSky sky = coastalSkyFor(wmo, windMs);
-  // Very low Jæren shoreline with a little wild coastal grass.
-  static const uint8_t shore[][4] = {
-    {5,70,15,68},{15,68,24,64},{24,64,32,61},
-    {32,61,40,63},{40,63,48,68},{48,68,57,70},
-    {57,70,75,71},{75,71,93,71},{93,71,115,70},{115,70,135,71},
-    {28,61,28,50},{28,56,22,51},{28,54,34,47},
-    {24,58,19,57},{31,57,36,54},
-    {9,81,29,81},{37,84,61,84},{70,80,101,80},
-    {107,85,131,85},{63,89,85,89}
+  drawCoastalCurves(d,x,y,w,h,shore,sizeof(shore)/sizeof(shore[0]),ink);
+  // No cartoon round sun or closed "bumpy" cloud outline.
+  // A clear sky is mostly negative space. Partly cloudy keeps one airy bank.
+  if (wmo!=0) {
+  static const uint8_t cloud[][8] = {
+    {58,39,69,38,73,30,84,29},
+    {84,29,96,26,104,30,114,30},
+    {114,30,126,30,131,35,137,37},
+    {72,46,91,44,105,44,124,46},
+    {84,23,96,21,101,23,112,26}
   };
-  for (unsigned i=0;i<sizeof(shore)/sizeof(shore[0]);++i)
-    line(shore[i][0],shore[i][1],shore[i][2],shore[i][3]);
-
-  // A small sun, drawn as a fine interrupted outline. For clear weather the
-  // sun is fully present; with fair cloud it peeks out from behind the bank.
-  if (sky == COAST_FAIR) {
-    static const uint8_t sun[][4] = {
-      {22,27,24,21},{24,21,29,17},{29,17,35,16},
-      {35,16,42,19},{42,19,45,25},{45,25,44,31},
-      {44,31,40,36},{40,36,34,37},{34,37,27,34},
-      {27,34,22,27},{34,10,34,7},{17,26,13,26},
-      {46,13,49,10}
-    };
-    for (unsigned i=0;i<sizeof(sun)/sizeof(sun[0]);++i)
-      line(sun[i][0],sun[i][1],sun[i][2],sun[i][3]);
+    drawCoastalCurves(d,x,y,w,h,cloud,sizeof(cloud)/sizeof(cloud[0]),ink);
   }
-
-  // Organic cloud bank; segmented curves rather than geometric circles.
-  if (wmo != 0 || sky != COAST_FAIR) {
-    static const uint8_t cloud[][4] = {
-      {54,45,60,43},{60,43,65,42},{65,42,67,36},
-      {67,36,71,32},{71,32,77,30},{77,30,83,31},
-      {83,31,88,35},{88,35,92,34},{92,34,97,35},
-      {97,35,103,38},{103,38,106,43},{106,43,118,45},
-      {58,48,76,48},{80,48,102,48},{107,48,118,48},
-      {74,27,79,25},{79,25,86,26}
-    };
-    for (unsigned i=0;i<sizeof(cloud)/sizeof(cloud[0]);++i)
-      line(cloud[i][0],cloud[i][1],cloud[i][2],cloud[i][3]);
-  }
-  if (sky == COAST_OVERCAST) {
-    line(60,26,75,22); line(75,22,93,24);
-    line(97,27,117,30);
-  } else if (sky == COAST_WIND) {
-    // Just three interrupted breeze strokes; never a large wind icon.
-    line(10,22,25,20); line(30,19,48,20);
-    line(95,15,109,13); line(114,14,130,17);
-    line(112,57,126,55);
-  } else if (sky == COAST_RAIN) {
-    line(72,54,68,62);line(86,53,82,61);line(100,54,96,62);
-  } else if (sky == COAST_SNOW) {
-    line(70,56,76,62);line(76,56,70,62);
-    line(87,52,93,58);line(93,52,87,58);
-    line(105,57,111,63);line(111,57,105,63);
+  if(sky==COAST_FAIR) {
+  static const uint8_t fair[][8] = {
+    {69,18,82,16,90,18,101,20},
+    {105,21,110,22,117,22,121,23}
+  };
+    drawCoastalCurves(d,x,y,w,h,fair,sizeof(fair)/sizeof(fair[0]),ink);
+  } else if(sky==COAST_OVERCAST) {
+  static const uint8_t overcast[][8] = {
+    {56,30,66,28,75,22,90,23},
+    {90,23,106,22,117,26,132,30},
+    {65,53,84,51,104,53,127,51}
+  };
+    drawCoastalCurves(d,x,y,w,h,overcast,sizeof(overcast)/sizeof(overcast[0]),ink);
+  } else if(sky==COAST_WIND) {
+  static const uint8_t wind[][8] = {
+    {8,27,22,23,34,25,46,24},
+    {65,15,81,12,102,13,120,17},
+    {106,57,116,54,126,55,135,52}
+  };
+    drawCoastalCurves(d,x,y,w,h,wind,sizeof(wind)/sizeof(wind[0]),ink);
+  } else if(sky==COAST_RAIN) {
+  static const uint8_t rain[][8] = {
+    {79,53,78,56,76,60,74,64},
+    {95,52,93,55,90,59,89,63},
+    {111,54,110,56,108,59,107,62}
+  };
+    drawCoastalCurves(d,x,y,w,h,rain,sizeof(rain)/sizeof(rain[0]),ink);
+  } else if(sky==COAST_SNOW) {
+  static const uint8_t snow[][8] = {
+    {77,56,79,58,81,60,83,62},
+    {83,56,81,58,79,60,77,62},
+    {96,53,98,55,100,57,102,59},
+    {102,53,100,55,98,57,96,59},
+    {114,57,116,59,118,61,120,63},
+    {120,57,118,59,116,61,114,63}
+  };
+    drawCoastalCurves(d,x,y,w,h,snow,sizeof(snow)/sizeof(snow[0]),ink);
   }
 }
 // Small botanical sprig, inspired by vintage field guides and bookplates.

@@ -191,3 +191,20 @@ coordinates**, with the Lab offering a Sky illustration selector to inspect
 Clear, Partly Cloudy, Overcast, Windy, Rain and Snow variations. The browser
 audit saves all six weather studies independently alongside the 352 layout
 snapshots. Lab forecasts remain illustrative sample values.
+
+## Weather engraving v2 — organic ink curves
+
+Replaced the icon-built v1 coast with a restrained hand-composed field-guide
+plate, made of continuous cubic contours instead of straight schematic lines.
+A softly windswept grass silhouette, low dune, broken waterlines and an airy
+unclosed cloud bank form one asymmetric sketch. Clear weather uses negative
+space (never a cartoon sun disc). Wind, overcast, rain and snow add only a few
+small local accents. Weather WMO/wind classification and original condition
+icon remain unchanged. Cubic control points match exactly across SVG and C++;
+the hardware samples 12 short integer line segments per curve on the 1-bit
+800×480 panel. Date's existing flower is untouched.
+
+**Acceptance:** Art remains inside its allocated Weather-only 4×4 region,
+with no large fills or overlapping content. The six Lab variants and the
+full 352-layout browser audit are required; real e-paper approval still needs
+physical visual testing. Sample content in the Lab is not real weather data.

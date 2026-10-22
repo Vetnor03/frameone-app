@@ -4,7 +4,7 @@ import {useEffect,useMemo,useRef,useState} from 'react'
 import Link from 'next/link'
 import {editorialPlan} from '../lib/editorialFrameLayout.mjs'
 import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition} from '../lib/editorialComposition.mjs'
-import {WEATHER_VIGNETTE_SCENES,weatherCoastalLines} from '../lib/editorialWeatherVignette.mjs'
+import {WEATHER_VIGNETTE_SCENES,weatherCoastalCurves} from '../lib/editorialWeatherVignette.mjs'
 
 type Module = typeof EDITORIAL_MODULES[number]
 type Span = 1|2|3|4
@@ -42,13 +42,13 @@ function Botanical({x,y,w,h,ink}:{x:number;y:number;w:number;h:number;ink:string
 function CoastalWeather({x,y,w,h,ink,wmo,windMs}:{
   x:number;y:number;w:number;h:number;ink:string;wmo:number;windMs:number
 }){
-  // Same normalized 140×96 strokes as the actual e-paper C++ renderer.
+  // Same hand-composed Bézier handles as firmware; C++ renders short 1-bit segments.
   return <svg x={x} y={y} width={w} height={h} viewBox="0 0 140 96"
     preserveAspectRatio="none" fill="none" stroke={ink} strokeWidth="1.15"
     strokeLinecap="round" strokeLinejoin="round"
     aria-label="Coastal weather field-guide engraving">
-    {weatherCoastalLines(wmo,windMs).map(([x1,y1,x2,y2],index)=>
-      <line key={index} x1={x1} y1={y1} x2={x2} y2={y2}/>)}
+    {weatherCoastalCurves(wmo,windMs).map((p,index)=>
+      <path key={index} d={`M ${p[0]} ${p[1]} C ${p[2]} ${p[3]} ${p[4]} ${p[5]} ${p[6]} ${p[7]}`}/>)}
   </svg>
 }
 function RatingBlocks({x,y,w,ink,theme,reference=false}:{

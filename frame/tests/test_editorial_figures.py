@@ -36,7 +36,7 @@ int main(){
     for(int h=70;h<=140;h+=14){
       Canvas c;c.left=7;c.top=11;c.right=c.left+w-1;c.bottom=c.top+h-1;
       weatherCoastalVignette(c,c.left,c.top,w,h,wmo,8.5f,1);
-      assert(c.calls>=18&&!c.outside);
+      assert(c.calls>=25&&!c.outside);
     }
   Canvas small;
   weatherCoastalVignette(small,0,0,80,50,3,2,1);
