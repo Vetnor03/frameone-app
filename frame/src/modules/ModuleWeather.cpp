@@ -2382,10 +2382,15 @@ static void renderAdaptiveWeather(const Cell& c,
   formatTemp(temperature, sizeof(temperature), data.tempC, cfg.units);
   const int iconSize = primary.h > 120 ? 56 : 38;
   if (landscape) {
-    if (EditorialDesign::budgetFor(editorial, EditorialDesign::WEATHER_FACTS).illustration && primary.w >= 270 && primary.h >= 115) {
-      EditorialFigures::weatherLandscape(DisplayCore::get(),
-        primary.x + primary.w / 4 - 62, primary.y + primary.h / 2 - 43,
-        124, 86, data.wmo, ink);
+    if (EditorialDesign::budgetFor(editorial, EditorialDesign::WEATHER_FACTS).illustration &&
+        primary.w >= 270 && primary.h >= 215) {
+      // The condition-specific icon is useful information; the nature-book
+      // engraving is optional decoration. Keep them in separate vertical bands.
+      const int artCenterX = primary.x + primary.w / 4;
+      const int artCenterY = primary.y + primary.h / 2;
+      ModuleIcons::drawWeatherIcon(artCenterX, artCenterY - 44, iconSize, data.wmo);
+      EditorialFigures::botanicalSprig(DisplayCore::get(),
+        artCenterX - 54, artCenterY + 3, 108, 76, ink);
     } else {
       ModuleIcons::drawWeatherIcon(primary.x + primary.w / 4, primary.y + primary.h / 2,
                                    iconSize, data.wmo);

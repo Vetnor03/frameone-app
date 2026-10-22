@@ -8,22 +8,22 @@ export const EDITORIAL_MODULES = Object.freeze([
 export const EDITORIAL_SAMPLES = Object.freeze({
   date: {heading:'',primary:'21',detail:'Wednesday',extras:[]},
   reminders: {heading:'Reminders',primary:'Kontrolltime Aleris',detail:'Friday · 12:30',
-    extras:['18:00 · Passe søsken','Saturday · Pick up parcel']},
+    extras:['Today · 18:00 · Passe søsken','Friday · 12:30 · Kontrolltime','Saturday · Pick up parcel','Sunday · Family dinner','Monday · Return library books','Tuesday · Gym appointment']},
   weather: {heading:'Weather',primary:'12°',detail:'Cloudy with sunny spells',
-    extras:['Wind NW · 4 m/s','Low 9° · High 13°','A brighter weekend ahead']},
+    extras:['Today · High 13° / Low 9°','Wind · NW 4 m/s','Rain probability · 20%','Tomorrow · 11° / Rain','Saturday · 12° / Brighter','Weekend · More sunshine']},
   news: {heading:'Siste nytt',primary:'Aker BP-lederforeningen innkaller til ekstraordinært møte',
-    detail:'Top stories',extras:['Oslo-restauranten serverer bjørnekjøtt','Cornell stanser forskningsreiser']},
+    detail:'Top stories',extras:['Oslo-restauranten serverer bjørnekjøtt','Cornell stanser forskningsreiser','Lokale nyheter fra Rogaland','Ny utvikling i Europa','Siste oppdatering kl. 12:30']},
   surf: {heading:'Surf · Hellestø',primary:'Poor to Fair',detail:'Waves 0.8–1.2 m',
-    extras:['Period 10 s','Wind NE · 4 m/s','Today’s Best 14:00–18:00']},
-  ski: {heading:'Ski',primary:'15 cm',detail:'Fresh snow',extras:['Cloudy · −4°C','Lifts open 9–16']},
+    extras:['Waves · 0.8–1.2 m','Swell period · 10 s','Wind · NE 4 m/s','Swell direction · NW','Today’s Best · 14:00–18:00','Tomorrow · Improving conditions']},
+  ski: {heading:'Ski',primary:'15 cm',detail:'Fresh snow',extras:['Temperature · −4°C','Fresh snow · 15 cm','Open lifts · 9–16','Wind · 3 m/s','Tomorrow · Mostly clear']},
   countdown: {heading:'Countdown',primary:'24',detail:'Days until Christmas',
     extras:['24 December 2026']},
   soccer: {heading:'Viking',primary:'2 – 1',detail:'Full time',
-    extras:['Next match · Sunday','League position · 3']},
+    extras:['Next match · Sunday','League position · 3','Form · W D W W L','Home · Stavanger','Kickoff · 18:00','Competition · Eliteserien']},
   stocks: {heading:'Equinor',primary:'274.50',detail:'NOK · +1.4%',
-    extras:['Today +3.70','Month +5.2%']},
+    extras:['Today · +3.70 NOK','Month · +5.2%','Week · +2.6%','Previous close · 270.80','Range · 268.00–277.00']},
   groceries: {heading:'Groceries',primary:'Milk',detail:'Bread',
-    extras:['Coffee','Apples','Butter']},
+    extras:['Coffee','Apples','Butter','Cheese','Tomatoes','Pasta','Oat milk']},
   assistant: {heading:'AI Follow',primary:'No new updates',detail:'Following two topics',
     extras:['Last checked today']},
 })
@@ -195,62 +195,90 @@ function contentComposition(module,p){
   const budget=editorialContentBudget(p,editorialModuleKind(module))
   const showHeader=Boolean(budget.heading&&p.height>=190)
   const body=paddedRegion(p,showHeader)
-  // A spacious Weather cell gets an illustration column, and the information
-  // stays centered in a separate column. No illustration can cover data.
-  const withWeatherArt=module==='weather'&&budget.illustration&&body.w>=540&&body.h>=240
-  const artWidth=withWeatherArt?Math.floor(body.w*.39):0
-  const rightX=withWeatherArt?body.x+artWidth+18:body.x
-  const contentArea=withWeatherArt?rect(rightX,body.y,body.w-artWidth-18,body.h):body
-  const width=contentArea.w
+  // A module earns a second information column only when there is real list or
+  // forecast data to show. Full-screen is not a reason to invent decoration.
+  const richSpread=p.width>=700&&p.height>=390&&info.extras.length>=3
+  const withBotanical=module==='weather'&&budget.illustration&&body.w>=540&&body.h>=240
+  const artWidth=withBotanical?Math.floor(body.w*.34):0
+  const rightX=withBotanical?body.x+artWidth+18:body.x
+  const remainingBody=withBotanical?rect(rightX,body.y,body.w-artWidth-18,body.h):body
+  const withSideList=richSpread&&!withBotanical
+  const heroWidth=withSideList?Math.floor(remainingBody.w*.49):remainingBody.w
+  const sideGap=withSideList?22:0
+  const heroArea=withSideList
+    ?rect(remainingBody.x,remainingBody.y,heroWidth,remainingBody.h)
+    :remainingBody
+  const listArea=withSideList
+    ?rect(heroArea.x+heroArea.w+sideGap,body.y,
+          remainingBody.w-heroArea.w-sideGap,body.h)
+    :null
+  const width=heroArea.w
   const compact=body.h<125
   const roomy=p.shape==='spread'
-  const blocks=[]
   const heroSize=module==='news'?clamp(width*.055,14,roomy?25:18):
     ['reminders','assistant','groceries'].includes(module)?clamp(width*.065,14,roomy?26:19):
     clamp(Math.min(width*.19,body.h*.38),22,roomy?62:43)
-  const hasRoomForDetail=body.h>105
-  // Main information is a protected content group. In narrow cells the role
-  // gains line wrapping rather than being moved to an arbitrary absolute Y.
+  const hero=[]
   if(module==='reminders'){
-    blocks.push(textBlock('reminder-time','Friday · 12:30',width,clamp(width*.065,11,15),
+    hero.push(textBlock('reminder-time','Friday · 12:30',width,clamp(width*.065,11,15),
       {role:'secondary'}))
-    blocks.push(textBlock('primary',info.primary,width,heroSize,
+    hero.push(textBlock('primary',info.primary,width,heroSize,
       {serif:true,maxLines:2}))
   }else{
-    blocks.push(textBlock('primary',info.primary,width,heroSize,
+    hero.push(textBlock('primary',info.primary,width,heroSize,
       {serif:module!=='soccer',maxLines:module==='news'?2:1}))
   }
-  if(module==='surf'){
-    blocks.push(graphicBlock('rating',Math.min(160,width-8),16,'score'))
-  }
-  if(hasRoomForDetail){
-    blocks.push(textBlock('detail',info.detail,width,clamp(width*.04,11,16),
+  if(module==='surf')
+    hero.push(graphicBlock('rating',Math.min(160,width-8),16,'score'))
+  if(body.h>105)
+    hero.push(textBlock('detail',info.detail,width,clamp(width*.04,11,16),
       {role:'secondary',maxLines:2}))
+  const gap=compact?6:9
+  const blocks=stackCentered(hero,heroArea,{gap})
+  let extras=info.extras
+  if(listArea){
+    // An optional category heading anchors a true information list; no repeated
+    // hero or ornamental image consumes the free half of the frame.
+    const sectionTitle={
+      reminders:'NEXT REMINDERS',news:'MORE HEADLINES',surf:'FORECAST DETAILS',
+      ski:'THE NEXT DAYS',soccer:'MATCH DETAILS',stocks:'MARKET DETAILS',
+      groceries:'STILL TO BUY',weather:'FORECAST',
+    }[module]||'DETAILS'
+    const side=[textBlock('section-heading',sectionTitle,listArea.w,13,
+      {role:'heading'})]
+    for(let i=0;i<extras.length&&i<6;i++)
+      side.push(textBlock('extra-'+i,extras[i],listArea.w,clamp(listArea.w*.037,12,15),
+        {role:'list',maxLines:module==='news'?2:1}))
+    // Automatically drop least important trailing rows if the actual block
+    // heights cannot fit. Keep the whole surviving section vertically centered.
+    const enough=()=>side.reduce((sum,b)=>sum+b.h,0)+(side.length-1)*12<=listArea.h-24
+    while(side.length>1&&!enough())side.pop()
+    blocks.push(...stackCentered(side,listArea,{gap:12}))
+  }else{
+    const used=hero.reduce((sum,b)=>sum+b.h,0)+(hero.length-1)*gap
+    let free=Math.max(0,heroArea.h-used-26)
+    const maxExtra=roomy?6:2
+    const rows=[]
+    for(let i=0;i<extras.length&&i<maxExtra;i++){
+      const row=textBlock('extra-'+i,extras[i],width,clamp(width*.034,11,15),
+        {role:'list',maxLines:1})
+      if(free<row.h+gap)break
+      rows.push(row)
+      free-=row.h+gap
+    }
+    // All content in a single region is a *single centered group*.
+    blocks.splice(0,blocks.length,...stackCentered([...hero,...rows],heroArea,{gap}))
   }
-  const existing=blocks.reduce((v,b)=>v+b.h,0)+Math.max(0,blocks.length-1)*9
-  let remaining=Math.max(0,body.h-existing-26)
-  let count=0
-  // All modules use the same information budget. "show more" means another
-  // row that physically fits, not arbitrary percentages or overlapping text.
-  for(const extra of info.extras){
-    if(count>=Math.max(0,budget.listItems||2))break
-    const rowSize=clamp(width*.034,11,15)
-    const row=textBlock('extra-'+count,extra,width,rowSize,{role:'list'})
-    if(remaining<row.h+9)break
-    blocks.push(row)
-    remaining-=row.h+9
-    count++
-  }
-  const content=stackCentered(blocks,contentArea,{gap:compact?6:9})
-  if(withWeatherArt){
-    const artwork=graphicBlock('weather-landscape',Math.min(210,artWidth-16),Math.min(142,body.h*.46))
-    content.push({...artwork,x:body.x+(artWidth-artwork.w)/2,
+  if(withBotanical){
+    const artwork=graphicBlock('weather-botanical',
+      Math.min(150,artWidth-16),Math.min(170,body.h*.49))
+    blocks.push({...artwork,x:body.x+(artWidth-artwork.w)/2,
       y:body.y+(body.h-artwork.h)/2})
   }
   const header=showHeader?{...textBlock('heading',info.heading,p.safeWidth,14,
     {role:'heading',serif:true}),x:p.inset,y:p.inset+4}:null
-  if(header)content.unshift(header)
-  return {body,blocks:content,centered:true,mode:p.shape}
+  if(header)blocks.unshift(header)
+  return {body,blocks,centered:true,mode:withSideList?'information-spread':p.shape}
 }
 
 export function composeEditorialModule(module,width,height){

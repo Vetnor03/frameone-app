@@ -152,3 +152,24 @@ The browser audit captures two dedicated 2×2 Surf review images:
 `surf-medium-reference-light.png` and `surf-medium-reference-dark.png`,
 in addition to the 11×16×2 matrix. This is an automated artifact, not a
 request for pilot users to click through every grid combination.
+
+## Full-cell density and scroll behavior
+
+On the experimental design Lab, full-size data-rich modules present an
+information spread: the most important fact stays prominent, while up to six
+measured supporting rows fill a separate information region. This applies to
+Reminders, News, Surf (except protected 2×2), Ski, Soccer, Stocks, and Groceries;
+Weather reserves a dedicated botanical illustration region and extends its
+forecast examples instead. Date keeps its approved calendar composition.
+Countdown and AI Follow are deliberately **not** padded with invented content.
+All Lab values are illustrative samples, not actual backend forecasts or events.
+
+The Lab owns a viewport-height scroll container because the RE:MIND controller
+application locks body scrolling. Desktop and 390px-mobile scrolling are
+explicitly checked in Chromium. The full 352-case geometry and glyph audit
+remains a separate safeguard; physical e-paper validation is still required.
+
+Weather no longer renders the unrelated mountain/coast landscape concept.
+When there is generous room on the real frame, the actual condition-specific
+weather icon stays visible and a **separate field-guide botanical sprig** sits
+below it. Smaller frames retain the existing condition icon without decoration.

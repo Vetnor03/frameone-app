@@ -91,3 +91,28 @@ test('Surf Medium retains original physical mark sizing and vertical composition
   assert.ok(named['swell-arrow'].x < named['wind-arrow'].x)
   assert.deepEqual(auditEditorialComposition(layout),[])
 })
+
+test('full-screen data-rich modules show additional information instead of enlarged whitespace',()=>{
+  for(const name of ['reminders','news','surf','ski','soccer','stocks','groceries']){
+    const small=composeEditorialModule(name,400,240)
+    const xl=composeEditorialModule(name,800,480)
+    assert.equal(xl.mode,'information-spread',name)
+    assert.ok(xl.blocks.filter(b=>b.id.startsWith('extra-')).length>=4,name)
+    assert.ok(xl.blocks.filter(b=>b.id.startsWith('extra-')).length>
+              small.blocks.filter(b=>b.id.startsWith('extra-')).length,name)
+    assert.ok(xl.blocks.some(b=>b.id==='section-heading'),name)
+    assert.deepEqual(auditEditorialComposition(xl),[],name)
+  }
+  for(const name of ['date','countdown','assistant']){
+    const xl=composeEditorialModule(name,800,480)
+    assert.notEqual(xl.mode,'information-spread',
+      'Do not fabricate list content for '+name)
+  }
+})
+test('full Weather pairs reserved botanical art with useful forecast details',()=>{
+  const weather=composeEditorialModule('weather',800,480)
+  assert.ok(weather.blocks.some(b=>b.id==='weather-botanical'))
+  assert.ok(weather.blocks.filter(b=>b.id.startsWith('extra-')).length>=4)
+  assert.equal(weather.blocks.some(b=>b.id==='weather-landscape'),false)
+  assert.deepEqual(auditEditorialComposition(weather),[])
+})

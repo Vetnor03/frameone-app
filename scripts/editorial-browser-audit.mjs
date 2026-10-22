@@ -27,6 +27,30 @@ try {
   assert.equal(ink.checked,352)
   assert.equal(ink.issues,0,'Rendered browser glyphs overlap or exceed the cell')
 
+  // The parent controller intentionally locks body scrolling. The independent
+  // Lab must scroll inside its own viewport, including on a small phone.
+  const checkScroll=async ()=>{
+    return page.evaluate(()=>{
+      const el=document.querySelector('[data-editorial-scroll]')
+      if(!(el instanceof HTMLElement))return {found:false,scrollable:false,moved:false}
+      const old=el.scrollTop
+      const scrollable=el.scrollHeight>el.clientHeight+24&&
+        ['auto','scroll'].includes(getComputedStyle(el).overflowY)
+      el.scrollTop=140
+      const moved=el.scrollTop>=100
+      el.scrollTop=old
+      return {found:true,scrollable,moved}
+    })
+  }
+  let scrolling=await checkScroll()
+  console.log('RE:MIND scroll viewport desktop:',JSON.stringify(scrolling))
+  assert.deepEqual(scrolling,{found:true,scrollable:true,moved:true})
+  await page.setViewportSize({width:390,height:700})
+  scrolling=await checkScroll()
+  console.log('RE:MIND scroll viewport mobile:',JSON.stringify(scrolling))
+  assert.deepEqual(scrolling,{found:true,scrollable:true,moved:true})
+  await page.setViewportSize({width:1440,height:960})
+
   mkdirSync('artifacts/editorial',{recursive:true})
   const grid=page.locator('label').filter({hasText:'Custom grid'}).locator('select')
   const moduleControl=page.locator('label').filter({hasText:'Module'}).locator('select')
