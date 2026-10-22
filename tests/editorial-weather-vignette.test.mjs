@@ -30,7 +30,8 @@ test('same coastal contour coordinates are used in both JS and firmware',()=>{
   assert.match(cpp,/coastalSkyFor/)
 
   // Prove every base and weather-variant curve matches the hardware control points.
-  const names=['shore','windPlant','cloud','windCloud','fair','overcast','wind','rain','snow']
+  const names=['shore','windPlant','cloud','partlyCloud','overcastCloud','snowCloud',
+    'windCloud','fair','wind','rain','snow']
   const expected=[
     weatherCoastalCurves(0,2),
     weatherCoastalCurves(2,2),
@@ -81,8 +82,8 @@ test('wind bends coastal grass and stretches cloud without changing approved rai
   const rainy=weatherCoastalCurves(61,4)
   // Six unchanged water/dune curves, but a different plant and cloud contour.
   assert.deepEqual(windy.slice(0,6),breezy.slice(0,6))
-  assert.notDeepEqual(windy.slice(6,16),breezy.slice(6,16))
-  assert.notDeepEqual(windy.slice(16,20),breezy.slice(16,20))
+  assert.notDeepEqual(windy.slice(6,13),breezy.slice(6,13))
+  assert.notDeepEqual(windy.slice(13,15),breezy.slice(16,18))
   // Approved rainy control points are strictly unchanged.
   assert.deepEqual(rainy.slice(-3),[
     [79,53,78,56,76,60,74,64],
@@ -90,18 +91,55 @@ test('wind bends coastal grass and stretches cloud without changing approved rai
     [111,54,110,56,108,59,107,62],
   ])
   // No use of the Snow X-mark glyphs in the Windy plate.
-  assert.equal(windy.length,6+10+4+2)
+  assert.equal(windy.length,6+7+2+2)
 })
-test('snow falls as sparse single strokes, never intersecting X-pairs',()=>{
+test('Snow has three fine floating flecks and no rain-slash marks',()=>{
   const snowy=weatherCoastalCurves(73,3)
-  const snowMarks=snowy.slice(-4)
-  assert.equal(snowMarks.length,4)
-  for(const mark of snowMarks){
-    assert.equal(mark.length,8)
-    // Each mark is a short continuous drifting fall, not a crossed symbol.
-    assert.ok(mark[1]>mark[7], 'snow stroke drifts upwards in control-point ordering')
-    assert.ok(Math.abs(mark[6]-mark[0])<=5)
+  const rain=weatherCoastalCurves(61,3)
+  const flecks=snowy.slice(-6)
+  assert.equal(flecks.length,6)
+  // Each flake uses two mirrored organic arcs, rather than two crossing X
+  // strokes or a straight rain dash.
+  for(let i=0;i<6;i+=2){
+    const upper=flecks[i],lower=flecks[i+1]
+    assert.equal(upper.length,8)
+    assert.equal(lower.length,8)
+    assert.deepEqual(upper.slice(6),lower.slice(0,2))
+    assert.deepEqual(upper.slice(0,2),lower.slice(6))
+    assert.ok(upper[1]>upper[3] && upper[3]<upper[7],
+      'floating fleck should have a small curved crown')
+    assert.ok(upper[6]-upper[0]>=3 && upper[6]-upper[0]<=5)
   }
-  const base=weatherCoastalCurves(61,3)
-  assert.deepEqual(snowy.slice(0,21),base.slice(0,21))
+  assert.notDeepEqual(flecks,rain.slice(-3))
+  assert.equal(snowy.length,16+3+6)
+})
+
+test('Partly Cloudy is airy while Overcast is a broad stationary cloud bank',()=>{
+  const partly=weatherCoastalCurves(2,4)
+  const overcast=weatherCoastalCurves(3,4)
+  const clear=weatherCoastalCurves(0,4)
+  assert.equal(partly.length,16+2+2)
+  assert.equal(overcast.length,16+5)
+  assert.equal(clear.length,16+2) // Clear is not redesigned here
+  assert.deepEqual(partly.slice(0,16),overcast.slice(0,16))
+  assert.notDeepEqual(partly.slice(16,18),overcast.slice(16,18))
+  assert.notDeepEqual(partly.slice(-2),overcast.slice(-2))
+  assert.equal(overcast.length>partly.length,true)
+})
+
+test('Rain stays byte-for-byte identical to the approved Weather v2 baseline',()=>{
+  const rainy=weatherCoastalCurves(61,4)
+  assert.equal(rainy.length,16+5+3)
+  assert.deepEqual(rainy.slice(-3),[
+    [79,53,78,56,76,60,74,64],
+    [95,52,93,55,90,59,89,63],
+    [111,54,110,56,108,59,107,62],
+  ])
+  assert.deepEqual(rainy.slice(16,21),[
+    [58,39,69,38,73,30,84,29],
+    [84,29,96,26,104,30,114,30],
+    [114,30,126,30,131,35,137,37],
+    [72,46,91,44,105,44,124,46],
+    [84,23,96,21,101,23,112,26],
+  ])
 })

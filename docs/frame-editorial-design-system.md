@@ -242,3 +242,19 @@ cloud bank, and uses only two delicate airflow sweeps. Neither changes the
 Rainy, Clear, Partly Cloudy, Overcast, Date, or Surf compositions or any
 forecast-fetch logic. Review Snow/Windy variants again on the protected Lab
 before treating them as aesthetically approved.
+
+## Weather identity separation — revision 3
+
+Only Windy, Snowy, Partly Cloudy and Overcast illustration contours are
+recomposed. Rainy retains its exact approved shoreline, organic cloud and
+rain mark coordinates; Clear, Date and Surf Medium remain unchanged.
+Partly Cloudy uses only two high, open cloud curves plus the familiar calm-sky
+strokes. Overcast uses five calm, broad canopy contours without additive
+filler or motion. Windy uses a seven-stroke bent coastal plant, two loose
+stretched cloud contours and exactly two airy wind strokes (reduced from
+the previous 10+4+2 marks). Snowy uses a quiet three-stroke cloud and
+three small closed seed-like snow flecks made from paired curves; these are
+not the rain slashes or X-shaped icons rejected in visual review.
+Sky/wind classification, forecast data, and rendering integration are
+unchanged. Verify the resulting sketches in both themes and on e-paper
+before treating the four revised variants as aesthetically approved.

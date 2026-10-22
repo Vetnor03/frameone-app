@@ -69,17 +69,14 @@ inline void weatherCoastalVignette(Canvas& d, int x, int y, int w, int h,
   // bends the grasses themselves rather than adding arbitrary wind icons.
   drawCoastalCurves(d,x,y,w,h,shore,6,ink);
   if(sky==COAST_WIND) {
-  static const uint8_t windPlant[][8] = {
-    {32,70,30,55,42,38,58,24},
-    {58,24,64,18,70,17,75,19},
-    {39,51,29,44,20,43,12,44},
-    {12,44,20,43,31,47,39,51},
-    {40,51,51,43,59,35,70,36},
-    {70,36,65,42,51,48,41,52},
-    {31,64,21,58,17,57,9,58},
-    {42,55,51,51,60,50,68,51},
-    {56,28,63,26,68,25,72,26},
-    {69,20,74,20,78,21,81,20}
+    static const uint8_t windPlant[][8] = {
+    {32,70,34,56,48,38,72,27},
+    {56,39,62,30,72,27,81,28},
+    {56,40,64,41,76,38,84,36},
+    {41,55,30,50,19,48,12,49},
+    {41,55,31,54,20,53,14,51},
+    {48,46,50,36,57,33,68,32},
+    {35,65,46,59,57,56,67,57}
   };
     drawCoastalCurves(d,x,y,w,h,windPlant,
                       sizeof(windPlant)/sizeof(windPlant[0]),ink);
@@ -97,38 +94,19 @@ inline void weatherCoastalVignette(Canvas& d, int x, int y, int w, int h,
     {72,46,91,44,105,44,124,46},
     {84,23,96,21,101,23,112,26}
   };
-    if(sky==COAST_WIND) {
-  static const uint8_t windCloud[][8] = {
-    {58,40,72,37,80,30,93,30},
-    {93,30,110,28,122,31,137,35},
-    {74,47,93,44,115,45,134,47},
-    {93,24,106,22,118,23,129,26}
-  };
-      // Stretch the cloud with the wind, no extra cartoon cloud shapes.
-      drawCoastalCurves(d,x,y,w,h,windCloud,
-                        sizeof(windCloud)/sizeof(windCloud[0]),ink);
-    } else {
-      drawCoastalCurves(d,x,y,w,h,cloud,sizeof(cloud)/sizeof(cloud[0]),ink);
-    }
-  }
-  if(sky==COAST_FAIR) {
-  static const uint8_t fair[][8] = {
-    {69,18,82,16,90,18,101,20},
-    {105,21,110,22,117,22,121,23}
-  };
-    drawCoastalCurves(d,x,y,w,h,fair,sizeof(fair)/sizeof(fair[0]),ink);
-  } else if(sky==COAST_OVERCAST) {
-  static const uint8_t overcast[][8] = {
-    {56,30,66,28,75,22,90,23},
-    {90,23,106,22,117,26,132,30},
-    {65,53,84,51,104,53,127,51}
-  };
-    drawCoastalCurves(d,x,y,w,h,overcast,sizeof(overcast)/sizeof(overcast[0]),ink);
-  } else if(sky==COAST_WIND) {
-    // Two faint airflow sweeps. Movement lives mainly in the leaning plant.
-  static const uint8_t wind[][8] = {
-    {8,28,24,24,38,23,51,27},
-    {86,16,102,14,121,17,136,20}
+    if(sky==COAST_FAIR) {
+      // Partly cloudy: an airy trace with most of the sky left open.
+      static const uint8_t partlyCloud[][8] = {
+        {87,41,99,36,112,37,126,41},
+        {101,33,109,31,119,33,126,36}
+      };
+      drawCoastalCurves(d,x,y,w,h,partlyCloud,
+                        sizeof(partlyCloud)/sizeof(partlyCloud[0]),ink);
+    } else if(sky==COAST_WIND) {
+    // Two restrained sweeps; the bent plant carries most of the motion.
+    static const uint8_t wind[][8] = {
+    {84,17,102,13,120,16,137,20},
+    {94,59,110,56,124,58,136,55}
   };    drawCoastalCurves(d,x,y,w,h,wind,sizeof(wind)/sizeof(wind[0]),ink);
   } else if(sky==COAST_RAIN) {
   static const uint8_t rain[][8] = {
@@ -138,11 +116,13 @@ inline void weatherCoastalVignette(Canvas& d, int x, int y, int w, int h,
   };
     drawCoastalCurves(d,x,y,w,h,rain,sizeof(rain)/sizeof(rain[0]),ink);
   } else if(sky==COAST_SNOW) {
-  static const uint8_t snow[][8] = {
-    {73,55,74,53,74,51,76,50},
-    {86,61,87,59,88,57,88,55},
-    {99,53,100,51,99,50,102,48},
-    {114,62,115,60,116,57,118,56}
+    static const uint8_t snow[][8] = {
+    {75,55,76,52,79,52,80,55},
+    {80,55,79,58,77,59,75,55},
+    {94,63,95,60,98,60,99,63},
+    {99,63,98,66,96,67,94,63},
+    {112,54,113,51,116,51,117,54},
+    {117,54,116,57,114,58,112,54}
   };    drawCoastalCurves(d,x,y,w,h,snow,sizeof(snow)/sizeof(snow[0]),ink);
   }
 }
