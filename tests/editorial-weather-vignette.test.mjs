@@ -91,7 +91,7 @@ test('wind bends coastal grass and stretches cloud without changing approved rai
     [111,54,110,56,108,59,107,62],
   ])
   // No use of the Snow X-mark glyphs in the Windy plate.
-  assert.equal(windy.length,6+7+2+2)
+  assert.equal(windy.length,6+7+2+1)
 })
 test('Snow has three fine floating flecks and no rain-slash marks',()=>{
   const snowy=weatherCoastalCurves(73,3)
@@ -142,4 +142,12 @@ test('Rain stays byte-for-byte identical to the approved Weather v2 baseline',()
     [72,46,91,44,105,44,124,46],
     [84,23,96,21,101,23,112,26],
   ])
+})
+
+test('wind polish retains the shoreline but limits the expressive air sweep',()=>{
+  const windy=weatherCoastalCurves(2,10)
+  const rainy=weatherCoastalCurves(61,4)
+  assert.deepEqual(windy.slice(0,6),rainy.slice(0,6))
+  assert.equal(windy.length,16) // 6 dune + 7 leaning grass + 2 cloud + 1 sweep
+  assert.deepEqual(windy[windy.length-1],[88,17,104,14,121,17,137,20])
 })

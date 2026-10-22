@@ -69,13 +69,13 @@ inline void weatherCoastalVignette(Canvas& d, int x, int y, int w, int h,
   if(sky==COAST_WIND) {
     // Wind is movement in the leaning plant, not extra symbolic icons.
     static const uint8_t windPlant[][8] = {
-      {32,70,34,56,48,38,72,27},
-      {56,39,62,30,72,27,81,28},
-      {56,40,64,41,76,38,84,36},
+      {32,70,34,56,45,39,65,26},
+      {53,38,59,30,65,25,72,26},
+      {52,39,60,41,70,39,77,37},
       {41,55,30,50,19,48,12,49},
       {41,55,31,54,20,53,14,51},
-      {48,46,50,36,57,33,68,32},
-      {35,65,46,59,57,56,67,57}
+      {48,46,48,37,54,34,64,33},
+      {35,65,46,59,53,56,61,57}
     };
     drawCoastalCurves(d,x,y,w,h,windPlant,sizeof(windPlant)/sizeof(windPlant[0]),ink);
   } else {
@@ -133,8 +133,7 @@ inline void weatherCoastalVignette(Canvas& d, int x, int y, int w, int h,
   } else if(sky==COAST_WIND) {
     // Just two fine wind sweeps; the plant and cloud carry the motion.
     static const uint8_t wind[][8] = {
-      {84,17,102,13,120,16,137,20},
-      {94,59,110,56,124,58,136,55}
+      {88,17,104,14,121,17,137,20}
     };
     drawCoastalCurves(d,x,y,w,h,wind,sizeof(wind)/sizeof(wind[0]),ink);
   } else if(sky==COAST_RAIN) {

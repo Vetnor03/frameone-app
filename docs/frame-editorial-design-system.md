@@ -258,3 +258,10 @@ not the rain slashes or X-shaped icons rejected in visual review.
 Sky/wind classification, forecast data, and rendering integration are
 unchanged. Verify the resulting sketches in both themes and on e-paper
 before treating the four revised variants as aesthetically approved.
+
+## Windy final fine-tuning
+
+The Windy illustration's plant is straightened slightly and its motion
+reduced to one delicate high airflow sweep. Its cloud remains elongated so
+it still reads differently from the quiet Partly Cloudy and Overcast motifs.
+Rainy, Snowy, Partly Cloudy, Overcast, Clear, Date and Surf are unchanged.
