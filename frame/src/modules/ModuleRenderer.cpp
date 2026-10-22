@@ -1,6 +1,7 @@
 #include "ModuleRenderer.h"
 #include "AdaptiveModuleCapability.h"
 #include "EditorialDesign.h"
+#include "EditorialReferencePolicy.h"
 #include "DisplayCore.h"
 #include "Theme.h"
 
@@ -100,8 +101,15 @@ void ModuleRenderer::renderPlaceholders(const SlotModule* assigns, int assignCou
     // geometry-aware presentation path (not a legacy fixed-size layout).
     // Production main retains the old Small/Medium/Large/XL appearances.
     Cell editorialCell = c;
-    if (EditorialDesign::kindFor(mod.c_str()) != EditorialDesign::UNKNOWN) {
-      editorialCell.size = CELL_ADAPTIVE;
+    const EditorialDesign::ContentKind contentKind = EditorialDesign::kindFor(mod.c_str());
+    if (contentKind != EditorialDesign::UNKNOWN) {
+      const EditorialReferences::Presentation presentation =
+        EditorialReferences::select(contentKind, c.colSpan, c.rowSpan);
+      // This includes custom-drawn 2×2 cells: they use the *approved* Surf
+      // Medium renderer and retain its spot heading, rating blocks/dice,
+      // wave range, divider, period/wind arrows and details.
+      editorialCell.size = presentation == EditorialReferences::SURF_MEDIUM_REFERENCE
+        ? CELL_MEDIUM : CELL_ADAPTIVE;
     }
     const uint32_t moduleStartedAtMs = millis();
 

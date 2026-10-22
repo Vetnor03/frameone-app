@@ -111,3 +111,28 @@ Light and Dark modes, and all supported module categories. It uses **sample
 content** only. This review surface is deliberately separate from the real
 app's frame mirror and is **not a pixel-perfect proof of the e-paper firmware**.
 The old inverted weekday treatment has been removed from the app's Date mirror.
+
+## Approved reference compositions (design preservation)
+
+**First protected reference: Surf Medium, 2×2 cells (400×240 logical pixels).**
+
+- Spot heading with underline
+- Left: rating verdict, six filled/outlined rating blocks **or experience dice**, wave range
+- Vertical divider
+- Right: the "Details:" heading, two distinct directional arrows, period and wind data
+- Trend indicator and Today's Best behavior remain controlled by the actual Surf firmware
+
+The experimental firmware now dispatches Surf 2×2 into its **existing, dedicated**
+Medium renderer, including when a user draws a 2×2 rectangle in Custom Grid.
+Other Surf geometries continue using Surf's adaptive policy. Existing rating,
+data sources, refresh behavior, values and other functional logic remain unchanged.
+
+The Editorial Lab's Surf 2×2 sample mirrors the approved information structure,
+but remains a browser-drawn *design reference*, not a pixel-accurate GFX rendering.
+It currently shows a sample six-block rating; experience-specific dice are preserved
+in the physical firmware, and must be represented in the Lab before final approval.
+
+Other modules' reference layouts are *candidates* until individually approved.
+Do not indiscriminately freeze every old S/M/L/XL template, and do not overwrite
+Surf Medium to satisfy generic typography guidelines. Geometry/body spacing may be
+adapted elsewhere as long as the module's protected content/visual hierarchy survives.

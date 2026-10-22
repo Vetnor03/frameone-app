@@ -110,6 +110,28 @@ function EditorialCanvas({module,width,height,theme}:{
               w={block.w} h={block.h} ink={ink}/>
           : <Botanical key={block.id} x={block.x} y={block.y}
               w={block.w} h={block.h} ink={ink}/>
+      if(block.type==='divider')
+        return <line key={block.id} x1={block.x} y1={block.y}
+          x2={block.x+block.w} y2={block.y+(block.w<=2?block.h:0)}
+          stroke={ink} strokeWidth={block.w<=2?'1':'2'} opacity=".8"/>
+      if(block.type==='direction'){
+        const isWind=block.id==='wind-arrow'
+        return <g key={block.id} transform={`translate(${block.x},${block.y})`}
+          stroke={ink} fill="none" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          {isWind?<path d={`M 3 ${block.h*.48} L ${block.w-4} ${block.h*.48}
+            M ${block.w-13} ${block.h*.21} L ${block.w-4} ${block.h*.48}
+            L ${block.w-13} ${block.h*.75}`}/>:
+            <path d={`M 4 ${block.h-3} L ${block.w-4} 3
+              M ${block.w-14} 3 H ${block.w-4} V 13`}/>}
+        </g>
+      }
+      if(block.type==='icon')
+        return <g key={block.id} transform={`translate(${block.x},${block.y})`}
+          stroke={ink} strokeWidth="1.4" strokeLinecap="round" fill="none">
+          {block.id==='wave-period-icon'?
+            <path d="M 1 10 Q 5 4 9 10 Q 13 16 17 10 Q 21 4 25 10 M 3 16 H 25"/>:
+            <path d="M 1 5 H 29 M 5 10 H 24 M 2 15 H 30"/>}
+        </g>
       if(block.type==='score')
         return <RatingBlocks key={block.id} x={block.x} y={block.y}
           w={block.w} ink={ink} theme={theme}/>

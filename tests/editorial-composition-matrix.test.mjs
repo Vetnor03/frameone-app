@@ -58,3 +58,19 @@ test('all text bounding estimates stay inside their assigned width',()=>{
         )
     }
 })
+
+test('approved Surf 2x2 reference retains verdict, rating, waves, arrows, period and wind',()=>{
+  const medium=composeEditorialModule('surf',400,240)
+  assert.equal(medium.mode,'surf-medium-reference')
+  const ids=medium.blocks.map(b=>b.id)
+  assert.deepEqual(ids,[
+    'spot','spot-underline','column-divider','rating-verdict','rating',
+    'wave-range','details-heading','swell-arrow','wind-arrow',
+    'wave-period-icon','wind-speed-icon','swell-period','wind-speed',
+  ])
+  assert.equal(medium.blocks.find(b=>b.id==='rating').type,'score')
+  assert.equal(medium.blocks.filter(b=>b.type==='direction').length,2)
+  assert.deepEqual(auditEditorialComposition(medium),[])
+  assert.notEqual(composeEditorialModule('surf',200,240).mode,'surf-medium-reference')
+  assert.notEqual(composeEditorialModule('surf',400,360).mode,'surf-medium-reference')
+})

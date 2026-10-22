@@ -150,6 +150,38 @@ function dateComposition(p){
   return {body,blocks,centered:true,mode:twoColumn?'spread':'stack'}
 }
 
+
+// Approved Surf Medium reference: the existing 2×2 two-column composition.
+// It is not a generic widget. Keep the verdict, six rating rectangles (or
+// experience dice), wave range, and the distinct swell/wind detail columns.
+function surfMediumComposition(p){
+  const w=p.width,h=p.height
+  const heading=textBlock('spot','Hellestø',Math.min(240,w-32),18,
+    {role:'heading'})
+  heading.x=(w-heading.w)/2;heading.y=15
+  const bar={id:'spot-underline',role:'divider',type:'divider',x:w/2-39,y:45,w:78,h:2}
+  const rule={id:'column-divider',role:'divider',type:'divider',x:w/2,y:77,w:1,h:132}
+  const text=(id,value,x,y,width,size,role='primary')=>{
+    const b=textBlock(id,value,width,size,{role,maxLines:1})
+    return {...b,x,y}
+  }
+  const blocks=[
+    heading,bar,rule,
+    text('rating-verdict','Poor to Fair',17,75,166,18,'primary'),
+    {id:'rating',role:'score',type:'score',x:32,y:117,w:136,h:16},
+    text('wave-range','1.6–2.0 m',17,179,166,18,'measurement'),
+    text('details-heading','Details:',214,75,172,18,'heading'),
+    {id:'swell-arrow',role:'direction',type:'direction',x:235,y:109,w:30,h:27},
+    {id:'wind-arrow',role:'direction',type:'direction',x:334,y:109,w:30,h:27},
+    {id:'wave-period-icon',role:'data-icon',type:'icon',x:240,y:150,w:28,h:18},
+    {id:'wind-speed-icon',role:'data-icon',type:'icon',x:333,y:150,w:33,h:18},
+    text('swell-period','7 s',219,184,76,14,'measurement'),
+    text('wind-speed','8 m/s',314,184,77,14,'measurement'),
+  ]
+  return {body:rect(p.inset,p.inset,p.safeWidth,p.safeHeight),
+    blocks,centered:false,mode:'surf-medium-reference'}
+}
+
 function contentComposition(module,p){
   const info=EDITORIAL_SAMPLES[module]
   const budget=editorialContentBudget(p,editorialModuleKind(module))
@@ -218,7 +250,9 @@ export function composeEditorialModule(module,width,height){
   if(!Number.isFinite(width)||!Number.isFinite(height)||width<100||height<80)
     throw new RangeError('Invalid cell dimensions')
   const plan=editorialPlan(width,height)
-  const layout=module==='date'?dateComposition(plan):contentComposition(module,plan)
+  const layout=module==='date'?dateComposition(plan):
+    module==='surf'&&width===400&&height===240?surfMediumComposition(plan):
+    contentComposition(module,plan)
   return {...layout,module,width,height,plan}
 }
 
