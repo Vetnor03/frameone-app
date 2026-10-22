@@ -4,6 +4,7 @@ import {useEffect,useMemo,useRef,useState} from 'react'
 import Link from 'next/link'
 import {editorialPlan} from '../lib/editorialFrameLayout.mjs'
 import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition} from '../lib/editorialComposition.mjs'
+import {WEATHER_VIGNETTE_SCENES,weatherCoastalLines} from '../lib/editorialWeatherVignette.mjs'
 
 type Module = typeof EDITORIAL_MODULES[number]
 type Span = 1|2|3|4
@@ -35,6 +36,18 @@ function Botanical({x,y,w,h,ink}:{x:number;y:number;w:number;h:number;ink:string
     <path d="M34 41 Q21 26 25 32 Q40 27 42 46 M73 30 Q79 12 86 18 Q92 29 66 36
       M36 23 Q24 11 27 12 Q36 7 45 28 M72 44 Q90 42 82 49 Q81 57 68 49"/>
     <path d="M47 67 H61"/>
+  </svg>
+}
+function CoastalWeather({x,y,w,h,ink,wmo,windMs}:{
+  x:number;y:number;w:number;h:number;ink:string;wmo:number;windMs:number
+}){
+  // Same normalized 140×96 strokes as the actual e-paper C++ renderer.
+  return <svg x={x} y={y} width={w} height={h} viewBox="0 0 140 96"
+    preserveAspectRatio="none" fill="none" stroke={ink} strokeWidth="1.15"
+    strokeLinecap="round" strokeLinejoin="round"
+    aria-label="Coastal weather field-guide engraving">
+    {weatherCoastalLines(wmo,windMs).map(([x1,y1,x2,y2],index)=>
+      <line key={index} x1={x1} y1={y1} x2={x2} y2={y2}/>)}
   </svg>
 }
 function RatingBlocks({x,y,w,ink,theme,reference=false}:{
@@ -79,10 +92,11 @@ function Calendar({x,y,w,h,ink}:{x:number;y:number;w:number;h:number;ink:string}
   </g>
 }
 
-function EditorialCanvas({module,width,height,theme}:{
-  module:Module;width:number;height:number;theme:FrameTheme
+function EditorialCanvas({module,width,height,theme,weatherScene='partly'}:{
+  module:Module;width:number;height:number;theme:FrameTheme;weatherScene?:string
 }) {
-  const layout=composeEditorialModule(module,width,height)
+  const layout=composeEditorialModule(module,width,height,{weatherScene})
+  const weather=WEATHER_VIGNETTE_SCENES[weatherScene]??WEATHER_VIGNETTE_SCENES.partly
   const paper=paperFor(theme),ink=inkFor(theme)
   return <svg role="img"
     aria-label={module+' '+width+'×'+height+' editorial concept, '+theme+' theme'}
@@ -95,8 +109,12 @@ function EditorialCanvas({module,width,height,theme}:{
       lines?:string[];fontSize?:number;serif?:boolean
     })=>{
       if(block.type==='figure')
-        return <Botanical key={block.id} x={block.x} y={block.y}
-          w={block.w} h={block.h} ink={ink}/>
+        return block.id==='weather-coast'
+          ? <CoastalWeather key={block.id} x={block.x} y={block.y}
+              w={block.w} h={block.h} ink={ink}
+              wmo={weather.wmo} windMs={weather.windMs}/>
+          : <Botanical key={block.id} x={block.x} y={block.y}
+              w={block.w} h={block.h} ink={ink}/>
       if(block.type==='divider')
         return <line key={block.id} x1={block.x} y1={block.y}
           x2={block.x+block.w} y2={block.y+(block.w<=2?block.h:0)}
@@ -152,6 +170,7 @@ export default function EditorialLabPage(){
   const [module,setModule]=useState<Module>('date')
   const [cell,setCell]=useState<Cell>('4x4')
   const [theme,setTheme]=useState<FrameTheme>('light')
+  const [weatherScene,setWeatherScene]=useState('partly')
   const [matrix,setMatrix]=useState(false)
   const browserProbes=useRef<HTMLDivElement|null>(null)
   const [browserAudit,setBrowserAudit]=useState<{checked:number;issues:string[]}|null>(null)
@@ -245,6 +264,14 @@ export default function EditorialLabPage(){
             {mode==='light'?'Light':'Dark'}
           </button>)}
         </fieldset>
+        {module==='weather'&&<label className="text-xs">Sky illustration
+          <select value={weatherScene} onChange={e=>setWeatherScene(e.target.value)}
+            data-testid="weather-sky-selector"
+            className="mt-1 block rounded border border-[#A99E93] bg-white px-3 py-2 text-sm">
+            {Object.entries(WEATHER_VIGNETTE_SCENES).map(([key,scene])=>
+              <option key={key} value={key}>{scene.label}</option>)}
+          </select>
+        </label>}
         <button type="button" onClick={()=>setMatrix(v=>!v)}
           aria-pressed={matrix}
           className="rounded border border-[#A99E93] bg-white px-4 py-2 text-sm">
@@ -283,7 +310,8 @@ export default function EditorialLabPage(){
             <div className="flex h-40 min-w-0 items-center justify-center overflow-hidden bg-[#243746] p-3">
               <div data-editorial-thumbnail="true" className="shrink border-[3px] border-[#ECE6DC]"
                 style={{width:d.width*scale,aspectRatio:d.width+'/'+d.height,maxWidth:'100%',maxHeight:122}}>
-                <EditorialCanvas module={module} width={d.width} height={d.height} theme={theme}/>
+                <EditorialCanvas module={module} width={d.width} height={d.height} theme={theme}
+                  weatherScene={weatherScene}/>
               </div>
             </div>
           </button>
@@ -293,7 +321,7 @@ export default function EditorialLabPage(){
           <div className="w-full border-[6px] border-[#F0EADF] bg-white"
             style={{maxWidth:selected.width}}>
             <EditorialCanvas module={module} width={selected.width}
-              height={selected.height} theme={theme}/>
+              height={selected.height} theme={theme} weatherScene={weatherScene}/>
           </div>
         </div>
       </div>}

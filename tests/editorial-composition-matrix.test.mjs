@@ -109,10 +109,19 @@ test('full-screen data-rich modules show additional information instead of enlar
       'Do not fabricate list content for '+name)
   }
 })
-test('full Weather pairs reserved botanical art with useful forecast details',()=>{
+test('full Weather pairs reserved coastal engraving with useful forecast details',()=>{
   const weather=composeEditorialModule('weather',800,480)
-  assert.ok(weather.blocks.some(b=>b.id==='weather-botanical'))
+  assert.ok(weather.blocks.some(b=>b.id==='weather-coast'))
   assert.ok(weather.blocks.filter(b=>b.id.startsWith('extra-')).length>=4)
-  assert.equal(weather.blocks.some(b=>b.id==='weather-landscape'),false)
+  assert.equal(weather.blocks.some(b=>b.id==='weather-botanical'),false)
   assert.deepEqual(auditEditorialComposition(weather),[])
+})
+
+test('changing sample skies changes Weather condition text but not geometry',()=>{
+  const fair=composeEditorialModule('weather',800,480,{weatherScene:'clear'})
+  const rainy=composeEditorialModule('weather',800,480,{weatherScene:'rainy'})
+  assert.ok(fair.blocks.some(b=>b.lines?.includes('Clear skies')))
+  assert.ok(rainy.blocks.some(b=>b.lines?.includes('Showers and rain')))
+  assert.deepEqual(auditEditorialComposition(fair),[])
+  assert.deepEqual(auditEditorialComposition(rainy),[])
 })

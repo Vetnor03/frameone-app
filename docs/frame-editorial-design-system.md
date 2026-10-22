@@ -185,3 +185,9 @@ wind and small slots show only the established weather-condition icon.
 No extra weather queries and no changes to weather fetch/reliability logic.
 The vignette stays inside a reserved illustration band **below** the real
 weather icon, never over temperature or forecast. Artwork is decorative only.
+
+The Lab and C++ firmware now share the **same normalized 140×96 line
+coordinates**, with the Lab offering a Sky illustration selector to inspect
+Clear, Partly Cloudy, Overcast, Windy, Rain and Snow variations. The browser
+audit saves all six weather studies independently alongside the 352 layout
+snapshots. Lab forecasts remain illustrative sample values.

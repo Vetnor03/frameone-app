@@ -73,6 +73,12 @@ try {
 
   // One complete contact sheet per module and theme: no manual clicking
   // through 16 individual shapes to review the composition direction.
+  await moduleControl.selectOption('weather')
+  await grid.selectOption('4x4')
+  for(const scene of Object.keys({clear:1,partly:1,overcast:1,windy:1,rainy:1,snowy:1})){
+    await page.getByTestId('weather-sky-selector').selectOption(scene)
+    await page.screenshot({path:'artifacts/editorial/weather-coast-'+scene+'.png'})
+  }
   await page.getByRole('button',{name:'View all 16 shapes'}).click()
   // The gallery itself is subject to overflow auditing. The first contact
   // sheet revealed tall thumbnails bleeding into adjacent rows.

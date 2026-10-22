@@ -1,4 +1,5 @@
 import {editorialPlan, editorialContentBudget, editorialModuleKind} from './editorialFrameLayout.mjs'
+import {WEATHER_VIGNETTE_SCENES} from './editorialWeatherVignette.mjs'
 
 export const EDITORIAL_MODULES = Object.freeze([
   'date','reminders','weather','news','surf','ski','countdown',
@@ -190,8 +191,15 @@ function surfMediumComposition(p){
     blocks,centered:false,mode:'surf-medium-reference'}
 }
 
-function contentComposition(module,p){
-  const info=EDITORIAL_SAMPLES[module]
+function contentComposition(module,p,options={}){
+  const base=EDITORIAL_SAMPLES[module]
+  // The Lab's manual weather scene changes sample condition text as well as art.
+  const weatherSample=WEATHER_VIGNETTE_SCENES[options.weatherScene||'partly']
+  const info=module==='weather'&&weatherSample
+    ? {...base,detail:weatherSample.detail,
+       extras:base.extras.map(row=>row.startsWith('Wind ·')
+         ? 'Wind · NW '+weatherSample.windMs+' m/s' : row)}
+    :base
   const budget=editorialContentBudget(p,editorialModuleKind(module))
   const showHeader=Boolean(budget.heading&&p.height>=190)
   const body=paddedRegion(p,showHeader)
@@ -270,8 +278,8 @@ function contentComposition(module,p){
     blocks.splice(0,blocks.length,...stackCentered([...hero,...rows],heroArea,{gap}))
   }
   if(withBotanical){
-    const artwork=graphicBlock('weather-botanical',
-      Math.min(150,artWidth-16),Math.min(170,body.h*.49))
+    const artwork=graphicBlock('weather-coast',
+      Math.min(208,artWidth-18),Math.min(132,body.h*.37))
     blocks.push({...artwork,x:body.x+(artWidth-artwork.w)/2,
       y:body.y+(body.h-artwork.h)/2})
   }
@@ -281,14 +289,14 @@ function contentComposition(module,p){
   return {body,blocks,centered:true,mode:withSideList?'information-spread':p.shape}
 }
 
-export function composeEditorialModule(module,width,height){
+export function composeEditorialModule(module,width,height,options={}){
   if(!EDITORIAL_MODULES.includes(module))throw new RangeError('Unknown module '+module)
   if(!Number.isFinite(width)||!Number.isFinite(height)||width<100||height<80)
     throw new RangeError('Invalid cell dimensions')
   const plan=editorialPlan(width,height)
   const layout=module==='date'?dateComposition(plan):
     module==='surf'&&width===400&&height===240?surfMediumComposition(plan):
-    contentComposition(module,plan)
+    contentComposition(module,plan,options)
   return {...layout,module,width,height,plan}
 }
 
