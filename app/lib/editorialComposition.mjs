@@ -276,7 +276,7 @@ function compactHorizontalComposition(module,p,info){
   const longHeadline=estimatedTextWidth(info.primary,18,module!=='soccer')>body.w-6
   const isMeasurement=!longHeadline&&
     estimatedTextWidth(info.primary,30,module!=='soccer')<body.w-10
-  let fontSize=longHeadline?15:isMeasurement?32:21
+  let fontSize=longHeadline?17:isMeasurement?32:21
   while(fontSize>13&&estimatedTextWidth(info.primary,fontSize,module!=='soccer')>body.w-5)
     fontSize--
   const items=[
@@ -342,9 +342,12 @@ function contentComposition(module,p,options={}){
   const width=heroArea.w
   const compact=body.h<125
   const roomy=p.shape==='spread'
-  let heroSize=module==='news'?clamp(width*.055,14,roomy?25:18):
-    ['reminders','assistant','groceries'].includes(module)?clamp(width*.065,14,roomy?26:19):
-    clamp(Math.min(width*.19,body.h*.38),22,roomy?62:43)
+  // Shared hierarchy for text-led content: headlines grow as their
+  // panel grows, with a height-aware limit to protect supporting details.
+  const textLed=['news','reminders','assistant','groceries'].includes(module)
+  let heroSize=textLed
+    ?clamp(Math.min(width*.075,body.h*.12),17,roomy?30:24)
+    :clamp(Math.min(width*.19,body.h*.38),22,roomy?62:43)
   // A numerical or short verbal headline should retain its complete meaning.
   // Reduce its scale within a global lower bound before ever ellipsizing it.
   // News/reminder headlines already have separate multi-line wrapping rules.
