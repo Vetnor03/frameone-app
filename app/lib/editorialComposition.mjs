@@ -191,6 +191,44 @@ function surfMediumComposition(p){
     blocks,centered:false,mode:'surf-medium-reference'}
 }
 
+// A ribbon is a small editorial row, not a tall card squeezed into 120px.
+// Shared three-zone grammar: identity / essential fact / supporting context.
+// In particular, every ribbon keeps the label and its primary explanation.
+function ribbonComposition(module,p,info){
+  const body=rect(p.inset,p.inset,p.safeWidth,p.safeHeight)
+  const gap=14
+  const labelW=Math.floor((body.w-gap*2)*.23)
+  const mainW=Math.floor((body.w-gap*2)*.45)
+  const detailW=body.w-labelW-mainW-gap*2
+  const left=rect(body.x,body.y,labelW,body.h)
+  const center=rect(left.x+left.w+gap,body.y,mainW,body.h)
+  const right=rect(center.x+center.w+gap,body.y,detailW,body.h)
+  const heading=textBlock('heading',info.heading,left.w,16,{serif:true,role:'heading'})
+  const isLong=estimatedTextWidth(info.primary,17,true)>center.w-4
+  let primarySize=isLong?16:Math.min(38,Math.max(22,center.w*.085))
+  while(primarySize>16&&estimatedTextWidth(info.primary,primarySize,true)>center.w-4)
+    primarySize--
+  const primary=textBlock('primary',info.primary,center.w,primarySize,
+    {serif:module!=='soccer',maxLines:isLong?2:1})
+  const centerItems=[primary]
+  if(module==='surf'){
+    centerItems.push(graphicBlock('rating',Math.min(150,center.w-6),16,'score'))
+  }
+  const details=[
+    textBlock('detail',info.detail,right.w,13,{role:'secondary',maxLines:2}),
+  ]
+  const next=info.extras.find(row=>
+    !String(row).toLowerCase().includes(String(info.primary).toLowerCase())&&
+    row!==info.detail)
+  if(next)details.push(textBlock('extra-0',next,right.w,11,
+    {role:'list',maxLines:2}))
+  return {body,blocks:[
+    ...stackCentered([heading],left),
+    ...stackCentered(centerItems,center,{gap:7}),
+    ...stackCentered(details,right,{gap:7}),
+  ],centered:false,mode:'editorial-ribbon'}
+}
+
 function contentComposition(module,p,options={}){
   const base=EDITORIAL_SAMPLES[module]
   // The Lab's manual weather scene changes sample condition text as well as art.
@@ -200,6 +238,7 @@ function contentComposition(module,p,options={}){
        extras:base.extras.map(row=>row.startsWith('Wind ·')
          ? 'Wind · NW '+weatherSample.windMs+' m/s' : row)}
     :base
+  if(p.shape==='ribbon'&&p.width>=540)return ribbonComposition(module,p,info)
   const budget=editorialContentBudget(p,editorialModuleKind(module))
   // Even the smallest cells need an identity: a standalone number without
   // its source is ambiguous from across a room.
