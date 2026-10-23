@@ -214,6 +214,7 @@ function FullFrameLab({theme,weatherScene}:{
   const qualityScore=useMemo(()=>Math.round(scoreEditorialGrid(tiles)),[tiles])
   const emphasized=useMemo(()=>new Set(editorialOrnamentTiles(tiles)),[tiles])
   const groupCues=useMemo(()=>new Set(editorialGroupingCues(tiles)),[tiles])
+  const densityRules=useMemo(()=>editorialDensityRules(tiles),[tiles])
   const validation=useMemo(()=>{
     const problems=validateEditorialGrid(tiles)
     if(autoQuality)problems.push(...auditEditorialGridQuality(tiles))
@@ -371,12 +372,17 @@ function FullFrameLab({theme,weatherScene}:{
                   left:(tile.x*25)+'%',top:(tile.y*25)+'%',
                   width:(tile.cols*25)+'%',height:(tile.rows*25)+'%',
                   backgroundColor:paperFor(theme),
-                  boxShadow:'inset 0 0 0 0.6px '+(theme==='light'?'#BFBAB1':'#696969'),
+                  boxShadow:densityRules.mode==='open'?
+                    'inset 0 0 0 0.6px '+(theme==='light'?'#BFBAB1':'#696969'):
+                    'none',
                 }}>
                 <EditorialCanvas module={tile.module} width={width} height={height}
                   theme={theme} weatherScene={weatherScene}
                   ornament={emphasized.has(tile.id)}
-                  sectionBreak={groupCues.has(tile.id)}/>
+                  sectionBreak={groupCues.has(tile.id)}
+                  density={densityRules.mode}
+                  separateRight={densityRules.boundaries[tile.id]?.right}
+                  separateBottom={densityRules.boundaries[tile.id]?.bottom}/>
                 {!clean&&<button type="button"
                   aria-label={'Edit cell '+tile.id.replace('cell-','')+': '+moduleLabel(tile.module)}
                   aria-pressed={isSelected}
@@ -408,6 +414,7 @@ function FullFrameLab({theme,weatherScene}:{
         {batch.map((design,index)=>{
           const accents=new Set(editorialOrnamentTiles(design.tiles))
           const sectionBreaks=new Set(editorialGroupingCues(design.tiles))
+          const previewDensity=editorialDensityRules(design.tiles)
           return <button type="button" key={index}
             onClick={()=>pickBatch(index)}
             aria-label={'Inspect random design '+(index+1)}
@@ -425,7 +432,10 @@ function FullFrameLab({theme,weatherScene}:{
                   <EditorialCanvas module={tile.module} width={w} height={h}
                     theme={theme} weatherScene={weatherScene}
                     ornament={accents.has(tile.id)}
-                    sectionBreak={sectionBreaks.has(tile.id)}/>
+                    sectionBreak={sectionBreaks.has(tile.id)}
+                    density={previewDensity.mode}
+                    separateRight={previewDensity.boundaries[tile.id]?.right}
+                    separateBottom={previewDensity.boundaries[tile.id]?.bottom}/>
                 </div>
               })}
             </div>
