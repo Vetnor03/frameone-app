@@ -419,7 +419,11 @@ export function auditEditorialComposition(composition){
     const dy=Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y)
     if(dx>1&&dy>1)issues.push('overlap: '+a.id+' / '+b.id)
   }
-  const main=blocks.filter(b=>b.id!=='heading'&&b.id!=='calendar')
+  // Compact summaries deliberately center the entire three-line group,
+  // including its title. Other arrangements center the content separately
+  // from a top-aligned title.
+  const main=blocks.filter(b=>b.id!=='calendar'&&
+    (composition.mode==='compact-summary'||b.id!=='heading'))
   if(main.length&&composition.centered&&!blocks.some(b=>b.id==='calendar')){
     const low=Math.min(...main.map(b=>b.y)),high=Math.max(...main.map(b=>b.y+b.h))
     const bodyCenter=body.y+body.h/2
