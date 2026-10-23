@@ -167,8 +167,12 @@ function tileContentProfile(tile){
   const focal=important.some(block=>
     (block.role==='hero'||block.id==='primary')&&
     block.type==='text'&&block.fontSize>=56&&block.w>=120)
+  const primaryFont=Math.max(0,...composition.blocks
+    .filter(block=>block.type==='text'&&
+      (block.id==='primary'||block.id==='date'||block.id==='rating-verdict'))
+    .map(block=>block.fontSize))
   const coverage=extent/Math.max(1,composition.plan.safeHeight)
-  const profile={coverage,inkHeight,informativeLines,pictorial,focal}
+  const profile={coverage,inkHeight,informativeLines,pictorial,focal,primaryFont}
   profileCache.set(key,profile)
   return profile
 }
@@ -213,6 +217,10 @@ export function auditEditorialGridQuality(tiles){
       issues.push('Oversized panel without sufficient visual focal point: '+tile.id)
     if(tile.rows===1&&tile.cols>=3&&p.informativeLines<2)
       issues.push('Unidentified or underfilled ribbon: '+tile.id)
+    // Narrow modules that cannot establish a readable primary fact should
+    // not be selected merely because they mathematically fit the grid.
+    if(tile.cols===1&&tile.rows<=2&&p.primaryFont<19)
+      issues.push('Narrow module lacks legible visual anchor: '+tile.id)
   }
   return issues
 }
@@ -310,6 +318,13 @@ function withModules(rects,next){
 // Aesthetic variety is a constraint, not a tiny random perturbation of a
 // scoring function. First select a composition family, then score candidates
 // *within that family*. Otherwise four quarters win almost every time.
+// The fingerprint deliberately ignores module assignment and cell ID:
+// a different headline does not turn the same four rectangles into a new
+// page design. Sort to normalize equivalent draw/traversal order.
+export function editorialGridSignature(tiles){
+  return [...tiles].map(({x,y,cols,rows})=>[x,y,cols,rows].join(','))
+    .sort().join('|')
+}
 export function editorialGridFamily(tiles){
   const n=tiles.length
   const sizes=tiles.map(tileArea)
@@ -343,13 +358,32 @@ export function editorialOrnamentTiles(tiles){
   return candidates.slice(0,max).map(tile=>tile.id)
 }
 
+// Measure novelty separately from quality. A pretty four-quarter grid is
+// still pretty, but should appear less often in a ten-frame review.
+function diversityPenalty(tiles,history){
+  if(!history.length)return 0
+  const signature=editorialGridSignature(tiles)
+  const matches=history.filter(prev=>editorialGridSignature(prev)===signature).length
+  const family=editorialGridFamily(tiles)
+  const sameFamily=history.filter(prev=>editorialGridFamily(prev)===family).length
+  const mostRecent=history.slice(-3).some(prev=>
+    editorialGridSignature(prev)===signature)
+  return matches*28+sameFamily*7+(mostRecent?16:0)
+}
 /** @param {number} seed @param {string|null} [previousPresetId]
- *  @param {Array|null} [previousTiles] */
-export function randomEditorialGrid(seed,previousPresetId=null,previousTiles=null){
+ *  @param {Array|null} [previousTiles] @param {Array<Array>} [recentLayouts] */
+export function randomEditorialGrid(seed,previousPresetId=null,previousTiles=null,recentLayouts=[]){
   const next=randomSource(seed)
   const previousFamily=Array.isArray(previousTiles)?editorialGridFamily(previousTiles):null
+  const history=Array.isArray(recentLayouts)?recentLayouts.filter(Array.isArray):[]
   const familyChoices=FAMILIES.filter(name=>name!==previousFamily)
-  const family=familyChoices[Math.floor(next()*familyChoices.length)]
+  // In a batch, choose among the least-represented families, not a purely
+  // independent random pick. Every result is STILL quality-gated afterward.
+  const usage=familyChoices.map(name=>history.filter(layout=>
+    editorialGridFamily(layout)===name).length)
+  const lowest=Math.min(...usage)
+  const underused=history.length?familyChoices.filter((_,i)=>usage[i]===lowest):familyChoices
+  const family=underused[Math.floor(next()*underused.length)]
   const procedural=next()<0.55
   const options=EDITORIAL_GRID_PRESETS.filter(p=>
     RANDOM_PRESETS.includes(p.id)&&p.id!==previousPresetId&&
@@ -367,7 +401,8 @@ export function randomEditorialGrid(seed,previousPresetId=null,previousTiles=nul
     if(previousTiles&&JSON.stringify(tiles.map(({x,y,cols,rows})=>[x,y,cols,rows]))===
       JSON.stringify(previousTiles.map(({x,y,cols,rows})=>[x,y,cols,rows])))continue
     if(auditEditorialGridQuality(tiles).length)continue
-    const score=scoreEditorialGrid(tiles)+next()*8
+    const baseQuality=scoreEditorialGrid(tiles)
+    const score=baseQuality-diversityPenalty(tiles,history)+next()*8
     if(score>best){
       best=score
       winner={seed:seed>>>0,presetId:preset?.id??'random',tiles,family}
@@ -384,7 +419,7 @@ export function randomEditorialGrid(seed,previousPresetId=null,previousTiles=nul
     for(let attempt=0;attempt<144;attempt++){
       const candidate=withModules(fallback.rects,next)
       if(auditEditorialGridQuality(candidate).length)continue
-      const score=scoreEditorialGrid(candidate)
+      const score=scoreEditorialGrid(candidate)-diversityPenalty(candidate,history)
       if(score>fallbackScore){fallbackScore=score;fallbackWinner=candidate}
     }
     if(!fallbackWinner){
@@ -393,7 +428,7 @@ export function randomEditorialGrid(seed,previousPresetId=null,previousTiles=nul
       for(let attempt=0;attempt<256;attempt++){
         const candidate=withModules(base.rects,next)
         if(auditEditorialGridQuality(candidate).length)continue
-        const score=scoreEditorialGrid(candidate)
+        const score=scoreEditorialGrid(candidate)-diversityPenalty(candidate,history)
         if(score>fallbackScore){fallbackScore=score;fallbackWinner=candidate}
       }
       if(!fallbackWinner)throw new Error('Cannot create a valid editorial layout')
@@ -419,7 +454,7 @@ export function randomEditorialGrid(seed,previousPresetId=null,previousTiles=nul
         const tiles=withModules(pattern.rects,next)
         const family=editorialGridFamily(tiles)
         if(family===previousFamily||auditEditorialGridQuality(tiles).length)continue
-        const score=scoreEditorialGrid(tiles)
+        const score=scoreEditorialGrid(tiles)-diversityPenalty(tiles,history)
         if(score>alternateScore){alternateScore=score
           substitute={seed:seed>>>0,presetId:id,tiles,family}}
       }
