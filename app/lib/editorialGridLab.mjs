@@ -205,6 +205,16 @@ export function editorialGroupingCues(tiles){
 export function editorialDensityRules(tiles){
   const dense=tiles.length>=7
   const intricate=tiles.length>=12
+  const uniform=tiles.length>0&&tiles.every(tile=>
+    tile.cols===tiles[0].cols&&tile.rows===tiles[0].rows)
+  // Even four cells may be hard to distinguish if their shared boundaries
+  // form a T-junction or a tall narrow strip. The frame's *topology*, not
+  // just its tile count, chooses when structural rules are useful.
+  const vertical=tiles.some(tile=>tile.x+tile.cols<GRID_COLS)
+  const horizontal=tiles.some(tile=>tile.y+tile.rows<GRID_ROWS)
+  const longThin=tiles.some(tile=>tile.cols===1&&tile.rows>=3)
+  const contour=tiles.length>=3&&tiles.length<=6&&!uniform&&
+    ((vertical&&horizontal)||(vertical&&longThin))
   const byId={}
   for(const tile of tiles){
     byId[tile.id]={
@@ -217,7 +227,8 @@ export function editorialDensityRules(tiles){
         tiles.some(other=>other.x===2&&other.y===2),
     }
   }
-  return {mode:intricate?'fine-grid':dense?'chapter-grid':'open',
+  return {mode:intricate?'fine-grid':dense?'chapter-grid':
+      contour?'contour':'open',
     boundaries:byId}
 }
 
