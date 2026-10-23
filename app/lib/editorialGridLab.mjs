@@ -1,4 +1,4 @@
-import {EDITORIAL_MODULES} from './editorialComposition.mjs'
+import {EDITORIAL_MODULES,composeEditorialModule} from './editorialComposition.mjs'
 
 // The test Lab uses the real frame's 800×480 logical canvas: four columns
 // of 200 pixels and four rows of 120 pixels. All presets tile the full frame.
@@ -130,6 +130,32 @@ const MODULE_FAMILY=Object.freeze({
 })
 const area=rect=>rect[2]*rect[3]
 const tileArea=tile=>tile.cols*tile.rows
+const profileCache=new Map()
+// Measure the actual disclosed content in each tile, rather than assuming
+// a large module looks rich because its allotted rectangle is large.
+function tileContentProfile(tile){
+  const key=tile.module+':'+tile.cols+'x'+tile.rows
+  if(profileCache.has(key))return profileCache.get(key)
+  const height=tile.rows*GRID_CELL_HEIGHT
+  const composition=composeEditorialModule(tile.module,
+    tile.cols*GRID_CELL_WIDTH,height)
+  const important=composition.blocks.filter(block=>
+    block.id!=='heading'&&block.id!=='month')
+  const extent=important.length?
+    (Math.max(...important.map(b=>b.y+b.h))-
+     Math.min(...important.map(b=>b.y))):0
+  const inkHeight=important.reduce((sum,b)=>sum+b.h,0)
+  const informativeLines=composition.blocks
+    .filter(block=>block.type==='text'&&!['heading','section-heading'].includes(block.id))
+    .reduce((sum,b)=>sum+(b.lines?.length??0),0)
+  const pictorial=important.some(block=>
+    ['figure','calendar','score'].includes(block.type))
+  const coverage=extent/Math.max(1,composition.plan.safeHeight)
+  const profile={coverage,inkHeight,informativeLines,pictorial}
+  profileCache.set(key,profile)
+  return profile
+}
+
 const adjacent=(a,b)=>{
   const horizontal=(a.x+a.cols===b.x||b.x+b.cols===a.x)&&
     Math.min(a.y+a.rows,b.y+b.rows)>Math.max(a.y,b.y)
@@ -152,6 +178,19 @@ export function auditEditorialGridQuality(tiles){
     issues.push('Long headlines need at least two grid columns')
   if(tiles.some(tile=>tile.module==='surf'&&tile.cols===1&&tile.rows<=2))
     issues.push('Surf verdict needs a wider cell')
+  for(const tile of tiles){
+    const p=tileContentProfile(tile)
+    // Large, sparse columns are the principal source of the floating
+    // information seen in user review PDFs. Require content capacity or art.
+    if(tile.rows>=3&&tile.cols===1&&p.coverage<.39)
+      issues.push('Underfilled tall column: '+tile.id)
+    if(tileArea(tile)>=6&&!p.pictorial&&p.informativeLines<=3)
+      issues.push('Large panel with insufficient disclosure: '+tile.id)
+    if(tileArea(tile)>=6&&!p.pictorial&&p.coverage<.28)
+      issues.push('Large panel has insufficient visual coverage: '+tile.id)
+    if(tile.rows===1&&tile.cols>=3&&p.informativeLines<2)
+      issues.push('Unidentified or underfilled ribbon: '+tile.id)
+  }
   return issues
 }
 
@@ -167,7 +206,7 @@ export function scoreEditorialGrid(tiles){
   else if(largest<4)score-=22
   if(tiles.length>7)score-=18*(tiles.length-7)
   const ribbonCount=tiles.filter(t=>t.rows===1&&t.cols===4).length
-  score-=ribbonCount*17
+  score-=ribbonCount*8
   if(ribbonCount>=2)score-=32
   const seen=new Set()
   for(const tile of tiles){
@@ -177,6 +216,15 @@ export function scoreEditorialGrid(tiles){
     else if(tile.cols===1)score-=5
     if(tile.cols===2&&tile.rows===1)score-=5
     if(tile.cols>=2&&tile.rows>=2)score+=5
+    // A poor information/area match must never be rescued solely by
+    // visually balanced geometry. The same test works across all modules.
+    const content=tileContentProfile(tile)
+    if(size>=4&&!content.pictorial)
+      score-=Math.max(0,.49-content.coverage)*32
+    if(size>=6&&!content.pictorial&&content.informativeLines<5)
+      score-=(5-content.informativeLines)*11
+    if(tile.cols===1&&tile.rows>=3)
+      score-=Math.max(0,.5-content.coverage)*55
     if(tile.module==='news'&&tile.cols<2)score-=60
     if(tile.module==='surf'&&tile.cols<2)score-=35
     if(tile.module==='reminders'&&tile.cols<2)score-=16
@@ -304,8 +352,32 @@ export function randomEditorialGrid(seed,previousPresetId=null,previousTiles=nul
     const id=family==='mosaic'?'folio-five':
       family==='hero'?'feature-left':family==='editorial'?'top-banner':'quarters'
     const fallback=EDITORIAL_GRID_PRESETS.find(p=>p.id===id)
-    winner={seed:seed>>>0,presetId:fallback.id,
-      tiles:withModules(fallback.rects,next),family}
+    // The backup must be scored and quality-gated too. A random assignment
+    // here previously bypassed every hard constraint and could recreate the
+    // exact poor layout we had just rejected.
+    let fallbackWinner=null,fallbackScore=-Infinity
+    for(let attempt=0;attempt<144;attempt++){
+      const candidate=withModules(fallback.rects,next)
+      if(auditEditorialGridQuality(candidate).length)continue
+      const score=scoreEditorialGrid(candidate)
+      if(score>fallbackScore){fallbackScore=score;fallbackWinner=candidate}
+    }
+    if(!fallbackWinner){
+      // Four balanced panels provide a universally safe geometric fallback.
+      const base=EDITORIAL_GRID_PRESETS.find(p=>p.id==='quarters')
+      for(let attempt=0;attempt<256;attempt++){
+        const candidate=withModules(base.rects,next)
+        if(auditEditorialGridQuality(candidate).length)continue
+        const score=scoreEditorialGrid(candidate)
+        if(score>fallbackScore){fallbackScore=score;fallbackWinner=candidate}
+      }
+      if(!fallbackWinner)throw new Error('Cannot create a valid editorial layout')
+      winner={seed:seed>>>0,presetId:base.id,tiles:fallbackWinner,
+        family:editorialGridFamily(fallbackWinner)}
+    }else{
+      winner={seed:seed>>>0,presetId:fallback.id,tiles:fallbackWinner,
+        family:editorialGridFamily(fallbackWinner)}
+    }
   }
   return winner
 }
