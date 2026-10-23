@@ -9,7 +9,7 @@ import {WEATHER_VIGNETTE_SCENES,weatherCoastalCurves} from '../lib/editorialWeat
 import {EDITORIAL_GRID_PRESETS,GRID_CELL_WIDTH,GRID_CELL_HEIGHT,
   makeEditorialGrid,randomEditorialGrid,shuffleEditorialGridModules,
   scoreEditorialGrid,editorialGridFamily,editorialOrnamentTiles,
-  auditEditorialGridQuality,validateEditorialGrid} from '../lib/editorialGridLab.mjs'
+  editorialGroupingCues,auditEditorialGridQuality,validateEditorialGrid} from '../lib/editorialGridLab.mjs'
 
 type Module = typeof EDITORIAL_MODULES[number]
 type Span = 1|2|3|4
@@ -98,9 +98,10 @@ function Calendar({x,y,w,h,ink}:{x:number;y:number;w:number;h:number;ink:string}
   </g>
 }
 
-function EditorialCanvas({module,width,height,theme,weatherScene='partly',ornament=true}:{
+function EditorialCanvas({module,width,height,theme,weatherScene='partly',
+  ornament=true,sectionBreak=false}:{
   module:Module;width:number;height:number;theme:FrameTheme;
-  weatherScene?:WeatherScene;ornament?:boolean
+  weatherScene?:WeatherScene;ornament?:boolean;sectionBreak?:boolean
 }) {
   const layout=composeEditorialModule(module,width,height,{weatherScene})
   const weather=WEATHER_VIGNETTE_SCENES[weatherScene]??WEATHER_VIGNETTE_SCENES.partly
@@ -111,6 +112,10 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly',orname
     data-editorial-probe="true" data-module={module} data-width={width} data-height={height}
     className="block h-auto w-full" style={{backgroundColor:paper}}>
     <rect width={width} height={height} fill={paper}/>
+    {sectionBreak&&<line data-editorial-section-break="true"
+      x1={Math.round(width*.18)} x2={Math.round(width*.82)}
+      y1={height-2} y2={height-2} stroke={ink}
+      strokeWidth=".8" opacity=".24"/>}
     {layout.blocks.map((block: {
       id:string;type:string;role:string;x:number;y:number;w:number;h:number;
       lines?:string[];fontSize?:number;serif?:boolean
@@ -197,6 +202,7 @@ function FullFrameLab({theme,weatherScene}:{
   const selected=tiles.find(tile=>tile.id===selectedId)??tiles[0]
   const qualityScore=useMemo(()=>Math.round(scoreEditorialGrid(tiles)),[tiles])
   const emphasized=useMemo(()=>new Set(editorialOrnamentTiles(tiles)),[tiles])
+  const groupCues=useMemo(()=>new Set(editorialGroupingCues(tiles)),[tiles])
   const validation=useMemo(()=>{
     const problems=validateEditorialGrid(tiles)
     if(autoQuality)problems.push(...auditEditorialGridQuality(tiles))
@@ -357,7 +363,9 @@ function FullFrameLab({theme,weatherScene}:{
                   boxShadow:'inset 0 0 0 0.6px '+(theme==='light'?'#BFBAB1':'#696969'),
                 }}>
                 <EditorialCanvas module={tile.module} width={width} height={height}
-                  theme={theme} weatherScene={weatherScene} ornament={emphasized.has(tile.id)}/>
+                  theme={theme} weatherScene={weatherScene}
+                  ornament={emphasized.has(tile.id)}
+                  sectionBreak={groupCues.has(tile.id)}/>
                 {!clean&&<button type="button"
                   aria-label={'Edit cell '+tile.id.replace('cell-','')+': '+moduleLabel(tile.module)}
                   aria-pressed={isSelected}
@@ -388,6 +396,7 @@ function FullFrameLab({theme,weatherScene}:{
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {batch.map((design,index)=>{
           const accents=new Set(editorialOrnamentTiles(design.tiles))
+          const sectionBreaks=new Set(editorialGroupingCues(design.tiles))
           return <button type="button" key={index}
             onClick={()=>pickBatch(index)}
             aria-label={'Inspect random design '+(index+1)}
@@ -403,7 +412,9 @@ function FullFrameLab({theme,weatherScene}:{
                   style={{left:(tile.x*25)+'%',top:(tile.y*25)+'%',
                     width:(tile.cols*25)+'%',height:(tile.rows*25)+'%'}}>
                   <EditorialCanvas module={tile.module} width={w} height={h}
-                    theme={theme} weatherScene={weatherScene} ornament={accents.has(tile.id)}/>
+                    theme={theme} weatherScene={weatherScene}
+                    ornament={accents.has(tile.id)}
+                    sectionBreak={sectionBreaks.has(tile.id)}/>
                 </div>
               })}
             </div>
