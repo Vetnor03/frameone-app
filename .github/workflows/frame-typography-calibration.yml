@@ -1,0 +1,39 @@
+name: Physical typography calibration (USB-only)
+
+on:
+  push:
+    branches:
+      - feat/physical-typography-calibration
+    paths:
+      - "frame/**"
+      - "tests/frame-physical-typography-audit.test.mjs"
+      - ".github/workflows/frame-typography-calibration.yml"
+  workflow_dispatch:
+
+jobs:
+  typography-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check isolation and font test contracts
+        run: node --test tests/frame-physical-typography-audit.test.mjs
+      - name: Install reproducible firmware toolchain
+        run: pip install platformio==6.1.19
+      - name: Build normal Alfred firmware (must remain unchanged)
+        run: pio run -d frame -e alfred_v1_2
+      - name: Compile isolated USB typography calibration
+        run: pio run -d frame -e alfred_v1_2_typography_audit
+      - name: Upload unflashed USB typography calibration
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remind-alfred-typography-calibration-USB-ONLY
+          path: |
+            frame/.pio/build/alfred_v1_2_typography_audit/firmware.bin
+            frame/.pio/build/alfred_v1_2_typography_audit/firmware.elf
+          if-no-files-found: error
+          retention-days: 14
