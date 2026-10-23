@@ -6,7 +6,8 @@ import {editorialPlan} from '../lib/editorialFrameLayout.mjs'
 import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition} from '../lib/editorialComposition.mjs'
 import {WEATHER_VIGNETTE_SCENES,weatherCoastalCurves} from '../lib/editorialWeatherVignette.mjs'
 import {EDITORIAL_GRID_PRESETS,GRID_CELL_WIDTH,GRID_CELL_HEIGHT,
-  makeEditorialGrid,randomEditorialGrid,randomEditorialModules,validateEditorialGrid} from '../lib/editorialGridLab.mjs'
+  makeEditorialGrid,randomEditorialGrid,shuffleEditorialGridModules,
+  scoreEditorialGrid,auditEditorialGridQuality,validateEditorialGrid} from '../lib/editorialGridLab.mjs'
 
 type Module = typeof EDITORIAL_MODULES[number]
 type Span = 1|2|3|4
@@ -185,8 +186,10 @@ function FullFrameLab({theme,weatherScene}:{
   const [clean,setClean]=useState(false)
   const [copyStatus,setCopyStatus]=useState('')
   const selected=tiles.find(tile=>tile.id===selectedId)??tiles[0]
+  const qualityScore=useMemo(()=>Math.round(scoreEditorialGrid(tiles)),[tiles])
   const validation=useMemo(()=>{
     const problems=validateEditorialGrid(tiles)
+    if(lastSeed!==null)problems.push(...auditEditorialGridQuality(tiles))
     for(const tile of tiles){
       const content=composeEditorialModule(tile.module,
         tile.cols*GRID_CELL_WIDTH,tile.rows*GRID_CELL_HEIGHT,{weatherScene})
@@ -194,8 +197,9 @@ function FullFrameLab({theme,weatherScene}:{
         problems.push(tile.id+' ('+tile.module+'): '+issue)
     }
     return problems
-  },[tiles,weatherScene])
+  },[tiles,weatherScene,lastSeed])
   const choosePreset=(id:string)=>{
+    if(id==='random')return
     setTiles(previous=>(makeEditorialGrid(id) as FrameTile[]).map((tile:FrameTile,index:number)=>({
       ...tile,module:(previous[index]?.module??tile.module) as Module,
     })))
@@ -214,8 +218,7 @@ function FullFrameLab({theme,weatherScene}:{
   const shuffleModules=()=>{
     const seed=Math.floor(Math.random()*0x100000000)
     setTiles(previous=>{
-      const shuffled=randomEditorialModules(seed,previous.length)
-      return previous.map((tile,i)=>({...tile,module:shuffled[i] as Module}))
+      return shuffleEditorialGridModules(seed,previous) as FrameTile[]
     })
     setLastSeed(seed)
   }
@@ -227,7 +230,7 @@ function FullFrameLab({theme,weatherScene}:{
   const copySetup=async()=>{
     try{
       await navigator.clipboard.writeText(JSON.stringify({
-        presetId,seed:lastSeed,tiles:tiles.map(({id,x,y,cols,rows,module})=>
+        presetId,seed:lastSeed,qualityScore,tiles:tiles.map(({id,x,y,cols,rows,module})=>
           ({id,x,y,cols,rows,module})),
       },null,2))
       setCopyStatus('Copied')
@@ -270,7 +273,7 @@ function FullFrameLab({theme,weatherScene}:{
     <p className="text-sm text-[#62584E]">
       {preset?.description??'Automatically generated 4×4 mosaic'}. Click a cell to edit it, or change modules below.
       Randomizing creates a new grid and module selection.
-      {lastSeed!==null&&<span data-testid="frame-seed" className="ml-2 font-mono text-xs">Seed {lastSeed}</span>}
+      {lastSeed!==null&&<span data-testid="frame-seed" className="ml-2 font-mono text-xs">Seed {lastSeed} · Layout score {qualityScore}</span>}
     </p>
     <div className="rounded-xl bg-[#82715F] p-3 sm:p-5">
       <div className="flex justify-center bg-[#213543] p-3 sm:p-7">
