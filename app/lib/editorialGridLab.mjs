@@ -172,7 +172,12 @@ function tileContentProfile(tile){
       (block.id==='primary'||block.id==='date'||block.id==='rating-verdict'))
     .map(block=>block.fontSize))
   const coverage=extent/Math.max(1,composition.plan.safeHeight)
-  const profile={coverage,inkHeight,informativeLines,pictorial,focal,primaryFont}
+  // The primary fact must remain meaningful in randomized compositions.
+  // Supporting rows may shorten; the main headline should not end in "...".
+  const essential=composition.blocks.find(block=>block.id==='primary')
+  const clippedLead=Boolean(essential?.lines?.some(line=>line.endsWith('…')))
+  const profile={coverage,inkHeight,informativeLines,pictorial,focal,
+    primaryFont,clippedLead}
   profileCache.set(key,profile)
   return profile
 }
@@ -217,6 +222,8 @@ export function auditEditorialGridQuality(tiles){
       issues.push('Oversized panel without sufficient visual focal point: '+tile.id)
     if(tile.rows===1&&tile.cols>=3&&p.informativeLines<2)
       issues.push('Unidentified or underfilled ribbon: '+tile.id)
+    if(p.clippedLead)
+      issues.push('Primary headline loses its meaning: '+tile.id)
     // Narrow modules that cannot establish a readable primary fact should
     // not be selected merely because they mathematically fit the grid.
     if(tile.cols===1&&tile.rows<=2&&p.primaryFont<19)
