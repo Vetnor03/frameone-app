@@ -277,7 +277,10 @@ function compactHorizontalComposition(module,p,info){
   const isMeasurement=!longHeadline&&
     estimatedTextWidth(info.primary,30,module!=='soccer')<body.w-10
   let fontSize=longHeadline?17:isMeasurement?32:21
-  while(fontSize>13&&estimatedTextWidth(info.primary,fontSize,module!=='soccer')>body.w-5)
+  // Wrapped headlines must be fitted to TWO lines; shrinking them until the
+  // entire sentence fits a single line silently reduced 17px to 13px.
+  while(!longHeadline&&fontSize>13&&
+    estimatedTextWidth(info.primary,fontSize,module!=='soccer')>body.w-5)
     fontSize--
   const items=[
     textBlock('heading',info.heading,body.w,12,{serif:true,role:'heading'}),
