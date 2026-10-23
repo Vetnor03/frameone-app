@@ -339,7 +339,7 @@ function randomRectangles(next,target=3+Math.floor(next()*5),minimumArea=2){
       }
       for(let cut=1;cut<h;cut++){
         const a=[x,y,w,cut],b=[x,y+cut,w,h-cut]
-        if(area(a)>=2&&area(b)>=2)splits.push({i,a,b,weight:Math.min(area(a),area(b))})
+        if(area(a)>=minimumArea&&area(b)>=minimumArea)splits.push({i,a,b,weight:Math.min(area(a),area(b))})
       }
     })
     if(!splits.length)break
