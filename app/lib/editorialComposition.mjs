@@ -430,6 +430,19 @@ export function auditEditorialComposition(composition){
     const dy=Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y)
     if(dx>1&&dy>1)issues.push('overlap: '+a.id+' / '+b.id)
   }
+  // Surface duplicated supporting facts as structural failures. Visual-only
+  // reviews caught this in Surf's 4x1 ribbon; the audit now protects ALL
+  // modules and aspect ratios from repeating a detail in its extras.
+  const supporting=blocks.filter(b=>b.type==='text'&&
+    (b.id==='detail'||b.id.startsWith('extra-')))
+  const seenSupporting=new Set()
+  for(const block of supporting){
+    const meaning=normalizeInformation(block.lines.join(' '))
+    if(!meaning)continue
+    if(seenSupporting.has(meaning))
+      issues.push('duplicated supporting information: '+block.id)
+    seenSupporting.add(meaning)
+  }
   // Compact summaries deliberately center the entire three-line group,
   // including its title. Other arrangements center the content separately
   // from a top-aligned title.
