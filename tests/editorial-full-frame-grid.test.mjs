@@ -248,3 +248,49 @@ test('all compact 2×1 modules retain heading, key value, and context',()=>{
     assert.deepEqual(auditEditorialComposition(c),[],moduleName)
   }
 })
+
+test('Round 5 PDF: half-frame columns must earn their visual dominance',()=>{
+  // Page 3: Surf on the entire right half; score rectangles alone do not
+  // constitute the strong illustrative anchor required by the new rules.
+  const sparseSurf=[
+    {id:'cell-1',x:0,y:0,cols:2,rows:2,module:'ski'},
+    {id:'cell-2',x:0,y:2,cols:2,rows:2,module:'soccer'},
+    {id:'cell-3',x:2,y:0,cols:2,rows:4,module:'surf'},
+  ]
+  assert.deepEqual(validateEditorialGrid(sparseSurf),[])
+  assert.ok(auditEditorialGridQuality(sparseSurf).some(issue=>
+    issue.includes('Oversized panel without sufficient visual focal point')))
+
+  // Page 10: Same structural failure with a small fact in a large Ski panel.
+  const sparseSki=[
+    {id:'cell-1',x:0,y:0,cols:2,rows:4,module:'ski'},
+    {id:'cell-2',x:2,y:0,cols:2,rows:2,module:'reminders'},
+    {id:'cell-3',x:2,y:2,cols:2,rows:2,module:'groceries'},
+  ]
+  assert.deepEqual(validateEditorialGrid(sparseSki),[])
+  assert.ok(auditEditorialGridQuality(sparseSki).some(issue=>
+    issue.includes('Oversized panel without sufficient visual focal point')))
+
+  // Hero-capable content can still use significant negative space.
+  const day=composeEditorialModule('date',400,480)
+  assert.ok(day.blocks.some(block=>block.id==='date'&&block.fontSize>=56))
+})
+
+test('Round 5 PDF: an information value appears only once despite punctuation',()=>{
+  for(const [moduleName,width,height,fragment] of [
+    ['surf',400,480,'Waves'],
+    ['ski',400,240,'Fresh snow'],
+  ]){
+    const composition=composeEditorialModule(moduleName,width,height)
+    const lines=composition.blocks.flatMap(block=>block.lines??[])
+    if(moduleName==='surf'){
+      const waveLines=lines.filter(line=>line.startsWith(fragment))
+      assert.equal(waveLines.length,1,
+        'Surf repeats wave height once as subtitle and once as an extra')
+    }else{
+      assert.ok(!lines.includes('Fresh snow · 15 cm'),
+        'Ski re-displays the hero measurement as an extra')
+    }
+    assert.deepEqual(auditEditorialComposition(composition),[],moduleName)
+  }
+})
