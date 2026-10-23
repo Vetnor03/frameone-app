@@ -27,6 +27,41 @@ jobs:
         run: pio run -d frame -e alfred_v1_2
       - name: Compile isolated USB typography calibration
         run: pio run -d frame -e alfred_v1_2_typography_audit
+
+      - name: Install Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+        with:
+          version: "1.5.1"
+      - name: Install pinned Arduino toolchain
+        run: |
+          arduino-cli core update-index \
+            --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@2.0.14 \
+            --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli lib install "ArduinoJson@6.21.5"
+          arduino-cli lib install "Adafruit BusIO@1.17.4"
+          arduino-cli lib install "Adafruit GFX Library@1.12.6"
+          arduino-cli lib install "GxEPD2@1.6.4"
+          arduino-cli lib install "PubSubClient@2.8"
+      - name: Prepare explicitly gated Arduino IDE calibration sketch
+        run: |
+          python frame/tools/prepare_arduino_sketch.py --output "$RUNNER_TEMP/frame_v2.5.1"
+          sed -i 's/^#define TYPOGRAPHY_AUDIT_ENABLED 0$/#define TYPOGRAPHY_AUDIT_ENABLED 1/' "$RUNNER_TEMP/frame_v2.5.1/Config.h"
+          grep -q '^#define TYPOGRAPHY_AUDIT_ENABLED 1$' "$RUNNER_TEMP/frame_v2.5.1/Config.h"
+          (cd "$RUNNER_TEMP" && zip -qr RE-MIND-Typography-Arduino-IDE.zip frame_v2.5.1)
+      - name: Compile calibration sketch in Arduino IDE toolchain
+        run: |
+          arduino-cli compile --warnings default \
+            --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" \
+            "$RUNNER_TEMP/frame_v2.5.1"
+      - name: Archive ready-to-open Arduino IDE sketch ZIP
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remind-typography-Arduino-IDE-source-USB-ONLY
+          path: ${{ runner.temp }}/RE-MIND-Typography-Arduino-IDE.zip
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload unflashed USB typography calibration
         if: success()
         uses: actions/upload-artifact@v4
