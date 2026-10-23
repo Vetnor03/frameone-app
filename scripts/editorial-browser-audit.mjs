@@ -191,6 +191,13 @@ try {
   assert.equal(await frame.locator('[data-editorial-center-accent="true"]').count(),1,
     'Dense frame should have one editorial junction, not a dot at each crossing')
   await page.screenshot({path:'artifacts/editorial/full-frame-sixteen-light.png'})
+  await page.getByTestId('frame-preset').selectOption('three-columns')
+  assert.equal(await assertFrameCoverage(),3)
+  assert.equal(await frame.locator('[data-editorial-density="contour"]').count(),3,
+    'A sparse, unequal-width column design needs subtle ownership contours')
+  await page.screenshot({path:'artifacts/editorial/full-frame-sparse-contour.png'})
+  await page.getByTestId('frame-preset').selectOption('sixteen')
+  assert.equal(await assertFrameCoverage(),16)
   await page.getByTestId('frame-module-cell-1').selectOption('weather')
   await page.getByTestId('frame-module-cell-2').selectOption('date')
   await page.getByTestId('frame-module-cell-3').selectOption('surf')
