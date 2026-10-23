@@ -122,7 +122,6 @@ const alphabet=[
   'UNBROKENLONGHEADLINEWITHOUTSPACESORPUNCTUATION',
   '12° • 15 cm • 08:30 • 24.10.2026',
 ]
-const normalize=s=>String(s).trim()
 const stringFor=(variant,salt)=>{
   const target=lengths[(variant+salt)%lengths.length]
   if(target===0)return ''
@@ -131,14 +130,14 @@ const stringFor=(variant,salt)=>{
   return text.slice(0,target).trim()
 }
 const contentVariants=64
-for(const module of EDITORIAL_MODULES)
+for(const moduleName of EDITORIAL_MODULES)
   for(let cols=1;cols<=4;cols++)
     for(let rows=1;rows<=4;rows++)
       for(let variant=0;variant<contentVariants;variant++){
         // The approved 2x2 Surf and Date are intentional reference layouts;
         // both are tested in their canonical configuration instead.
-        const reference=module==='date'||(module==='surf'&&cols===2&&rows===2)
-        const original=EDITORIAL_SAMPLES[module]
+        const reference=moduleName==='date'||(moduleName==='surf'&&cols===2&&rows===2)
+        const original=EDITORIAL_SAMPLES[moduleName]
         const sample=reference?undefined:{
           heading:original.heading,
           primary:variant%11===0?'':(variant%13===0?original.primary:
@@ -148,13 +147,13 @@ for(const module of EDITORIAL_MODULES)
           extras:variant%6===0?[]:
             Array.from({length:(variant%9)},(_,i)=>stringFor(variant+i+3,cols+i)),
         }
-        const view=composeEditorialModule(module,cols*200,rows*120,
+        const view=composeEditorialModule(moduleName,cols*200,rows*120,
           sample?{sample}:{})
         const issues=auditEditorialComposition(view)
         summary.contentFixtures++
         if(issues.length){
           summary.contentOverflowFailures++
-          fail('content-geometry',{module,size:cols+'x'+rows,
+          fail('content-geometry',{module:moduleName,size:cols+'x'+rows,
             variant,issues,
             primary:sample?.primary?.slice(0,60),
             detail:sample?.detail?.slice(0,40)})
