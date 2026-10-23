@@ -191,6 +191,8 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly',
 }
 
 type FrameTile={id:string;x:number;y:number;cols:number;rows:number;module:Module}
+type DensityPolicy={mode:'open'|'chapter-grid'|'fine-grid';
+  boundaries:Record<string,{right:boolean;bottom:boolean}>}
 const moduleLabel=(module:Module)=>module==='assistant'
   ?'AI Follow':module.charAt(0).toUpperCase()+module.slice(1)
 
@@ -214,7 +216,7 @@ function FullFrameLab({theme,weatherScene}:{
   const qualityScore=useMemo(()=>Math.round(scoreEditorialGrid(tiles)),[tiles])
   const emphasized=useMemo(()=>new Set(editorialOrnamentTiles(tiles)),[tiles])
   const groupCues=useMemo(()=>new Set(editorialGroupingCues(tiles)),[tiles])
-  const densityRules=useMemo(()=>editorialDensityRules(tiles),[tiles])
+  const densityRules=useMemo(()=>editorialDensityRules(tiles) as DensityPolicy,[tiles])
   const validation=useMemo(()=>{
     const problems=validateEditorialGrid(tiles)
     if(autoQuality)problems.push(...auditEditorialGridQuality(tiles))
@@ -417,7 +419,7 @@ function FullFrameLab({theme,weatherScene}:{
         {batch.map((design,index)=>{
           const accents=new Set(editorialOrnamentTiles(design.tiles))
           const sectionBreaks=new Set(editorialGroupingCues(design.tiles))
-          const previewDensity=editorialDensityRules(design.tiles)
+          const previewDensity=editorialDensityRules(design.tiles) as DensityPolicy
           return <button type="button" key={index}
             onClick={()=>pickBatch(index)}
             aria-label={'Inspect random design '+(index+1)}
