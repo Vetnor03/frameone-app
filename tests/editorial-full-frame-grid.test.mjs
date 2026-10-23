@@ -573,3 +573,45 @@ test('Dense dividers preserve orientation with one quiet focal junction',()=>{
   assert.ok(Object.values(editorialDensityRules(sparse).boundaries)
     .every(b=>!b.centralJunction))
 })
+
+test('Round 12 PDFs: page-level heading ornaments form an intentional row rhythm',()=>{
+  // PDF (18), page 4: previously both right-hand tiles gained elaborate
+  // book dividers while the two left tiles were completely undecorated.
+  const quarterFrame=[
+    {id:'ski',x:0,y:0,cols:2,rows:2,module:'ski'},
+    {id:'reminders',x:2,y:0,cols:2,rows:2,module:'reminders'},
+    {id:'stocks',x:0,y:2,cols:2,rows:2,module:'stocks'},
+    {id:'news',x:2,y:2,cols:2,rows:2,module:'news'},
+  ]
+  assert.deepEqual(validateEditorialGrid(quarterFrame),[])
+  const accents=editorialOrnamentTiles(quarterFrame)
+  assert.equal(accents.length,2)
+  const chosen=quarterFrame.filter(tile=>accents.includes(tile.id))
+  assert.equal(chosen[0].y,chosen[1].y,
+    'Chapter rules should share a common horizontal baseline where possible')
+  assert.ok(chosen.some(tile=>tile.x===0)&&chosen.some(tile=>tile.x===2),
+    'Both ornaments must not occupy only the right-hand column')
+  // No renderer art change, only page-level decisions.
+  for(const tile of quarterFrame)
+    assert.deepEqual(auditEditorialComposition(
+      composeEditorialModule(tile.module,tile.cols*200,tile.rows*120)),[])
+})
+
+test('Round 12 PDFs: stacked bands have one separator, never a second Date rule',()=>{
+  // PDF (17), page 9: the full-width News ribbon and Date ribbon had two
+  // competing rules close together.
+  const tiles=[
+    {id:'ski',x:0,y:0,cols:2,rows:2,module:'ski'},
+    {id:'countdown',x:2,y:0,cols:2,rows:2,module:'countdown'},
+    {id:'news',x:0,y:2,cols:4,rows:1,module:'news'},
+    {id:'date',x:0,y:3,cols:4,rows:1,module:'date'},
+  ]
+  assert.deepEqual(validateEditorialGrid(tiles),[])
+  assert.deepEqual(editorialGroupingCues(tiles),['news'])
+  assert.ok(!editorialOrnamentTiles(tiles).includes('date'),
+    'Date heading must not add another horizontal rule near the existing boundary')
+  assert.deepEqual(validateEditorialGrid(tiles),[],
+    'Customer layout is always valid regardless of aesthetics')
+  assert.equal(editorialOrnamentTiles(makeEditorialGrid('sixteen')).length,0,
+    'Dense grids use the surrounding line grammar, not repeated ornaments')
+})
