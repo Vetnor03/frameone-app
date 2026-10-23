@@ -186,6 +186,9 @@ try {
   assert.equal(await assertFrameCoverage(),4)
   await page.getByTestId('frame-preset').selectOption('sixteen')
   assert.equal(await assertFrameCoverage(),16)
+  assert.equal(await frame.locator('[data-editorial-density="fine-grid"]').count(),16,
+    'All 16 customer-selected modules must use fine-grid separators')
+  await page.screenshot({path:'artifacts/editorial/full-frame-sixteen-light.png'})
   await page.getByTestId('frame-module-cell-1').selectOption('weather')
   await page.getByTestId('frame-module-cell-2').selectOption('date')
   await page.getByTestId('frame-module-cell-3').selectOption('surf')
