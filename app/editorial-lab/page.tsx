@@ -63,13 +63,13 @@ function RatingBlocks({x,y,w,h=16,ink,theme,reference=false}:{
   // and radius 3. Other shapes remain free to resize these marks.
   const gap=reference?6:4
   const blockW=reference?20:Math.min(22,(w-5*gap)/6)
-  const blockH=Math.min(14,Math.max(6,h-2))
+  const blockH=reference?14:Math.min(14,Math.max(6,h-2))
   const actual=6*blockW+5*gap
   const left=x+(w-actual)/2
   const muted=theme==='light'?'#777777':'#C0C0C0'
   return <g role="img" aria-label="Three of six filled Surf rating rectangles">
     {Array.from({length:6},(_,index)=><rect key={index}
-      x={left+index*(blockW+gap)} y={y+(h-blockH)/2} width={blockW} height={blockH}
+      x={left+index*(blockW+gap)} y={y+((reference?16:h)-blockH)/2} width={blockW} height={blockH}
       rx={reference?3:2} stroke={index<3?ink:muted} strokeWidth="1.2"
       fill={index<3?ink:'none'}/>)}
   </g>
