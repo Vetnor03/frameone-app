@@ -75,6 +75,24 @@ function wrapEditorialText(value,w,size,serif=false,maxLines=2){
   return lines.map(l=>fitEditorialText(l,w,size,serif))
 }
 
+// Content-first typography: use the largest legible size that displays every
+// word in the allotted lines. Only truncate when the minimum size still fails.
+export function fitEditorialHeadline(value,width,preferredSize,{
+  minSize=16,maxLines=2,serif=true,
+}={}){
+  const source=String(value??'').trim().replace(/\s+/g,' ')
+  const top=Math.max(minSize,preferredSize)
+  for(let size=top;size>=minSize;size-=0.5){
+    const lines=wrapEditorialText(source,width,size,serif,maxLines)
+    if(lines.join(' ')===source&&lines.every(line=>
+      estimatedTextWidth(line,size,serif)<=width-4)){
+      return {fontSize:size,lines,complete:true}
+    }
+  }
+  const lines=wrapEditorialText(source,width,minSize,serif,maxLines)
+  return {fontSize:minSize,lines,complete:lines.join(' ')===source}
+}
+
 function textBlock(id,value,w,size,{serif=false,maxLines=1,role='primary'}={}){
   const lines=maxLines>1?wrapEditorialText(value,w,size,serif,maxLines):
     [fitEditorialText(value,w,size,serif)].filter(Boolean)
@@ -277,11 +295,17 @@ function compactHorizontalComposition(module,p,info){
   const isMeasurement=!longHeadline&&
     estimatedTextWidth(info.primary,30,module!=='soccer')<body.w-10
   let fontSize=longHeadline?17:isMeasurement?32:21
-  // Wrapped headlines must be fitted to TWO lines; shrinking them until the
-  // entire sentence fits a single line silently reduced 17px to 13px.
-  while(!longHeadline&&fontSize>13&&
-    estimatedTextWidth(info.primary,fontSize,module!=='soccer')>body.w-5)
-    fontSize--
+  // Find the best complete two-line headline instead of blindly using
+  // the same type size regardless of actual headline length.
+  if(longHeadline){
+    fontSize=fitEditorialHeadline(info.primary,body.w,17,{
+      minSize:15,maxLines:2,serif:module!=='soccer',
+    }).fontSize
+  }else{
+    while(fontSize>13&&
+      estimatedTextWidth(info.primary,fontSize,module!=='soccer')>body.w-5)
+      fontSize--
+  }
   const items=[
     textBlock('heading',info.heading,body.w,12,{serif:true,role:'heading'}),
     textBlock('primary',info.primary,body.w,fontSize,{
@@ -351,6 +375,15 @@ function contentComposition(module,p,options={}){
   let heroSize=textLed
     ?clamp(Math.min(width*.075,body.h*.12),17,roomy?30:24)
     :clamp(Math.min(width*.19,body.h*.38),22,roomy?62:43)
+  // Fit long text against available space, not only the module size. This
+  // avoids losing the final word of a meaningful editorial headline.
+  const needsWrap=module==='news'||module==='reminders'||
+    (textLed&&estimatedTextWidth(info.primary,heroSize,true)>width-4)
+  if(needsWrap){
+    heroSize=fitEditorialHeadline(info.primary,width,heroSize,{
+      minSize:module==='news'?16:17,maxLines:2,serif:true,
+    }).fontSize
+  }
   // A numerical or short verbal headline should retain its complete meaning.
   // Reduce its scale within a global lower bound before ever ellipsizing it.
   // News/reminder headlines already have separate multi-line wrapping rules.
@@ -370,7 +403,7 @@ function contentComposition(module,p,options={}){
       {serif:true,maxLines:2}))
   }else{
     hero.push(textBlock('primary',info.primary,width,heroSize,
-      {serif:module!=='soccer',maxLines:module==='news'?2:1}))
+      {serif:module!=='soccer',maxLines:needsWrap?2:1}))
   }
   if(module==='surf')
     hero.push(graphicBlock('rating',Math.min(160,width-8),16,'score'))
