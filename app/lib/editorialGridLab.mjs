@@ -327,15 +327,15 @@ export function scoreEditorialGrid(tiles){
 
 // Only split when both children retain adequate breathing room. Favor the
 // largest panels and balanced cuts, instead of repeatedly slicing tiny scraps.
-function randomRectangles(next,target=3+Math.floor(next()*5)){
+function randomRectangles(next,target=3+Math.floor(next()*5),minimumArea=2){
   const rects=[[0,0,4,4]]
-  for(let attempt=0;attempt<24&&rects.length<target;attempt++){
+  for(let attempt=0;attempt<80&&rects.length<target;attempt++){
     const splits=[]
     rects.forEach((rect,i)=>{
       const [x,y,w,h]=rect
       for(let cut=1;cut<w;cut++){
         const a=[x,y,cut,h],b=[x+cut,y,w-cut,h]
-        if(area(a)>=2&&area(b)>=2)splits.push({i,a,b,weight:Math.min(area(a),area(b))})
+        if(area(a)>=minimumArea&&area(b)>=minimumArea)splits.push({i,a,b,weight:Math.min(area(a),area(b))})
       }
       for(let cut=1;cut<h;cut++){
         const a=[x,y,w,cut],b=[x,y+cut,w,h-cut]
@@ -354,6 +354,26 @@ function randomRectangles(next,target=3+Math.floor(next()*5)){
     rects.splice(picked.i,1,picked.a,picked.b)
   }
   return rects.sort((a,b)=>a[1]-b[1]||a[0]-b[0])
+}
+
+// The 100-layout PDF is a QA stress sample, NOT the curated randomizer.
+// Systematically exercise every customer-legal density from 1 through 16,
+// including tiny 1×1 cells and extreme all-ribbon layouts. No aesthetic
+// selection gate may discard a valid customer grid here.
+export function randomEditorialReviewGrid(seed,targetCount){
+  if(!Number.isInteger(targetCount)||targetCount<1||targetCount>16)
+    throw new RangeError('Review density must be 1–16 modules')
+  const next=randomSource(seed)
+  const matches=EDITORIAL_GRID_PRESETS.filter(p=>p.rects.length===targetCount)
+  const preset=matches.length&&next()<.35?
+    matches[Math.floor(next()*matches.length)]:null
+  const rects=preset?[...preset.rects]:randomRectangles(next,targetCount,1)
+  const tiles=withModules(rects,next)
+  const issues=validateEditorialGrid(tiles)
+  if(rects.length!==targetCount||issues.length)
+    throw new Error('Review grid failed valid full-frame coverage: '+issues.join('; '))
+  return {seed:seed>>>0,presetId:preset?.id??'random',
+    tiles,family:editorialGridFamily(tiles)}
 }
 
 function withModules(rects,next){
