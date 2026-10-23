@@ -221,6 +221,47 @@ export function editorialDensityRules(tiles){
     boundaries:byId}
 }
 
+// Duplicate modules are valid customer choices. For generated stress layouts
+// with more than eleven tiles, place necessary repeated modules apart so they
+// test the adaptive renderer rather than forming accidental duplicate pairs.
+function spreadRepeatedModules(tiles){
+  if(tiles.length<=EDITORIAL_MODULES.length)return tiles
+  const distanceCost=(a,b)=>{
+    const dx=Math.abs((a.x+a.cols/2)-(b.x+b.cols/2))
+    const dy=Math.abs((a.y+a.rows/2)-(b.y+b.rows/2))
+    const edgeTouch=(a.x+a.cols===b.x||b.x+b.cols===a.x)&&
+      Math.min(a.y+a.rows,b.y+b.rows)>Math.max(a.y,b.y)
+    const rowTouch=(a.y+a.rows===b.y||b.y+b.rows===a.y)&&
+      Math.min(a.x+a.cols,b.x+b.cols)>Math.max(a.x,b.x)
+    return (edgeTouch||rowTouch?100:0)+40/(.4+dx+dy)
+  }
+  const penalty=arr=>{
+    let score=0
+    for(let i=0;i<arr.length;i++)for(let j=i+1;j<arr.length;j++)
+      if(arr[i].module===arr[j].module)
+        score+=distanceCost(arr[i],arr[j])
+    return score
+  }
+  let current=tiles.map(tile=>({...tile}))
+  // Greedy best-improvement swaps preserve every tile rectangle, every
+  // module count and seed reproducibility. Never force a module choice.
+  for(let pass=0;pass<5;pass++){
+    let best=penalty(current),swapA=-1,swapB=-1
+    for(let i=0;i<current.length;i++)for(let j=i+1;j<current.length;j++){
+      if(current[i].module===current[j].module)continue
+      const candidate=current.map(tile=>({...tile}))
+      ;[candidate[i].module,candidate[j].module]=
+        [candidate[j].module,candidate[i].module]
+      const cost=penalty(candidate)
+      if(cost<best-0.01){best=cost;swapA=i;swapB=j}
+    }
+    if(swapA<0)break
+    ;[current[swapA].module,current[swapB].module]=
+      [current[swapB].module,current[swapA].module]
+  }
+  return current
+}
+
 const adjacent=(a,b)=>{
   const horizontal=(a.x+a.cols===b.x||b.x+b.cols===a.x)&&
     Math.min(a.y+a.rows,b.y+b.rows)>Math.max(a.y,b.y)
@@ -368,7 +409,7 @@ export function randomEditorialReviewGrid(seed,targetCount){
   const preset=matches.length&&next()<.35?
     matches[Math.floor(next()*matches.length)]:null
   const rects=preset?[...preset.rects]:randomRectangles(next,targetCount,1)
-  const tiles=withModules(rects,next)
+  const tiles=spreadRepeatedModules(withModules(rects,next))
   const issues=validateEditorialGrid(tiles)
   if(rects.length!==targetCount||issues.length)
     throw new Error('Review grid failed valid full-frame coverage: '+issues.join('; '))
