@@ -125,9 +125,9 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly',
         d={`M ${width-4} ${height-7} L ${width-1} ${height-4} L ${width-4} ${height-1} L ${width-7} ${height-4} Z`}
         fill={paper} stroke={ink} strokeWidth=".85" opacity=".57"/>}
     {sectionBreak&&density==='open'&&<line data-editorial-section-break="true"
-      x1={Math.round(width*.18)} x2={Math.round(width*.82)}
-      y1={height-2} y2={height-2} stroke={ink}
-      strokeWidth=".8" opacity=".24"/>}
+      x1={Math.round(width*.34)} x2={Math.round(width*.66)}
+      y1={height-4} y2={height-4} stroke={ink}
+      strokeWidth=".7" opacity=".25"/>}
     {layout.blocks.map((block: {
       id:string;type:string;role:string;x:number;y:number;w:number;h:number;
       lines?:string[];fontSize?:number;serif?:boolean
