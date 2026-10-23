@@ -419,8 +419,9 @@ function contentComposition(module,p,options={}){
   // half-sized tile. Scale the principal fact with the available full-frame
   // area; leave secondary rows understated and never inflate empty-state copy.
   const flagship=p.width>=780&&p.height>=450
-  const tallFeature=p.width>=380&&p.height>=450
-  const valueCeiling=flagship?88:tallFeature?70:roomy?62:43
+  // A tall narrow cell must earn its visual weight through content, not
+  // a giant isolated figure. Preserve the established balanced-column type.
+  const valueCeiling=flagship?88:roomy?62:43
   let heroSize=textLed
     ?clamp(Math.min(width*.075,body.h*.12),17,roomy?30:24)
     :clamp(Math.min(width*(flagship?.20:.19),body.h*.38),22,valueCeiling)
