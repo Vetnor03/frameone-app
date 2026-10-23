@@ -386,3 +386,19 @@ test('Round 8 PDFs: duplicated user content is normalized before disclosure',()=
   assert.ok(!extras.some(line=>line.toLowerCase().includes('waves 0.8')))
   assert.equal(extras.filter(line=>line.startsWith('Swell period')).length,1)
 })
+
+test('Round 9 PDFs: text-led panels use available space for legible headlines',()=>{
+  // PDF (7), page 7: News had a very small headline despite a full 2×2
+  // quadrant. Test a shared rule for all text-dominant modules, not an
+  // individual screenshot override.
+  for(const moduleName of ['news','reminders','assistant','groceries']){
+    const quadrant=composeEditorialModule(moduleName,400,240)
+    const headline=quadrant.blocks.find(b=>b.id==='primary')
+    assert.ok(headline&&headline.fontSize>=21,
+      moduleName+' text hierarchy too weak in 2×2 cell')
+    assert.deepEqual(auditEditorialComposition(quadrant),[],moduleName)
+  }
+  const compactNews=composeEditorialModule('news',400,120)
+  assert.ok(compactNews.blocks.find(b=>b.id==='primary')?.fontSize>=17)
+  assert.deepEqual(auditEditorialComposition(compactNews),[])
+})
