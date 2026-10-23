@@ -649,3 +649,50 @@ test('QA stress sampling never rejects an intentionally dense valid customer lay
   assert.throws(()=>randomEditorialReviewGrid(12,0),RangeError)
   assert.throws(()=>randomEditorialReviewGrid(12,17),RangeError)
 })
+
+test('Round 16: full frame numeric facts receive genuine display-scale typography',()=>{
+  for(const moduleName of ['countdown','stocks','soccer','ski','weather']){
+    const full=composeEditorialModule(moduleName,800,480)
+    const quarter=composeEditorialModule(moduleName,400,240)
+    const fullLead=full.blocks.find(block=>block.id==='primary')
+    const quarterLead=quarter.blocks.find(block=>block.id==='primary')
+    assert.ok(fullLead&&quarterLead)
+    assert.ok(fullLead.fontSize>=70,moduleName+' too small on full screen')
+    assert.ok(fullLead.fontSize>quarterLead.fontSize,
+      moduleName+' does not exploit the available full frame')
+    assert.deepEqual(auditEditorialComposition(full),[],
+      'Full-screen typography clips '+moduleName)
+    assert.deepEqual(auditEditorialComposition(quarter),[],
+      'Medium typography regressed '+moduleName)
+  }
+})
+
+test('Round 16: short News cell uses context-preserving headlines',()=>{
+  const tiny=composeEditorialModule('news',200,120)
+  const lead=tiny.blocks.find(block=>block.id==='primary')
+  assert.ok(lead)
+  assert.ok(lead.lines.length>=2&&lead.lines.length<=3)
+  assert.ok(!lead.lines.some(line=>line.endsWith('…')),
+    'Tiny headlines must use all available vertical space before clipping')
+  assert.deepEqual(auditEditorialComposition(tiny),[])
+})
+
+test('Round 16: repeated modules are spread through dense QA layouts',()=>{
+  const seeds=[3438288,482138944,3819704928,2383602960,
+    2432900466,735521833]
+  for(const seed of seeds){
+    const design=randomEditorialReviewGrid(seed,16)
+    assert.deepEqual(validateEditorialGrid(design.tiles),[])
+    assert.deepEqual(randomEditorialReviewGrid(seed,16),design)
+    const seen=new Map()
+    for(const tile of design.tiles)
+      seen.set(tile.module,(seen.get(tile.module)||0)+1)
+    assert.equal([...seen.values()].reduce((sum,n)=>sum+n,0),16)
+    const repeated=design.tiles.filter(t=>seen.get(t.module)>1)
+    for(const t of repeated){
+      const others=repeated.filter(o=>o.id!==t.id&&o.module===t.module)
+      assert.ok(others.every(o=>Math.abs(t.x-o.x)+Math.abs(t.y-o.y)>=2),
+        'Duplicate modules remain adjacent in seed '+seed)
+    }
+  }
+})
