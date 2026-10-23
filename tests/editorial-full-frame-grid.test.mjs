@@ -201,7 +201,14 @@ test('PDF review regression: oversized sparse modules are rejected globally',()=
   const groceries=composeEditorialModule('groceries',800,120)
   assert.ok(groceries.blocks.some(block=>block.id==='heading'&&
     block.lines.includes('Groceries')))
-  for(const composition of [countdown,groceries])
+  // The actual PDF page 10 placed Countdown in a 2×1 cell.
+  const shortCountdown=composeEditorialModule('countdown',400,120)
+  assert.equal(shortCountdown.mode,'compact-summary')
+  assert.ok(shortCountdown.blocks.some(block=>block.id==='heading'&&
+    block.lines.includes('Countdown')))
+  assert.ok(shortCountdown.blocks.some(block=>block.id==='detail'&&
+    block.lines.includes('Days until Christmas')))
+  for(const composition of [countdown,groceries,shortCountdown])
     assert.deepEqual(auditEditorialComposition(composition),[],composition.module)
 })
 
@@ -229,4 +236,15 @@ test('hard quality gate never admits underfilled featured panels across 1000 see
   }
   assert.ok(different>200)
   assert.ok(named.size>=4)
+})
+
+test('all compact 2×1 modules retain heading, key value, and context',()=>{
+  for(const module of EDITORIAL_MODULES.filter(name=>name!=='date')){
+    const c=composeEditorialModule(module,400,120)
+    assert.equal(c.mode,'compact-summary',module)
+    for(const part of ['heading','primary','detail'])
+      assert.ok(c.blocks.some(b=>b.id===part&&b.lines?.length),
+        module+' missing '+part)
+    assert.deepEqual(auditEditorialComposition(c),[],module)
+  }
 })
