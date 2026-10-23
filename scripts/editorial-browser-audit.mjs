@@ -237,7 +237,7 @@ try {
   assert.ok(randomized.size>=12,'Randomize repeated too many identical frames')
   // Reviewer-facing contact sheet must show ten *real* mixed compositions
   // and allow any selection to be inspected in the same full-size frame.
-  await page.getByTestId('frame-batch').click()
+  await page.getByTestId('frame-batch-small').click()
   const sheet=page.getByTestId('frame-batch-results')
   assert.equal(await sheet.getByRole('button',{name:/Inspect random design/}).count(),10)
   assert.ok(await sheet.locator('svg[data-editorial-probe]').count()>=20)
@@ -259,6 +259,14 @@ try {
   console.log('RE:MIND contact sheet PDF:',pdf.length,'bytes, 10 pages')
   await page.screenshot({path:'artifacts/editorial/full-frame-ten-preview-sheet.png',fullPage:true})
   await sheet.getByRole('button',{name:'Inspect random design 6'}).click()
+  await assertFrameCoverage()
+  // The full review stores 100 distinct, reproducible designs. Do not
+  // auto-export all 100 in the ordinary browser smoke test; the PDF builder's
+  // 100-page structural regression runs as a fast deterministic unit test.
+  await page.getByTestId('frame-batch').click()
+  assert.equal(await sheet.getByRole('button',{name:/Inspect random design/}).count(),100)
+  assert.match(await page.getByTestId('frame-export-pdf').innerText(),/100/)
+  await sheet.getByRole('button',{name:'Inspect random design 100'}).click()
   await assertFrameCoverage()
   await page.getByTestId('frame-preset').selectOption('sixteen')
   await page.getByTestId('frame-shuffle').click()
