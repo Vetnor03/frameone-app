@@ -27,6 +27,15 @@ export const EDITORIAL_GRID_PRESETS=Object.freeze([
   preset('tall-strip','Tall strip','One 1×4 alongside two 3×2 panels',[[0,0,1,4],[1,0,3,2],[1,2,3,2]]),
   preset('top-banner','Top banner','A 4×1 ribbon above two 2×3 panels',[[0,0,4,1],[0,1,2,3],[2,1,2,3]]),
   preset('bottom-banner','Bottom banner','Two 2×3 panels above a 4×1 ribbon',[[0,0,2,3],[2,0,2,3],[0,3,4,1]]),
+  preset('hero-four','Four-panel hero','Tall anchor with three varied companions',[
+    [0,0,2,4],[2,0,2,2],[2,2,2,1],[2,3,2,1],
+  ]),
+  preset('hero-four-right','Right-hand hero','Three left companions beside tall anchor',[
+    [0,0,2,2],[0,2,2,1],[0,3,2,1],[2,0,2,4],
+  ]),
+  preset('editorial-four','Four-panel folio','Two medium anchors, a featured panel and short footer',[
+    [0,0,2,3],[0,3,2,1],[2,0,2,2],[2,2,2,2],
+  ]),
   preset('three-columns','Three columns','Narrow, wide, narrow',[[0,0,1,4],[1,0,2,4],[3,0,1,4]]),
   preset('four-columns','Four columns','Four 1×4 vertical stacks',[[0,0,1,4],[1,0,1,4],[2,0,1,4],[3,0,1,4]]),
   preset('four-rows','Four rows','Four 4×1 horizontal ribbons',[[0,0,4,1],[0,1,4,1],[0,2,4,1],[0,3,4,1]]),
@@ -122,6 +131,7 @@ const RANDOM_PRESETS=Object.freeze([
   'feature-left','feature-right','hero-sidebar','tall-strip',
   'top-banner','bottom-banner','three-columns',
   'folio-five','asymmetric-five','mosaic-six',
+  'hero-four','hero-four-right','editorial-four',
 ])
 const MODULE_FAMILY=Object.freeze({
   date:'ambient',weather:'ambient',surf:'ambient',ski:'ambient',
@@ -291,13 +301,13 @@ export function editorialGridFamily(tiles){
   const maximum=Math.max(...sizes)
   if(n>=5)return 'mosaic'
   if(n===4&&sizes.every(size=>size===4))return 'balanced'
-  if(n===4&&maximum<=6)return 'balanced'
+  if(n===4&&maximum<=5)return 'balanced'
   if(n<=4&&maximum>=8)return 'hero'
   return 'editorial'
 }
 function fitsFamily(tiles,family){
   if(family==='mosaic')return tiles.length>=5&&tiles.length<=7
-  if(family==='balanced')return tiles.length===4&&Math.max(...tiles.map(tileArea))<=6
+  if(family==='balanced')return tiles.length===4&&Math.max(...tiles.map(tileArea))<=5
   if(family==='hero')return tiles.length>=2&&tiles.length<=4&&
     Math.max(...tiles.map(tileArea))>=8
   return tiles.length>=3&&tiles.length<=4&&editorialGridFamily(tiles)==='editorial'
@@ -333,8 +343,8 @@ export function randomEditorialGrid(seed,previousPresetId=null,previousTiles=nul
   const attempts=procedural?48:36
   for(let i=0;i<attempts;i++){
     const requested=family==='mosaic'?5+Math.floor(next()*3):
-      family==='balanced'?4:family==='hero'?2+Math.floor(next()*3):
-      3+Math.floor(next()*2)
+      family==='balanced'?4:family==='hero'?3+Math.floor(next()*2):
+      (next()<.72?4:3)
     const preset=procedural||!options.length?null:options[Math.floor(next()*options.length)]
     const rects=preset?([...preset.rects]):randomRectangles(next,requested)
     const tiles=withModules(rects,next)
@@ -350,7 +360,7 @@ export function randomEditorialGrid(seed,previousPresetId=null,previousTiles=nul
   }
   if(!winner){
     const id=family==='mosaic'?'folio-five':
-      family==='hero'?'feature-left':family==='editorial'?'top-banner':'quarters'
+      family==='hero'?'hero-four':family==='editorial'?'editorial-four':'quarters'
     const fallback=EDITORIAL_GRID_PRESETS.find(p=>p.id===id)
     // The backup must be scored and quality-gated too. A random assignment
     // here previously bypassed every hard constraint and could recreate the
