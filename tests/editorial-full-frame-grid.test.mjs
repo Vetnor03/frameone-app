@@ -169,3 +169,64 @@ test('medium-height wide panels add structure and do not repeat content',()=>{
   for(const c of [weather,match,reminders,ski])
     assert.deepEqual(auditEditorialComposition(c),[],c.module)
 })
+
+test('PDF review regression: oversized sparse modules are rejected globally',()=>{
+  // Page 1: Countdown occupies half the frame for just three lines.
+  const leftHeavy=[
+    {id:'cell-1',x:0,y:0,cols:2,rows:4,module:'countdown'},
+    {id:'cell-2',x:2,y:0,cols:2,rows:2,module:'groceries'},
+    {id:'cell-3',x:2,y:2,cols:2,rows:2,module:'soccer'},
+  ]
+  assert.deepEqual(validateEditorialGrid(leftHeavy),[])
+  assert.ok(auditEditorialGridQuality(leftHeavy).some(issue=>
+    issue.includes('insufficient disclosure')))
+
+  // Page 3: tall 1×4 AI Follow displays only a tiny island of text.
+  const tallAssistant=[
+    {id:'cell-1',x:0,y:0,cols:1,rows:4,module:'assistant'},
+    {id:'cell-2',x:1,y:0,cols:3,rows:2,module:'reminders'},
+    {id:'cell-3',x:1,y:2,cols:3,rows:2,module:'news'},
+  ]
+  assert.deepEqual(validateEditorialGrid(tallAssistant),[])
+  assert.ok(auditEditorialGridQuality(tallAssistant).some(issue=>
+    issue.includes('Underfilled tall column')))
+
+  // Page 10: a full-width narrow cell must keep both the meaning and value.
+  const countdown=composeEditorialModule('countdown',800,120)
+  assert.equal(countdown.mode,'editorial-ribbon')
+  assert.ok(countdown.blocks.some(block=>block.id==='heading'&&
+    block.lines.includes('Countdown')))
+  assert.ok(countdown.blocks.some(block=>block.id==='detail'&&
+    block.lines.includes('Days until Christmas')))
+  const groceries=composeEditorialModule('groceries',800,120)
+  assert.ok(groceries.blocks.some(block=>block.id==='heading'&&
+    block.lines.includes('Groceries')))
+  for(const composition of [countdown,groceries])
+    assert.deepEqual(auditEditorialComposition(composition),[],composition.module)
+})
+
+test('full-width editorial ribbons always retain a human-readable identity',()=>{
+  for(const width of [600,800]){
+    for(const module of EDITORIAL_MODULES.filter(name=>name!=='date')){
+      const c=composeEditorialModule(module,width,120)
+      assert.equal(c.mode,'editorial-ribbon',module)
+      assert.ok(c.blocks.some(block=>block.id==='heading'&&block.lines?.length))
+      assert.ok(c.blocks.some(block=>block.id==='primary'&&block.lines?.length))
+      assert.ok(c.blocks.some(block=>block.id==='detail'&&block.lines?.length))
+      assert.deepEqual(auditEditorialComposition(c),[],module+' '+width)
+    }
+  }
+})
+
+test('hard quality gate never admits underfilled featured panels across 1000 seeds',()=>{
+  let different=0
+  const named=new Set()
+  for(let seed=5000;seed<6000;seed++){
+    const layout=randomEditorialGrid(seed)
+    assert.deepEqual(auditEditorialGridQuality(layout.tiles),[],'seed '+seed)
+    if(layout.presetId==='random')different++
+    named.add(layout.presetId)
+  }
+  assert.ok(different>200)
+  assert.ok(named.size>=4)
+})
