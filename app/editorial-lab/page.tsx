@@ -9,7 +9,7 @@ import {WEATHER_VIGNETTE_SCENES,weatherCoastalCurves} from '../lib/editorialWeat
 import {EDITORIAL_GRID_PRESETS,GRID_CELL_WIDTH,GRID_CELL_HEIGHT,
   makeEditorialGrid,randomEditorialGrid,shuffleEditorialGridModules,
   scoreEditorialGrid,editorialGridFamily,editorialOrnamentTiles,
-  editorialGroupingCues,auditEditorialGridQuality,validateEditorialGrid} from '../lib/editorialGridLab.mjs'
+  editorialGroupingCues,editorialDensityRules,auditEditorialGridQuality,validateEditorialGrid} from '../lib/editorialGridLab.mjs'
 
 type Module = typeof EDITORIAL_MODULES[number]
 type Span = 1|2|3|4
