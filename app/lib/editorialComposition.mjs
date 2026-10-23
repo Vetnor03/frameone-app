@@ -511,7 +511,8 @@ export function auditEditorialComposition(composition){
   // including its title. Other arrangements center the content separately
   // from a top-aligned title.
   const main=blocks.filter(b=>b.id!=='calendar'&&
-    (composition.mode==='compact-summary'||b.id!=='heading'))
+    (['compact-summary','editorial-ribbon'].includes(composition.mode)||
+      b.id!=='heading'))
   if(main.length&&composition.centered&&!blocks.some(b=>b.id==='calendar')){
     const low=Math.min(...main.map(b=>b.y)),high=Math.max(...main.map(b=>b.y+b.h))
     const bodyCenter=body.y+body.h/2
