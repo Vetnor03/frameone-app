@@ -123,21 +123,15 @@ const paddedRegion=(p,header=false)=>{
 function dateComposition(p){
   const body=paddedRegion(p)
   if(p.shape==='ribbon'&&body.w>=300){
-    const widths=[Math.floor(body.w*.32),Math.floor(body.w*.24)]
-    widths.push(body.w-widths[0]-widths[1]-12)
-    const gap=6
-    const parts=[
-      textBlock('weekday','Wednesday',widths[0],clamp(body.h*.15,11,16),{role:'secondary'}),
-      textBlock('date','21',widths[1],clamp(body.h*.45,28,58),{serif:true,role:'hero'}),
-      textBlock('month','October 2026',widths[2],clamp(body.h*.13,11,15),{serif:true,role:'primary'}),
+    // One coherent date group. Spreading weekday, date and month across
+    // three distant columns made the band read as three unrelated modules.
+    const items=[
+      textBlock('month','October 2026',body.w,15,{serif:true,role:'heading'}),
+      textBlock('date','21',body.w,43,{serif:true,role:'hero'}),
+      textBlock('weekday','Wednesday',body.w,13,{role:'secondary'}),
     ]
-    let x=body.x
-    const blocks=parts.map(block=>{
-      const placed={...block,x,y:body.y+(body.h-block.h)/2}
-      x+=block.w+gap
-      return placed
-    })
-    return {body,blocks,centered:true,mode:'ribbon'}
+    return {body,blocks:stackCentered(items,body,{gap:5}),
+      centered:true,mode:'ribbon'}
   }
   const twoColumn=body.w>=520&&body.h>=290
   let hero=body,calendar=null
@@ -251,40 +245,38 @@ function distinctVisibleSupporting(blocks,existing=[]){
     return true
   })
 }
+// Full-width and 3-column ribbons are read as a single section, not
+// three disconnected facts placed at far-left, center and far-right.
+// Identity, primary value and explanation stay together as a coherent group.
 function ribbonComposition(module,p,info){
   const body=rect(p.inset,p.inset,p.safeWidth,p.safeHeight)
-  const gap=14
-  const labelW=Math.floor((body.w-gap*2)*.23)
-  const mainW=Math.floor((body.w-gap*2)*.45)
-  const detailW=body.w-labelW-mainW-gap*2
-  const left=rect(body.x,body.y,labelW,body.h)
-  const center=rect(left.x+left.w+gap,body.y,mainW,body.h)
-  const right=rect(center.x+center.w+gap,body.y,detailW,body.h)
-  const heading=textBlock('heading',info.heading,left.w,16,{serif:true,role:'heading'})
-  const isLong=estimatedTextWidth(info.primary,17,true)>center.w-4
-  let primarySize=isLong?16:Math.min(38,Math.max(22,center.w*.085))
-  while(primarySize>16&&estimatedTextWidth(info.primary,primarySize,true)>center.w-4)
-    primarySize--
-  const primary=textBlock('primary',info.primary,center.w,primarySize,
-    {serif:module!=='soccer',maxLines:isLong?2:1})
-  const centerItems=[primary]
-  if(module==='surf'){
-    centerItems.push(graphicBlock('rating',Math.min(150,center.w-6),16,'score'))
-  }
-  const details=[
-    textBlock('detail',info.detail,right.w,13,{role:'secondary',maxLines:2}),
-  ]
+  const serif=module!=='soccer'
+  const lead=fitEditorialHeadline(info.primary,body.w,
+    Math.min(38,Math.max(24,body.w*.064)),{
+      minSize:16,maxLines:2,serif,
+    })
+  const heading=textBlock('heading',info.heading,body.w,14,
+    {serif:true,role:'heading'})
+  const primary=textBlock('primary',info.primary,body.w,lead.fontSize,
+    {serif,maxLines:lead.lines.length>1?2:1})
+  const detail=textBlock('detail',info.detail,body.w,13,
+    {role:'secondary',maxLines:1})
+  const items=[heading,primary]
+  if(module==='surf')
+    items.push(graphicBlock('rating',Math.min(152,body.w-10),16,'score'))
+  items.push(detail)
   const next=distinctSupportingLines(info)[0]
   if(next){
-    const candidate=textBlock('extra-0',next,right.w,11,
-      {role:'list',maxLines:2})
-    details.push(...distinctVisibleSupporting([candidate],details))
+    const candidate=textBlock('extra-0',next,body.w,11,
+      {role:'list',maxLines:1})
+    const unique=distinctVisibleSupporting([candidate],items)
+    const proposed=[...items,...unique]
+    const occupied=proposed.reduce((sum,block)=>sum+block.h,0)+
+      (proposed.length-1)*5
+    if(occupied<=body.h-8)items.push(...unique)
   }
-  return {body,blocks:[
-    ...stackCentered([heading],left),
-    ...stackCentered(centerItems,center,{gap:7}),
-    ...stackCentered(details,right,{gap:7}),
-  ],centered:false,mode:'editorial-ribbon'}
+  return {body,blocks:stackCentered(items,body,{gap:5}),
+    centered:true,mode:'editorial-ribbon'}
 }
 
 // Compact horizontal cells keep the value *and* its explanation together.
