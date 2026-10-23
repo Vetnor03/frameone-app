@@ -253,10 +253,15 @@ function compactHorizontalComposition(module,p,info){
 }
 
 function contentComposition(module,p,options={}){
-  const base=EDITORIAL_SAMPLES[module]
+  // Pure test-only content injection: the default renderer remains unchanged.
+  // Allows the stress suite to exercise real composition logic with difficult
+  // headlines, sparse updates and unusual text, without changing module art.
+  const base=options.sample
+    ? {...EDITORIAL_SAMPLES[module],...options.sample}
+    : EDITORIAL_SAMPLES[module]
   // The Lab's manual weather scene changes sample condition text as well as art.
   const weatherSample=WEATHER_VIGNETTE_SCENES[options.weatherScene||'partly']
-  const info=module==='weather'&&weatherSample
+  const info=module==='weather'&&weatherSample&&!options.sample
     ? {...base,detail:weatherSample.detail,
        extras:base.extras.map(row=>row.startsWith('Wind ·')
          ? 'Wind · NW '+weatherSample.windMs+' m/s' : row)}
