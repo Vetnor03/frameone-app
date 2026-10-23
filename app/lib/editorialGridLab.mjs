@@ -389,6 +389,28 @@ export function randomEditorialGrid(seed,previousPresetId=null,previousTiles=nul
         family:editorialGridFamily(fallbackWinner)}
     }
   }
+  // Reject a composition that technically meets minimum disclosure but
+  // still scores poorly as a whole. Recompose with a different visual family
+  // rather than lowering the acceptance standard for sparse panels.
+  if(scoreEditorialGrid(winner.tiles)<56){
+    const alternateIds=[
+      'quarters','editorial-four','hero-four','hero-four-right',
+      'folio-five','asymmetric-five','mosaic-six',
+    ]
+    let substitute=null,alternateScore=scoreEditorialGrid(winner.tiles)
+    for(const id of alternateIds){
+      const pattern=EDITORIAL_GRID_PRESETS.find(p=>p.id===id)
+      for(let i=0;i<24;i++){
+        const tiles=withModules(pattern.rects,next)
+        const family=editorialGridFamily(tiles)
+        if(family===previousFamily||auditEditorialGridQuality(tiles).length)continue
+        const score=scoreEditorialGrid(tiles)
+        if(score>alternateScore){alternateScore=score
+          substitute={seed:seed>>>0,presetId:id,tiles,family}}
+      }
+    }
+    if(substitute)winner=substitute
+  }
   return winner
 }
 
