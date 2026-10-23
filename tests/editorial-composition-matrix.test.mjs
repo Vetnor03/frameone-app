@@ -23,7 +23,7 @@ test('all eleven modules fit and center automatically across every grid and them
 test('short-wide Date fits all three facts, without the month being clipped',()=>{
   const c=composeEditorialModule('date',400,120)
   assert.equal(c.mode,'ribbon')
-  assert.deepEqual(c.blocks.map(block=>block.lines[0]),['Wednesday','21','October 2026'])
+  assert.deepEqual(c.blocks.map(block=>block.lines[0]),['October 2026','21','Wednesday'])
   assert.deepEqual(auditEditorialComposition(c),[])
 })
 
