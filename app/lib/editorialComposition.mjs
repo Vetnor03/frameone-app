@@ -422,8 +422,15 @@ function contentComposition(module,p,options={}){
   // A tall narrow cell must earn its visual weight through content, not
   // a giant isolated figure. Preserve the established balanced-column type.
   const valueCeiling=flagship?88:roomy?62:43
+  // A short, meaningful message can act as a full-frame typographic focal
+  // point. This is a shared content-length rule, not an AI Follow, Groceries
+  // or Reminders special case; long headlines keep their measured scale.
+  const shortFlagshipHeadline=flagship&&textLed&&
+    String(info.primary).trim().length<=26
   let heroSize=textLed
-    ?clamp(Math.min(width*.075,body.h*.12),17,roomy?30:24)
+    ?shortFlagshipHeadline
+      ?clamp(Math.min(width*.10,body.h*.14),30,44)
+      :clamp(Math.min(width*.075,body.h*.12),17,roomy?30:24)
     :clamp(Math.min(width*(flagship?.20:.19),body.h*.38),22,valueCeiling)
   // Fit long text against available space, not only the module size. This
   // avoids losing the final word of a meaningful editorial headline.
