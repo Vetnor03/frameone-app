@@ -440,3 +440,22 @@ test('Round 10 PDFs: longer headlines adapt before truncating',()=>{
     assert.deepEqual(auditEditorialComposition(longView),[])
   }
 })
+
+test('Round 10 PDF: randomized cells never show a clipped primary headline',()=>{
+  let checked=0
+  for(let seed=4000;seed<4350;seed++){
+    const layout=randomEditorialGrid(seed)
+    assert.deepEqual(auditEditorialGridQuality(layout.tiles),[],
+      'Randomizer accepted clipped headline at seed '+seed)
+    for(const tile of layout.tiles){
+      const c=composeEditorialModule(tile.module,tile.cols*200,tile.rows*120)
+      const lead=c.blocks.find(block=>block.id==='primary')
+      if(!lead)continue
+      assert.ok(lead.lines.every(line=>!line.endsWith('…')),
+        'Cut-off main headline in '+tile.module+' '+tile.cols+'×'+tile.rows+
+        ', seed '+seed)
+      checked++
+    }
+  }
+  assert.ok(checked>800)
+})
