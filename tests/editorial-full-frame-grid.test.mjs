@@ -339,3 +339,50 @@ test('Round 6 PDF: narrow columns cannot use tiny primary content as an anchor',
   assert.ok(auditEditorialGridQuality(tiles).some(issue=>
     issue.includes('Narrow module lacks legible visual anchor')))
 })
+
+test('Round 8 PDFs: horizontal ribbons never repeat the same supporting fact',()=>{
+  // PDF (5), page 10: Surf Waves appeared twice with different punctuation.
+  const surf=composeEditorialModule('surf',800,120)
+  assert.equal(surf.mode,'editorial-ribbon')
+  const support=surf.blocks.filter(b=>b.id==='detail'||b.id.startsWith('extra-'))
+  const waveRows=support.flatMap(b=>b.lines).filter(line=>line.startsWith('Waves'))
+  assert.equal(waveRows.length,1,
+    'The wave measurement should occur once, even when punctuation differs')
+  assert.ok(surf.blocks.some(b=>b.id==='extra-0'&&
+    b.lines.some(line=>line.includes('Swell period'))),
+    'The second column should advance to the next distinct forecast datum')
+  assert.deepEqual(auditEditorialComposition(surf),[])
+
+  for(const moduleName of EDITORIAL_MODULES.filter(m=>m!=='date')){
+    for(const [width,height] of [[800,120],[800,240],[400,240]]){
+      const c=composeEditorialModule(moduleName,width,height)
+      assert.deepEqual(auditEditorialComposition(c),[],
+        'Duplicate or layout issue in '+moduleName+' '+width+'x'+height)
+    }
+  }
+})
+
+test('Round 8 PDFs: duplicated user content is normalized before disclosure',()=>{
+  const sample={
+    primary:'Wave conditions',
+    detail:'Waves 0.8–1.2 m',
+    extras:[
+      'Waves · 0.8–1.2 m',
+      'WAVES: 0.8–1.2 m',
+      'Swell period · 10 s',
+      'Swell period: 10 s',
+      'Wind · NE 4 m/s',
+    ],
+  }
+  const ribbon=composeEditorialModule('surf',800,120,{sample})
+  const lines=ribbon.blocks.flatMap(b=>b.lines??[])
+  const allWaves=lines.filter(line=>line.toLowerCase().includes('waves 0.8'))
+  assert.equal(allWaves.length,1,allWaves.join(' | '))
+  assert.deepEqual(auditEditorialComposition(ribbon),[])
+  const richer=composeEditorialModule('surf',800,480,{sample})
+  assert.deepEqual(auditEditorialComposition(richer),[])
+  const extras=richer.blocks.filter(b=>b.id.startsWith('extra-'))
+    .flatMap(b=>b.lines)
+  assert.ok(!extras.some(line=>line.toLowerCase().includes('waves 0.8')))
+  assert.equal(extras.filter(line=>line.startsWith('Swell period')).length,1)
+})
