@@ -208,8 +208,15 @@ function contentComposition(module,p,options={}){
   const body=paddedRegion(p,showHeader)
   // A module earns a second information column only when there is real list or
   // forecast data to show. Full-screen is not a reason to invent decoration.
-  const richSpread=p.width>=700&&p.height>=390&&info.extras.length>=3
-  const withBotanical=module==='weather'&&budget.illustration&&body.w>=540&&body.h>=240
+  // Wider medium-height panels need to use their *width*, not just enlarge
+  // a centered headline. Long editorial headlines keep full-line space until
+  // the panel is tall enough to accommodate a second column.
+  const richSpread=p.width>=680&&p.height>=235&&info.extras.length>=3&&
+    (module!=='news'||p.height>=390)
+  // Weather earns its coastal illustration as soon as the wide panel can
+  // support art plus readable weather data; 2×2 Surf stays untouched.
+  const withBotanical=module==='weather'&&body.w>=620&&body.h>=160&&
+    (budget.illustration||p.width>=650)
   const artWidth=withBotanical?Math.floor(body.w*.34):0
   const rightX=withBotanical?body.x+artWidth+18:body.x
   const remainingBody=withBotanical?rect(rightX,body.y,body.w-artWidth-18,body.h):body
@@ -252,12 +259,27 @@ function contentComposition(module,p,options={}){
   }
   if(module==='surf')
     hero.push(graphicBlock('rating',Math.min(160,width-8),16,'score'))
-  if(body.h>105)
+  // Do not display the same timestamp twice when it already introduces the
+  // reminder. Keep the most meaningful line, rather than repeating metadata.
+  const repeatedDetail=hero.some(block=>block.lines?.join(' ')===info.detail)
+  if(body.h>105&&!repeatedDetail)
     hero.push(textBlock('detail',info.detail,width,clamp(width*.04,11,16),
       {role:'secondary',maxLines:2}))
   const gap=compact?6:9
   const blocks=stackCentered(hero,heroArea,{gap})
-  let extras=info.extras
+  // Shared semantic deduplication: avoid repeating a measurement already
+  // explained by the primary + subtitle, or re-listing the lead reminder.
+  const normalized=value=>String(value).toLocaleLowerCase().replace(/\s+/g,'')
+  const primaryKey=info.primary.toLocaleLowerCase().split(/\s+/)[0]
+  const extras=info.extras.filter(row=>{
+    const rowText=normalized(row)
+    const repeatsMeasurement=rowText.includes(normalized(info.primary))&&
+      rowText.includes(normalized(info.detail))
+    const repeatsLeadReminder=module==='reminders'&&
+      row.toLocaleLowerCase().includes(primaryKey)&&
+      rowText.includes(normalized(info.detail))
+    return !repeatsMeasurement&&!repeatsLeadReminder
+  })
   if(listArea){
     // An optional category heading anchors a true information list; no repeated
     // hero or ornamental image consumes the free half of the frame.
