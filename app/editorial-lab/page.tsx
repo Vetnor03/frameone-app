@@ -288,6 +288,28 @@ function FullFrameLab({theme,weatherScene}:{
       setExportBusy(false)
     }
   }
+  const downloadBatchManifest=()=>{
+    if(batch.length===0)return
+    const payload={
+      format:'RE:MIND-layout-review-v1',theme,weatherScene,
+      count:batch.length,
+      layouts:batch.map((design,index)=>({
+        page:index+1,seed:design.seed,presetId:design.presetId,
+        family:design.family,score:Math.round(scoreEditorialGrid(design.tiles)),
+        tiles:design.tiles.map(({id,x,y,cols,rows,module})=>
+          ({id,x,y,cols,rows,module})),
+      })),
+    }
+    const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],
+      {type:'application/json'}))
+    const link=document.createElement('a')
+    link.href=url
+    link.download='RE-MIND-layout-review-'+batch.length+'.json'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setTimeout(()=>URL.revokeObjectURL(url),15000)
+  }
   const pickBatch=(index:number)=>{
     const chosen=batch[index]
     if(!chosen)return
@@ -419,11 +441,18 @@ function FullFrameLab({theme,weatherScene}:{
           <p className="text-sm font-medium">{batch.length} independently randomized layouts · choose any to inspect at full size</p>
           <p className="text-xs text-[#62584E]">Export shows each complete 800×480 frame on its own landscape page with the original seed.</p>
         </div>
-        <button type="button" data-testid="frame-export-pdf"
-          disabled={exportBusy} onClick={()=>void downloadBatchPdf()}
-          className="rounded bg-[#29231F] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-          {exportBusy?'Preparing PDF...':'Download all '+batch.length+' as PDF'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" data-testid="frame-export-manifest"
+            disabled={exportBusy} onClick={downloadBatchManifest}
+            className="rounded border border-[#A99E93] bg-white px-4 py-2 text-sm font-semibold disabled:opacity-50">
+            Download layout data (JSON)
+          </button>
+          <button type="button" data-testid="frame-export-pdf"
+            disabled={exportBusy} onClick={()=>void downloadBatchPdf()}
+            className="rounded bg-[#29231F] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            {exportBusy?'Preparing PDF...':'Download all '+batch.length+' as PDF'}
+          </button>
+        </div>
       </div>
       {exportStatus&&<p className="mb-3 text-xs" role="status" data-testid="frame-pdf-status">{exportStatus}</p>}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
