@@ -177,7 +177,9 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly',
           fontSize={size} fill={ink} opacity={['secondary','list'].includes(block.role)?'.72':'1'}>
           {line}
         </text>)}
-        {ornament&&(block.id==='heading'||block.id==='month') &&
+        {ornament&&density==='open'&&
+          !['compact-summary','miniature','editorial-ribbon'].includes(layout.mode)&&
+          (block.id==='heading'||block.id==='month')&&
           layout.mode!=='surf-medium-reference' && <BookDivider
           x={block.x+Math.min(40,block.w*.15)}
           y={block.y+block.h+3}
