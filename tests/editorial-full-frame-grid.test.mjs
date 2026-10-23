@@ -696,3 +696,33 @@ test('Round 16: repeated modules are spread through dense QA layouts',()=>{
     }
   }
 })
+
+test('Round 18: sparse topology can earn quiet dividing contours without limiting customer choices',()=>{
+  const cases=[
+    {name:'balanced quarters remain open',mode:'open',tiles:[
+      {x:0,y:0,cols:2,rows:2},{x:2,y:0,cols:2,rows:2},
+      {x:0,y:2,cols:2,rows:2},{x:2,y:2,cols:2,rows:2}]},
+    {name:'four full-width horizontal ribbons remain open',mode:'open',tiles:[
+      {x:0,y:0,cols:4,rows:1},{x:0,y:1,cols:4,rows:1},
+      {x:0,y:2,cols:4,rows:1},{x:0,y:3,cols:4,rows:1}]},
+    {name:'asymmetrical three columns gain contour cues',mode:'contour',tiles:[
+      {x:0,y:0,cols:2,rows:4},{x:2,y:0,cols:1,rows:4},
+      {x:3,y:0,cols:1,rows:4}]},
+    {name:'ambiguous five-module broken mosaic gains contour cues',mode:'contour',tiles:[
+      {x:0,y:0,cols:2,rows:2},{x:2,y:0,cols:1,rows:2},
+      {x:3,y:0,cols:1,rows:4},{x:0,y:2,cols:1,rows:2},
+      {x:1,y:2,cols:2,rows:2}]},
+    {name:'simple halves stay minimal',mode:'open',tiles:[
+      {x:0,y:0,cols:2,rows:4},{x:2,y:0,cols:2,rows:4}]},
+  ]
+  for(const item of cases){
+    const grid=item.tiles.map((tile,index)=>({
+      ...tile,id:'cell-'+(index+1),
+      module:EDITORIAL_MODULES[index%EDITORIAL_MODULES.length]}))
+    assert.deepEqual(validateEditorialGrid(grid),[],item.name)
+    const before=JSON.stringify(grid)
+    assert.equal(editorialDensityRules(grid).mode,item.mode,item.name)
+    assert.equal(JSON.stringify(grid),before,
+      'The contour rule must never modify a user-created grid')
+  }
+})
