@@ -182,6 +182,24 @@ function tileContentProfile(tile){
   return profile
 }
 
+// Two wide ribbons stacked on the same grid line can look like one
+// continuous stream of unrelated facts, even when each ribbon is internally
+// coherent. Add one discreet section break at that particular boundary.
+// This returns the UPPER ribbon ID, so the line is embedded in its SVG and
+// appears in exported PDFs as well as the full-size preview.
+export function editorialGroupingCues(tiles){
+  const anchors=new Set()
+  for(const top of tiles){
+    if(top.rows!==1||top.cols<3)continue
+    if(tiles.some(bottom=>
+      bottom.id!==top.id&&bottom.rows===1&&bottom.cols>=3&&
+      bottom.x===top.x&&bottom.cols===top.cols&&
+      bottom.y===top.y+1))
+      anchors.add(top.id)
+  }
+  return [...anchors]
+}
+
 const adjacent=(a,b)=>{
   const horizontal=(a.x+a.cols===b.x||b.x+b.cols===a.x)&&
     Math.min(a.y+a.rows,b.y+b.rows)>Math.max(a.y,b.y)
@@ -246,6 +264,8 @@ export function scoreEditorialGrid(tiles){
   const ribbonCount=tiles.filter(t=>t.rows===1&&t.cols===4).length
   score-=ribbonCount*8
   if(ribbonCount>=2)score-=32
+  // Prefer naturally distinct sections when quality is otherwise equal.
+  score-=editorialGroupingCues(tiles).length*10
   const seen=new Set()
   for(const tile of tiles){
     const size=tileArea(tile)
