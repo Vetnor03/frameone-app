@@ -301,6 +301,13 @@ function FullFrameLab({theme,weatherScene}:{
       layouts:batch.map((design,index)=>({
         page:index+1,seed:design.seed,presetId:design.presetId,
         family:design.family,score:Math.round(scoreEditorialGrid(design.tiles)),
+        moduleCount:design.tiles.length,
+        // Diagnostic output, NEVER a reason to exclude a user-created grid.
+        geometryIssues:validateEditorialGrid(design.tiles),
+        renderingIssues:design.tiles.flatMap((tile:FrameTile)=>
+          auditEditorialComposition(composeEditorialModule(tile.module,
+            tile.cols*GRID_CELL_WIDTH,tile.rows*GRID_CELL_HEIGHT,
+            {weatherScene})).map(issue=>tile.id+': '+issue)),
         tiles:design.tiles.map(({id,x,y,cols,rows,module}:FrameTile)=>
           ({id,x,y,cols,rows,module})),
       })),
