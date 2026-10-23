@@ -200,6 +200,23 @@ export function editorialGroupingCues(tiles){
   return [...anchors]
 }
 
+// Aesthetic policy for user-authored grids. NEVER invalidates a valid
+// arrangement; it only determines how the editorial surface groups the cells.
+export function editorialDensityRules(tiles){
+  const dense=tiles.length>=7
+  const intricate=tiles.length>=12
+  const byId={}
+  for(const tile of tiles){
+    byId[tile.id]={
+      // Edges exist only between cells, not around the outer frame.
+      right:tile.x+tile.cols<GRID_COLS,
+      bottom:tile.y+tile.rows<GRID_ROWS,
+    }
+  }
+  return {mode:intricate?'fine-grid':dense?'chapter-grid':'open',
+    boundaries:byId}
+}
+
 const adjacent=(a,b)=>{
   const horizontal=(a.x+a.cols===b.x||b.x+b.cols===a.x)&&
     Math.min(a.y+a.rows,b.y+b.rows)>Math.max(a.y,b.y)
