@@ -220,7 +220,7 @@ test('full-width editorial ribbons always retain a human-readable identity',()=>
       assert.ok(c.blocks.some(block=>block.id==='heading'&&block.lines?.length))
       assert.ok(c.blocks.some(block=>block.id==='primary'&&block.lines?.length))
       assert.ok(c.blocks.some(block=>block.id==='detail'&&block.lines?.length))
-      assert.deepEqual(auditEditorialComposition(c),[],moduleName+ '+width)
+      assert.deepEqual(auditEditorialComposition(c),[],moduleName+' '+width)
     }
   }
 })
