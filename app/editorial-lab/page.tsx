@@ -99,9 +99,10 @@ function Calendar({x,y,w,h,ink}:{x:number;y:number;w:number;h:number;ink:string}
 }
 
 function EditorialCanvas({module,width,height,theme,weatherScene='partly',
-  ornament=true,sectionBreak=false}:{
+  ornament=true,sectionBreak=false,density='open',separateRight=false,separateBottom=false}:{
   module:Module;width:number;height:number;theme:FrameTheme;
-  weatherScene?:WeatherScene;ornament?:boolean;sectionBreak?:boolean
+  weatherScene?:WeatherScene;ornament?:boolean;sectionBreak?:boolean;
+  density?:'open'|'chapter-grid'|'fine-grid';separateRight?:boolean;separateBottom?:boolean
 }) {
   const layout=composeEditorialModule(module,width,height,{weatherScene})
   const weather=WEATHER_VIGNETTE_SCENES[weatherScene]??WEATHER_VIGNETTE_SCENES.partly
