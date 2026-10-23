@@ -6,7 +6,7 @@ import {EDITORIAL_GRID_PRESETS,GRID_WIDTH,GRID_HEIGHT,
   makeEditorialGrid,randomEditorialGrid,randomEditorialModules,validateEditorialGrid,
   auditEditorialGridQuality,scoreEditorialGrid,shuffleEditorialGridModules,
   editorialGridFamily,editorialOrnamentTiles,editorialGridSignature,
-  editorialGroupingCues
+  editorialGroupingCues,editorialDensityRules
 } from '../app/lib/editorialGridLab.mjs'
 
 test('all named 4x4 layouts completely cover the frame without collisions',()=>{
@@ -506,4 +506,42 @@ test('Round 11: only adjacent matching horizontal bands receive a separator',()=
     {id:'four',x:0,y:3,cols:4,rows:1,module:'weather'},
   ]
   assert.deepEqual(editorialGroupingCues(ribbons),['one','two','three'])
+})
+
+test('Customer-authored sixteen-cell grids remain valid with any module assignments',()=>{
+  const tiles=makeEditorialGrid('sixteen')
+  assert.equal(tiles.length,16)
+  assert.deepEqual(validateEditorialGrid(tiles),[])
+  const density=editorialDensityRules(tiles)
+  assert.equal(density.mode,'fine-grid')
+  assert.equal(Object.values(density.boundaries).filter(edge=>edge.right).length,12)
+  assert.equal(Object.values(density.boundaries).filter(edge=>edge.bottom).length,12)
+  for(let i=0;i<EDITORIAL_MODULES.length;i++){
+    const c=composeEditorialModule(EDITORIAL_MODULES[i],200,120)
+    if(EDITORIAL_MODULES[i]!=='date'){
+      assert.equal(c.mode,'miniature',EDITORIAL_MODULES[i])
+      for(const id of ['heading','primary','detail'])
+        assert.ok(c.blocks.some(b=>b.id===id&&b.lines.length),
+          'Miniature '+EDITORIAL_MODULES[i]+' lost '+id)
+    }
+    assert.deepEqual(auditEditorialComposition(c),[],
+      'Geometry failure in customer-sized '+EDITORIAL_MODULES[i])
+  }
+  const changed=tiles.map((tile,i)=>({...tile,
+    module:EDITORIAL_MODULES[(i*7)%EDITORIAL_MODULES.length]}))
+  assert.deepEqual(validateEditorialGrid(changed),[])
+  assert.deepEqual(validateEditorialGrid(shuffleEditorialGridModules(2938,changed)),[])
+})
+
+test('Visual boundaries change with density, never the validity of a layout',()=>{
+  for(const preset of EDITORIAL_GRID_PRESETS){
+    const tiles=makeEditorialGrid(preset.id)
+    const before=JSON.stringify(tiles)
+    const policy=editorialDensityRules(tiles)
+    assert.ok(['open','chapter-grid','fine-grid'].includes(policy.mode))
+    assert.deepEqual(validateEditorialGrid(tiles),[])
+    assert.equal(JSON.stringify(tiles),before,'Density policy modified the grid')
+  }
+  assert.equal(editorialDensityRules(makeEditorialGrid('quarters')).mode,'open')
+  assert.equal(editorialDensityRules(makeEditorialGrid('eight-columns')).mode,'chapter-grid')
 })
