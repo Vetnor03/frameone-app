@@ -7,7 +7,8 @@ import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition} from
 import {WEATHER_VIGNETTE_SCENES,weatherCoastalCurves} from '../lib/editorialWeatherVignette.mjs'
 import {EDITORIAL_GRID_PRESETS,GRID_CELL_WIDTH,GRID_CELL_HEIGHT,
   makeEditorialGrid,randomEditorialGrid,shuffleEditorialGridModules,
-  scoreEditorialGrid,auditEditorialGridQuality,validateEditorialGrid} from '../lib/editorialGridLab.mjs'
+  scoreEditorialGrid,editorialGridFamily,editorialOrnamentTiles,
+  auditEditorialGridQuality,validateEditorialGrid} from '../lib/editorialGridLab.mjs'
 
 type Module = typeof EDITORIAL_MODULES[number]
 type Span = 1|2|3|4
@@ -96,8 +97,9 @@ function Calendar({x,y,w,h,ink}:{x:number;y:number;w:number;h:number;ink:string}
   </g>
 }
 
-function EditorialCanvas({module,width,height,theme,weatherScene='partly'}:{
-  module:Module;width:number;height:number;theme:FrameTheme;weatherScene?:WeatherScene
+function EditorialCanvas({module,width,height,theme,weatherScene='partly',ornament=true}:{
+  module:Module;width:number;height:number;theme:FrameTheme;
+  weatherScene?:WeatherScene;ornament?:boolean
 }) {
   const layout=composeEditorialModule(module,width,height,{weatherScene})
   const weather=WEATHER_VIGNETTE_SCENES[weatherScene]??WEATHER_VIGNETTE_SCENES.partly
@@ -160,7 +162,8 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly'}:{
           fontSize={size} fill={ink} opacity={['secondary','list'].includes(block.role)?'.72':'1'}>
           {line}
         </text>)}
-        {block.role==='heading' && layout.mode!=='surf-medium-reference' && <BookDivider
+        {ornament&&(block.id==='heading'||block.id==='month') &&
+          layout.mode!=='surf-medium-reference' && <BookDivider
           x={block.x+Math.min(40,block.w*.15)}
           y={block.y+block.h+3}
           width={block.w-Math.min(80,block.w*.3)}
@@ -185,8 +188,10 @@ function FullFrameLab({theme,weatherScene}:{
   const [lastSeed,setLastSeed]=useState<number|null>(null)
   const [clean,setClean]=useState(false)
   const [copyStatus,setCopyStatus]=useState('')
+  const [batch,setBatch]=useState<ReturnType<typeof randomEditorialGrid>[]>([])
   const selected=tiles.find(tile=>tile.id===selectedId)??tiles[0]
   const qualityScore=useMemo(()=>Math.round(scoreEditorialGrid(tiles)),[tiles])
+  const emphasized=useMemo(()=>new Set(editorialOrnamentTiles(tiles)),[tiles])
   const validation=useMemo(()=>{
     const problems=validateEditorialGrid(tiles)
     if(lastSeed!==null)problems.push(...auditEditorialGridQuality(tiles))
@@ -206,14 +211,41 @@ function FullFrameLab({theme,weatherScene}:{
     setPresetId(id)
     setSelectedId('cell-1')
     setLastSeed(null)
+    setBatch([])
   }
   const randomize=()=>{
     const seed=Math.floor(Math.random()*0x100000000)
-    const result=randomEditorialGrid(seed,presetId)
+    const result=randomEditorialGrid(seed,presetId,tiles)
+    setBatch([])
     setTiles(result.tiles as FrameTile[])
     setPresetId(result.presetId)
     setSelectedId('cell-1')
     setLastSeed(result.seed)
+  }
+  const generateBatch=()=>{
+    const base=Math.floor(Math.random()*0x100000000)
+    const previews:ReturnType<typeof randomEditorialGrid>[]=[]
+    let previous:FrameTile[]=tiles,previousId=presetId
+    for(let i=0;i<10;i++){
+      const result=randomEditorialGrid((base+i*0x9E3779B9)>>>0,previousId,previous)
+      previews.push(result)
+      previous=result.tiles as FrameTile[]
+      previousId=result.presetId
+    }
+    setBatch(previews)
+    const first=previews[0]
+    setTiles(first.tiles as FrameTile[])
+    setPresetId(first.presetId)
+    setSelectedId('cell-1')
+    setLastSeed(first.seed)
+  }
+  const pickBatch=(index:number)=>{
+    const chosen=batch[index]
+    if(!chosen)return
+    setTiles(chosen.tiles as FrameTile[])
+    setPresetId(chosen.presetId)
+    setSelectedId('cell-1')
+    setLastSeed(chosen.seed)
   }
   const shuffleModules=()=>{
     const seed=Math.floor(Math.random()*0x100000000)
@@ -254,6 +286,11 @@ function FullFrameLab({theme,weatherScene}:{
         className="rounded bg-[#29231F] px-4 py-2 text-sm font-medium text-white">
         Randomize layout + modules
       </button>
+      <button type="button" data-testid="frame-batch"
+        onClick={generateBatch}
+        className="rounded border border-[#A99E93] bg-[#EFEAE3] px-4 py-2 text-sm font-medium">
+        Generate 10 previews
+      </button>
       <button type="button" data-testid="frame-shuffle"
         onClick={shuffleModules}
         className="rounded border border-[#B6A99B] bg-white px-4 py-2 text-sm">
@@ -273,7 +310,7 @@ function FullFrameLab({theme,weatherScene}:{
     <p className="text-sm text-[#62584E]">
       {preset?.description??'Automatically generated 4×4 mosaic'}. Click a cell to edit it, or change modules below.
       Randomizing creates a new grid and module selection.
-      {lastSeed!==null&&<span data-testid="frame-seed" className="ml-2 font-mono text-xs">Seed {lastSeed} · Layout score {qualityScore}</span>}
+      {lastSeed!==null&&<span data-testid="frame-seed" className="ml-2 font-mono text-xs">Seed {lastSeed} · {editorialGridFamily(tiles)} · Layout score {qualityScore}</span>}
     </p>
     <div className="rounded-xl bg-[#82715F] p-3 sm:p-5">
       <div className="flex justify-center bg-[#213543] p-3 sm:p-7">
@@ -294,7 +331,7 @@ function FullFrameLab({theme,weatherScene}:{
                   boxShadow:'inset 0 0 0 0.6px '+(theme==='light'?'#BFBAB1':'#696969'),
                 }}>
                 <EditorialCanvas module={tile.module} width={width} height={height}
-                  theme={theme} weatherScene={weatherScene}/>
+                  theme={theme} weatherScene={weatherScene} ornament={emphasized.has(tile.id)}/>
                 {!clean&&<button type="button"
                   aria-label={'Edit cell '+tile.id.replace('cell-','')+': '+moduleLabel(tile.module)}
                   aria-pressed={isSelected}
@@ -308,6 +345,34 @@ function FullFrameLab({theme,weatherScene}:{
         </div>
       </div>
     </div>
+    {batch.length>0&&<section className="rounded-lg border border-[#D0C5B8] bg-white p-3"
+      data-testid="frame-batch-results">
+      <p className="mb-3 text-sm font-medium">10 independently randomized layouts · choose any to inspect at full size</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {batch.map((design,index)=>{
+          const accents=new Set(editorialOrnamentTiles(design.tiles))
+          return <button type="button" key={index}
+            onClick={()=>pickBatch(index)}
+            aria-label={'Inspect random design '+(index+1)}
+            className={'rounded border p-2 text-left '+(lastSeed===design.seed?
+              'border-[#AD7D33] ring-2 ring-[#AD7D33]/40':'border-[#D0C5B8]')}>
+            <div className="mb-1 text-xs">#{index+1} · {design.tiles.length} modules</div>
+            <div className="relative w-full overflow-hidden border border-[#E5E0D8]"
+              style={{aspectRatio:'800 / 480',backgroundColor:paperFor(theme)}}>
+              {design.tiles.map(tile=>{
+                const w=tile.cols*GRID_CELL_WIDTH,h=tile.rows*GRID_CELL_HEIGHT
+                return <div key={tile.id} className="absolute"
+                  style={{left:(tile.x*25)+'%',top:(tile.y*25)+'%',
+                    width:(tile.cols*25)+'%',height:(tile.rows*25)+'%'}}>
+                  <EditorialCanvas module={tile.module} width={w} height={h}
+                    theme={theme} weatherScene={weatherScene} ornament={accents.has(tile.id)}/>
+                </div>
+              })}
+            </div>
+          </button>
+        })}
+      </div>
+    </section>}
     <div data-testid="frame-layout-audit" data-issues={validation.length}
       className={'rounded bg-white p-3 text-sm '+(validation.length?'text-red-700':'text-[#476242]')}>
       {tiles.length} modules · {validation.length===0?'16/16':'Check'} grid squares covered ·
