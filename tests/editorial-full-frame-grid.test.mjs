@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition} from
   '../app/lib/editorialComposition.mjs'
 import {EDITORIAL_GRID_PRESETS,GRID_WIDTH,GRID_HEIGHT,
-  makeEditorialGrid,randomEditorialGrid,randomEditorialModules,validateEditorialGrid,
+  makeEditorialGrid,randomEditorialGrid,randomEditorialReviewGrid,randomEditorialModules,validateEditorialGrid,
   auditEditorialGridQuality,scoreEditorialGrid,shuffleEditorialGridModules,
   editorialGridFamily,editorialOrnamentTiles,editorialGridSignature,
   editorialGroupingCues,editorialDensityRules
@@ -614,4 +614,38 @@ test('Round 12 PDFs: stacked bands have one separator, never a second Date rule'
     'Customer layout is always valid regardless of aesthetics')
   assert.equal(editorialOrnamentTiles(makeEditorialGrid('sixteen')).length,0,
     'Dense grids use the surrounding line grammar, not repeated ornaments')
+})
+
+test('100-layout QA reviews exercise every customer-legal density from 1–16',()=>{
+  const counts=new Map()
+  const signatures=new Set()
+  for(let index=0;index<100;index++){
+    const density=1+((index*7)%16)
+    const seed=(3642187536+index*0x9E3779B9)>>>0
+    const design=randomEditorialReviewGrid(seed,density)
+    assert.equal(design.seed,seed)
+    assert.equal(design.tiles.length,density)
+    assert.deepEqual(validateEditorialGrid(design.tiles),[])
+    assert.deepEqual(randomEditorialReviewGrid(seed,density),design)
+    assert.ok(design.tiles.every(t=>t.cols>=1&&t.rows>=1))
+    assert.ok(design.tiles.every(t=>EDITORIAL_MODULES.includes(t.module)))
+    counts.set(density,(counts.get(density)??0)+1)
+    signatures.add(design.tiles.map(t=>
+      [t.x,t.y,t.cols,t.rows,t.module].join(',')).join('|'))
+  }
+  assert.deepEqual([...counts.keys()].sort((a,b)=>a-b),
+    Array.from({length:16},(_,i)=>i+1))
+  assert.ok(Math.min(...counts.values())>=6,
+    'Each 1–16 module density must occur at least six times')
+  assert.ok(signatures.size>=80,'Layouts are insufficiently varied')
+})
+
+test('QA stress sampling never rejects an intentionally dense valid customer layout',()=>{
+  const a=randomEditorialReviewGrid(19477170,16)
+  assert.equal(a.tiles.length,16)
+  assert.ok(a.tiles.every(t=>t.cols===1&&t.rows===1))
+  assert.deepEqual(validateEditorialGrid(a.tiles),[])
+  assert.equal(editorialDensityRules(a.tiles).mode,'fine-grid')
+  assert.throws(()=>randomEditorialReviewGrid(12,0),RangeError)
+  assert.throws(()=>randomEditorialReviewGrid(12,17),RangeError)
 })
