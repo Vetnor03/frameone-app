@@ -158,10 +158,17 @@ function tileContentProfile(tile){
   const informativeLines=composition.blocks
     .filter(block=>block.type==='text'&&!['heading','section-heading'].includes(block.id))
     .reduce((sum,b)=>sum+(b.lines?.length??0),0)
+  // A score indicator is supporting data, not a large illustration. Counting
+  // the small Surf rating rectangles as artwork previously let a sparse
+  // half-frame hero pass the quality gate.
   const pictorial=important.some(block=>
-    ['figure','calendar','score'].includes(block.type))
+    (block.type==='calendar'||block.type==='figure')&&
+    block.w*block.h>=Math.max(1500,composition.width*composition.height*.015))
+  const focal=important.some(block=>
+    (block.role==='hero'||block.id==='primary')&&
+    block.type==='text'&&block.fontSize>=56&&block.w>=120)
   const coverage=extent/Math.max(1,composition.plan.safeHeight)
-  const profile={coverage,inkHeight,informativeLines,pictorial}
+  const profile={coverage,inkHeight,informativeLines,pictorial,focal}
   profileCache.set(key,profile)
   return profile
 }
@@ -198,6 +205,12 @@ export function auditEditorialGridQuality(tiles){
       issues.push('Large panel with insufficient disclosure: '+tile.id)
     if(tileArea(tile)>=6&&!p.pictorial&&p.coverage<.28)
       issues.push('Large panel has insufficient visual coverage: '+tile.id)
+    // A half-frame column is an expensive design decision: it must present a
+    // strong typographic focal point, genuine illustration, or genuinely
+    // expanded information. Mere presence of the Surf rating bar is not enough.
+    if(tileArea(tile)>=8&&tile.cols<=2&&!p.pictorial&&!p.focal&&
+      !(p.informativeLines>=7&&p.coverage>=.48))
+      issues.push('Oversized panel without sufficient visual focal point: '+tile.id)
     if(tile.rows===1&&tile.cols>=3&&p.informativeLines<2)
       issues.push('Unidentified or underfilled ribbon: '+tile.id)
   }
@@ -231,6 +244,8 @@ export function scoreEditorialGrid(tiles){
     const content=tileContentProfile(tile)
     if(size>=4&&!content.pictorial)
       score-=Math.max(0,.49-content.coverage)*32
+    if(size>=8&&tile.cols<=2&&!content.pictorial&&!content.focal)
+      score-=Math.max(0,.6-content.coverage)*60
     if(size>=6&&!content.pictorial&&content.informativeLines<5)
       score-=(5-content.informativeLines)*11
     if(tile.cols===1&&tile.rows>=3)
