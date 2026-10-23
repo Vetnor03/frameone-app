@@ -220,6 +220,16 @@ try {
       await page.screenshot({path:'artifacts/editorial/full-frame-random-'+iteration+'.png'})
   }
   assert.ok(randomized.size>=12,'Randomize repeated too many identical frames')
+  // Reviewer-facing contact sheet must show ten *real* mixed compositions
+  // and allow any selection to be inspected in the same full-size frame.
+  await page.getByTestId('frame-batch').click()
+  const sheet=page.getByTestId('frame-batch-results')
+  assert.equal(await sheet.getByRole('button').count(),10)
+  assert.ok(await sheet.locator('svg[data-editorial-probe]').count()>=20)
+  await assertFrameCoverage()
+  await page.screenshot({path:'artifacts/editorial/full-frame-ten-preview-sheet.png',fullPage:true})
+  await sheet.getByRole('button',{name:'Inspect random design 6'}).click()
+  await assertFrameCoverage()
   await page.getByTestId('frame-preset').selectOption('sixteen')
   await page.getByTestId('frame-shuffle').click()
   const palette=await frame.locator('[data-frame-tile]').evaluateAll(nodes=>
