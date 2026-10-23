@@ -286,6 +286,45 @@ function ribbonComposition(module,p,info){
 
 // Compact horizontal cells keep the value *and* its explanation together.
 // This prevents a numeric value in a 2×1 grid from becoming meaningless.
+// Tiny cells are a valid intentional user layout, not a geometry error.
+// They use the same disciplined miniature editorial hierarchy for EVERY
+// module: identity, unmistakable lead fact, then one line of context.
+// Larger text or extra lines give way to meaning rather than clipping.
+function miniatureComposition(module,p,info){
+  const body=rect(p.inset,p.inset,p.safeWidth,p.safeHeight)
+  const serif=module!=='soccer'
+  const lead=fitEditorialHeadline(info.primary,body.w,
+    ['news','reminders','groceries','assistant'].includes(module)?18:31,
+    {minSize:13,maxLines:2,serif})
+  const title=textBlock('heading',info.heading,body.w,12,
+    {serif:true,role:'heading',maxLines:1})
+  const primary=textBlock('primary',info.primary,body.w,lead.fontSize,
+    {serif,maxLines:lead.lines.length>1?2:1})
+  const detail=textBlock('detail',info.detail,body.w,11,
+    {role:'secondary',maxLines:1})
+  let items=[title,primary,detail]
+  // The rating conveys more than a second duplicate line on tiny Surf tiles.
+  if(module==='surf')
+    items=[title,primary,graphicBlock('rating',Math.min(128,body.w-8),
+      12,'score'),detail]
+  const gap=4
+  const heightOf=parts=>parts.reduce((n,b)=>n+b.h,0)+(parts.length-1)*gap
+  // Extremely long headlines should never push the identity or context off
+  // the panel. Compress type until the entire group stays in the safe area.
+  while(heightOf(items)>body.h&&primary.fontSize>13){
+    primary.fontSize-=1
+    const resized=textBlock('primary',info.primary,body.w,primary.fontSize,
+      {serif,maxLines:2})
+    items=items.map(b=>b.id==='primary'?resized:b)
+  }
+  if(heightOf(items)>body.h){
+    // The score is optional ornament, the module name and context are not.
+    items=items.filter(b=>b.id!=='rating')
+  }
+  return {body,blocks:stackCentered(items,body,{gap}),
+    centered:true,mode:'miniature'}
+}
+
 function compactHorizontalComposition(module,p,info){
   const body=rect(p.inset,p.inset,p.safeWidth,p.safeHeight)
   const longHeadline=estimatedTextWidth(info.primary,18,module!=='soccer')>body.w-6
@@ -330,6 +369,7 @@ function contentComposition(module,p,options={}){
        extras:base.extras.map(row=>row.startsWith('Wind ·')
          ? 'Wind · NW '+weatherSample.windMs+' m/s' : row)}
     :base
+  if(p.width<260&&p.height<152)return miniatureComposition(module,p,info)
   if(p.shape==='ribbon'&&p.width>=540)return ribbonComposition(module,p,info)
   if(p.height<=152&&p.width>=300&&p.width<540)
     return compactHorizontalComposition(module,p,info)
@@ -511,7 +551,7 @@ export function auditEditorialComposition(composition){
   // including its title. Other arrangements center the content separately
   // from a top-aligned title.
   const main=blocks.filter(b=>b.id!=='calendar'&&
-    (['compact-summary','editorial-ribbon'].includes(composition.mode)||
+    (['compact-summary','editorial-ribbon','miniature'].includes(composition.mode)||
       b.id!=='heading'))
   if(main.length&&composition.centered&&!blocks.some(b=>b.id==='calendar')){
     const low=Math.min(...main.map(b=>b.y)),high=Math.max(...main.map(b=>b.y+b.h))
