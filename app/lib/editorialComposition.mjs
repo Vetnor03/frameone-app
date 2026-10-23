@@ -214,6 +214,18 @@ function distinctSupportingLines(info){
   })
 }
 
+// Different source strings can be truncated to the same *visible* value.
+// De-duplicate after fitting as well as before it, keeping the first item.
+function distinctVisibleSupporting(blocks,existing=[]){
+  const seen=new Set(existing.map(b=>
+    normalizeInformation((b.lines??[]).join(' '))).filter(Boolean))
+  return blocks.filter(block=>{
+    const key=normalizeInformation((block.lines??[]).join(' '))
+    if(!key||key==='…'||seen.has(key))return false
+    seen.add(key)
+    return true
+  })
+}
 function ribbonComposition(module,p,info){
   const body=rect(p.inset,p.inset,p.safeWidth,p.safeHeight)
   const gap=14
@@ -238,8 +250,11 @@ function ribbonComposition(module,p,info){
     textBlock('detail',info.detail,right.w,13,{role:'secondary',maxLines:2}),
   ]
   const next=distinctSupportingLines(info)[0]
-  if(next)details.push(textBlock('extra-0',next,right.w,11,
-    {role:'list',maxLines:2}))
+  if(next){
+    const candidate=textBlock('extra-0',next,right.w,11,
+      {role:'list',maxLines:2})
+    details.push(...distinctVisibleSupporting([candidate],details))
+  }
   return {body,blocks:[
     ...stackCentered([heading],left),
     ...stackCentered(centerItems,center,{gap:7}),
@@ -365,9 +380,12 @@ function contentComposition(module,p,options={}){
     }[module]||'DETAILS'
     const side=[textBlock('section-heading',sectionTitle,listArea.w,13,
       {role:'heading'})]
-    for(let i=0;i<extras.length&&i<6;i++)
-      side.push(textBlock('extra-'+i,extras[i],listArea.w,clamp(listArea.w*.037,12,15),
-        {role:'list',maxLines:module==='news'?2:1}))
+    for(let i=0;i<extras.length&&i<6;i++){
+      const candidate=textBlock('extra-'+i,extras[i],listArea.w,
+        clamp(listArea.w*.037,12,15),
+        {role:'list',maxLines:module==='news'?2:1})
+      side.push(...distinctVisibleSupporting([candidate],blocks.concat(side)))
+    }
     // Automatically drop least important trailing rows if the actual block
     // heights cannot fit. Keep the whole surviving section vertically centered.
     const enough=()=>side.reduce((sum,b)=>sum+b.h,0)+(side.length-1)*12<=listArea.h-24
@@ -382,8 +400,11 @@ function contentComposition(module,p,options={}){
       const row=textBlock('extra-'+i,extras[i],width,clamp(width*.034,11,15),
         {role:'list',maxLines:1})
       if(free<row.h+gap)break
-      rows.push(row)
-      free-=row.h+gap
+      const distinct=distinctVisibleSupporting([row],hero.concat(rows))
+      if(distinct.length){
+        rows.push(row)
+        free-=row.h+gap
+      }
     }
     // All content in a single region is a *single centered group*.
     blocks.splice(0,blocks.length,...stackCentered([...hero,...rows],heroArea,{gap}))
