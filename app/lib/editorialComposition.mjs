@@ -333,16 +333,22 @@ function contentComposition(module,p,options={}){
   const blocks=stackCentered(hero,heroArea,{gap})
   // Shared semantic deduplication: avoid repeating a measurement already
   // explained by the primary + subtitle, or re-listing the lead reminder.
-  const normalized=value=>String(value).toLocaleLowerCase().replace(/\s+/g,'')
+  // Semantically identical measurements can arrive with different punctuation,
+  // e.g. "Waves 0.8–1.2 m" and "Waves · 0.8–1.2 m". Normalize symbols and
+  // spacing before deciding which supporting line is redundant.
+  const normalized=value=>String(value).normalize('NFKD').toLocaleLowerCase()
+    .replace(/[\\p{P}\\p{S}\\s]/gu,'')
   const primaryKey=info.primary.toLocaleLowerCase().split(/\s+/)[0]
   const extras=info.extras.filter(row=>{
     const rowText=normalized(row)
+    const repeatsSubtitle=rowText===normalized(info.detail)
+    const repeatsPrimary=rowText===normalized(info.primary)
     const repeatsMeasurement=rowText.includes(normalized(info.primary))&&
       rowText.includes(normalized(info.detail))
     const repeatsLeadReminder=module==='reminders'&&
       row.toLocaleLowerCase().includes(primaryKey)&&
       rowText.includes(normalized(info.detail))
-    return !repeatsMeasurement&&!repeatsLeadReminder
+    return !repeatsSubtitle&&!repeatsPrimary&&!repeatsMeasurement&&!repeatsLeadReminder
   })
   if(listArea){
     // An optional category heading anchors a true information list; no repeated
