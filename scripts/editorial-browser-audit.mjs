@@ -224,7 +224,7 @@ try {
   // and allow any selection to be inspected in the same full-size frame.
   await page.getByTestId('frame-batch').click()
   const sheet=page.getByTestId('frame-batch-results')
-  assert.equal(await sheet.getByRole('button').count(),10)
+  assert.equal(await sheet.getByRole('button',{name:/Inspect random design/}).count(),10)
   assert.ok(await sheet.locator('svg[data-editorial-probe]').count()>=20)
   await assertFrameCoverage()
   const downloadPromise=page.waitForEvent('download',{timeout:90000})
