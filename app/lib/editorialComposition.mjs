@@ -226,7 +226,7 @@ function contentComposition(module,p,options={}){
   const width=heroArea.w
   const compact=body.h<125
   const roomy=p.shape==='spread'
-  const heroSize=module==='news'?clamp(width*.055,14,roomy?25:18):
+  let heroSize=module==='news'?clamp(width*.055,14,roomy?25:18):
     ['reminders','assistant','groceries'].includes(module)?clamp(width*.065,14,roomy?26:19):
     clamp(Math.min(width*.19,body.h*.38),22,roomy?62:43)
   // A numerical or short verbal headline should retain its complete meaning.
