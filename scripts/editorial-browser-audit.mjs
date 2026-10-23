@@ -236,9 +236,9 @@ try {
   const pdf=readFileSync(pdfPath)
   const pdfString=pdf.toString('latin1')
   assert.ok(pdfString.startsWith('%PDF-1.4'),'PDF header missing')
-  assert.equal((pdfString.match(/\\/Type \\/Page \\/Parent /g)||[]).length,10,
+  assert.equal((pdfString.match(/\/Type \/Page \/Parent /g)||[]).length,10,
     'Expected one full-size frame per PDF page')
-  assert.equal((pdfString.match(/\\/Filter \\/DCTDecode /g)||[]).length,10,
+  assert.equal((pdfString.match(/\/Filter \/DCTDecode /g)||[]).length,10,
     'Expected one high-resolution embedded JPEG per PDF page')
   assert.ok(pdf.length>60000,'PDF unexpectedly small')
   console.log('RE:MIND contact sheet PDF:',pdf.length,'bytes, 10 pages')
