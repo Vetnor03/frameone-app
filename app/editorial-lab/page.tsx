@@ -186,6 +186,7 @@ function FullFrameLab({theme,weatherScene}:{
   const [tiles,setTiles]=useState<FrameTile[]>(()=>makeEditorialGrid('quarters') as FrameTile[])
   const [selectedId,setSelectedId]=useState('cell-1')
   const [lastSeed,setLastSeed]=useState<number|null>(null)
+  const [autoQuality,setAutoQuality]=useState(false)
   const [clean,setClean]=useState(false)
   const [copyStatus,setCopyStatus]=useState('')
   const [batch,setBatch]=useState<ReturnType<typeof randomEditorialGrid>[]>([])
@@ -194,7 +195,7 @@ function FullFrameLab({theme,weatherScene}:{
   const emphasized=useMemo(()=>new Set(editorialOrnamentTiles(tiles)),[tiles])
   const validation=useMemo(()=>{
     const problems=validateEditorialGrid(tiles)
-    if(lastSeed!==null)problems.push(...auditEditorialGridQuality(tiles))
+    if(autoQuality)problems.push(...auditEditorialGridQuality(tiles))
     for(const tile of tiles){
       const content=composeEditorialModule(tile.module,
         tile.cols*GRID_CELL_WIDTH,tile.rows*GRID_CELL_HEIGHT,{weatherScene})
@@ -202,7 +203,7 @@ function FullFrameLab({theme,weatherScene}:{
         problems.push(tile.id+' ('+tile.module+'): '+issue)
     }
     return problems
-  },[tiles,weatherScene,lastSeed])
+  },[tiles,weatherScene,autoQuality])
   const choosePreset=(id:string)=>{
     if(id==='random')return
     setTiles(previous=>(makeEditorialGrid(id) as FrameTile[]).map((tile:FrameTile,index:number)=>({
@@ -211,6 +212,7 @@ function FullFrameLab({theme,weatherScene}:{
     setPresetId(id)
     setSelectedId('cell-1')
     setLastSeed(null)
+    setAutoQuality(false)
     setBatch([])
   }
   const randomize=()=>{
@@ -221,6 +223,7 @@ function FullFrameLab({theme,weatherScene}:{
     setPresetId(result.presetId)
     setSelectedId('cell-1')
     setLastSeed(result.seed)
+    setAutoQuality(true)
   }
   const generateBatch=()=>{
     const base=Math.floor(Math.random()*0x100000000)
@@ -238,6 +241,7 @@ function FullFrameLab({theme,weatherScene}:{
     setPresetId(first.presetId)
     setSelectedId('cell-1')
     setLastSeed(first.seed)
+    setAutoQuality(true)
   }
   const pickBatch=(index:number)=>{
     const chosen=batch[index]
@@ -246,6 +250,7 @@ function FullFrameLab({theme,weatherScene}:{
     setPresetId(chosen.presetId)
     setSelectedId('cell-1')
     setLastSeed(chosen.seed)
+    setAutoQuality(true)
   }
   const shuffleModules=()=>{
     const seed=Math.floor(Math.random()*0x100000000)
@@ -258,6 +263,7 @@ function FullFrameLab({theme,weatherScene}:{
     setTiles(previous=>previous.map(tile=>tile.id===id?{...tile,module}:tile))
     setSelectedId(id)
     setLastSeed(null)
+    setAutoQuality(false)
   }
   const copySetup=async()=>{
     try{
