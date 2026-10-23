@@ -188,10 +188,22 @@ try {
   assert.equal(await assertFrameCoverage(),16)
   assert.equal(await frame.locator('[data-editorial-density="fine-grid"]').count(),16,
     'All 16 customer-selected modules must use fine-grid separators')
+  assert.equal(await frame.locator('[data-editorial-center-accent="true"]').count(),1,
+    'Dense frame should have one editorial junction, not a dot at each crossing')
   await page.screenshot({path:'artifacts/editorial/full-frame-sixteen-light.png'})
   await page.getByTestId('frame-module-cell-1').selectOption('weather')
   await page.getByTestId('frame-module-cell-2').selectOption('date')
   await page.getByTestId('frame-module-cell-3').selectOption('surf')
+  const surfSpacing=await frame.locator('[data-frame-tile="cell-3"] svg').evaluate(svg=>{
+    const rects=[...svg.querySelectorAll('g[aria-label*="Surf rating"] rect')]
+    const wave=svg.querySelector('text[data-audit-block="detail"]')
+    if(!rects.length||!wave)return {missing:true}
+    const bottom=Math.max(...rects.map(rect=>rect.getBBox().y+rect.getBBox().height))
+    return {missing:false,gap:wave.getBBox().y-bottom}
+  })
+  assert.equal(surfSpacing.missing,false)
+  assert.ok(surfSpacing.gap>=3,'1x1 Surf wave caption collides with rating bars: '+
+    JSON.stringify(surfSpacing))
   assert.equal(await frame.locator('[data-frame-tile="cell-1"]').getAttribute('data-module'),'weather')
   assert.equal(await frame.locator('[data-frame-tile="cell-2"]').getAttribute('data-module'),'date')
   assert.equal(await frame.locator('[data-frame-tile="cell-3"]').getAttribute('data-module'),'surf')
