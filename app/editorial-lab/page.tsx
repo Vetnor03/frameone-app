@@ -2,6 +2,7 @@
 
 import {useEffect,useMemo,useRef,useState} from 'react'
 import Link from 'next/link'
+import {exportEditorialBatchPdf} from '../lib/editorialPdfExport.mjs'
 import {editorialPlan} from '../lib/editorialFrameLayout.mjs'
 import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition} from '../lib/editorialComposition.mjs'
 import {WEATHER_VIGNETTE_SCENES,weatherCoastalCurves} from '../lib/editorialWeatherVignette.mjs'
@@ -190,6 +191,9 @@ function FullFrameLab({theme,weatherScene}:{
   const [clean,setClean]=useState(false)
   const [copyStatus,setCopyStatus]=useState('')
   const [batch,setBatch]=useState<ReturnType<typeof randomEditorialGrid>[]>([])
+  const batchRoot=useRef<HTMLElement|null>(null)
+  const [exportBusy,setExportBusy]=useState(false)
+  const [exportStatus,setExportStatus]=useState('')
   const selected=tiles.find(tile=>tile.id===selectedId)??tiles[0]
   const qualityScore=useMemo(()=>Math.round(scoreEditorialGrid(tiles)),[tiles])
   const emphasized=useMemo(()=>new Set(editorialOrnamentTiles(tiles)),[tiles])
@@ -242,6 +246,19 @@ function FullFrameLab({theme,weatherScene}:{
     setSelectedId('cell-1')
     setLastSeed(first.seed)
     setAutoQuality(true)
+  }
+  const downloadBatchPdf=async()=>{
+    if(exportBusy||!batchRoot.current||batch.length===0)return
+    setExportBusy(true)
+    setExportStatus('Preparing full-resolution pages...')
+    try{
+      const pages=await exportEditorialBatchPdf(batchRoot.current,batch,{theme,weatherScene})
+      setExportStatus('Downloaded '+pages+' full-size pages as a PDF')
+    }catch(error){
+      setExportStatus(error instanceof Error?error.message:'Could not export PDF')
+    }finally{
+      setExportBusy(false)
+    }
   }
   const pickBatch=(index:number)=>{
     const chosen=batch[index]
@@ -352,8 +369,19 @@ function FullFrameLab({theme,weatherScene}:{
       </div>
     </div>
     {batch.length>0&&<section className="rounded-lg border border-[#D0C5B8] bg-white p-3"
-      data-testid="frame-batch-results">
-      <p className="mb-3 text-sm font-medium">10 independently randomized layouts · choose any to inspect at full size</p>
+      data-testid="frame-batch-results" ref={batchRoot}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">10 independently randomized layouts · choose any to inspect at full size</p>
+          <p className="text-xs text-[#62584E]">Export shows each complete 800×480 frame on its own landscape page with the original seed.</p>
+        </div>
+        <button type="button" data-testid="frame-export-pdf"
+          disabled={exportBusy} onClick={()=>void downloadBatchPdf()}
+          className="rounded bg-[#29231F] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+          {exportBusy?'Preparing PDF...':'Download all 10 as PDF'}
+        </button>
+      </div>
+      {exportStatus&&<p className="mb-3 text-xs" role="status" data-testid="frame-pdf-status">{exportStatus}</p>}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {batch.map((design,index)=>{
           const accents=new Set(editorialOrnamentTiles(design.tiles))
@@ -364,10 +392,11 @@ function FullFrameLab({theme,weatherScene}:{
               'border-[#AD7D33] ring-2 ring-[#AD7D33]/40':'border-[#D0C5B8]')}>
             <div className="mb-1 text-xs">#{index+1} · {design.tiles.length} modules</div>
             <div className="relative w-full overflow-hidden border border-[#E5E0D8]"
+              data-batch-preview={index}
               style={{aspectRatio:'800 / 480',backgroundColor:paperFor(theme)}}>
               {design.tiles.map((tile:FrameTile)=>{
                 const w=tile.cols*GRID_CELL_WIDTH,h=tile.rows*GRID_CELL_HEIGHT
-                return <div key={tile.id} className="absolute"
+                return <div key={tile.id} className="absolute" data-export-tile={tile.id}
                   style={{left:(tile.x*25)+'%',top:(tile.y*25)+'%',
                     width:(tile.cols*25)+'%',height:(tile.rows*25)+'%'}}>
                   <EditorialCanvas module={tile.module} width={w} height={h}
