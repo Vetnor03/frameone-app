@@ -306,8 +306,10 @@ function miniatureComposition(module,p,info){
   // The rating conveys more than a second duplicate line on tiny Surf tiles.
   if(module==='surf')
     items=[title,primary,graphicBlock('rating',Math.min(128,body.w-8),
-      12,'score'),detail]
-  const gap=4
+      16,'score'),detail]
+  // A miniature Surf score is a 16px-high *graphic*, not a text line.
+  // Preserve at least 6px between graphic, caption and primary title.
+  const gap=module==='surf'?6:4
   const heightOf=parts=>parts.reduce((n,b)=>n+b.h,0)+(parts.length-1)*gap
   // Extremely long headlines should never push the identity or context off
   // the panel. Compress type until the entire group stays in the safe area.
