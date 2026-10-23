@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition} from
   '../app/lib/editorialComposition.mjs'
 import {EDITORIAL_GRID_PRESETS,GRID_WIDTH,GRID_HEIGHT,
-  makeEditorialGrid,randomEditorialGrid,randomEditorialModules,validateEditorialGrid
+  makeEditorialGrid,randomEditorialGrid,randomEditorialModules,validateEditorialGrid,
+  auditEditorialGridQuality,scoreEditorialGrid,shuffleEditorialGridModules
 } from '../app/lib/editorialGridLab.mjs'
 
 test('all named 4x4 layouts completely cover the frame without collisions',()=>{
@@ -75,4 +76,43 @@ test('a mixed frame uses its original Surf Medium reference in any 2x2 tile',()=
   assert.deepEqual(validateEditorialGrid(grid),[])
   const surf=composeEditorialModule(grid[0].module,grid[0].cols*200,grid[0].rows*120)
   assert.equal(surf.mode,'surf-medium-reference')
+})
+
+test('quality-gated randomization avoids unreadable tile shapes for 1000 seeds',()=>{
+  let minScore=Infinity
+  const groups=new Set()
+  for(let seed=0;seed<1000;seed++){
+    const result=randomEditorialGrid(seed,seed%2?'quarters':null)
+    assert.deepEqual(auditEditorialGridQuality(result.tiles),[],String(seed))
+    const score=scoreEditorialGrid(result.tiles)
+    assert.ok(Number.isFinite(score),'Non-finite quality score for '+seed)
+    minScore=Math.min(minScore,score)
+    groups.add(result.presetId)
+    for(const tile of result.tiles){
+      if(tile.module==='surf'){
+        const c=composeEditorialModule('surf',tile.cols*200,tile.rows*120)
+        const primary=c.blocks.find(b=>b.id==='primary')
+        // The approved 2×2 reference has a separately named verdict block.
+        if(primary)assert.ok(primary.lines.every(line=>!line.includes('…')),
+          'Surf verdict truncated for '+seed+' '+tile.cols+'×'+tile.rows)
+      }
+    }
+  }
+  assert.ok(groups.has('random'),'No generated mosaics')
+  assert.ok(groups.size>=4,'Too few distinct layout families')
+  assert.ok(minScore>50,'Weakest scored layout was '+minScore)
+})
+
+test('shuffle of an existing layout preserves every rectangle and improves module assignment',()=>{
+  const layout=makeEditorialGrid('hero-sidebar')
+  for(let seed=0;seed<50;seed++){
+    const shuffled=shuffleEditorialGridModules(seed,layout)
+    assert.deepEqual(validateEditorialGrid(shuffled),[])
+    assert.deepEqual(shuffled.map(({x,y,cols,rows})=>[x,y,cols,rows]),
+      layout.map(({x,y,cols,rows})=>[x,y,cols,rows]))
+    assert.deepEqual(auditEditorialGridQuality(shuffled),[])
+    assert.equal(new Set(shuffled.map(x=>x.module)).size,shuffled.length)
+  }
+  const tiny=makeEditorialGrid('sixteen')
+  assert.deepEqual(validateEditorialGrid(shuffleEditorialGridModules(10,tiny)),[])
 })
