@@ -36,6 +36,15 @@ export const EDITORIAL_GRID_PRESETS=Object.freeze([
   preset('eight-rows','Eight thin columns','Eight 1×2 panels',Array.from({length:2},(_,row)=>[
     [0,row*2,1,2],[1,row*2,1,2],[2,row*2,1,2],[3,row*2,1,2],
   ]).flat()),
+  preset('folio-five','Five-panel folio','Three substantial panels and two restrained ribbons',[
+    [0,0,2,2],[2,0,2,1],[2,1,2,1],[0,2,2,2],[2,2,2,2],
+  ]),
+  preset('asymmetric-five','Asymmetric five','A feature balanced by varied supporting cells',[
+    [0,0,1,2],[1,0,3,2],[0,2,2,2],[2,2,1,2],[3,2,1,2],
+  ]),
+  preset('mosaic-six','Six-panel mosaic','Two anchors with four compact supporting panels',[
+    [0,0,2,2],[2,0,2,1],[2,1,2,1],[0,2,2,1],[0,3,2,1],[2,2,2,2],
+  ]),
   preset('mixed-mosaic','Editorial mosaic','A different blend of seven cells',[
     [0,0,2,2],[2,0,2,1],[2,1,1,1],[3,1,1,1],
     [0,2,1,2],[1,2,2,2],[3,2,1,2],
@@ -112,6 +121,7 @@ const RANDOM_PRESETS=Object.freeze([
   'halves-vertical','halves-horizontal','quarters',
   'feature-left','feature-right','hero-sidebar','tall-strip',
   'top-banner','bottom-banner','three-columns',
+  'folio-five','asymmetric-five','mosaic-six',
 ])
 const MODULE_FAMILY=Object.freeze({
   date:'ambient',weather:'ambient',surf:'ambient',ski:'ambient',
@@ -188,9 +198,8 @@ export function scoreEditorialGrid(tiles){
 
 // Only split when both children retain adequate breathing room. Favor the
 // largest panels and balanced cuts, instead of repeatedly slicing tiny scraps.
-function randomRectangles(next){
+function randomRectangles(next,target=3+Math.floor(next()*5)){
   const rects=[[0,0,4,4]]
-  const target=3+Math.floor(next()*5)
   for(let attempt=0;attempt<24&&rects.length<target;attempt++){
     const splits=[]
     rects.forEach((rect,i)=>{
@@ -225,34 +234,78 @@ function withModules(rects,next){
   }))
 }
 
-/** @param {number} seed @param {string|null} [previousPresetId] */
-export function randomEditorialGrid(seed,previousPresetId=null){
+// Aesthetic variety is a constraint, not a tiny random perturbation of a
+// scoring function. First select a composition family, then score candidates
+// *within that family*. Otherwise four quarters win almost every time.
+export function editorialGridFamily(tiles){
+  const n=tiles.length
+  const sizes=tiles.map(tileArea)
+  const maximum=Math.max(...sizes)
+  if(n>=5)return 'mosaic'
+  if(n===4&&sizes.every(size=>size===4))return 'balanced'
+  if(n===4&&maximum<=6)return 'balanced'
+  if(n<=4&&maximum>=8)return 'hero'
+  return 'editorial'
+}
+function fitsFamily(tiles,family){
+  if(family==='mosaic')return tiles.length>=5&&tiles.length<=7
+  if(family==='balanced')return tiles.length===4&&Math.max(...tiles.map(tileArea))<=6
+  if(family==='hero')return tiles.length>=2&&tiles.length<=4&&
+    Math.max(...tiles.map(tileArea))>=8
+  return tiles.length>=3&&tiles.length<=4
+}
+const FAMILIES=['hero','balanced','mosaic','editorial']
+
+// Repeating the same ornament on every tile made previously good grid layouts
+// look like a spreadsheet of identical chapter headings. A limited number of
+// emphasis points gives the frame a calmer reading rhythm.
+export function editorialOrnamentTiles(tiles){
+  const priority={news:3,reminders:3,weather:2,date:2,groceries:1,stocks:1}
+  const max=tiles.length>=4?2:1
+  const candidates=tiles.filter(tile=>!(tile.module==='surf'&&tile.cols===2&&tile.rows===2))
+    .sort((a,b)=>{
+      const preference=tile=>Math.min(10,tileArea(tile))*3+(priority[tile.module]??0)
+      return preference(b)-preference(a)||a.y-b.y||a.x-b.x
+    })
+  return candidates.slice(0,max).map(tile=>tile.id)
+}
+
+/** @param {number} seed @param {string|null} [previousPresetId]
+ *  @param {Array|null} [previousTiles] */
+export function randomEditorialGrid(seed,previousPresetId=null,previousTiles=null){
   const next=randomSource(seed)
-  // Retain a genuinely mixed distribution of generated and named layouts.
-  // Within the selected family, choose the highest-quality candidate.
+  const previousFamily=Array.isArray(previousTiles)?editorialGridFamily(previousTiles):null
+  const familyChoices=FAMILIES.filter(name=>name!==previousFamily)
+  const family=familyChoices[Math.floor(next()*familyChoices.length)]
   const procedural=next()<0.55
   const options=EDITORIAL_GRID_PRESETS.filter(p=>
-    RANDOM_PRESETS.includes(p.id)&&p.id!==previousPresetId)
+    RANDOM_PRESETS.includes(p.id)&&p.id!==previousPresetId&&
+    fitsFamily(p.rects.map(([x,y,cols,rows])=>({x,y,cols,rows})),family))
   let winner=null,best=-Infinity
-  const attempts=procedural?24:32
+  const attempts=procedural?48:36
   for(let i=0;i<attempts;i++){
-    const preset=procedural?null:options[Math.floor(next()*options.length)]
-    const rects=procedural?randomRectangles(next):preset.rects
+    const requested=family==='mosaic'?5+Math.floor(next()*3):
+      family==='balanced'?4:family==='hero'?2+Math.floor(next()*3):
+      3+Math.floor(next()*2)
+    const preset=procedural||!options.length?null:options[Math.floor(next()*options.length)]
+    const rects=preset?([...preset.rects]):randomRectangles(next,requested)
     const tiles=withModules(rects,next)
-    const issues=auditEditorialGridQuality(tiles)
-    if(issues.length)continue
-    // A little deterministic variation avoids repeatedly selecting a single
-    // beautiful but predictable arrangement.
-    const score=scoreEditorialGrid(tiles)+next()*9
+    if(!fitsFamily(tiles,family))continue
+    if(previousTiles&&JSON.stringify(tiles.map(({x,y,cols,rows})=>[x,y,cols,rows]))===
+      JSON.stringify(previousTiles.map(({x,y,cols,rows})=>[x,y,cols,rows])))continue
+    if(auditEditorialGridQuality(tiles).length)continue
+    const score=scoreEditorialGrid(tiles)+next()*8
     if(score>best){
       best=score
-      winner={seed:seed>>>0,presetId:preset?.id??'random',tiles}
+      winner={seed:seed>>>0,presetId:preset?.id??'random',tiles,family}
     }
   }
-  // Every seed has a valid graceful fallback; never present a broken mosaic.
   if(!winner){
-    const rects=EDITORIAL_GRID_PRESETS.find(p=>p.id==='quarters').rects
-    winner={seed:seed>>>0,presetId:'quarters',tiles:withModules(rects,next)}
+    const id=family==='mosaic'?'folio-five':
+      family==='hero'?'feature-left':'quarters'
+    const fallback=EDITORIAL_GRID_PRESETS.find(p=>p.id===id)
+    winner={seed:seed>>>0,presetId:fallback.id,
+      tiles:withModules(fallback.rects,next),family}
   }
   return winner
 }
