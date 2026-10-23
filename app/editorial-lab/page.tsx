@@ -122,7 +122,7 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly',
     </g>}
     {density==='fine-grid'&&centralJunction&&
       <path data-editorial-center-accent="true"
-        d={`M ${width-3} ${height-7} L ${width+1} ${height-3} L ${width-3} ${height+1} L ${width-7} ${height-3} Z`}
+        d={`M ${width-4} ${height-7} L ${width-1} ${height-4} L ${width-4} ${height-1} L ${width-7} ${height-4} Z`}
         fill={paper} stroke={ink} strokeWidth=".85" opacity=".57"/>}
     {sectionBreak&&density==='open'&&<line data-editorial-section-break="true"
       x1={Math.round(width*.18)} x2={Math.round(width*.82)}
