@@ -538,7 +538,7 @@ test('Visual boundaries change with density, never the validity of a layout',()=
     const tiles=makeEditorialGrid(preset.id)
     const before=JSON.stringify(tiles)
     const policy=editorialDensityRules(tiles)
-    assert.ok(['open','chapter-grid','fine-grid'].includes(policy.mode))
+    assert.ok(['open','contour','chapter-grid','fine-grid'].includes(policy.mode))
     assert.deepEqual(validateEditorialGrid(tiles),[])
     assert.equal(JSON.stringify(tiles),before,'Density policy modified the grid')
   }
