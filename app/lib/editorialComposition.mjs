@@ -229,6 +229,29 @@ function ribbonComposition(module,p,info){
   ],centered:false,mode:'editorial-ribbon'}
 }
 
+// Compact horizontal cells keep the value *and* its explanation together.
+// This prevents a numeric value in a 2×1 grid from becoming meaningless.
+function compactHorizontalComposition(module,p,info){
+  const body=rect(p.inset,p.inset,p.safeWidth,p.safeHeight)
+  const longHeadline=estimatedTextWidth(info.primary,18,module!=='soccer')>body.w-6
+  const isMeasurement=!longHeadline&&
+    estimatedTextWidth(info.primary,30,module!=='soccer')<body.w-10
+  let fontSize=longHeadline?15:isMeasurement?32:21
+  while(fontSize>13&&estimatedTextWidth(info.primary,fontSize,module!=='soccer')>body.w-5)
+    fontSize--
+  const items=[
+    textBlock('heading',info.heading,body.w,12,{serif:true,role:'heading'}),
+    textBlock('primary',info.primary,body.w,fontSize,{
+      serif:module!=='soccer',maxLines:longHeadline?2:1,
+    }),
+    ...(module==='surf'?[graphicBlock('rating',Math.min(145,body.w-6),16,'score')]:[]),
+    textBlock('detail',info.detail,body.w,12,
+      {role:'secondary',maxLines:1}),
+  ]
+  return {body,blocks:stackCentered(items,body,{gap:5}),
+    centered:true,mode:'compact-summary'}
+}
+
 function contentComposition(module,p,options={}){
   const base=EDITORIAL_SAMPLES[module]
   // The Lab's manual weather scene changes sample condition text as well as art.
@@ -239,6 +262,8 @@ function contentComposition(module,p,options={}){
          ? 'Wind · NW '+weatherSample.windMs+' m/s' : row)}
     :base
   if(p.shape==='ribbon'&&p.width>=540)return ribbonComposition(module,p,info)
+  if(p.height<=152&&p.width>=300&&p.width<540)
+    return compactHorizontalComposition(module,p,info)
   const budget=editorialContentBudget(p,editorialModuleKind(module))
   // Even the smallest cells need an identity: a standalone number without
   // its source is ambiguous from across a room.
