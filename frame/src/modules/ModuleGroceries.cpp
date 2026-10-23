@@ -1,3 +1,4 @@
+#include "EditorialDesign.h"
 #include "FrameText.h"
 #include "ModuleGroceries.h"
 
@@ -1150,7 +1151,7 @@ static void renderAdaptiveGroceries(const Cell& c) {
   };
   const GroceriesAdaptivePolicy::Result layout = GroceriesAdaptivePolicy::compose(input);
   if (layout.family == GroceriesAdaptivePolicy::EMPTY) {
-    const int pad = max(9, min(14, c.w * 35 / 1000));
+    const int pad = EditorialDesign::planFor(c.w, c.h).inset;
     adaptiveHeading(c.x + pad, c.y + pad, max(1, c.w - pad * 2), 28,
                     g_cache.languageNo ? "Handleliste" : "Grocery List");
     adaptiveCenteredLine(c.x + pad, c.y + c.h / 2 + 8, max(1, c.w - pad * 2),
@@ -1160,8 +1161,8 @@ static void renderAdaptiveGroceries(const Cell& c) {
 
   auto& d = DisplayCore::get();
   const uint16_t ink = Theme::ink();
-  const int pad = max(9, min(14, c.w * 35 / 1000));
-  const int gap = 12;
+  const int pad = EditorialDesign::planFor(c.w, c.h).inset;
+  const int gap = EditorialDesign::planFor(c.w, c.h).gap;
   const int innerX = c.x + pad;
   const int innerW = max(1, c.w - pad * 2);
   int topH = max(1, c.h - pad * 2);

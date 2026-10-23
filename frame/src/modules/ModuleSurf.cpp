@@ -1,3 +1,4 @@
+#include "EditorialDesign.h"
 #include "FrameText.h"
 // ===============================
 // ModuleSurf.cpp (FULL FILE - copy/paste)
@@ -1898,8 +1899,9 @@ static void renderAdaptiveSurf(const Cell& c,
   const uint16_t ink = Theme::ink();
 
   // BEGIN ADAPTIVE SURF GEOMETRY
-  const int pad = clampi((c.w < c.h ? c.w : c.h) * 6 / 100, 8, 18);
-  const int gap = 10;
+  const EditorialDesign::Plan editorial = EditorialDesign::planFor(c.w, c.h);
+  const int pad = editorial.inset;
+  const int gap = editorial.gap;
   const int innerX = c.x + pad;
   const int innerY = c.y + pad;
   const int innerW = c.w - pad * 2;

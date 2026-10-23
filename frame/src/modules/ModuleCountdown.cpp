@@ -1,3 +1,4 @@
+#include "EditorialDesign.h"
 #include "FrameLayout.h"
 #include "FrameText.h"
 // ===============================
@@ -1756,7 +1757,7 @@ static void renderAdaptiveCountdown(const Cell& c) {
   if(!g_cache.ok){drawEmptyState(c,"No Countdown","Fetch failed");return;}const int heroIdx=findNearestIdx();if(heroIdx<0){drawEmptyState(c,"No Countdown","No events yet");return;}const CountdownItem& hero=g_cache.items[heroIdx];const CountdownItem* events[MAX_EVENTS];const int eventCount=collectAdaptiveUpcoming(heroIdx,events,MAX_EVENTS);const AdaptiveCountdownComposition comp=adaptiveCountdownComposition(c,hero,events,eventCount);
   char number[16],unit[16],date[32];formatDaysNumber(hero.daysLeft,number,sizeof(number));formatDaysUnit(hero.daysLeft,unit,sizeof(unit));adaptiveEffectiveDate(hero,date,sizeof(date));
   // BEGIN ADAPTIVE COUNTDOWN GEOMETRY
-  const int pad = max(8, min(18, min(c.w, c.h) * 7 / 100));
+  const int pad = EditorialDesign::planFor(c.w, c.h).inset;
   const int ix = c.x + pad;
   const int iy = c.y + pad;
   const int iw = max(1, c.w - pad * 2);

@@ -1,3 +1,4 @@
+#include "EditorialDesign.h"
 #include "ModuleAssistant.h"
 #include "AiFollowAdaptivePolicy.h"
 #include "DisplayCore.h"
@@ -73,7 +74,7 @@ void reset(){if(g_cache)*g_cache=AssistantCache{};}
 void render(const Cell& c) {
   const bool cacheAvailable=ensureCache();
   if(cacheAvailable&&!g_cache->loaded)fetch();
-  const int pad=c.w*35/1000<8?8:(c.w*35/1000>14?14:c.w*35/1000);const Rect header={c.x+pad,c.y+pad,c.w-pad*2,30};char fitted[80];
+  const int pad = EditorialDesign::planFor(c.w, c.h).inset;const Rect header={c.x+pad,c.y+pad,c.w-pad*2,30};char fitted[80];
   fit("AI FOLLOW",fitted,sizeof(fitted),header.w,&FreeSansBold12pt8b);drawInRect(header,fitted,&FreeSansBold12pt8b,15,ALIGN_CENTER);
   if(c.h>=135){const int headingWidth=min(header.w,widthOf(fitted,&FreeSansBold12pt8b));DisplayCore::get().fillRect(header.x+(header.w-headingWidth)/2,header.y+21,headingWidth,2,Theme::ink());}
   if(!cacheAvailable||!g_cache->ok){drawInRect({c.x+pad,c.y+c.h/2-12,c.w-pad*2,24},"Updates unavailable",&FreeSans9pt8b,13,ALIGN_CENTER);return;}

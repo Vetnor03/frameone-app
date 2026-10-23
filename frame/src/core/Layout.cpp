@@ -6,6 +6,7 @@
 #include "Config.h"
 #include "ModuleRenderer.h"
 #include "Theme.h"
+#include "EditorialOrnaments.h"
 #include "GeneratedLayouts.h"
 
 #include "ModuleDate.h"
@@ -30,7 +31,10 @@ static void span95(int start, int length, int& outA, int& outB) {
 
 static void drawHLine(int y, int x0, int x1) {
   auto& d = DisplayCore::get();
-  d.drawLine(x0, y, x1, y, Theme::ink());
+  // Experimental bookplate motif only across sufficiently wide sections.
+  // Small/narrow custom-grid dividers remain simple lines.
+  EditorialOrnaments::horizontal(d, x0, y, x1, Theme::ink(),
+                                 x1 - x0 >= VIEWPORT_W * 3 / 4);
 }
 
 static void drawVLine(int x, int y0, int y1) {

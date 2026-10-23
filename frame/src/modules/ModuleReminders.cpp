@@ -1,3 +1,5 @@
+#include "EditorialDesign.h"
+#include "EditorialTypography.h"
 #include "FrameText.h"
 #include "FrameLayout.h"
 // ===============================
@@ -2275,7 +2277,9 @@ static bool adaptivePrefixFits(const ReminderBucket* bucket, int count, int widt
   for (int i = 0; i < count; ++i) {
     const int itemIdx = bucket->itemIdx[i];
     if (itemIdx < 0 || itemIdx >= g_cache->count) return false;
-    if (!adaptiveTitleFits(g_cache->items[itemIdx], width)) return false;
+    const ReminderItem& item = g_cache->items[itemIdx];
+    const int itemWidth = item.time[0] ? width : width + 55;
+    if (!adaptiveTitleFits(item, itemWidth)) return false;
   }
   return true;
 }
@@ -2297,7 +2301,9 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
   const bool shallow = landscape && usable.height < 126;
   const bool split = !shallow && landscape && usable.width >= 464 && usable.height >= 164;
   out.family = shallow ? REM_SHALLOW_HORIZONTAL : split ? REM_SPLIT_SECTIONS : REM_VERTICAL_LIST;
-  out.showHeading = !shallow && usable.height >= 104;
+  const EditorialDesign::ContentBudget budget = EditorialDesign::budgetFor(
+    EditorialDesign::planFor(c.w, c.h), EditorialDesign::REMINDER_LIST);
+  out.showHeading = !shallow && usable.height >= 104 && budget.heading;
 
   const int totalCount = todayCount + tomorrowCount;
   const int headingH = out.showHeading ? 30 : 0;
@@ -2427,15 +2433,15 @@ static void drawAdaptiveItem(const ReminderItem& item, const ReminderRect& row, 
   if (row.w < 1 || row.h < 1) return;
   const int inset = 2, x = row.x + inset, y = row.y + inset;
   const int w = max(1, row.w - inset * 2), h = max(1, row.h - inset * 2);
-  const int timeW = min(density.timeW, w);
-  const int gap = 7;
+  const int timeW = item.time[0] ? min(density.timeW, max(0, w - 65)) : 0;
+  const int gap = timeW ? 7 : 0;
   const ReminderRect timeRect = {x, y, timeW, h};
   const ReminderRect titleRect = {
     x + timeW + gap, y,
     max(1, w - timeW - gap), h
   };
 
-  if (item.time[0]) drawAdaptiveLabel(timeRect, item.time, FONT_B9);
+  if (timeW && item.time[0]) drawAdaptiveLabel(timeRect, item.time, FONT_B9);
 
   const int lineStep = 21;
   const int maxLines = min(5, max(1, titleRect.h / lineStep));
@@ -2471,8 +2477,11 @@ static void drawAdaptiveSection(const ReminderBucket* bucket, int visible, int o
   const int headingH = heading ? 30 : 0;
   const int footerH = sectionFooter && overflow ? 24 : 0;
   if (heading) {
-    drawAdaptiveLabel({rect.x, rect.y, rect.w, headingH}, headingText, FONT_B12);
-    int16_t x1, y1; uint16_t tw, th; measureText(headingText, FONT_B12, x1, y1, tw, th);
+    const EditorialDesign::Plan editorial = EditorialDesign::planFor(rect.w, rect.h);
+    const GFXfont* headingFont = EditorialTypography::choose(
+      editorial, EditorialDesign::HEADING, FONT_B9, FONT_B9, FONT_B12, FONT_B12);
+    drawAdaptiveLabel({rect.x, rect.y, rect.w, headingH}, headingText, headingFont);
+    int16_t x1, y1; uint16_t tw, th; measureText(headingText, headingFont, x1, y1, tw, th);
     const int lineW = min(rect.w, (int)tw);
     DisplayCore::get().fillRect(rect.x + (rect.w - lineW) / 2, rect.y + 22,
                                 lineW, 2, Theme::ink());
@@ -2517,7 +2526,7 @@ static void buildAdaptiveFallbackHeading(const ReminderBucket& bucket, char* out
 }
 
 static void renderAdaptiveFallbackBucket(const Cell& c, const ReminderBucket& bucket) {
-  const int pad = max(9, min(18, (int)lroundf(min(c.w, c.h) * .08f)));
+  const int pad = EditorialDesign::planFor(c.w, c.h).inset;
   ReminderRect inner = {c.x + pad, c.y + pad, max(1, c.w - pad * 2), max(1, c.h - pad * 2)};
   const bool shallow = c.h <= 150 && c.w > c.h;
   const int capacity = shallow
@@ -2564,7 +2573,7 @@ static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets
   const ReminderBucket* today = todayIdx >= 0 ? &buckets[todayIdx] : nullptr;
   const ReminderBucket* tomorrow = tomorrowIdx >= 0 ? &buckets[tomorrowIdx] : nullptr;
   const AdaptiveReminderComposition comp = adaptiveComposition(c, today, tomorrow);
-  const int pad = max(9, min(18, (int)lroundf(min(c.w, c.h) * .08f)));
+  const int pad = EditorialDesign::planFor(c.w, c.h).inset;
   ReminderRect inner = {c.x + pad, c.y + pad, max(1, c.w - pad * 2), max(1, c.h - pad * 2)};
   if (comp.todayItems + comp.tomorrowItems <= 0) {
     drawAdaptiveOverflow(inner, todayCount + tomorrowCount);

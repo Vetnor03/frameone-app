@@ -78,6 +78,7 @@ test('adaptive renderer geometry remains explicit and Arduino C++11 compatible',
  const geometry=renderer.slice(renderer.indexOf(begin)+begin.length,renderer.indexOf(end))
  assert.ok(geometry.length>0,'marked renderer geometry block is present')
  const source=`
+#include "EditorialDesign.h"
 template <typename T> constexpr T min(T a,T b){return a<b?a:b;}
 template <typename T> constexpr T max(T a,T b){return a>b?a:b;}
 struct Cell{int x,y,w,h;};
@@ -99,7 +100,7 @@ int main(){
  const directory=await mkdtemp(join(tmpdir(),'countdown-geometry-'))
  const cpp=join(directory,'geometry.cpp'),binary=join(directory,'geometry')
  await writeFile(cpp,source)
- execFileSync('g++',['-std=gnu++11','-Wall','-Wextra','-Werror',cpp,'-o',binary])
+ execFileSync('g++',['-std=gnu++11','-Wall','-Wextra','-Werror','-I',new URL('../frame/src/display/',import.meta.url).pathname,cpp,'-o',binary])
  execFileSync(binary)
 })
 test('physical capability accepts exact Countdown instances but rejects lookalikes',()=>{

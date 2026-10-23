@@ -1,3 +1,5 @@
+#include "EditorialDesign.h"
+#include "EditorialFigures.h"
 #include "FrameText.h"
 #include "ModuleDate.h"
 #include "DisplayCore.h"
@@ -946,23 +948,12 @@ static void uppercaseAscii(const char* input, char* output, size_t outputSize) {
   output[i] = '\0';
 }
 
+// Editorial weekdays are type, not a solid inverted UI badge.
 static void drawAdaptiveWeekdayBadge(const char* weekday, int x, int y, int w, int h) {
   char uppercase[20];
   uppercaseAscii(weekday, uppercase, sizeof(uppercase));
   const GFXfont* fonts[] = {FONT_B12, FONT_9};
-  for (int i = 0; i < 2; ++i) {
-    int16_t x1, y1; uint16_t tw, th;
-    measureText(uppercase, fonts[i], x1, y1, tw, th);
-    if ((int)tw > w - 18 || (int)th > h - 8) continue;
-    const int badgeW = min(w - 4, max(62, (int)tw + 18));
-    const int badgeH = min(h - 4, (int)th + 10);
-    if (badgeW <= 0 || badgeH <= 0) return;
-    const int badgeX = x + (w - badgeW) / 2;
-    const int badgeY = y + (h - badgeH) / 2;
-    DisplayCore::get().fillRect(badgeX, badgeY, badgeW, badgeH, GxEPD_WHITE);
-    drawAdaptiveFact(uppercase, badgeX, badgeY, badgeW, badgeH, &fonts[i], 1, GxEPD_BLACK);
-    return;
-  }
+  drawAdaptiveFact(uppercase, x, y, w, h, fonts, 2, Theme::ink());
 }
 
 static void drawAdaptiveHolidays(int x, int y, int w, int h, int maxRows,
@@ -1009,8 +1000,8 @@ static int adaptiveUpcomingHolidayCount(int todayYear, int todayMonth0, int toda
 // share this grammar rather than owning independent render functions.
 static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
                              int year, int month0, int dayNum) {
-  const bool adaptiveMicro = c.w < 150 || c.h < 88 || (c.w < 230 && c.h < 140);
-  const int pad = min(18, max(adaptiveMicro ? 8 : 10, min(c.w, c.h) * 7 / 100));
+  const EditorialDesign::Plan editorial = EditorialDesign::planFor(c.w, c.h);
+  const int pad = editorial.inset;
   const int x = c.x + pad, y = c.y + pad;
   const int w = c.w - pad * 2, h = c.h - pad * 2;
   if (w <= 0 || h <= 0) return;
@@ -1055,6 +1046,14 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
     if (holidayRows) heroH -= min(82, 42 + holidayRows * 22) + 12;
   }
 
+  // Reserve a dedicated margin for decorative line art; it never overlays
+  // the date, calendar or the upcoming-holidays area.
+  const int holidayStartY = heroY + heroH + 12;
+  const bool botanical = EditorialDesign::budgetFor(editorial, EditorialDesign::DATE_FACTS).illustration && expanded &&
+                         heroW >= 230 && heroH >= 280;
+  const int botanicalReserve = botanical ? 78 : 0;
+  if (botanical) heroH -= botanicalReserve;
+
   if (micro) {
     const int weekdayH = 30;
     const int dayH = max(1, heroH - weekdayH);
@@ -1084,6 +1083,11 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
     drawAdaptiveWeekdayBadge(wday, heroX, top, heroW, weekdayH);
   }
 
+  if (botanical) {
+    EditorialFigures::botanicalSprig(DisplayCore::get(),
+      heroX + (heroW - 108)/2, heroY + heroH + 3, 108, 70, Theme::ink());
+  }
+
   if (calW >= 154 && calH >= 92) {
     if (expanded) {
       const int gap = 14, rowH = (calH - gap) / 2;
@@ -1102,7 +1106,7 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
   }
   if (holidayRows) {
     const int holidayH = min(82, 42 + holidayRows * 22);
-    drawAdaptiveHolidays(heroX, heroY + heroH + 12, heroW, holidayH, holidayRows,
+    drawAdaptiveHolidays(heroX, holidayStartY, heroW, holidayH, holidayRows,
                          year, month0, dayNum);
   }
 }

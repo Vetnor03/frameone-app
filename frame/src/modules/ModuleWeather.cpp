@@ -1,3 +1,5 @@
+#include "EditorialDesign.h"
+#include "EditorialFigures.h"
 #include "FrameText.h"
 // ModuleWeather.cpp
 #include "ModuleWeather.h"
@@ -2340,9 +2342,8 @@ static void renderAdaptiveWeather(const Cell& c,
   const bool showInsight = large && forecastRows == 0 && insight[0];
   const bool hasDetails = showRange || showWind || showProbability || showInsight;
 
-  int pad = (int)lroundf((float)(c.w < c.h ? c.w : c.h) * 0.08f);
-  if (pad < 9) pad = 9;
-  if (pad > 18) pad = 18;
+  const EditorialDesign::Plan editorial = EditorialDesign::planFor(c.w, c.h);
+  const int pad = editorial.inset;
   WeatherRect inner = {c.x + pad, c.y + pad, c.w - 2 * pad, c.h - 2 * pad};
   int headerH = showLocation ? (int)lroundf(inner.h * 0.12f) : 0;
   if (headerH && headerH < 25) headerH = 25;
@@ -2381,8 +2382,22 @@ static void renderAdaptiveWeather(const Cell& c,
   formatTemp(temperature, sizeof(temperature), data.tempC, cfg.units);
   const int iconSize = primary.h > 120 ? 56 : 38;
   if (landscape) {
-    ModuleIcons::drawWeatherIcon(primary.x + primary.w / 4, primary.y + primary.h / 2,
-                                 iconSize, data.wmo);
+    if (EditorialDesign::budgetFor(editorial, EditorialDesign::WEATHER_FACTS).illustration &&
+        primary.w >= 270 && primary.h >= 215) {
+      // The condition-specific icon is useful information; the nature-book
+      // engraving is optional decoration. Keep them in separate vertical bands.
+      const int artCenterX = primary.x + primary.w / 4;
+      const int artCenterY = primary.y + primary.h / 2;
+      ModuleIcons::drawWeatherIcon(artCenterX, artCenterY - 44, iconSize, data.wmo);
+      // A low coastal field-guide vignette in the same fine-line family as Date.
+      // The WMO condition and actual wind choose the sky; no extra API call.
+      EditorialFigures::weatherCoastalVignette(DisplayCore::get(),
+        artCenterX - 62, artCenterY + 5, 124, 82,
+        data.wmo, data.currentWindMs, ink);
+    } else {
+      ModuleIcons::drawWeatherIcon(primary.x + primary.w / 4, primary.y + primary.h / 2,
+                                   iconSize, data.wmo);
+    }
     drawCenteredBox(primary.x + primary.w / 2, primary.y, primary.w / 2,
                     showCondition ? primary.h * 2 / 3 : primary.h, temperature, FONT_B18, ink);
     if (showCondition) drawWrappedTextBox(primary.x + primary.w / 2,

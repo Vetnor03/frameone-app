@@ -19,7 +19,11 @@ test('adaptive Weather renders the representative WMO used by its condition',asy
   const adaptive=weather.match(/static void renderAdaptiveWeather[\s\S]*?\n}\n\n\/\/ -----------------------------------------------------------------------------\n\/\/ Public API/)?.[0]
   assert.ok(adaptive)
   const iconCalls=[...adaptive.matchAll(/ModuleIcons::drawWeatherIcon\([\s\S]*?\);/g)].map(match=>match[0])
-  assert.equal(iconCalls.length,2)
+  // The spacious landscape layout now has an icon + botanical branch,
+  // in addition to its compact fallback and portrait icon branch.
+  assert.equal(iconCalls.length,3)
+  assert.match(adaptive,/EditorialFigures::weatherCoastalVignette\(/)
+  assert.match(adaptive,/data\.wmo, data\.currentWindMs, ink\)/)
   for(const call of iconCalls){
     assert.match(call,/data\.wmo/)
     assert.doesNotMatch(call,/data\.currentWmo/)

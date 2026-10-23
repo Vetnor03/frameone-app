@@ -1,3 +1,4 @@
+#include "EditorialDesign.h"
 #include "FrameText.h"
 // ===============================
 // ModuleSoccer.cpp
@@ -1604,8 +1605,9 @@ static void renderAdaptive(const Cell& c, const SoccerInstanceConfig& cfg, const
                        data.hasStanding, data.tableCount, soccerDetailCount(data)};
   const Result comp = compose(input);
   const uint16_t ink = Theme::ink();
-  const int pad = c.w*35/1000 < 8 ? 8 : c.w*35/1000 > 14 ? 14 : c.w*35/1000;
-  const int gap = 10;
+  const EditorialDesign::Plan editorial = EditorialDesign::planFor(c.w, c.h);
+  const int pad = editorial.inset;
+  const int gap = editorial.gap;
   if (!data.valid || !comp.available) {
     drawCenteredBox(c.x+pad, c.y+pad, c.w-pad*2, c.h-pad*2, "Soccer", FONT_B12, ink);
     return;

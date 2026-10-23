@@ -1,3 +1,4 @@
+#include "EditorialDesign.h"
 #include "ModuleStocks.h"
 #include "DisplayCore.h"
 #include "Theme.h"
@@ -709,8 +710,9 @@ static void renderAdaptiveStocks(const Cell& c, const StockCache& data) {
     return;
   }
 
-  const int pad = max(9, min(14, c.w * 35 / 1000));
-  const int gap = 10;
+  const EditorialDesign::Plan editorial = EditorialDesign::planFor(c.w, c.h);
+  const int pad = editorial.inset;
+  const int gap = editorial.gap;
   StocksRect summary = stockRect(c.x + pad, c.y + pad, c.w - pad * 2, c.h - pad * 2);
   StocksRect chart = stockRect(0, 0, 1, 1);
   StocksRect selector = stockRect(0, 0, 1, 1);
