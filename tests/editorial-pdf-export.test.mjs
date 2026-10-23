@@ -39,3 +39,25 @@ test('PDF export rejects missing or invalid preview images',()=>{
   assert.throws(()=>buildEditorialReviewPdf([]),RangeError)
   assert.throws(()=>buildEditorialReviewPdf([{jpeg:new Uint8Array(0)}]),TypeError)
 })
+
+test('native PDF builder keeps all 100 pages distinct and reproducible',()=>{
+  const jpeg=Uint8Array.from([0xff,0xd8,0xff,0xd9])
+  const pages=Array.from({length:100},(_,index)=>({
+    jpeg,width:1600,height:960,seed:3000000000+index,
+    presetId:index%3===0?'random':'editorial-four',
+    modules:index%2?['surf','reminders']:['date','news','weather'],
+  }))
+  const data=buildEditorialReviewPdf(pages,{theme:'dark',weatherScene:'partly'})
+  const pdf=Buffer.from(data).toString('latin1')
+  assert.match(pdf,/\/Count 100 /)
+  assert.equal((pdf.match(/\/Type \/Page \/Parent /g)||[]).length,100)
+  assert.equal((pdf.match(/\/Subtype \/Image /g)||[]).length,100)
+  assert.ok(pdf.includes('Layout review 100 of 100'))
+  for(let i=0;i<100;i++)
+    assert.ok(pdf.includes('Seed '+(3000000000+i)),'Lost seed on page '+(i+1))
+  const xref=/xref\n0 (\d+)\n([\s\S]*?)trailer/.exec(pdf)
+  assert.ok(xref)
+  assert.equal(Number(xref[1]),303)
+  assert.equal(xref[2].trim().split('\n').length,303)
+  assert.throws(()=>buildEditorialReviewPdf([...pages,pages[0]]),RangeError)
+})
