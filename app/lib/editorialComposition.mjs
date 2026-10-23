@@ -251,16 +251,21 @@ function distinctVisibleSupporting(blocks,existing=[]){
 function ribbonComposition(module,p,info){
   const body=rect(p.inset,p.inset,p.safeWidth,p.safeHeight)
   const serif=module!=='soccer'
-  const lead=fitEditorialHeadline(info.primary,body.w,
-    Math.min(38,Math.max(24,body.w*.064)),{
-      minSize:16,maxLines:2,serif,
-    })
   const heading=textBlock('heading',info.heading,body.w,14,
     {serif:true,role:'heading'})
-  const primary=textBlock('primary',info.primary,body.w,lead.fontSize,
-    {serif,maxLines:lead.lines.length>1?2:1})
   const detail=textBlock('detail',info.detail,body.w,13,
     {role:'secondary',maxLines:1})
+  const preferred=Math.min(38,Math.max(24,body.w*.064))
+  const linesNeeded=estimatedTextWidth(info.primary,preferred,serif)>body.w-4?2:1
+  const reserved=heading.h+detail.h+(module==='surf'?16:0)+18
+  const allowedByHeight=Math.floor(
+    (body.h-reserved)/(linesNeeded*1.24))
+  const lead=fitEditorialHeadline(info.primary,body.w,
+    Math.max(16,Math.min(preferred,allowedByHeight)),{
+      minSize:16,maxLines:2,serif,
+    })
+  const primary=textBlock('primary',info.primary,body.w,lead.fontSize,
+    {serif,maxLines:lead.lines.length>1?2:1})
   const items=[heading,primary]
   if(module==='surf')
     items.push(graphicBlock('rating',Math.min(152,body.w-10),16,'score'))
