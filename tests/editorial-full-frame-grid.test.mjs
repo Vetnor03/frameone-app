@@ -4,7 +4,8 @@ import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition} from
   '../app/lib/editorialComposition.mjs'
 import {EDITORIAL_GRID_PRESETS,GRID_WIDTH,GRID_HEIGHT,
   makeEditorialGrid,randomEditorialGrid,randomEditorialModules,validateEditorialGrid,
-  auditEditorialGridQuality,scoreEditorialGrid,shuffleEditorialGridModules
+  auditEditorialGridQuality,scoreEditorialGrid,shuffleEditorialGridModules,
+  editorialGridFamily,editorialOrnamentTiles
 } from '../app/lib/editorialGridLab.mjs'
 
 test('all named 4x4 layouts completely cover the frame without collisions',()=>{
@@ -115,4 +116,56 @@ test('shuffle of an existing layout preserves every rectangle and improves modul
   }
   const tiny=makeEditorialGrid('sixteen')
   assert.deepEqual(validateEditorialGrid(shuffleEditorialGridModules(10,tiny)),[])
+})
+
+test('editorial randomizer varies composition families, not only module labels',()=>{
+  const families=new Set(),presets=new Set(),counts=new Set()
+  let previous=null,previousId=null
+  let procedural=0,curated=0
+  for(let seed=2000;seed<2500;seed++){
+    const result=randomEditorialGrid(seed,previousId,previous)
+    assert.deepEqual(auditEditorialGridQuality(result.tiles),[],String(seed))
+    const family=editorialGridFamily(result.tiles)
+    assert.notEqual(family,previous&&editorialGridFamily(previous),
+      'Identical consecutive composition family: '+seed)
+    assert.equal(result.family,family)
+    families.add(family)
+    presets.add(result.presetId)
+    counts.add(result.tiles.length)
+    if(result.presetId==='random')procedural++
+    else curated++
+    previous=result.tiles;previousId=result.presetId
+  }
+  assert.deepEqual([...families].sort(),['balanced','editorial','hero','mosaic'])
+  assert.ok(presets.size>=6,'Too few curated/generative layout variants')
+  assert.ok(counts.size>=4,'Too narrow a range of content densities')
+  assert.ok(procedural>100&&curated>75,'One randomization mode is underrepresented')
+})
+
+test('emphasis is limited to one or two well-spaced chapter ornaments',()=>{
+  for(const preset of EDITORIAL_GRID_PRESETS){
+    const tiles=makeEditorialGrid(preset.id)
+    const emphasized=editorialOrnamentTiles(tiles)
+    assert.ok(emphasized.length<= (tiles.length>=4?2:1))
+    assert.equal(new Set(emphasized).size,emphasized.length)
+    assert.ok(emphasized.every(id=>tiles.some(tile=>tile.id===id)))
+  }
+})
+
+test('medium-height wide panels add structure and do not repeat content',()=>{
+  const weather=composeEditorialModule('weather',800,240)
+  assert.ok(weather.blocks.some(block=>block.id==='weather-coast'))
+  const match=composeEditorialModule('soccer',800,240)
+  assert.equal(match.mode,'information-spread')
+  assert.ok(match.blocks.some(block=>block.id==='section-heading'))
+  const reminders=composeEditorialModule('reminders',800,240)
+  assert.ok(reminders.blocks.some(block=>block.id==='reminder-time'))
+  assert.ok(!reminders.blocks.some(block=>block.id==='detail'),
+    'The lead reminder time should appear only once')
+  assert.ok(!reminders.blocks.some(block=>block.lines?.some(line=>
+    line.includes('Friday · 12:30 · Kontrolltime'))))
+  const ski=composeEditorialModule('ski',400,240)
+  assert.ok(!ski.blocks.some(block=>block.lines?.some(line=>line==='Fresh snow · 15 cm')))
+  for(const c of [weather,match,reminders,ski])
+    assert.deepEqual(auditEditorialComposition(c),[],c.module)
 })
