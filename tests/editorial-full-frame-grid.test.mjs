@@ -5,7 +5,7 @@ import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition} from
 import {EDITORIAL_GRID_PRESETS,GRID_WIDTH,GRID_HEIGHT,
   makeEditorialGrid,randomEditorialGrid,randomEditorialModules,validateEditorialGrid,
   auditEditorialGridQuality,scoreEditorialGrid,shuffleEditorialGridModules,
-  editorialGridFamily,editorialOrnamentTiles
+  editorialGridFamily,editorialOrnamentTiles,editorialGridSignature
 } from '../app/lib/editorialGridLab.mjs'
 
 test('all named 4x4 layouts completely cover the frame without collisions',()=>{
@@ -293,4 +293,49 @@ test('Round 5 PDF: an information value appears only once despite punctuation',(
     }
     assert.deepEqual(auditEditorialComposition(composition),[],moduleName)
   }
+})
+
+test('Round 6 PDF: ten-preview batches diversify geometry without relaxing quality',()=>{
+  const variedCounts=[]
+  for(const base of [1587897083,4242332852,2601801325,961269798,2989078282]){
+    const recent=[]
+    let previous=makeEditorialGrid('quarters'),previousId='quarters'
+    const signatures=[]
+    const families=[]
+    for(let i=0;i<10;i++){
+      const result=randomEditorialGrid(
+        (base+i*0x9E3779B9)>>>0,previousId,previous,recent)
+      assert.deepEqual(auditEditorialGridQuality(result.tiles),[],
+        'A quality gate failed after novelty-aware selection, seed '+result.seed)
+      assert.ok(scoreEditorialGrid(result.tiles)>48,'Low-quality layout in review batch')
+      signatures.push(editorialGridSignature(result.tiles))
+      families.push(editorialGridFamily(result.tiles))
+      recent.push(result.tiles)
+      previous=result.tiles
+      previousId=result.presetId
+    }
+    const distinctShapes=new Set(signatures).size
+    variedCounts.push(distinctShapes)
+    assert.ok(distinctShapes>=5,'Contact sheet repeats too many shapes: '+base)
+    assert.ok(new Set(families).size>=3,'Not enough compositional families: '+base)
+    const counts=new Map()
+    for(const signature of signatures)
+      counts.set(signature,(counts.get(signature)??0)+1)
+    assert.ok(Math.max(...counts.values())<=4,
+      'One geometry dominates the ten-preview review batch: '+base)
+  }
+  assert.ok(variedCounts.some(n=>n>=7),'No sufficiently varied contact sheet')
+})
+
+test('Round 6 PDF: narrow columns cannot use tiny primary content as an anchor',()=>{
+  const groceries={id:'cell-1',x:0,y:0,cols:1,rows:2,module:'groceries'}
+  const others=[
+    {id:'cell-2',x:1,y:0,cols:3,rows:2,module:'news'},
+    {id:'cell-3',x:0,y:2,cols:2,rows:2,module:'stocks'},
+    {id:'cell-4',x:2,y:2,cols:2,rows:2,module:'weather'},
+  ]
+  const tiles=[groceries,...others]
+  assert.deepEqual(validateEditorialGrid(tiles),[])
+  assert.ok(auditEditorialGridQuality(tiles).some(issue=>
+    issue.includes('Narrow module lacks legible visual anchor')))
 })
