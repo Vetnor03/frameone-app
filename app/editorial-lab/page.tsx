@@ -252,20 +252,22 @@ function FullFrameLab({theme,weatherScene}:{
     setLastSeed(result.seed)
     setAutoQuality(true)
   }
-  const generateBatch=()=>{
+  const generateBatch=(count:10|100)=>{
     const base=Math.floor(Math.random()*0x100000000)
     const previews:ReturnType<typeof randomEditorialGrid>[]=[]
     let previous:FrameTile[]=tiles,previousId=presetId
     const history:FrameTile[][]=[]
-    for(let i=0;i<10;i++){
+    for(let i=0;i<count;i++){
       const result=randomEditorialGrid(
         (base+i*0x9E3779B9)>>>0,previousId,previous,history)
       previews.push(result)
       previous=result.tiles as FrameTile[]
       previousId=result.presetId
       history.push(previous)
+      if(history.length>16)history.shift()
     }
     setBatch(previews)
+    setExportStatus('')
     const first=previews[0]
     setTiles(first.tiles as FrameTile[])
     setPresetId(first.presetId)
@@ -339,9 +341,14 @@ function FullFrameLab({theme,weatherScene}:{
         Randomize layout + modules
       </button>
       <button type="button" data-testid="frame-batch"
-        onClick={generateBatch}
+        onClick={()=>generateBatch(100)}
+        className="rounded bg-[#29231F] px-4 py-2 text-sm font-medium text-white">
+        Generate 100 layouts
+      </button>
+      <button type="button" data-testid="frame-batch-small"
+        onClick={()=>generateBatch(10)}
         className="rounded border border-[#A99E93] bg-[#EFEAE3] px-4 py-2 text-sm font-medium">
-        Generate 10 previews
+        Quick review · 10
       </button>
       <button type="button" data-testid="frame-shuffle"
         onClick={shuffleModules}
@@ -409,13 +416,13 @@ function FullFrameLab({theme,weatherScene}:{
       data-testid="frame-batch-results" ref={batchRoot}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-medium">10 independently randomized layouts · choose any to inspect at full size</p>
+          <p className="text-sm font-medium">{batch.length} independently randomized layouts · choose any to inspect at full size</p>
           <p className="text-xs text-[#62584E]">Export shows each complete 800×480 frame on its own landscape page with the original seed.</p>
         </div>
         <button type="button" data-testid="frame-export-pdf"
           disabled={exportBusy} onClick={()=>void downloadBatchPdf()}
           className="rounded bg-[#29231F] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-          {exportBusy?'Preparing PDF...':'Download all 10 as PDF'}
+          {exportBusy?'Preparing PDF...':'Download all '+batch.length+' as PDF'}
         </button>
       </div>
       {exportStatus&&<p className="mb-3 text-xs" role="status" data-testid="frame-pdf-status">{exportStatus}</p>}
