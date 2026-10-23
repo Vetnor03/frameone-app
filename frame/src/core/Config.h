@@ -37,6 +37,12 @@ extern const char* BASE_URL;
 #define TEMP_REFRESH_AUDIT_ENABLED 0
 #endif
 
+// Opt-in physical typography experiment. Off in every normal firmware
+// profile; the diagnostic never connects Wi-Fi or writes persistent settings.
+#ifndef TYPOGRAPHY_AUDIT_ENABLED
+#define TYPOGRAPHY_AUDIT_ENABLED 0
+#endif
+
 // =========================
 // ePaper pins (EDIT THESE to your wiring)
 // =========================
