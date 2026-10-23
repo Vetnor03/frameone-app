@@ -21,6 +21,10 @@
 #include "TempRefreshAudit.h" // TEMP_REFRESH_AUDIT temporary instrumentation
 #endif
 
+#if TYPOGRAPHY_AUDIT_ENABLED
+#include "TypographyAudit.h"
+#endif
+
 // Modules
 #include "ModuleDate.h"
 #include "ModuleWeather.h"
@@ -1418,6 +1422,12 @@ void setup() {
   pinMode(HardwareProfile::kEpdPower, OUTPUT);
   digitalWrite(HardwareProfile::kEpdPower, LOW);
 #endif
+#if TYPOGRAPHY_AUDIT_ENABLED
+  // Isolated factory/QA path: no pairing, networking, scheduler, NVS or OTA.
+  // The panel is powered only for explicit USB calibration page refreshes.
+  TypographyAudit::begin();
+  return;
+#endif
   Serial.begin(115200);
   delay(200);
 #if defined(FRAME_IS_ALFRED_V1_2)
@@ -1858,4 +1868,8 @@ run_normal_sync:
 
 }
 
-void loop() {}
+void loop() {
+#if TYPOGRAPHY_AUDIT_ENABLED
+  TypographyAudit::poll();
+#endif
+}
