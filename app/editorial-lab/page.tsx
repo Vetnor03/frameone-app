@@ -365,7 +365,7 @@ function FullFrameLab({theme,weatherScene}:{
             <div className="mb-1 text-xs">#{index+1} · {design.tiles.length} modules</div>
             <div className="relative w-full overflow-hidden border border-[#E5E0D8]"
               style={{aspectRatio:'800 / 480',backgroundColor:paperFor(theme)}}>
-              {design.tiles.map(tile=>{
+              {design.tiles.map((tile:FrameTile)=>{
                 const w=tile.cols*GRID_CELL_WIDTH,h=tile.rows*GRID_CELL_HEIGHT
                 return <div key={tile.id} className="absolute"
                   style={{left:(tile.x*25)+'%',top:(tile.y*25)+'%',
