@@ -113,7 +113,15 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly',
     data-editorial-probe="true" data-module={module} data-width={width} data-height={height}
     className="block h-auto w-full" style={{backgroundColor:paper}}>
     <rect width={width} height={height} fill={paper}/>
-    {sectionBreak&&<line data-editorial-section-break="true"
+    {density!=='open'&&<g data-editorial-density={density} stroke={ink}
+      fill="none" strokeWidth={density==='fine-grid'?0.9:0.7}
+      opacity={density==='fine-grid'?.44:.30}>
+      {separateRight&&<line x1={width-3} y1={10} x2={width-3} y2={height-10}/>}
+      {separateBottom&&<line x1={10} y1={height-3} x2={width-10} y2={height-3}/>}
+      {density==='fine-grid'&&separateRight&&separateBottom&&
+        <circle cx={width-3} cy={height-3} r="1.8" fill={ink}/>}
+    </g>}
+    {sectionBreak&&density==='open'&&<line data-editorial-section-break="true"
       x1={Math.round(width*.18)} x2={Math.round(width*.82)}
       y1={height-2} y2={height-2} stroke={ink}
       strokeWidth=".8" opacity=".24"/>}
