@@ -96,7 +96,7 @@ function stackCentered(items,region,{gap=9}={}){
   })
 }
 const paddedRegion=(p,header=false)=>{
-  const top=p.inset+(header?36:0)
+  const top=p.inset+(header?(p.height<155?26:36):0)
   return rect(p.inset,top,p.safeWidth,p.height-top-p.inset)
 }
 
@@ -201,7 +201,10 @@ function contentComposition(module,p,options={}){
          ? 'Wind · NW '+weatherSample.windMs+' m/s' : row)}
     :base
   const budget=editorialContentBudget(p,editorialModuleKind(module))
-  const showHeader=Boolean(budget.heading&&p.height>=190)
+  // Even the smallest cells need an identity: a standalone number without
+  // its source is ambiguous from across a room.
+  const compactIdentity=p.height>=110&&p.height<155&&p.width<=400
+  const showHeader=Boolean(info.heading&&(budget.heading&&p.height>=190||compactIdentity))
   const body=paddedRegion(p,showHeader)
   // A module earns a second information column only when there is real list or
   // forecast data to show. Full-screen is not a reason to invent decoration.
@@ -226,6 +229,17 @@ function contentComposition(module,p,options={}){
   const heroSize=module==='news'?clamp(width*.055,14,roomy?25:18):
     ['reminders','assistant','groceries'].includes(module)?clamp(width*.065,14,roomy?26:19):
     clamp(Math.min(width*.19,body.h*.38),22,roomy?62:43)
+  // A numerical or short verbal headline should retain its complete meaning.
+  // Reduce its scale within a global lower bound before ever ellipsizing it.
+  // News/reminder headlines already have separate multi-line wrapping rules.
+  if(!['reminders','news'].includes(module)){
+    const serif=module!=='soccer'
+    const measured=estimatedTextWidth(info.primary,heroSize,serif)
+    if(measured>width-6){
+      const floor=['assistant','groceries'].includes(module)?14:19
+      heroSize=Math.max(floor,Math.min(heroSize,Math.floor(heroSize*(width-6)/measured)))
+    }
+  }
   const hero=[]
   if(module==='reminders'){
     hero.push(textBlock('reminder-time','Friday · 12:30',width,clamp(width*.065,11,15),
@@ -283,8 +297,8 @@ function contentComposition(module,p,options={}){
     blocks.push({...artwork,x:body.x+(artWidth-artwork.w)/2,
       y:body.y+(body.h-artwork.h)/2})
   }
-  const header=showHeader?{...textBlock('heading',info.heading,p.safeWidth,14,
-    {role:'heading',serif:true}),x:p.inset,y:p.inset+4}:null
+  const header=showHeader?{...textBlock('heading',info.heading,p.safeWidth,
+    compactIdentity?12:14,{role:'heading',serif:true}),x:p.inset,y:p.inset+4}:null
   if(header)blocks.unshift(header)
   return {body,blocks,centered:true,mode:withSideList?'information-spread':p.shape}
 }
