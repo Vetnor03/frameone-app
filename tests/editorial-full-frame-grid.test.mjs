@@ -214,13 +214,13 @@ test('PDF review regression: oversized sparse modules are rejected globally',()=
 
 test('full-width editorial ribbons always retain a human-readable identity',()=>{
   for(const width of [600,800]){
-    for(const module of EDITORIAL_MODULES.filter(name=>name!=='date')){
-      const c=composeEditorialModule(module,width,120)
-      assert.equal(c.mode,'editorial-ribbon',module)
+    for(const moduleName of EDITORIAL_MODULES.filter(name=>name!=='date')){
+      const c=composeEditorialModule(moduleName,width,120)
+      assert.equal(c.mode,'editorial-ribbon',moduleName)
       assert.ok(c.blocks.some(block=>block.id==='heading'&&block.lines?.length))
       assert.ok(c.blocks.some(block=>block.id==='primary'&&block.lines?.length))
       assert.ok(c.blocks.some(block=>block.id==='detail'&&block.lines?.length))
-      assert.deepEqual(auditEditorialComposition(c),[],module+' '+width)
+      assert.deepEqual(auditEditorialComposition(c),[],moduleName+ '+width)
     }
   }
 })
@@ -239,12 +239,12 @@ test('hard quality gate never admits underfilled featured panels across 1000 see
 })
 
 test('all compact 2×1 modules retain heading, key value, and context',()=>{
-  for(const module of EDITORIAL_MODULES.filter(name=>name!=='date')){
-    const c=composeEditorialModule(module,400,120)
-    assert.equal(c.mode,'compact-summary',module)
+  for(const moduleName of EDITORIAL_MODULES.filter(name=>name!=='date')){
+    const c=composeEditorialModule(moduleName,400,120)
+    assert.equal(c.mode,'compact-summary',moduleName)
     for(const part of ['heading','primary','detail'])
       assert.ok(c.blocks.some(b=>b.id===part&&b.lines?.length),
-        module+' missing '+part)
-    assert.deepEqual(auditEditorialComposition(c),[],module)
+        moduleName+' missing '+part)
+    assert.deepEqual(auditEditorialComposition(c),[],moduleName)
   }
 })
