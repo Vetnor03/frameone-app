@@ -726,3 +726,20 @@ test('Round 18: sparse topology can earn quiet dividing contours without limitin
       'The contour rule must never modify a user-created grid')
   }
 })
+
+test('Round 18: short informative full-screen messages earn visual presence',()=>{
+  const full=composeEditorialModule('assistant',800,480)
+  const half=composeEditorialModule('assistant',400,240)
+  const lead=full.blocks.find(b=>b.id==='primary')
+  const smaller=half.blocks.find(b=>b.id==='primary')
+  assert.ok(lead&&smaller)
+  assert.ok(lead.fontSize>=40,'A single empty-status module must be readable')
+  assert.ok(lead.fontSize>smaller.fontSize)
+  assert.deepEqual(auditEditorialComposition(full),[])
+  // Long news headlines remain measured and readable, not simply enlarged.
+  const news=composeEditorialModule('news',800,480)
+  const headline=news.blocks.find(b=>b.id==='primary')
+  assert.ok(headline)
+  assert.ok(headline.fontSize<=30)
+  assert.deepEqual(auditEditorialComposition(news),[])
+})
