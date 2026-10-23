@@ -337,7 +337,7 @@ function contentComposition(module,p,options={}){
   // e.g. "Waves 0.8–1.2 m" and "Waves · 0.8–1.2 m". Normalize symbols and
   // spacing before deciding which supporting line is redundant.
   const normalized=value=>String(value).normalize('NFKD').toLocaleLowerCase()
-    .replace(/[\\p{P}\\p{S}\\s]/gu,'')
+    .replace(/[\p{P}\p{S}\s]/gu,'')
   const primaryKey=info.primary.toLocaleLowerCase().split(/\s+/)[0]
   const extras=info.extras.filter(row=>{
     const rowText=normalized(row)
