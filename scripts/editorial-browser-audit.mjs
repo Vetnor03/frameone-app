@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
-import {mkdirSync} from 'node:fs'
+import {mkdirSync,readFileSync} from 'node:fs'
 import {chromium} from 'playwright'
 
 const base=process.env.EDITORIAL_BASE_URL||'http://127.0.0.1:3000'
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']})
 try {
-  const page=await browser.newPage({viewport:{width:1440,height:960},deviceScaleFactor:1})
+  const page=await browser.newPage({viewport:{width:1440,height:960},deviceScaleFactor:1,acceptDownloads:true})
   await page.goto(base+'/editorial-lab',{waitUntil:'domcontentloaded',timeout:120000})
   await page.waitForFunction(()=>{
     const element=document.querySelector('[data-testid="editorial-browser-audit"]')
@@ -227,6 +227,21 @@ try {
   assert.equal(await sheet.getByRole('button').count(),10)
   assert.ok(await sheet.locator('svg[data-editorial-probe]').count()>=20)
   await assertFrameCoverage()
+  const downloadPromise=page.waitForEvent('download',{timeout:90000})
+  await page.getByTestId('frame-export-pdf').click()
+  const pdfDownload=await downloadPromise
+  assert.equal(pdfDownload.suggestedFilename(),'RE-MIND-layout-review-10.pdf')
+  const pdfPath='artifacts/editorial/ten-preview-review.pdf'
+  await pdfDownload.saveAs(pdfPath)
+  const pdf=readFileSync(pdfPath)
+  const pdfString=pdf.toString('latin1')
+  assert.ok(pdfString.startsWith('%PDF-1.4'),'PDF header missing')
+  assert.equal((pdfString.match(/\\/Type \\/Page \\/Parent /g)||[]).length,10,
+    'Expected one full-size frame per PDF page')
+  assert.equal((pdfString.match(/\\/Filter \\/DCTDecode /g)||[]).length,10,
+    'Expected one high-resolution embedded JPEG per PDF page')
+  assert.ok(pdf.length>60000,'PDF unexpectedly small')
+  console.log('RE:MIND contact sheet PDF:',pdf.length,'bytes, 10 pages')
   await page.screenshot({path:'artifacts/editorial/full-frame-ten-preview-sheet.png',fullPage:true})
   await sheet.getByRole('button',{name:'Inspect random design 6'}).click()
   await assertFrameCoverage()
