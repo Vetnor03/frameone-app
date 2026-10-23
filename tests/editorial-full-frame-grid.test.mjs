@@ -545,3 +545,31 @@ test('Visual boundaries change with density, never the validity of a layout',()=
   assert.equal(editorialDensityRules(makeEditorialGrid('quarters')).mode,'open')
   assert.equal(editorialDensityRules(makeEditorialGrid('eight-columns')).mode,'chapter-grid')
 })
+
+test('Miniature score graphics never collide with their supporting caption',()=>{
+  for(const [w,h] of [[200,120],[200,240],[400,120],[600,120]]){
+    const c=composeEditorialModule('surf',w,h)
+    const score=c.blocks.find(b=>b.id==='rating')
+    const detail=c.blocks.find(b=>b.id==='detail')
+    if(!score||!detail)continue
+    assert.ok(score.h>=14,'Surf score needs its actual rendered height')
+    assert.ok(detail.y-(score.y+score.h)>=4,
+      'Surf caption too close to score at '+w+'×'+h)
+    assert.deepEqual(auditEditorialComposition(c),[],'Surf '+w+'×'+h)
+  }
+})
+
+test('Dense dividers preserve orientation with one quiet focal junction',()=>{
+  const sixteen=makeEditorialGrid('sixteen')
+  const policy=editorialDensityRules(sixteen)
+  assert.equal(policy.mode,'fine-grid')
+  assert.equal(Object.values(policy.boundaries).filter(b=>b.centralJunction).length,1)
+  assert.equal(Object.values(policy.boundaries).filter(b=>b.right).length,12)
+  assert.equal(Object.values(policy.boundaries).filter(b=>b.bottom).length,12)
+  const medium=makeEditorialGrid('eight-columns')
+  assert.equal(editorialDensityRules(medium).mode,'chapter-grid')
+  const sparse=makeEditorialGrid('quarters')
+  assert.equal(editorialDensityRules(sparse).mode,'open')
+  assert.ok(Object.values(editorialDensityRules(sparse).boundaries)
+    .every(b=>!b.centralJunction))
+})
