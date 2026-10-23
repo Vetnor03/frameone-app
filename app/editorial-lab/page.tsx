@@ -7,7 +7,7 @@ import {editorialPlan} from '../lib/editorialFrameLayout.mjs'
 import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition} from '../lib/editorialComposition.mjs'
 import {WEATHER_VIGNETTE_SCENES,weatherCoastalCurves} from '../lib/editorialWeatherVignette.mjs'
 import {EDITORIAL_GRID_PRESETS,GRID_CELL_WIDTH,GRID_CELL_HEIGHT,
-  makeEditorialGrid,randomEditorialGrid,shuffleEditorialGridModules,
+  makeEditorialGrid,randomEditorialGrid,randomEditorialReviewGrid,shuffleEditorialGridModules,
   scoreEditorialGrid,editorialGridFamily,editorialOrnamentTiles,
   editorialGroupingCues,editorialDensityRules,auditEditorialGridQuality,validateEditorialGrid} from '../lib/editorialGridLab.mjs'
 
@@ -258,8 +258,13 @@ function FullFrameLab({theme,weatherScene}:{
     let previous:FrameTile[]=tiles,previousId=presetId
     const history:FrameTile[][]=[]
     for(let i=0;i<count;i++){
-      const result=randomEditorialGrid(
-        (base+i*0x9E3779B9)>>>0,previousId,previous,history)
+      const layoutSeed=(base+i*0x9E3779B9)>>>0
+      // 100-page QA evenly samples every valid size from one to sixteen.
+      // Quick 10 keeps the curated aesthetically scored randomizer.
+      const density=1+((i*7)%16)
+      const result=count===100?
+        randomEditorialReviewGrid(layoutSeed,density):
+        randomEditorialGrid(layoutSeed,previousId,previous,history)
       previews.push(result)
       previous=result.tiles as FrameTile[]
       previousId=result.presetId
@@ -273,7 +278,7 @@ function FullFrameLab({theme,weatherScene}:{
     setPresetId(first.presetId)
     setSelectedId('cell-1')
     setLastSeed(first.seed)
-    setAutoQuality(true)
+    setAutoQuality(count!==100)
   }
   const downloadBatchPdf=async()=>{
     if(exportBusy||!batchRoot.current||batch.length===0)return
@@ -317,7 +322,9 @@ function FullFrameLab({theme,weatherScene}:{
     setPresetId(chosen.presetId)
     setSelectedId('cell-1')
     setLastSeed(chosen.seed)
-    setAutoQuality(true)
+    // Stress cases may be intentionally difficult; validate geometry and
+    // rendering, never condemn a customer-legal tile arrangement.
+    setAutoQuality(batch.length!==100)
   }
   const shuffleModules=()=>{
     const seed=Math.floor(Math.random()*0x100000000)
@@ -439,7 +446,10 @@ function FullFrameLab({theme,weatherScene}:{
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-medium">{batch.length} independently randomized layouts · choose any to inspect at full size</p>
-          <p className="text-xs text-[#62584E]">Export shows each complete 800×480 frame on its own landscape page with the original seed.</p>
+          <p className="text-xs text-[#62584E]">{batch.length===100?
+            'Stress review: samples all 1–16-module densities. Nothing is excluded for aesthetics.':
+            'Curated quick review: ten high-quality randomized designs.'}
+            {' '}Every PDF page includes the exact seed; the JSON preserves every cell.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" data-testid="frame-export-manifest"
