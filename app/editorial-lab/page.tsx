@@ -296,7 +296,7 @@ function FullFrameLab({theme,weatherScene}:{
       layouts:batch.map((design,index)=>({
         page:index+1,seed:design.seed,presetId:design.presetId,
         family:design.family,score:Math.round(scoreEditorialGrid(design.tiles)),
-        tiles:design.tiles.map(({id,x,y,cols,rows,module})=>
+        tiles:design.tiles.map(({id,x,y,cols,rows,module}:FrameTile)=>
           ({id,x,y,cols,rows,module})),
       })),
     }
