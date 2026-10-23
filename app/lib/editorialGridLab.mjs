@@ -211,6 +211,10 @@ export function editorialDensityRules(tiles){
       // Edges exist only between cells, not around the outer frame.
       right:tile.x+tile.cols<GRID_COLS,
       bottom:tile.y+tile.rows<GRID_ROWS,
+      // Only one delicate editorial diamond in the center of the entire
+      // 4×4 composition; repeated junction dots made it look like graph paper.
+      centralJunction:tile.x+tile.cols===2&&tile.y+tile.rows===2&&
+        tiles.some(other=>other.x===2&&other.y===2),
     }
   }
   return {mode:intricate?'fine-grid':dense?'chapter-grid':'open',
