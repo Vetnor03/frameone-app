@@ -233,11 +233,14 @@ function FullFrameLab({theme,weatherScene}:{
     const base=Math.floor(Math.random()*0x100000000)
     const previews:ReturnType<typeof randomEditorialGrid>[]=[]
     let previous:FrameTile[]=tiles,previousId=presetId
+    const history:FrameTile[][]=[]
     for(let i=0;i<10;i++){
-      const result=randomEditorialGrid((base+i*0x9E3779B9)>>>0,previousId,previous)
+      const result=randomEditorialGrid(
+        (base+i*0x9E3779B9)>>>0,previousId,previous,history)
       previews.push(result)
       previous=result.tiles as FrameTile[]
       previousId=result.presetId
+      history.push(previous)
     }
     setBatch(previews)
     const first=previews[0]
