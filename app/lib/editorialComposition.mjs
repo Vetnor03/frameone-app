@@ -204,11 +204,18 @@ function normalizeInformation(value){
 function distinctSupportingLines(info){
   const primary=normalizeInformation(info.primary)
   const detail=normalizeInformation(info.detail)
+  const headlineKey=normalizeInformation(String(info.primary??'').trim().split(/\s+/)[0])
   const seen=new Set([primary,detail].filter(Boolean))
   return (info.extras??[]).filter(value=>{
     const key=normalizeInformation(value)
     if(!key||seen.has(key))return false
     if(primary&&detail&&key.includes(primary)&&key.includes(detail))return false
+    // Some reminder systems abbreviate the title in their supporting list
+    // ("Friday 12:30 Kontrolltime" vs "Kontrolltime Aleris").
+    // Matching both time and a meaningful title token identifies the same
+    // event without suppressing other items on a different day.
+    if(detail&&headlineKey.length>=5&&key.includes(detail)&&
+      key.includes(headlineKey))return false
     seen.add(key)
     return true
   })
