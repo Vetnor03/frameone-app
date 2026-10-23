@@ -296,6 +296,9 @@ function FullFrameLab({theme,weatherScene}:{
       return shuffleEditorialGridModules(seed,previous) as FrameTile[]
     })
     setLastSeed(seed)
+    // Shuffling a customer-authored 16-cell grid must never re-enable a
+    // generator's aesthetic selection constraints on their chosen geometry.
+    setAutoQuality(false)
   }
   const updateModule=(id:string,module:Module)=>{
     setTiles(previous=>previous.map(tile=>tile.id===id?{...tile,module}:tile))
