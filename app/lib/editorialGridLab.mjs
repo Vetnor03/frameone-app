@@ -252,7 +252,7 @@ function fitsFamily(tiles,family){
   if(family==='balanced')return tiles.length===4&&Math.max(...tiles.map(tileArea))<=6
   if(family==='hero')return tiles.length>=2&&tiles.length<=4&&
     Math.max(...tiles.map(tileArea))>=8
-  return tiles.length>=3&&tiles.length<=4
+  return tiles.length>=3&&tiles.length<=4&&editorialGridFamily(tiles)==='editorial'
 }
 const FAMILIES=['hero','balanced','mosaic','editorial']
 
@@ -302,7 +302,7 @@ export function randomEditorialGrid(seed,previousPresetId=null,previousTiles=nul
   }
   if(!winner){
     const id=family==='mosaic'?'folio-five':
-      family==='hero'?'feature-left':'quarters'
+      family==='hero'?'feature-left':family==='editorial'?'top-banner':'quarters'
     const fallback=EDITORIAL_GRID_PRESETS.find(p=>p.id===id)
     winner={seed:seed>>>0,presetId:fallback.id,
       tiles:withModules(fallback.rects,next),family}
