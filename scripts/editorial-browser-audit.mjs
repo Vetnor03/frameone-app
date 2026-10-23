@@ -266,6 +266,18 @@ try {
   await page.getByTestId('frame-batch').click()
   assert.equal(await sheet.getByRole('button',{name:/Inspect random design/}).count(),100)
   assert.match(await page.getByTestId('frame-export-pdf').innerText(),/100/)
+  const manifestPromise=page.waitForEvent('download',{timeout:30000})
+  await page.getByTestId('frame-export-manifest').click()
+  const manifestDownload=await manifestPromise
+  assert.equal(manifestDownload.suggestedFilename(),'RE-MIND-layout-review-100.json')
+  const manifestPath='artifacts/editorial/hundred-review-layouts.json'
+  await manifestDownload.saveAs(manifestPath)
+  const manifest=JSON.parse(readFileSync(manifestPath,'utf8'))
+  assert.equal(manifest.count,100)
+  assert.equal(manifest.layouts.length,100)
+  assert.ok(manifest.layouts.every((layout,index)=>
+    layout.page===index+1&&Number.isInteger(layout.seed)&&
+    layout.tiles.every(tile=>Number.isInteger(tile.x)&&Number.isInteger(tile.y))))
   await sheet.getByRole('button',{name:'Inspect random design 100'}).click()
   await assertFrameCoverage()
   await page.getByTestId('frame-preset').selectOption('sixteen')
