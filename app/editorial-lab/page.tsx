@@ -102,7 +102,7 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly',
   ornament=true,sectionBreak=false,density='open',separateRight=false,separateBottom=false,centralJunction=false}:{
   module:Module;width:number;height:number;theme:FrameTheme;
   weatherScene?:WeatherScene;ornament?:boolean;sectionBreak?:boolean;
-  density?:'open'|'chapter-grid'|'fine-grid';separateRight?:boolean;separateBottom?:boolean;
+  density?:'open'|'contour'|'chapter-grid'|'fine-grid';separateRight?:boolean;separateBottom?:boolean;
   centralJunction?:boolean
 }) {
   const layout=composeEditorialModule(module,width,height,{weatherScene})
@@ -116,7 +116,7 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly',
     <rect width={width} height={height} fill={paper}/>
     {density!=='open'&&<g data-editorial-density={density} stroke={ink}
       fill="none" strokeWidth={density==='fine-grid'?0.75:0.65}
-      opacity={density==='fine-grid'?.28:.27}>
+      opacity={density==='contour'?.19:density==='fine-grid'?.28:.27}>
       {separateRight&&<line x1={width-3} y1={6} x2={width-3} y2={height-6}/>}
       {separateBottom&&<line x1={6} y1={height-3} x2={width-6} y2={height-3}/>}
     </g>}
@@ -180,7 +180,7 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly',
           fontSize={size} fill={ink} opacity={['secondary','list'].includes(block.role)?'.72':'1'}>
           {line}
         </text>)}
-        {ornament&&density==='open'&&
+        {ornament&&(density==='open'||density==='contour')&&
           !['compact-summary','miniature','editorial-ribbon'].includes(layout.mode)&&
           (block.id==='heading'||block.id==='month')&&
           layout.mode!=='surf-medium-reference' && <BookDivider
@@ -194,7 +194,7 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly',
 }
 
 type FrameTile={id:string;x:number;y:number;cols:number;rows:number;module:Module}
-type DensityPolicy={mode:'open'|'chapter-grid'|'fine-grid';
+type DensityPolicy={mode:'open'|'contour'|'chapter-grid'|'fine-grid';
   boundaries:Record<string,{right:boolean;bottom:boolean;centralJunction:boolean}>}
 const moduleLabel=(module:Module)=>module==='assistant'
   ?'AI Follow':module.charAt(0).toUpperCase()+module.slice(1)
