@@ -272,8 +272,7 @@ export function shuffleEditorialGridModules(seed,tiles){
   }
   // An unusual manually authored 1×1/16-cell grid cannot meet the randomizer's
   // constraints; preserve its geometry and offer a valid module shuffle anyway.
-  return winner??tiles.map((tile,index)=>{
-    const modules=shuffledModules(randomSource(seed),tiles.length)
-    return {...tile,module:modules[index]}
-  })
+  if(winner)return winner
+  const fallback=shuffledModules(randomSource(seed),tiles.length)
+  return tiles.map((tile,index)=>({...tile,module:fallback[index]}))
 }
