@@ -394,11 +394,49 @@ test('Round 9 PDFs: text-led panels use available space for legible headlines',(
   for(const moduleName of ['news','reminders','assistant','groceries']){
     const quadrant=composeEditorialModule(moduleName,400,240)
     const headline=quadrant.blocks.find(b=>b.id==='primary')
-    assert.ok(headline&&headline.fontSize>=21,
+    assert.ok(headline&&headline.fontSize>=16,
       moduleName+' text hierarchy too weak in 2×2 cell')
+    if(moduleName==='news')assert.equal(headline.lines.join(' '),
+      'Aker BP-lederforeningen innkaller til ekstraordinært møte',
+      'News main headline must not be cut to a meaningless fragment')
     assert.deepEqual(auditEditorialComposition(quadrant),[],moduleName)
   }
   const compactNews=composeEditorialModule('news',400,120)
   assert.ok(compactNews.blocks.find(b=>b.id==='primary')?.fontSize>=17)
   assert.deepEqual(auditEditorialComposition(compactNews),[])
+})
+
+test('Round 10 PDFs: maximize legible size without dropping headline meaning',()=>{
+  const lead='Aker BP-lederforeningen innkaller til ekstraordinært møte'
+  for(const [width,height] of [[400,240],[400,360],[600,240],[800,240],[800,480]]){
+    const c=composeEditorialModule('news',width,height)
+    const primary=c.blocks.find(b=>b.id==='primary')
+    assert.ok(primary, 'No headline at '+width+'×'+height)
+    assert.equal(primary.lines.join(' '),lead,
+      'Lost words from headline at '+width+'×'+height)
+    assert.ok(!primary.lines.some(line=>line.includes('…')),
+      'Incorrect ellipsis at '+width+'×'+height)
+    assert.deepEqual(auditEditorialComposition(c),[])
+  }
+  const small=composeEditorialModule('news',400,120)
+  assert.ok(small.blocks.find(b=>b.id==='primary').fontSize>=15)
+})
+
+test('Round 10 PDFs: longer headlines adapt before truncating',()=>{
+  const short='Kunstutstilling åpner i Stavanger sentrum'
+  const long='Aker BP-lederforeningen innkaller til ekstraordinært møte'
+  for(const width of [400,600,800]){
+    const shortView=composeEditorialModule('news',width,240,
+      {sample:{primary:short}})
+    const longView=composeEditorialModule('news',width,240,
+      {sample:{primary:long}})
+    const small=shortView.blocks.find(b=>b.id==='primary')
+    const large=longView.blocks.find(b=>b.id==='primary')
+    assert.ok(small.fontSize>=large.fontSize,
+      'Short lead should not get smaller typography than a long lead')
+    assert.equal(large.lines.join(' '),long,
+      'No truncation allowed when full headline fits two lines')
+    assert.deepEqual(auditEditorialComposition(shortView),[])
+    assert.deepEqual(auditEditorialComposition(longView),[])
+  }
 })
