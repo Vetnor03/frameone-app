@@ -194,6 +194,26 @@ function surfMediumComposition(p){
 // A ribbon is a small editorial row, not a tall card squeezed into 120px.
 // Shared three-zone grammar: identity / essential fact / supporting context.
 // In particular, every ribbon keeps the label and its primary explanation.
+// Shared semantic de-duplication used by ALL composition modes, including
+// horizontal ribbons. Use punctuation-insensitive comparisons for separators
+// without destroying numeric sign or decimal information.
+function normalizeInformation(value){
+  return String(value??'').normalize('NFKC').toLocaleLowerCase()
+    .replace(/[\s.,;:·•'"()]/g,'').replace(/[–—]/g,'-')
+}
+function distinctSupportingLines(info){
+  const primary=normalizeInformation(info.primary)
+  const detail=normalizeInformation(info.detail)
+  const seen=new Set([primary,detail].filter(Boolean))
+  return (info.extras??[]).filter(value=>{
+    const key=normalizeInformation(value)
+    if(!key||seen.has(key))return false
+    if(primary&&detail&&key.includes(primary)&&key.includes(detail))return false
+    seen.add(key)
+    return true
+  })
+}
+
 function ribbonComposition(module,p,info){
   const body=rect(p.inset,p.inset,p.safeWidth,p.safeHeight)
   const gap=14
@@ -217,9 +237,7 @@ function ribbonComposition(module,p,info){
   const details=[
     textBlock('detail',info.detail,right.w,13,{role:'secondary',maxLines:2}),
   ]
-  const next=info.extras.find(row=>
-    !String(row).toLowerCase().includes(String(info.primary).toLowerCase())&&
-    row!==info.detail)
+  const next=distinctSupportingLines(info)[0]
   if(next)details.push(textBlock('extra-0',next,right.w,11,
     {role:'list',maxLines:2}))
   return {body,blocks:[
@@ -336,25 +354,7 @@ function contentComposition(module,p,options={}){
       {role:'secondary',maxLines:2}))
   const gap=compact?6:9
   const blocks=stackCentered(hero,heroArea,{gap})
-  // Shared semantic deduplication: avoid repeating a measurement already
-  // explained by the primary + subtitle, or re-listing the lead reminder.
-  // Semantically identical measurements can arrive with different punctuation,
-  // e.g. "Waves 0.8–1.2 m" and "Waves · 0.8–1.2 m". Normalize symbols and
-  // spacing before deciding which supporting line is redundant.
-  const normalized=value=>String(value).normalize('NFKD').toLocaleLowerCase()
-    .replace(/[\p{P}\p{S}\s]/gu,'')
-  const primaryKey=info.primary.toLocaleLowerCase().split(/\s+/)[0]
-  const extras=info.extras.filter(row=>{
-    const rowText=normalized(row)
-    const repeatsSubtitle=rowText===normalized(info.detail)
-    const repeatsPrimary=rowText===normalized(info.primary)
-    const repeatsMeasurement=rowText.includes(normalized(info.primary))&&
-      rowText.includes(normalized(info.detail))
-    const repeatsLeadReminder=module==='reminders'&&
-      row.toLocaleLowerCase().includes(primaryKey)&&
-      rowText.includes(normalized(info.detail))
-    return !repeatsSubtitle&&!repeatsPrimary&&!repeatsMeasurement&&!repeatsLeadReminder
-  })
+  const extras=distinctSupportingLines(info)
   if(listArea){
     // An optional category heading anchors a true information list; no repeated
     // hero or ornamental image consumes the free half of the frame.
