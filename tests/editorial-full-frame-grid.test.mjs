@@ -5,7 +5,8 @@ import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition} from
 import {EDITORIAL_GRID_PRESETS,GRID_WIDTH,GRID_HEIGHT,
   makeEditorialGrid,randomEditorialGrid,randomEditorialModules,validateEditorialGrid,
   auditEditorialGridQuality,scoreEditorialGrid,shuffleEditorialGridModules,
-  editorialGridFamily,editorialOrnamentTiles,editorialGridSignature
+  editorialGridFamily,editorialOrnamentTiles,editorialGridSignature,
+  editorialGroupingCues
 } from '../app/lib/editorialGridLab.mjs'
 
 test('all named 4x4 layouts completely cover the frame without collisions',()=>{
@@ -348,9 +349,8 @@ test('Round 8 PDFs: horizontal ribbons never repeat the same supporting fact',()
   const waveRows=support.flatMap(b=>b.lines).filter(line=>line.startsWith('Waves'))
   assert.equal(waveRows.length,1,
     'The wave measurement should occur once, even when punctuation differs')
-  assert.ok(surf.blocks.some(b=>b.id==='extra-0'&&
-    b.lines.some(line=>line.includes('Swell period'))),
-    'The second column should advance to the next distinct forecast datum')
+  assert.ok(surf.blocks.some(b=>b.id==='rating'&&b.type==='score'),
+    'A compact Surf ribbon retains its rating bar instead of duplicating rows')
   assert.deepEqual(auditEditorialComposition(surf),[])
 
   for(const moduleName of EDITORIAL_MODULES.filter(m=>m!=='date')){
@@ -458,4 +458,52 @@ test('Round 10 PDF: randomized cells never show a clipped primary headline',()=>
     }
   }
   assert.ok(checked>800)
+})
+
+test('Round 11: wide one-row modules read as a single recognizable group',()=>{
+  for(const moduleName of ['stocks','groceries','news','reminders','soccer','weather','countdown','date']){
+    for(const width of [600,800]){
+      const c=composeEditorialModule(moduleName,width,120)
+      const labels=c.blocks.filter(b=>b.type==='text'&&b.lines?.length)
+      // Text may span full-width for longer headlines, but text ANCHORS
+      // must cluster around the same center (no remote left/middle/right).
+      const anchors=labels.map(b=>b.x+b.w/2)
+      const span=Math.max(...anchors)-Math.min(...anchors)
+      assert.ok(span<width*.20,
+        moduleName+' '+width+'×120 has detached text groups, span '+span)
+      assert.deepEqual(auditEditorialComposition(c),[],
+        'Overflow after regrouping '+moduleName+' '+width)
+    }
+  }
+  const eq=composeEditorialModule('stocks',600,120)
+  assert.deepEqual(eq.blocks.filter(b=>b.type==='text')
+    .map(b=>b.id).slice(0,3),['heading','primary','detail'])
+  const date=composeEditorialModule('date',600,120)
+  assert.equal(date.mode,'ribbon')
+  assert.deepEqual(date.blocks.map(b=>b.lines[0]),
+    ['October 2026','21','Wednesday'])
+})
+
+test('Round 11: only adjacent matching horizontal bands receive a separator',()=>{
+  // Screenshot layout: Countdown left, two wide rows right,
+  // News and Groceries below. Equinor must visually belong to its own row.
+  const screenshot=[
+    {id:'countdown',x:0,y:0,cols:1,rows:2,module:'countdown'},
+    {id:'equinor',x:1,y:0,cols:3,rows:1,module:'stocks'},
+    {id:'date',x:1,y:1,cols:3,rows:1,module:'date'},
+    {id:'news',x:0,y:2,cols:2,rows:2,module:'news'},
+    {id:'groceries',x:2,y:2,cols:2,rows:2,module:'groceries'},
+  ]
+  assert.deepEqual(validateEditorialGrid(screenshot),[])
+  assert.deepEqual(editorialGroupingCues(screenshot),['equinor'])
+  assert.deepEqual(editorialGroupingCues(makeEditorialGrid('quarters')),[])
+  assert.deepEqual(editorialGroupingCues(makeEditorialGrid('halves-horizontal')),[])
+  // A run of three wide bands gets one separator per actual boundary.
+  const ribbons=[
+    {id:'one',x:0,y:0,cols:4,rows:1,module:'stocks'},
+    {id:'two',x:0,y:1,cols:4,rows:1,module:'date'},
+    {id:'three',x:0,y:2,cols:4,rows:1,module:'news'},
+    {id:'four',x:0,y:3,cols:4,rows:1,module:'weather'},
+  ]
+  assert.deepEqual(editorialGroupingCues(ribbons),['one','two','three'])
 })
