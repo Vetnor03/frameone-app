@@ -100,8 +100,8 @@ async function drawCell(ctx,sourceSvg,x,y,width,height,scale){
 export async function exportEditorialBatchPdf(container,designs,
   {theme='light',weatherScene='partly'}={}){
   if(!container||!Array.isArray(designs)||!designs.length)
-    throw new Error('Generate 10 previews before exporting')
-  const scale=3
+    throw new Error('Generate previews before exporting')
+  const scale=designs.length>25?2:3
   const canvas=document.createElement('canvas')
   canvas.width=800*scale
   canvas.height=480*scale
@@ -122,7 +122,7 @@ export async function exportEditorialBatchPdf(container,designs,
       await drawCell(ctx,svg,tile.x*200,tile.y*120,tile.cols*200,tile.rows*120,scale)
     }
     pages.push({
-      jpeg:decodeJpeg(canvas.toDataURL('image/jpeg',0.96)),
+      jpeg:decodeJpeg(canvas.toDataURL('image/jpeg',designs.length>25?0.90:0.96)),
       width:canvas.width,height:canvas.height,
       seed:design.seed,presetId:design.presetId,
       modules:design.tiles.map(tile=>tile.module),
@@ -134,7 +134,7 @@ export async function exportEditorialBatchPdf(container,designs,
   const url=URL.createObjectURL(blob)
   const link=document.createElement('a')
   link.href=url
-  link.download='RE-MIND-layout-review-10.pdf'
+  link.download='RE-MIND-layout-review-'+designs.length+'.pdf'
   document.body.appendChild(link)
   link.click()
   link.remove()
