@@ -293,13 +293,17 @@ function ribbonComposition(module,p,info){
 function miniatureComposition(module,p,info){
   const body=rect(p.inset,p.inset,p.safeWidth,p.safeHeight)
   const serif=module!=='soccer'
+  // An editorial headline that occupies only two short lines often
+  // becomes meaningless when truncated. Small news tiles may spend one more
+  // line on the headline rather than repeating the same tiny summary.
+  const headlineLines=module==='news'?3:2
   const lead=fitEditorialHeadline(info.primary,body.w,
     ['news','reminders','groceries','assistant'].includes(module)?18:31,
-    {minSize:13,maxLines:2,serif})
+    {minSize:13,maxLines:headlineLines,serif})
   const title=textBlock('heading',info.heading,body.w,12,
     {serif:true,role:'heading',maxLines:1})
   const primary=textBlock('primary',info.primary,body.w,lead.fontSize,
-    {serif,maxLines:lead.lines.length>1?2:1})
+    {serif,maxLines:lead.lines.length>1?headlineLines:1})
   const detail=textBlock('detail',info.detail,body.w,11,
     {role:'secondary',maxLines:1})
   let items=[title,primary,detail]
@@ -316,7 +320,7 @@ function miniatureComposition(module,p,info){
   while(heightOf(items)>body.h&&primary.fontSize>13){
     primary.fontSize-=1
     const resized=textBlock('primary',info.primary,body.w,primary.fontSize,
-      {serif,maxLines:2})
+      {serif,maxLines:headlineLines})
     items=items.map(b=>b.id==='primary'?resized:b)
   }
   if(heightOf(items)>body.h){
