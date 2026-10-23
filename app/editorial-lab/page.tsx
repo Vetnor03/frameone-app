@@ -99,10 +99,11 @@ function Calendar({x,y,w,h,ink}:{x:number;y:number;w:number;h:number;ink:string}
 }
 
 function EditorialCanvas({module,width,height,theme,weatherScene='partly',
-  ornament=true,sectionBreak=false,density='open',separateRight=false,separateBottom=false}:{
+  ornament=true,sectionBreak=false,density='open',separateRight=false,separateBottom=false,centralJunction=false}:{
   module:Module;width:number;height:number;theme:FrameTheme;
   weatherScene?:WeatherScene;ornament?:boolean;sectionBreak?:boolean;
-  density?:'open'|'chapter-grid'|'fine-grid';separateRight?:boolean;separateBottom?:boolean
+  density?:'open'|'chapter-grid'|'fine-grid';separateRight?:boolean;separateBottom?:boolean;
+  centralJunction?:boolean
 }) {
   const layout=composeEditorialModule(module,width,height,{weatherScene})
   const weather=WEATHER_VIGNETTE_SCENES[weatherScene]??WEATHER_VIGNETTE_SCENES.partly
@@ -114,13 +115,15 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly',
     className="block h-auto w-full" style={{backgroundColor:paper}}>
     <rect width={width} height={height} fill={paper}/>
     {density!=='open'&&<g data-editorial-density={density} stroke={ink}
-      fill="none" strokeWidth={density==='fine-grid'?0.9:0.7}
-      opacity={density==='fine-grid'?.44:.30}>
-      {separateRight&&<line x1={width-3} y1={10} x2={width-3} y2={height-10}/>}
-      {separateBottom&&<line x1={10} y1={height-3} x2={width-10} y2={height-3}/>}
-      {density==='fine-grid'&&separateRight&&separateBottom&&
-        <circle cx={width-3} cy={height-3} r="1.8" fill={ink}/>}
+      fill="none" strokeWidth={density==='fine-grid'?0.75:0.65}
+      opacity={density==='fine-grid'?.28:.27}>
+      {separateRight&&<line x1={width-3} y1={6} x2={width-3} y2={height-6}/>}
+      {separateBottom&&<line x1={6} y1={height-3} x2={width-6} y2={height-3}/>}
     </g>}
+    {density==='fine-grid'&&centralJunction&&
+      <path data-editorial-center-accent="true"
+        d={`M ${width-3} ${height-7} L ${width+1} ${height-3} L ${width-3} ${height+1} L ${width-7} ${height-3} Z`}
+        fill={paper} stroke={ink} strokeWidth=".85" opacity=".57"/>}
     {sectionBreak&&density==='open'&&<line data-editorial-section-break="true"
       x1={Math.round(width*.18)} x2={Math.round(width*.82)}
       y1={height-2} y2={height-2} stroke={ink}
@@ -192,7 +195,7 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly',
 
 type FrameTile={id:string;x:number;y:number;cols:number;rows:number;module:Module}
 type DensityPolicy={mode:'open'|'chapter-grid'|'fine-grid';
-  boundaries:Record<string,{right:boolean;bottom:boolean}>}
+  boundaries:Record<string,{right:boolean;bottom:boolean;centralJunction:boolean}>}
 const moduleLabel=(module:Module)=>module==='assistant'
   ?'AI Follow':module.charAt(0).toUpperCase()+module.slice(1)
 
@@ -387,7 +390,8 @@ function FullFrameLab({theme,weatherScene}:{
                   sectionBreak={groupCues.has(tile.id)}
                   density={densityRules.mode}
                   separateRight={densityRules.boundaries[tile.id]?.right}
-                  separateBottom={densityRules.boundaries[tile.id]?.bottom}/>
+                  separateBottom={densityRules.boundaries[tile.id]?.bottom}
+                  centralJunction={densityRules.boundaries[tile.id]?.centralJunction}/>
                 {!clean&&<button type="button"
                   aria-label={'Edit cell '+tile.id.replace('cell-','')+': '+moduleLabel(tile.module)}
                   aria-pressed={isSelected}
@@ -440,7 +444,8 @@ function FullFrameLab({theme,weatherScene}:{
                     sectionBreak={sectionBreaks.has(tile.id)}
                     density={previewDensity.mode}
                     separateRight={previewDensity.boundaries[tile.id]?.right}
-                    separateBottom={previewDensity.boundaries[tile.id]?.bottom}/>
+                    separateBottom={previewDensity.boundaries[tile.id]?.bottom}
+                    centralJunction={previewDensity.boundaries[tile.id]?.centralJunction}/>
                 </div>
               })}
             </div>
