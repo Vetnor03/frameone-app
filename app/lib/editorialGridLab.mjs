@@ -395,15 +395,46 @@ const FAMILIES=['hero','balanced','mosaic','editorial']
 // Repeating the same ornament on every tile made previously good grid layouts
 // look like a spreadsheet of identical chapter headings. A limited number of
 // emphasis points gives the frame a calmer reading rhythm.
+// Ornament placement is a PAGE-LEVEL decision. Emphasize two *aligned*
+// chapters when possible, rather than two unrelated high-priority modules
+// occupying the same column. The module design itself remains unrestricted.
 export function editorialOrnamentTiles(tiles){
+  if(tiles.length>=7)return [] // dense grids use boundary cues instead
   const priority={news:3,reminders:3,weather:2,date:2,groceries:1,stocks:1}
-  const max=tiles.length>=4?2:1
-  const candidates=tiles.filter(tile=>!(tile.module==='surf'&&tile.cols===2&&tile.rows===2))
-    .sort((a,b)=>{
-      const preference=tile=>Math.min(10,tileArea(tile))*3+(priority[tile.module]??0)
-      return preference(b)-preference(a)||a.y-b.y||a.x-b.x
-    })
-  return candidates.slice(0,max).map(tile=>tile.id)
+  const blocked=new Set()
+  // A section break already separates stacked full-width ribbon modules.
+  // Do not put a second ornamental line immediately below that boundary.
+  const separators=new Set(editorialGroupingCues(tiles))
+  for(const top of tiles){
+    if(!separators.has(top.id))continue
+    for(const bottom of tiles){
+      if(bottom.y===top.y+1&&bottom.x===top.x&&
+        bottom.cols===top.cols&&bottom.rows===1)
+        blocked.add(bottom.id)
+    }
+  }
+  const candidates=tiles.filter(tile=>
+    !(tile.module==='surf'&&tile.cols===2&&tile.rows===2)&&
+    !blocked.has(tile.id))
+  const value=tile=>Math.min(10,tileArea(tile))*3+(priority[tile.module]??0)
+  const sorted=[...candidates].sort((a,b)=>
+    value(b)-value(a)||a.y-b.y||a.x-b.x)
+  if(tiles.length<4||sorted.length<2)return sorted.slice(0,1).map(t=>t.id)
+  // Select two modules with a deliberate spatial relationship. Identical
+  // horizontal bands yield visually rhythmic ornaments; opposite horizontal
+  // regions avoid a lopsided, right-column-only arrangement.
+  let bestPair=null,best=-Infinity
+  for(let i=0;i<candidates.length;i++)for(let j=i+1;j<candidates.length;j++){
+    const a=candidates[i],b=candidates[j]
+    const aCx=a.x+a.cols/2,bCx=b.x+b.cols/2
+    const sameRow=a.y===b.y&&a.rows===b.rows
+    const oppositeSides=(aCx<2&&bCx>2)||(aCx>2&&bCx<2)
+    const sameColumn=a.x===b.x&&a.cols===b.cols
+    const score=value(a)+value(b)+(sameRow?16:0)+
+      (oppositeSides?8:0)-(sameColumn?10:0)
+    if(score>best){best=score;bestPair=[a,b]}
+  }
+  return bestPair?bestPair.map(t=>t.id):sorted.slice(0,2).map(t=>t.id)
 }
 
 // Measure novelty separately from quality. A pretty four-quarter grid is
