@@ -256,3 +256,24 @@ export function randomEditorialGrid(seed,previousPresetId=null){
   }
   return winner
 }
+
+// Keep a selected arrangement fixed while searching for a harmonious,
+// non-repeating module assignment. Uses the same scoring rule as Randomize.
+export function shuffleEditorialGridModules(seed,tiles){
+  const next=randomSource(seed)
+  let winner=null,best=-Infinity
+  for(let i=0;i<32;i++){
+    const modules=shuffledModules(next,tiles.length)
+    const candidate=tiles.map((tile,index)=>({...tile,module:modules[index]}))
+    const issues=auditEditorialGridQuality(candidate)
+    if(issues.length)continue
+    const score=scoreEditorialGrid(candidate)+next()*9
+    if(score>best){best=score;winner=candidate}
+  }
+  // An unusual manually authored 1×1/16-cell grid cannot meet the randomizer's
+  // constraints; preserve its geometry and offer a valid module shuffle anyway.
+  return winner??tiles.map((tile,index)=>{
+    const modules=shuffledModules(randomSource(seed),tiles.length)
+    return {...tile,module:modules[index]}
+  })
+}
