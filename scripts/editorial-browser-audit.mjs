@@ -275,9 +275,18 @@ try {
   const manifest=JSON.parse(readFileSync(manifestPath,'utf8'))
   assert.equal(manifest.count,100)
   assert.equal(manifest.layouts.length,100)
+  const histogram=Array(17).fill(0)
+  for(const layout of manifest.layouts){
+    assert.ok(layout.tiles.length>=1&&layout.tiles.length<=16)
+    histogram[layout.tiles.length]++
+    assert.ok(layout.tiles.every(tile=>Number.isInteger(tile.x)&&
+      Number.isInteger(tile.y)&&tile.x>=0&&tile.y>=0&&
+      tile.x+tile.cols<=4&&tile.y+tile.rows<=4))
+  }
+  assert.ok(histogram.slice(1).every(count=>count>=6),
+    '100-page QA must cover all densities from 1 through 16')
   assert.ok(manifest.layouts.every((layout,index)=>
-    layout.page===index+1&&Number.isInteger(layout.seed)&&
-    layout.tiles.every(tile=>Number.isInteger(tile.x)&&Number.isInteger(tile.y))))
+    layout.page===index+1&&Number.isInteger(layout.seed)))
   await sheet.getByRole('button',{name:'Inspect random design 100'}).click()
   await assertFrameCoverage()
   await page.getByTestId('frame-preset').selectOption('sixteen')
