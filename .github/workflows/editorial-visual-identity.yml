@@ -26,6 +26,8 @@ jobs:
         run: node --test tests/editorial-typeface-identity.test.mjs tests/editorial-pdf-export.test.mjs
       - name: Typecheck Layout Lab
         run: npm run typecheck
+      - name: Preserve approved frame geometry
+        run: npm run check:frame-layouts
       - name: Build staging app
         run: npm run build
         env:
