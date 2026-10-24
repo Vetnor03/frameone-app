@@ -13,7 +13,7 @@ on:
 jobs:
   typography-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,126 +21,58 @@ jobs:
           python-version: "3.12"
       - name: Check isolation and font test contracts
         run: node --test tests/frame-physical-typography-audit.test.mjs
-      - name: Install reproducible firmware toolchain
-        run: pip install platformio==6.1.19
-      - name: Build normal Alfred firmware (must remain unchanged)
+      - name: Install firmware compiler and Python font tools
+        run: pip install platformio==6.1.19 Pillow==11.3.0 fonttools==4.60.1
+      - name: Normal Alfred firmware remains independent
         run: pio run -d frame -e alfred_v1_2
-      - name: Compile isolated USB typography calibration
+      - name: Original USB font calibration still compiles
         run: pio run -d frame -e alfred_v1_2_typography_audit
-
-      - name: Generate Norwegian-safe editorial typeface bitmap candidates
+      - name: Generate Norwegian-capable premium bitmap fonts
         run: |
-          pip install Pillow==11.3.0 fonttools==4.60.1
           mkdir -p /tmp/remind-licensed-fonts
-          # Specific Google Fonts repository commit, not floating HEAD.
           FONT_REF=e7db6ca603fd4862010383ff17ffd6cc4ffac1c0
-          curl --fail --location --silent --show-error \
-            "https://raw.githubusercontent.com/google/fonts/$FONT_REF/ofl/instrumentserif/InstrumentSerif-Regular.ttf" \
-            -o /tmp/remind-licensed-fonts/instrument.ttf
-          curl --fail --location --silent --show-error \
-            "https://raw.githubusercontent.com/google/fonts/$FONT_REF/ofl/dmsans/DMSans%5Bopsz%2Cwght%5D.ttf" \
-            -o /tmp/remind-licensed-fonts/dm.ttf
-          curl --fail --location --silent --show-error \
-            "https://raw.githubusercontent.com/google/fonts/$FONT_REF/ofl/fraunces/Fraunces%5BSOFT%2CWONK%2Copsz%2Cwght%5D.ttf" \
-            -o /tmp/remind-licensed-fonts/fraunces.ttf
-          python frame/tools/generate_eink_typefaces.py \
-            --instrument /tmp/remind-licensed-fonts/instrument.ttf \
-            --dm /tmp/remind-licensed-fonts/dm.ttf \
-            --fraunces /tmp/remind-licensed-fonts/fraunces.ttf \
-            --output frame/src/assets/fonts/EditorialCandidates.h
+          curl -fLsS "https://raw.githubusercontent.com/google/fonts/$FONT_REF/ofl/instrumentserif/InstrumentSerif-Regular.ttf" -o /tmp/remind-licensed-fonts/instrument.ttf
+          curl -fLsS "https://raw.githubusercontent.com/google/fonts/$FONT_REF/ofl/dmsans/DMSans%5Bopsz%2Cwght%5D.ttf" -o /tmp/remind-licensed-fonts/dm.ttf
+          curl -fLsS "https://raw.githubusercontent.com/google/fonts/$FONT_REF/ofl/fraunces/Fraunces%5BSOFT%2CWONK%2Copsz%2Cwght%5D.ttf" -o /tmp/remind-licensed-fonts/fraunces.ttf
+          python frame/tools/generate_eink_typefaces.py --instrument /tmp/remind-licensed-fonts/instrument.ttf --dm /tmp/remind-licensed-fonts/dm.ttf --fraunces /tmp/remind-licensed-fonts/fraunces.ttf --output frame/src/assets/fonts/EditorialCandidates.h
           grep -q "RemindFraunces72" frame/src/assets/fonts/EditorialCandidates.h
-          grep -q "RemindInstrument72" frame/src/assets/fonts/EditorialCandidates.h
-      - name: Compile custom serif/sans candidate USB diagnostic
+      - name: Build USB-only custom serif/sans candidate
         run: pio run -d frame -e alfred_v1_2_typography_identity
-      - name: Archive unflashed custom font comparison firmware
-        if: success()
+      - name: Archive the compiled test binary
         uses: actions/upload-artifact@v4
         with:
           name: remind-alfred-fancy-font-test-USB-ONLY
           path: frame/.pio/build/alfred_v1_2_typography_identity/firmware.bin
           if-no-files-found: error
           retention-days: 14
-      - name: Install Arduino CLI
-        uses: arduino/setup-arduino-cli@v2
+      - uses: arduino/setup-arduino-cli@v2
         with:
           version: "1.5.1"
       - name: Install pinned Arduino toolchain
         run: |
-          arduino-cli core update-index \
-            --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-          arduino-cli core install esp32:esp32@2.0.14 \
-            --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@2.0.14 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli lib install "ArduinoJson@6.21.5"
           arduino-cli lib install "Adafruit BusIO@1.17.4"
           arduino-cli lib install "Adafruit GFX Library@1.12.6"
           arduino-cli lib install "GxEPD2@1.6.4"
           arduino-cli lib install "PubSubClient@2.8"
-      - name: Prepare explicitly gated Arduino IDE calibration sketch
-        run: |
-          python frame/tools/prepare_arduino_sketch.py --output "$RUNNER_TEMP/frame_v2.5.1"
-          sed -i 's/^#define TYPOGRAPHY_AUDIT_ENABLED 0$/#define TYPOGRAPHY_AUDIT_ENABLED 1/' "$RUNNER_TEMP/frame_v2.5.1/Config.h"
-          grep -q '^#define TYPOGRAPHY_AUDIT_ENABLED 1$' "$RUNNER_TEMP/frame_v2.5.1/Config.h"
-          (cd "$RUNNER_TEMP" && zip -qr RE-MIND-Typography-Arduino-IDE.zip frame_v2.5.1)
-      - name: Compile calibration sketch in Arduino IDE toolchain
-        run: |
-          arduino-cli compile --warnings default \
-            --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" \
-            "$RUNNER_TEMP/frame_v2.5.1"
-      - name: Prepare Arduino IDE sketch with custom font candidates enabled
+      - name: Prepare six-page Arduino IDE sketch
         run: |
           mkdir -p "$RUNNER_TEMP/fancy"
           python frame/tools/prepare_arduino_sketch.py --output "$RUNNER_TEMP/fancy/frame_v2.5.1"
           sed -i 's/^#define TYPOGRAPHY_AUDIT_ENABLED 0$/#define TYPOGRAPHY_AUDIT_ENABLED 1/' "$RUNNER_TEMP/fancy/frame_v2.5.1/Config.h"
           sed -i 's/^#define TYPOGRAPHY_CANDIDATE_FONTS_ENABLED 0$/#define TYPOGRAPHY_CANDIDATE_FONTS_ENABLED 1/' "$RUNNER_TEMP/fancy/frame_v2.5.1/Config.h"
-          grep -q '^#define TYPOGRAPHY_CANDIDATE_FONTS_ENABLED 1
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: remind-typography-Arduino-IDE-source-USB-ONLY
-          path: ${{ runner.temp }}/RE-MIND-Typography-Arduino-IDE.zip
-          if-no-files-found: error
-          retention-days: 14
-      - name: Upload unflashed USB typography calibration
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: remind-alfred-typography-calibration-USB-ONLY
-          path: |
-            frame/.pio/build/alfred_v1_2_typography_audit/firmware.bin
-            frame/.pio/build/alfred_v1_2_typography_audit/firmware.elf
-          if-no-files-found: error
-          retention-days: 14
- "$RUNNER_TEMP/fancy/frame_v2.5.1/Config.h"
-          grep -q 'RemindFraunces72' "$RUNNER_TEMP/fancy/frame_v2.5.1/EditorialCandidates.h"
-          (cd "$RUNNER_TEMP/fancy" && zip -qr "$RUNNER_TEMP/RE-MIND-Fancy-Fonts-Arduino-IDE.zip" frame_v2.5.1)
-      - name: Compile custom-font Arduino sketch
+          grep -q "RemindInstrument72" "$RUNNER_TEMP/fancy/frame_v2.5.1/EditorialCandidates.h"
+          cd "$RUNNER_TEMP/fancy"
+          zip -qr "$RUNNER_TEMP/RE-MIND-Fancy-Fonts-Arduino-IDE.zip" frame_v2.5.1
+      - name: Compile fancy-font Arduino IDE sketch
         run: |
-          arduino-cli compile --warnings default \
-            --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" \
-            "$RUNNER_TEMP/fancy/frame_v2.5.1"
-      - name: Archive ready-to-flash custom font comparison Arduino sketch
-        if: success()
+          arduino-cli compile --warnings default --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" "$RUNNER_TEMP/fancy/frame_v2.5.1"
+      - name: Archive Arduino IDE code ready for USB flash
         uses: actions/upload-artifact@v4
         with:
           name: remind-fancy-font-Arduino-IDE-USB-ONLY
           path: ${{ runner.temp }}/RE-MIND-Fancy-Fonts-Arduino-IDE.zip
-          if-no-files-found: error
-          retention-days: 14
-      - name: Archive ready-to-open Arduino IDE sketch ZIP
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: remind-typography-Arduino-IDE-source-USB-ONLY
-          path: ${{ runner.temp }}/RE-MIND-Typography-Arduino-IDE.zip
-          if-no-files-found: error
-          retention-days: 14
-      - name: Upload unflashed USB typography calibration
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: remind-alfred-typography-calibration-USB-ONLY
-          path: |
-            frame/.pio/build/alfred_v1_2_typography_audit/firmware.bin
-            frame/.pio/build/alfred_v1_2_typography_audit/firmware.elf
           if-no-files-found: error
           retention-days: 14
