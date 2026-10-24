@@ -649,6 +649,47 @@ export default function EditorialLabPage(){
           Single module · 16 shapes
         </button>
       </div>
+      <section className="mb-5 rounded-xl border border-[#D6CCBE] bg-[#F8F6F1] p-3 sm:p-5"
+        aria-label="RE:MIND typeface shortlist">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[.25em] text-[#8C7969]">Visual identity · typography study</p>
+            <h2 className="mt-1 text-xl" style={{fontFamily:'"Instrument Serif", Georgia, serif'}}>
+              Three interpretations of a gallery-like home display
+            </h2>
+            <p className="mt-1 text-xs text-[#6C6259]">
+              Select a pairing to apply it to every preview. The physical firmware is unchanged.
+            </p>
+          </div>
+          <span className="rounded-full border border-[#C7B8A5] px-3 py-1 text-xs text-[#665344]">
+            Norwegian characters included
+          </span>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {(Object.entries(EDITORIAL_TYPEFACES) as Array<[Typography,typeof EDITORIAL_TYPEFACES[Typography]]>).map(([key,choice])=>
+            <button type="button" key={key} data-testid={'typeface-'+key}
+              aria-pressed={typography===key} onClick={()=>setTypography(key)}
+              className={'min-w-0 rounded-lg border bg-white p-4 text-left transition-colors '+
+                (typography===key?'border-[#594736] ring-2 ring-[#594736]/20':'border-[#E0D6CB] hover:border-[#A38C78]')}>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[.18em]">{choice.label}</span>
+                <span className="text-[10px] text-[#9B8978]">{typography===key?'● Selected':'○ Preview'}</span>
+              </div>
+              <p className="mt-3 text-[54px] leading-none" style={{
+                fontFamily:'"'+choice.display+'", Georgia, serif',
+                fontVariantNumeric:'lining-nums',letterSpacing:'-.025em'
+              }}>21<span className="ml-2 text-[25px]">okt</span></p>
+              <p className="mt-2 text-[14px]" style={{fontFamily:'"'+choice.body+'", Arial, sans-serif'}}>
+                Kontrolltime · fredag 12:30
+              </p>
+              <p className="mt-3 text-[11px] leading-relaxed text-[#796B5E]">{choice.description}</p>
+            </button>)}
+        </div>
+        <p className="mt-3 text-xs text-[#716456]" data-testid="typeface-norwegian-specimen"
+          style={{fontFamily:'"'+EDITORIAL_TYPEFACES[typography].body+'", Arial, sans-serif'}}>
+          {EDITORIAL_NORWEGIAN_SPECIMEN}
+        </p>
+      </section>
       {view==='frame'&&<div className="mb-4 flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium">Frame appearance</span>
         {(['light','dark'] as const).map(mode=><button key={mode}
