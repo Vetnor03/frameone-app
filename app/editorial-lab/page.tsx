@@ -761,6 +761,7 @@ export default function EditorialLabPage(){
         </span>
         <span data-testid="editorial-browser-audit" data-issues={browserAudit?.issues.length??-1}
           data-checked={browserAudit?.checked??0}
+          data-problems={JSON.stringify(browserAudit?.issues??[])}
           className={browserAudit?.issues.length?'text-red-700':'text-[#476242]'}>
           {browserAudit
             ? browserAudit.checked+' browser renderings · '+browserAudit.issues.length+' glyph issues'
