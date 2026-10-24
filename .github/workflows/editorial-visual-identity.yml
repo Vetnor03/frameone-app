@@ -1,0 +1,32 @@
+name: Editorial visual identity build
+on:
+  push:
+    branches:
+      - feat/editorial-visual-identity
+    paths:
+      - "app/editorial-lab/**"
+      - "app/lib/editorialIdentity.mjs"
+      - "app/lib/editorialPdfExport.mjs"
+      - "package.json"
+      - "tests/editorial-typeface-identity.test.mjs"
+      - ".github/workflows/editorial-visual-identity.yml"
+  workflow_dispatch:
+jobs:
+  editorial-typefaces:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies without changing project lockfiles
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Run typography and PDF structure tests
+        run: node --test tests/editorial-typeface-identity.test.mjs tests/editorial-pdf-export.test.mjs
+      - name: Typecheck Layout Lab
+        run: npm run typecheck
+      - name: Build staging app
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
