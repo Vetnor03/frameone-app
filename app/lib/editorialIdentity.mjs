@@ -42,7 +42,7 @@ export function editorialFaceForBlock(module,block,typography='gallery',mode='')
   const id=block.id||''
   const role=block.role||''
   const lead=id==='primary'||role==='hero'
-  const display=role==='hero' ||
+  const display=(role==='hero'&&!BODY_LED.has(module)) ||
     (lead&&!BODY_LED.has(module) && (NUMERIC_LED.has(module)||module==='surf')) ||
     (module==='date'&&(id==='month'||id==='weekday'))
   // Use readable sans for all long headlines, labels, informational lists
