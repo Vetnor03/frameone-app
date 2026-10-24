@@ -30,3 +30,22 @@ jobs:
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+      - name: Install ephemeral Chromium for actual typography measurements
+        run: |
+          npm install --no-save --no-package-lock playwright
+          npx playwright install --with-deps chromium
+      - name: Start Layout Lab
+        run: |
+          (npm run dev -- --hostname 127.0.0.1 --port 3000 > /tmp/editorial-fonts-next.log 2>&1 &)
+      - name: Audit actual font glyph clipping across all grid shapes
+        run: node scripts/editorial-browser-audit.mjs
+      - name: Save rendered font previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editorial-typography-visual-review
+          path: artifacts/editorial/
+          if-no-files-found: ignore
+      - name: Print server errors
+        if: failure()
+        run: tail -120 /tmp/editorial-fonts-next.log || true
