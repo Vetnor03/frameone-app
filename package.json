@@ -23,7 +23,10 @@
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "resend": "^6.12.4"
+    "resend": "^6.12.4",
+    "@fontsource/instrument-serif": "^5.2.8",
+    "@fontsource/dm-sans": "^5.2.8",
+    "@fontsource/fraunces": "^5.2.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
