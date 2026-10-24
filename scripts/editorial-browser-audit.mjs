@@ -22,6 +22,10 @@ try {
   const ink=await read('editorial-browser-audit')
   console.log('RE:MIND editorial geometry:',JSON.stringify(geometry))
   console.log('RE:MIND rendered glyphs:',JSON.stringify(ink))
+  if(ink.issues){
+    const detail=await page.getByTestId('editorial-browser-audit').getAttribute('data-problems')
+    console.log('RE:MIND glyph issue details:',detail)
+  }
   assert.equal(geometry.checked,352)
   assert.equal(geometry.issues,0,'Geometry regression in editorial compositions')
   assert.equal(ink.checked,352)
