@@ -86,6 +86,46 @@ jobs:
           arduino-cli compile --warnings default \
             --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" \
             "$RUNNER_TEMP/frame_v2.5.1"
+      - name: Prepare Arduino IDE sketch with custom font candidates enabled
+        run: |
+          mkdir -p "$RUNNER_TEMP/fancy"
+          python frame/tools/prepare_arduino_sketch.py --output "$RUNNER_TEMP/fancy/frame_v2.5.1"
+          sed -i 's/^#define TYPOGRAPHY_AUDIT_ENABLED 0$/#define TYPOGRAPHY_AUDIT_ENABLED 1/' "$RUNNER_TEMP/fancy/frame_v2.5.1/Config.h"
+          sed -i 's/^#define TYPOGRAPHY_CANDIDATE_FONTS_ENABLED 0$/#define TYPOGRAPHY_CANDIDATE_FONTS_ENABLED 1/' "$RUNNER_TEMP/fancy/frame_v2.5.1/Config.h"
+          grep -q '^#define TYPOGRAPHY_CANDIDATE_FONTS_ENABLED 1
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remind-typography-Arduino-IDE-source-USB-ONLY
+          path: ${{ runner.temp }}/RE-MIND-Typography-Arduino-IDE.zip
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload unflashed USB typography calibration
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remind-alfred-typography-calibration-USB-ONLY
+          path: |
+            frame/.pio/build/alfred_v1_2_typography_audit/firmware.bin
+            frame/.pio/build/alfred_v1_2_typography_audit/firmware.elf
+          if-no-files-found: error
+          retention-days: 14
+ "$RUNNER_TEMP/fancy/frame_v2.5.1/Config.h"
+          grep -q 'RemindFraunces72' "$RUNNER_TEMP/fancy/frame_v2.5.1/EditorialCandidates.h"
+          (cd "$RUNNER_TEMP/fancy" && zip -qr "$RUNNER_TEMP/RE-MIND-Fancy-Fonts-Arduino-IDE.zip" frame_v2.5.1)
+      - name: Compile custom-font Arduino sketch
+        run: |
+          arduino-cli compile --warnings default \
+            --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" \
+            "$RUNNER_TEMP/fancy/frame_v2.5.1"
+      - name: Archive ready-to-flash custom font comparison Arduino sketch
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remind-fancy-font-Arduino-IDE-USB-ONLY
+          path: ${{ runner.temp }}/RE-MIND-Fancy-Fonts-Arduino-IDE.zip
+          if-no-files-found: error
+          retention-days: 14
       - name: Archive ready-to-open Arduino IDE sketch ZIP
         if: success()
         uses: actions/upload-artifact@v4
