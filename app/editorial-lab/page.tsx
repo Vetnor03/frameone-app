@@ -1,9 +1,15 @@
 'use client'
 
 import {useEffect,useMemo,useRef,useState} from 'react'
+import '@fontsource/instrument-serif/400.css'
+import '@fontsource/instrument-serif/400-italic.css'
+import '@fontsource/dm-sans/400.css'
+import '@fontsource/dm-sans/600.css'
+import '@fontsource/fraunces/400.css'
 import Link from 'next/link'
 import {exportEditorialBatchPdf} from '../lib/editorialPdfExport.mjs'
 import {editorialPlan} from '../lib/editorialFrameLayout.mjs'
+import {EDITORIAL_TYPEFACES,EDITORIAL_NORWEGIAN_SPECIMEN,editorialFaceForBlock} from '../lib/editorialIdentity.mjs'
 import {EDITORIAL_MODULES,composeEditorialModule,auditEditorialComposition} from '../lib/editorialComposition.mjs'
 import {WEATHER_VIGNETTE_SCENES,weatherCoastalCurves} from '../lib/editorialWeatherVignette.mjs'
 import {EDITORIAL_GRID_PRESETS,GRID_CELL_WIDTH,GRID_CELL_HEIGHT,
@@ -15,6 +21,7 @@ type Module = typeof EDITORIAL_MODULES[number]
 type Span = 1|2|3|4
 type Cell = string
 type FrameTheme = 'light'|'dark'
+type Typography = keyof typeof EDITORIAL_TYPEFACES
 type WeatherScene = keyof typeof WEATHER_VIGNETTE_SCENES
 const spans:Span[]=[1,2,3,4]
 const cells=spans.flatMap(cols=>spans.map(rows=>({
@@ -98,10 +105,10 @@ function Calendar({x,y,w,h,ink}:{x:number;y:number;w:number;h:number;ink:string}
   </g>
 }
 
-function EditorialCanvas({module,width,height,theme,weatherScene='partly',
+function EditorialCanvas({module,width,height,theme,typography='gallery',weatherScene='partly',
   ornament=true,sectionBreak=false,density='open',separateRight=false,separateBottom=false,centralJunction=false}:{
   module:Module;width:number;height:number;theme:FrameTheme;
-  weatherScene?:WeatherScene;ornament?:boolean;sectionBreak?:boolean;
+  typography?:Typography;weatherScene?:WeatherScene;ornament?:boolean;sectionBreak?:boolean;
   density?:'open'|'contour'|'chapter-grid'|'fine-grid';separateRight?:boolean;separateBottom?:boolean;
   centralJunction?:boolean
 }) {
@@ -111,7 +118,7 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly',
   return <svg role="img"
     aria-label={module+' '+width+'×'+height+' editorial concept, '+theme+' theme'}
     viewBox={'0 0 '+width+' '+height} preserveAspectRatio="xMidYMid meet"
-    data-editorial-probe="true" data-module={module} data-width={width} data-height={height}
+    data-editorial-probe="true" data-module={module} data-width={width} data-height={height} data-typography={typography}
     className="block h-auto w-full" style={{backgroundColor:paper}}>
     <rect width={width} height={height} fill={paper}/>
     {density!=='open'&&<g data-editorial-density={density} stroke={ink}
@@ -171,13 +178,16 @@ function EditorialCanvas({module,width,height,theme,weatherScene='partly',
       const size=block.fontSize??13
       const lineHeight=size*1.24
       const lines=block.lines??[]
+      const face=editorialFaceForBlock(module,block,typography,layout.mode)
       return <g key={block.id} data-role={block.role} data-block={block.id}>
         {lines.map((line,i)=><text key={i} data-audit-block={block.id}
           x={block.x+block.w/2}
           y={block.y+(i+.5)*lineHeight}
           textAnchor="middle" dominantBaseline="middle"
-          fontFamily={block.serif?'Georgia, "Times New Roman", serif':'Arial, Helvetica, sans-serif'}
-          fontSize={size} fill={ink} opacity={['secondary','list'].includes(block.role)?'.72':'1'}>
+          fontFamily={face.fontFamily} fontWeight={face.fontWeight}
+          letterSpacing={face.letterSpacing}
+          fontSize={size} fill={ink} opacity={['secondary','list'].includes(block.role)?
+            (layout.mode==='surf-medium-reference'||typography==='original'?'.72':'.88'):'1'}>
           {line}
         </text>)}
         {ornament&&(density==='open'||density==='contour')&&
@@ -201,8 +211,8 @@ const moduleLabel=(module:Module)=>module==='assistant'
 
 // Full-frame editing is a layout-study surface. Every cell uses the *same*
 // EditorialCanvas renderer as the single-cell Lab; no fake thumbnail geometry.
-function FullFrameLab({theme,weatherScene}:{
-  theme:FrameTheme;weatherScene:WeatherScene
+function FullFrameLab({theme,weatherScene,typography}:{
+  theme:FrameTheme;weatherScene:WeatherScene;typography:Typography
 }){
   const [presetId,setPresetId]=useState('quarters')
   const [tiles,setTiles]=useState<FrameTile[]>(()=>makeEditorialGrid('quarters') as FrameTile[])
@@ -285,7 +295,7 @@ function FullFrameLab({theme,weatherScene}:{
     setExportBusy(true)
     setExportStatus('Preparing full-resolution pages...')
     try{
-      const pages=await exportEditorialBatchPdf(batchRoot.current,batch,{theme,weatherScene})
+      const pages=await exportEditorialBatchPdf(batchRoot.current,batch,{theme,weatherScene,typography})
       setExportStatus('Downloaded '+pages+' full-size pages as a PDF')
     }catch(error){
       setExportStatus(error instanceof Error?error.message:'Could not export PDF')
@@ -296,7 +306,7 @@ function FullFrameLab({theme,weatherScene}:{
   const downloadBatchManifest=()=>{
     if(batch.length===0)return
     const payload={
-      format:'RE:MIND-layout-review-v1',theme,weatherScene,
+      format:'RE:MIND-layout-review-v1',theme,weatherScene,typography,
       count:batch.length,
       layouts:batch.map((design,index)=>({
         page:index+1,seed:design.seed,presetId:design.presetId,
@@ -352,7 +362,7 @@ function FullFrameLab({theme,weatherScene}:{
   const copySetup=async()=>{
     try{
       await navigator.clipboard.writeText(JSON.stringify({
-        presetId,seed:lastSeed,qualityScore,tiles:tiles.map(({id,x,y,cols,rows,module})=>
+        presetId,seed:lastSeed,qualityScore,typography,tiles:tiles.map(({id,x,y,cols,rows,module})=>
           ({id,x,y,cols,rows,module})),
       },null,2))
       setCopyStatus('Copied')
@@ -428,7 +438,7 @@ function FullFrameLab({theme,weatherScene}:{
                     'none',
                 }}>
                 <EditorialCanvas module={tile.module} width={width} height={height}
-                  theme={theme} weatherScene={weatherScene}
+                  theme={theme} weatherScene={weatherScene} typography={typography}
                   ornament={emphasized.has(tile.id)}
                   sectionBreak={groupCues.has(tile.id)}
                   density={densityRules.mode}
@@ -492,7 +502,7 @@ function FullFrameLab({theme,weatherScene}:{
                   style={{left:(tile.x*25)+'%',top:(tile.y*25)+'%',
                     width:(tile.cols*25)+'%',height:(tile.rows*25)+'%'}}>
                   <EditorialCanvas module={tile.module} width={w} height={h}
-                    theme={theme} weatherScene={weatherScene}
+                    theme={theme} weatherScene={weatherScene} typography={typography}
                     ornament={accents.has(tile.id)}
                     sectionBreak={sectionBreaks.has(tile.id)}
                     density={previewDensity.mode}
@@ -555,6 +565,7 @@ export default function EditorialLabPage(){
   const [module,setModule]=useState<Module>('date')
   const [cell,setCell]=useState<Cell>('4x4')
   const [theme,setTheme]=useState<FrameTheme>('light')
+  const [typography,setTypography]=useState<Typography>('gallery')
   const [weatherScene,setWeatherScene]=useState<WeatherScene>('partly')
   const [matrix,setMatrix]=useState(false)
   const browserProbes=useRef<HTMLDivElement|null>(null)
@@ -595,7 +606,7 @@ export default function EditorialLabPage(){
       if(!cancelled)setBrowserAudit({checked:0,issues:['Browser font measurements unavailable']})
     })
     return ()=>{cancelled=true}
-  },[])
+  },[typography])
   const selected=cells.find(item=>item.key===cell)??cells[cells.length-1]
   const plan=editorialPlan(selected.width,selected.height)
   const audit=useMemo(()=>{
@@ -656,7 +667,7 @@ export default function EditorialLabPage(){
           </select>
         </label>
       </div>}
-      {view==='frame'&&<FullFrameLab theme={theme} weatherScene={weatherScene}/>}
+      {view==='frame'&&<FullFrameLab theme={theme} weatherScene={weatherScene} typography={typography}/>}
       {view==='single'&&<>
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <label className="text-xs">Module
@@ -740,7 +751,7 @@ export default function EditorialLabPage(){
           <div className="w-full border-[6px] border-[#F0EADF] bg-white"
             style={{maxWidth:selected.width}}>
             <EditorialCanvas module={module} width={selected.width}
-              height={selected.height} theme={theme} weatherScene={weatherScene}/>
+              height={selected.height} theme={theme} weatherScene={weatherScene} typography={typography}/>
           </div>
         </div>
       </div>}
