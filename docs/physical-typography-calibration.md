@@ -35,6 +35,38 @@ send commands unnecessarily. Unplugging USB suspends the diagnostic.
 The panel image can remain visible after power-down; this is normal e-paper
 behaviour.
 
+## New premium-font comparison (separate, USB-only build)
+
+The fancy-font candidate target generates real 1-bit Adafruit GFX bitmap
+glyphs from open-licensed Instrument Serif, Fraunces and DM Sans source fonts.
+The source fonts are pinned to a specific Google Fonts repository commit,
+and converted using the script
+`frame/tools/generate_eink_typefaces.py` in the calibration workflow.
+
+The compiled custom-font firmware artifact and a fully prepared Arduino IDE
+source ZIP are provided by the successful GitHub Actions run named
+**Physical typography calibration (USB-only)**. Use the artifact named
+`remind-fancy-font-Arduino-IDE-USB-ONLY` to flash through Arduino IDE.
+The compiled `remind-alfred-fancy-font-test-USB-ONLY` binary is an alternative.
+
+The optional six-page build uses pages 1–4 from the original comparison,
+plus:
+
+- Page **5**: Instrument Serif 48/72px with DM Sans 18/24px.
+- Page **6**: Fraunces 48/72px with the same practical DM Sans.
+- Both pages display `Æ Ø Å æ ø å` from the actual one-bit generated glyphs.
+
+No external font installation is needed when using the prepared Arduino ZIP.
+To build this optional candidate yourself you must first generate the
+`EditorialCandidates.h` font file with the pinned source TTF files, then
+select the `alfred_v1_2_typography_identity` PlatformIO environment.
+The *regular* `alfred_v1_2` firmware never includes or executes the font
+comparison path.
+
+This is an experimental aesthetic comparison, not production typography.
+You must still judge small-text readability from the actual panel before
+changing standard RE:MIND typefaces.
+
 ## How to evaluate
 
 For pages 1–2, view the **real panel**, without zoomed camera screenshots,
