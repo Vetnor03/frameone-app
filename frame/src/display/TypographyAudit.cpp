@@ -16,6 +16,9 @@
 #include <Fonts/FreeSerif18pt7b.h>
 #include <Fonts/FreeSerifBold18pt7b.h>
 #include <Fonts/FreeSerifBold24pt7b.h>
+#if TYPOGRAPHY_CANDIDATE_FONTS_ENABLED
+#include "EditorialCandidates.h"
+#endif
 #include <Arduino.h>
 
 #if !defined(FRAME_IS_ALFRED_V1_2)
@@ -27,6 +30,11 @@ constexpr int kWidth = 800;
 constexpr int kHeight = 480;
 uint8_t currentPage = 0;
 bool usbConnected = false;
+#if TYPOGRAPHY_CANDIDATE_FONTS_ENABLED
+constexpr uint8_t kPageCount = 6;
+#else
+constexpr uint8_t kPageCount = 4;
+#endif
 
 struct Sample {
   const char* label;
@@ -177,10 +185,42 @@ void pageGrid(bool dark) {
   }
 }
 
+#if TYPOGRAPHY_CANDIDATE_FONTS_ENABLED
+void pageNewType(bool warm) {
+  auto& d = DisplayCore::get();
+  d.fillScreen(GxEPD_WHITE);
+  const GFXfont* display = warm ? &RemindFraunces72 : &RemindInstrument72;
+  const GFXfont* headingFace = warm ? &RemindFraunces48 : &RemindInstrument48;
+  heading(warm ? "RE:MIND | WARM FONT 6/6" : "RE:MIND | GALLERY FONT 5/6",
+    "One-bit custom Norwegian fonts, true sizes. View from 0.5 / 1 / 2 metres.",
+    GxEPD_BLACK);
+  // 72px is a *bitmap design size*. The real glyph height may be smaller.
+  text(24, 80, 750, 95, "21", display, GxEPD_BLACK, true, false);
+  text(220, 90, 550, 74, "oktober", headingFace, GxEPD_BLACK, true, false);
+  rule(24, 184, 776, 184, GxEPD_BLACK);
+  text(24, 196, 752, 55, "Æ Ø Å  æ ø å", headingFace, GxEPD_BLACK, true, false);
+  text(24, 272, 752, 40, "Kontrolltime · fredag 12:30",
+    &RemindDM24, GxEPD_BLACK, true, false);
+  text(24, 325, 752, 30, "Blåbær, vær, brød og åpne møter",
+    &RemindDM18, GxEPD_BLACK, true, false);
+  rule(24, 376, 776, 376, GxEPD_BLACK);
+  text(24, 387, 752, 35, "DM Sans 18 / 24 · Seriff 48 / 72",
+    &RemindDM18, GxEPD_BLACK, true, false);
+  text(24, 432, 752, 23, "Actual one-bit glyphs. Only this USB test includes new custom fonts.",
+    &FreeSans9pt8b, GxEPD_BLACK, false, false);
+}
+#endif
+
 void draw(uint8_t page) {
   if (!usbConnected) return;
-  Serial.printf("RE:MIND physical typography QA page %u/4; full 800x480 refresh\n",
-    unsigned(page + 1));
+  Serial.printf("RE:MIND physical typography QA page %u/%u; full 800x480 refresh\n",
+    unsigned(page + 1), unsigned(
+#if TYPOGRAPHY_CANDIDATE_FONTS_ENABLED
+    6
+#else
+    4
+#endif
+    ));
   DisplayCore::begin();
   auto& d = DisplayCore::get();
   d.setFullWindow();
@@ -190,11 +230,16 @@ void draw(uint8_t page) {
       case 0: pageFamilies(); break;
       case 1: pageDistance(); break;
       case 2: pageGrid(false); break;
+      case 3: pageGrid(true); break;
+#if TYPOGRAPHY_CANDIDATE_FONTS_ENABLED
+      case 4: pageNewType(false); break;
+      case 5: pageNewType(true); break;
+#endif
       default: pageGrid(true); break;
     }
   } while (d.nextPage());
   DisplayCore::end(); // Turn off the e-paper rail after every completed page.
-  Serial.println("Type QA page complete; send 1-4 or n/p to change page.");
+  Serial.println("Type QA page complete; send 1-6 or n/p to change page.");
 }
 }
 
@@ -206,7 +251,7 @@ void begin() {
   // The diagnostic has no battery power policy: only refresh while on USB.
   usbConnected = digitalRead(HardwareProfile::kPgoodN) == LOW;
   Serial.println("RE:MIND TYPOGRAPHY CALIBRATION - NO NETWORK, NO OTA, NO NVS");
-  Serial.println("USB required. Commands: 1-4 = pages; n = next; p = previous; ? = help.");
+  Serial.println("USB required. Commands: 1-6 = pages; n = next; p = previous; ? = help.");
   if (!usbConnected) {
     Serial.println("USB not detected; no panel refresh. Connect supplied USB cable.");
     return;
@@ -234,11 +279,11 @@ void poll() {
   }
   const char command = static_cast<char>(Serial.read());
   uint8_t nextPage = currentPage;
-  if (command >= '1' && command <= '4') nextPage = command - '1';
-  else if (command == 'n' || command == 'N') nextPage = (currentPage + 1) % 4;
-  else if (command == 'p' || command == 'P') nextPage = (currentPage + 3) % 4;
+  if (command >= '1' && command <= '6') nextPage = command - '1';
+  else if (command == 'n' || command == 'N') nextPage = (currentPage + kPageCount - 1 + 1) % kPageCount;
+  else if (command == 'p' || command == 'P') nextPage = (currentPage + kPageCount - 1) % kPageCount;
   else if (command == '?') {
-    Serial.println("Send 1, 2, 3, 4, n, or p. Each command performs ONE full e-paper refresh.");
+    Serial.println("Send 1-6, n, or p. Each command performs ONE full e-paper refresh.");
     return;
   } else return;
   if (nextPage != currentPage) {
