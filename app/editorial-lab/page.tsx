@@ -176,13 +176,19 @@ function EditorialCanvas({module,width,height,theme,typography='gallery',weather
         return <Calendar key={block.id} x={block.x} y={block.y}
           w={block.w} h={block.h} ink={ink}/>
       const size=block.fontSize??13
-      const lineHeight=size*1.24
       const lines=block.lines??[]
+      const readableHeadline=typography!=='original'&&
+        layout.mode!=='surf-medium-reference'&&lines.length>1&&
+        ['news','reminders','groceries','assistant'].includes(module)&&
+        block.id==='primary'
+      const lineHeight=size*(readableHeadline?1.43:1.24)
       const face=editorialFaceForBlock(module,block,typography,layout.mode)
       return <g key={block.id} data-role={block.role} data-block={block.id}>
         {lines.map((line,i)=><text key={i} data-audit-block={block.id}
           x={block.x+block.w/2}
-          y={block.y+(i+.5)*lineHeight}
+          y={readableHeadline
+            ?block.y+block.h/2+(i-(lines.length-1)/2)*lineHeight
+            :block.y+(i+.5)*lineHeight}
           textAnchor="middle" dominantBaseline="middle"
           fontFamily={face.fontFamily} fontWeight={face.fontWeight}
           letterSpacing={face.letterSpacing}
