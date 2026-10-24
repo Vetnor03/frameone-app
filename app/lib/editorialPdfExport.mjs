@@ -15,7 +15,7 @@ const pdfText = value => '('+cleanAscii(value)+')'
 
 // Accepts a list of {jpeg:Uint8Array,width,height,seed,modules,presetId}.
 // Produces an entirely offline multi-page PDF, one full-sized layout per page.
-export function buildEditorialReviewPdf(pages,{theme='light',weatherScene='partly'}={}){
+export function buildEditorialReviewPdf(pages,{theme='light',weatherScene='partly',typography='original'}={}){
   if(!Array.isArray(pages)||!pages.length||pages.length>100)
     throw new RangeError('Expected between 1 and 100 frame previews')
   const pageWidth=960,pageHeight=680
@@ -43,7 +43,7 @@ export function buildEditorialReviewPdf(pages,{theme='light',weatherScene='partl
     const details='Seed '+page.seed+'  |  '+page.modules.length+
       ' modules  |  '+page.presetId
     const legend='Modules: '+page.modules.join(', ')+'  |  Theme: '+theme+
-      '  |  Weather: '+weatherScene
+      '  |  Weather: '+weatherScene+'  |  Typography: '+typography
     const instructions='Review the full-size composition, readability, balance and hierarchy.'
     const commands=[
       'q','0.90 G','0.7 w','38 76 884 530 re S','Q',
@@ -84,8 +84,21 @@ const decodeJpeg = dataUrl => {
   for(let i=0;i<data.length;i++)out[i]=data.charCodeAt(i)
   return out
 }
-async function drawCell(ctx,sourceSvg,x,y,width,height,scale){
-  const svg=new XMLSerializer().serializeToString(sourceSvg)
+async function drawCell(ctx,sourceSvg,x,y,width,height,scale,typography){
+  // Serialized SVG images cannot reliably access a page's loaded web fonts.
+  // For the font-shortlist review, rasterize the ornamental SVG first and
+  // draw its main text with Canvas using the browser's actual self-hosted fonts.
+  // This avoids silently exporting fallback Georgia/Arial while the on-screen
+  // sample uses Instrument Serif, Fraunces and DM Sans.
+  const replaceText=typography!=='original'&&
+    sourceSvg.getAttribute('data-module')!=='surf-medium-approved'&&
+    !(sourceSvg.getAttribute('data-module')==='surf'&&width===400&&height===240)
+  const sourceText=replaceText
+    ?Array.from(sourceSvg.querySelectorAll('text[data-audit-block]')):[]
+  const copy=sourceSvg.cloneNode(true)
+  if(replaceText)
+    copy.querySelectorAll('text[data-audit-block]').forEach(node=>node.remove())
+  const svg=new XMLSerializer().serializeToString(copy)
   const blob=new Blob([svg],{type:'image/svg+xml;charset=utf-8'})
   const url=URL.createObjectURL(blob)
   try{
@@ -93,14 +106,36 @@ async function drawCell(ctx,sourceSvg,x,y,width,height,scale){
     image.src=url
     await image.decode()
     ctx.drawImage(image,x*scale,y*scale,width*scale,height*scale)
+    if(sourceText.length){
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(x*scale,y*scale,width*scale,height*scale)
+      ctx.clip()
+      for(const text of sourceText){
+        const family=text.getAttribute('font-family')||'Arial, sans-serif'
+        const size=Number(text.getAttribute('font-size')||13)
+        const weight=text.getAttribute('font-weight')||'400'
+        await document.fonts.load(weight+' '+size+'px '+family)
+        ctx.font=weight+' '+size*scale+'px '+family
+        ctx.textAlign='center'
+        ctx.textBaseline='middle'
+        ctx.fillStyle=text.getAttribute('fill')||'#000000'
+        ctx.globalAlpha=Number(text.getAttribute('opacity')||1)
+        ctx.fillText(text.textContent||'',
+          (x+Number(text.getAttribute('x')||0))*scale,
+          (y+Number(text.getAttribute('y')||0))*scale)
+      }
+      ctx.restore()
+    }
   }finally{
     URL.revokeObjectURL(url)
   }
 }
 export async function exportEditorialBatchPdf(container,designs,
-  {theme='light',weatherScene='partly'}={}){
+  {theme='light',weatherScene='partly',typography='original'}={}){
   if(!container||!Array.isArray(designs)||!designs.length)
     throw new Error('Generate previews before exporting')
+  await document.fonts.ready
   const scale=designs.length>25?2:3
   const canvas=document.createElement('canvas')
   canvas.width=800*scale
@@ -119,7 +154,7 @@ export async function exportEditorialBatchPdf(container,designs,
         .find(node=>node.getAttribute('data-export-tile')===tile.id)
       const svg=tileRoot?.querySelector('svg[data-editorial-probe]')
       if(!svg)throw new Error('Module art is missing in preview '+(i+1))
-      await drawCell(ctx,svg,tile.x*200,tile.y*120,tile.cols*200,tile.rows*120,scale)
+      await drawCell(ctx,svg,tile.x*200,tile.y*120,tile.cols*200,tile.rows*120,scale,typography)
     }
     pages.push({
       jpeg:decodeJpeg(canvas.toDataURL('image/jpeg',designs.length>25?0.90:0.96)),
@@ -128,7 +163,7 @@ export async function exportEditorialBatchPdf(container,designs,
       modules:design.tiles.map(tile=>tile.module),
     })
   }
-  const data=buildEditorialReviewPdf(pages,{theme,weatherScene})
+  const data=buildEditorialReviewPdf(pages,{theme,weatherScene,typography})
   const blob=new Blob([data.buffer.slice(data.byteOffset,data.byteOffset+data.byteLength)],
     {type:'application/pdf'})
   const url=URL.createObjectURL(blob)
