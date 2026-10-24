@@ -28,6 +28,38 @@ jobs:
       - name: Compile isolated USB typography calibration
         run: pio run -d frame -e alfred_v1_2_typography_audit
 
+      - name: Generate Norwegian-safe editorial typeface bitmap candidates
+        run: |
+          pip install Pillow==11.3.0 fonttools==4.60.1
+          mkdir -p /tmp/remind-licensed-fonts
+          # Specific Google Fonts repository commit, not floating HEAD.
+          FONT_REF=e7db6ca603fd4862010383ff17ffd6cc4ffac1c0
+          curl --fail --location --silent --show-error \
+            "https://raw.githubusercontent.com/google/fonts/$FONT_REF/ofl/instrumentserif/InstrumentSerif-Regular.ttf" \
+            -o /tmp/remind-licensed-fonts/instrument.ttf
+          curl --fail --location --silent --show-error \
+            "https://raw.githubusercontent.com/google/fonts/$FONT_REF/ofl/dmsans/DMSans%5Bopsz%2Cwght%5D.ttf" \
+            -o /tmp/remind-licensed-fonts/dm.ttf
+          curl --fail --location --silent --show-error \
+            "https://raw.githubusercontent.com/google/fonts/$FONT_REF/ofl/fraunces/Fraunces%5BSOFT%2CWONK%2Copsz%2Cwght%5D.ttf" \
+            -o /tmp/remind-licensed-fonts/fraunces.ttf
+          python frame/tools/generate_eink_typefaces.py \
+            --instrument /tmp/remind-licensed-fonts/instrument.ttf \
+            --dm /tmp/remind-licensed-fonts/dm.ttf \
+            --fraunces /tmp/remind-licensed-fonts/fraunces.ttf \
+            --output frame/src/assets/fonts/EditorialCandidates.h
+          grep -q "RemindFraunces72" frame/src/assets/fonts/EditorialCandidates.h
+          grep -q "RemindInstrument72" frame/src/assets/fonts/EditorialCandidates.h
+      - name: Compile custom serif/sans candidate USB diagnostic
+        run: pio run -d frame -e alfred_v1_2_typography_identity
+      - name: Archive unflashed custom font comparison firmware
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remind-alfred-fancy-font-test-USB-ONLY
+          path: frame/.pio/build/alfred_v1_2_typography_identity/firmware.bin
+          if-no-files-found: error
+          retention-days: 14
       - name: Install Arduino CLI
         uses: arduino/setup-arduino-cli@v2
         with:
