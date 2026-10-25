@@ -45,6 +45,9 @@ extern const char* BASE_URL;
 #ifndef TYPOGRAPHY_CANDIDATE_FONTS_ENABLED
 #define TYPOGRAPHY_CANDIDATE_FONTS_ENABLED 0
 #endif
+#ifndef TYPOGRAPHY_ART_AUDIT_ENABLED
+#define TYPOGRAPHY_ART_AUDIT_ENABLED 0
+#endif
 
 // =========================
 // ePaper pins (EDIT THESE to your wiring)
