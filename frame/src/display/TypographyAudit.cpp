@@ -80,7 +80,12 @@ void pageFamilies() {
   auto& d = DisplayCore::get();
   d.fillScreen(GxEPD_WHITE);
   const uint16_t ink = GxEPD_BLACK;
-  heading("RE:MIND | FONT CALIBRATION 1/4",
+  heading(
+#if TYPOGRAPHY_CANDIDATE_FONTS_ENABLED
+    "RE:MIND | FONT CALIBRATION 1/6",
+#else
+    "RE:MIND | FONT CALIBRATION 1/4",
+#endif
     "Actual 800 x 480 pixels. Compare stroke weight, personality and spacing.", ink);
   text(28, 75, 352, 32, "SANS | NORWEGIAN", &FreeSansBold12pt8b, ink);
   text(420, 75, 352, 32, "SERIF | ASCII ONLY", &FreeSansBold12pt8b, ink);
@@ -110,14 +115,20 @@ void pageFamilies() {
       rule(424, y + 61, 763, y + 61, ink);
     }
   }
-  text(25, 453, 750, 22, "Serif characters Æ/Ø/Å are NOT supported in this candidate. Do not ship yet.",
+  // Keep calibration captions inside the visible passepartout opening.
+  text(25, 435, 750, 20, "Stock serif: ASCII only. Premium tests on pages 5 and 6 support AE/O/A.",
        &FreeSans9pt8b, ink);
 }
 
 void pageDistance() {
   auto& d = DisplayCore::get();
   d.fillScreen(GxEPD_WHITE);
-  heading("RE:MIND | DISTANCE TEST 2/4",
+  heading(
+#if TYPOGRAPHY_CANDIDATE_FONTS_ENABLED
+    "RE:MIND | DISTANCE TEST 2/6",
+#else
+    "RE:MIND | DISTANCE TEST 2/4",
+#endif
     "Read from 0.5 m, then 1 m, then 2 m. Record the smallest COMFORTABLE size.", GxEPD_BLACK);
   const struct Row {
     const char* name;
@@ -239,7 +250,8 @@ void draw(uint8_t page) {
     }
   } while (d.nextPage());
   DisplayCore::end(); // Turn off the e-paper rail after every completed page.
-  Serial.println("Type QA page complete; send 1-6 or n/p to change page.");
+  Serial.printf("Type QA page complete; send 1-%u or n/p to change page.\n",
+    unsigned(kPageCount));
 }
 }
 
@@ -251,7 +263,8 @@ void begin() {
   // The diagnostic has no battery power policy: only refresh while on USB.
   usbConnected = digitalRead(HardwareProfile::kPgoodN) == LOW;
   Serial.println("RE:MIND TYPOGRAPHY CALIBRATION - NO NETWORK, NO OTA, NO NVS");
-  Serial.println("USB required. Commands: 1-6 = pages; n = next; p = previous; ? = help.");
+  Serial.printf("USB required. Commands: 1-%u = pages; n = next; p = previous; ? = help.\n",
+    unsigned(kPageCount));
   if (!usbConnected) {
     Serial.println("USB not detected; no panel refresh. Connect supplied USB cable.");
     return;
@@ -279,11 +292,14 @@ void poll() {
   }
   const char command = static_cast<char>(Serial.read());
   uint8_t nextPage = currentPage;
-  if (command >= '1' && command <= '6') nextPage = command - '1';
-  else if (command == 'n' || command == 'N') nextPage = (currentPage + kPageCount - 1 + 1) % kPageCount;
+  if (command >= '1' && command < '1' + kPageCount)
+    nextPage = command - '1';
+  else if (command == 'n' || command == 'N')
+    nextPage = (currentPage + 1) % kPageCount;
   else if (command == 'p' || command == 'P') nextPage = (currentPage + kPageCount - 1) % kPageCount;
   else if (command == '?') {
-    Serial.println("Send 1-6, n, or p. Each command performs ONE full e-paper refresh.");
+    Serial.printf("Send 1-%u, n or p. Each command performs ONE full refresh.\n",
+      unsigned(kPageCount));
     return;
   } else return;
   if (nextPage != currentPage) {
