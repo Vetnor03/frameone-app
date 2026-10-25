@@ -67,6 +67,36 @@ This is an experimental aesthetic comparison, not production typography.
 You must still judge small-text readability from the actual panel before
 changing standard RE:MIND typefaces.
 
+## High-detail illustration experiment — pages 7–10
+
+The newer optional `remind-art-and-fonts-Arduino-IDE-USB-ONLY` build is the
+**ten-page** replacement for the earlier six-page font-only test. It preserves
+pages 1–6 and adds actual 800×480, one-bit illustration calibration.
+No normal RE:MIND functionality is changed and the sketches are not OTA firmware.
+
+With USB connected, open Serial Monitor (115200 baud) and send:
+
+| Input | Artwork | What to compare |
+| --- | --- | --- |
+| `7` | Stroke / hatching / stipple atlas | Which hairlines are visible without breaking apart? |
+| `8` | Three identical coastal engravings, same real module footprint | Fine vs. balanced vs. bold (which looks most like a fine art print?) |
+| `9` | Large-format fine coastal engraving | Maximum convincing detail, open sky and natural shore textures |
+| `0` | Editorial page with a small engravable coastline and botanical branch | Does the art remain beautiful when combined with real content? |
+
+`n` and `p` still advance or reverse through all ten pages. **Each switch
+performs one full e-paper refresh**; please don't send commands repeatedly
+without letting refresh finish.
+
+Please share a front-on photo of page 8 and page 10 at roughly 1–2 metres,
+plus a close-up of page 7 or 9. The firmware is using the panel's native 1-bit
+pixels, not browser anti-aliasing or simulated grayscale.
+
+These scenes are procedural *calibration artwork* inspired by the desired
+engraving aesthetic, not production illustrations or an exact copy of the
+reference photograph. Fine lines may vanish at normal viewing distance.
+Use the outcome to choose a common rule for stroke widths, texture densities,
+and when to simplify miniatures. Never prohibit a valid module layout.
+
 ## How to evaluate
 
 For pages 1–2, view the **real panel**, without zoomed camera screenshots,
