@@ -54,7 +54,7 @@ test('calibration contains multi-family candidates and real 1x1 frame samples',a
   assert.match(source,/pageGrid\(true\)/)
   assert.match(source,/FrameText::normalizeUtf8ForDisplay/)
   assert.match(source,/Serial.printf\("Type QA: %s ink bounding box/)
-  assert.match(source,/Serif characters Æ\/Ø\/Å are NOT supported/)
+  assert.match(source,/Stock serif: ASCII only/)
 })
 
 test('engraving calibration exists only behind explicit opt-in artwork gate',async()=>{
@@ -89,7 +89,7 @@ test('illustration test compares same 1-bit art at real module size across strok
     assert.ok(!s.includes(risk),'The artwork-only renderer must not alter device state: '+risk)
   }
   const w=await read('.github/workflows/frame-typography-calibration.yml')
-  assert.match(w,/Compile fancy-font Arduino IDE sketch/)
-  assert.match(w,/RE-MIND-Art-And-Fonts-Arduino-IDE.zip/)
+  assert.match(w,/Compile Arduino IDE sketch/)
+  assert.match(w,/RE-MIND-Artwork-Type-Test.zip/)
   assert.match(w,/TYPOGRAPHY_ART_AUDIT_ENABLED 1/)
 })
