@@ -73,3 +73,13 @@ test('PDF metadata distinguishes the chosen font pairing',()=>{
   const data=buildEditorialReviewPdf([dummy],{typography:'gallery'})
   assert.match(Buffer.from(data).toString('latin1'),/Typography: gallery/)
 })
+
+test('Fraunces and DM Sans are the default visual-identity shortlist choice',async()=>{
+  const lab=await source('app/editorial-lab/page.tsx')
+  assert.match(lab,/const \[typography,setTypography\]=useState<Typography>\('warm'\)/)
+  assert.equal(EDITORIAL_TYPEFACES.warm.display,'Fraunces')
+  assert.equal(EDITORIAL_TYPEFACES.warm.body,'DM Sans')
+  // The original comparison and Instrument Serif remain opt-in alternatives.
+  assert.ok(EDITORIAL_TYPEFACES.gallery)
+  assert.ok(EDITORIAL_TYPEFACES.original)
+})
