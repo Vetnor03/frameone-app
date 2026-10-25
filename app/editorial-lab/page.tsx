@@ -571,7 +571,7 @@ export default function EditorialLabPage(){
   const [module,setModule]=useState<Module>('date')
   const [cell,setCell]=useState<Cell>('4x4')
   const [theme,setTheme]=useState<FrameTheme>('light')
-  const [typography,setTypography]=useState<Typography>('gallery')
+  const [typography,setTypography]=useState<Typography>('warm')
   const [weatherScene,setWeatherScene]=useState<WeatherScene>('partly')
   const [matrix,setMatrix]=useState(false)
   const browserProbes=useRef<HTMLDivElement|null>(null)
@@ -660,8 +660,8 @@ export default function EditorialLabPage(){
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[.25em] text-[#8C7969]">Visual identity · typography study</p>
-            <h2 className="mt-1 text-xl" style={{fontFamily:'"Instrument Serif", Georgia, serif'}}>
-              Three interpretations of a gallery-like home display
+            <h2 className="mt-1 text-xl" style={{fontFamily:'"'+EDITORIAL_TYPEFACES[typography].display+'", Georgia, serif'}}>
+              RE:MIND's expressive typography · Fraunces is the preferred direction
             </h2>
             <p className="mt-1 text-xs text-[#6C6259]">
               Select a pairing to apply it to every preview. The physical firmware is unchanged.
