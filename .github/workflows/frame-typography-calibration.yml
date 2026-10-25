@@ -1,4 +1,4 @@
-name: Physical typography calibration (USB-only)
+name: Physical type and engraving calibration (USB-only)
 
 on:
   push:
@@ -41,7 +41,7 @@ jobs:
       - name: Archive the compiled test binary
         uses: actions/upload-artifact@v4
         with:
-          name: remind-alfred-fancy-font-test-USB-ONLY
+          name: remind-alfred-art-font-test-USB-ONLY
           path: frame/.pio/build/alfred_v1_2_typography_identity/firmware.bin
           if-no-files-found: error
           retention-days: 14
@@ -57,22 +57,38 @@ jobs:
           arduino-cli lib install "Adafruit GFX Library@1.12.6"
           arduino-cli lib install "GxEPD2@1.6.4"
           arduino-cli lib install "PubSubClient@2.8"
-      - name: Prepare six-page Arduino IDE sketch
+      - name: Prepare ten-page Arduino IDE sketch
         run: |
           mkdir -p "$RUNNER_TEMP/fancy"
           python frame/tools/prepare_arduino_sketch.py --output "$RUNNER_TEMP/fancy/frame_v2.5.1"
           sed -i 's/^#define TYPOGRAPHY_AUDIT_ENABLED 0$/#define TYPOGRAPHY_AUDIT_ENABLED 1/' "$RUNNER_TEMP/fancy/frame_v2.5.1/Config.h"
           sed -i 's/^#define TYPOGRAPHY_CANDIDATE_FONTS_ENABLED 0$/#define TYPOGRAPHY_CANDIDATE_FONTS_ENABLED 1/' "$RUNNER_TEMP/fancy/frame_v2.5.1/Config.h"
+          sed -i 's/^#define TYPOGRAPHY_ART_AUDIT_ENABLED 0$/#define TYPOGRAPHY_ART_AUDIT_ENABLED 1/' "$RUNNER_TEMP/fancy/frame_v2.5.1/Config.h"
+          grep -q '^#define TYPOGRAPHY_ART_AUDIT_ENABLED 1
           grep -q "RemindInstrument72" "$RUNNER_TEMP/fancy/frame_v2.5.1/EditorialCandidates.h"
           cd "$RUNNER_TEMP/fancy"
-          zip -qr "$RUNNER_TEMP/RE-MIND-Fancy-Fonts-Arduino-IDE.zip" frame_v2.5.1
+          zip -qr "$RUNNER_TEMP/RE-MIND-Art-And-Fonts-Arduino-IDE.zip" frame_v2.5.1
       - name: Compile fancy-font Arduino IDE sketch
         run: |
           arduino-cli compile --warnings default --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" "$RUNNER_TEMP/fancy/frame_v2.5.1"
       - name: Archive Arduino IDE code ready for USB flash
         uses: actions/upload-artifact@v4
         with:
-          name: remind-fancy-font-Arduino-IDE-USB-ONLY
-          path: ${{ runner.temp }}/RE-MIND-Fancy-Fonts-Arduino-IDE.zip
+          name: remind-art-and-fonts-Arduino-IDE-USB-ONLY
+          path: ${{ runner.temp }}/RE-MIND-Art-And-Fonts-Arduino-IDE.zip
+          if-no-files-found: error
+          retention-days: 14
+ "$RUNNER_TEMP/fancy/frame_v2.5.1/Config.h"
+          grep -q "RemindInstrument72" "$RUNNER_TEMP/fancy/frame_v2.5.1/EditorialCandidates.h"
+          cd "$RUNNER_TEMP/fancy"
+          zip -qr "$RUNNER_TEMP/RE-MIND-Art-And-Fonts-Arduino-IDE.zip" frame_v2.5.1
+      - name: Compile fancy-font Arduino IDE sketch
+        run: |
+          arduino-cli compile --warnings default --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" "$RUNNER_TEMP/fancy/frame_v2.5.1"
+      - name: Archive Arduino IDE code ready for USB flash
+        uses: actions/upload-artifact@v4
+        with:
+          name: remind-art-and-fonts-Arduino-IDE-USB-ONLY
+          path: ${{ runner.temp }}/RE-MIND-Art-And-Fonts-Arduino-IDE.zip
           if-no-files-found: error
           retention-days: 14
