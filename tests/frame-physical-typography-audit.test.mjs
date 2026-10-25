@@ -56,3 +56,40 @@ test('calibration contains multi-family candidates and real 1x1 frame samples',a
   assert.match(source,/Serial.printf\("Type QA: %s ink bounding box/)
   assert.match(source,/Serif characters Æ\/Ø\/Å are NOT supported/)
 })
+
+test('engraving calibration exists only behind explicit opt-in artwork gate',async()=>{
+  const [config,platform,main,art]=await Promise.all([
+    read('frame/src/core/Config.h'),
+    read('frame/platformio.ini'),
+    read('frame/src/display/TypographyAudit.cpp'),
+    read('frame/src/display/TypographyArt.cpp'),
+  ])
+  assert.match(config,/#ifndef TYPOGRAPHY_ART_AUDIT_ENABLED\s+#define TYPOGRAPHY_ART_AUDIT_ENABLED 0/)
+  assert.match(platform,/-DTYPOGRAPHY_ART_AUDIT_ENABLED=1/)
+  assert.match(art,/#if TYPOGRAPHY_AUDIT_ENABLED && TYPOGRAPHY_CANDIDATE_FONTS_ENABLED/)
+  assert.match(main,/#if TYPOGRAPHY_ART_AUDIT_ENABLED/)
+  assert.match(main,/TypographyArt::drawAtlas\(\)/)
+  assert.match(main,/TypographyArt::drawComparison\(\)/)
+  assert.match(main,/TypographyArt::drawLarge\(\)/)
+  assert.match(main,/TypographyArt::drawLayout\(\)/)
+  assert.match(main,/command == '0'\) nextPage = 9/)
+  assert.match(main,/constexpr uint8_t kPageCount = 10/)
+})
+
+test('illustration test compares same 1-bit art at real module size across stroke, hatch and stipple densities',async()=>{
+  const s=await read('frame/src/display/TypographyArt.cpp')
+  for(const token of ['kFine={1,3,30,6}','kBalanced={2,6,17,4}',
+    'kBold={3,10,8,2}','drawLine','drawPixel','drawRect',
+    'engraving(art,styles[i])','engraving({23,81,754,354},kFine)',
+    'engraving({539,293,237,164},kBalanced)',
+    'botanic({690,10,95,133},kBalanced)']){
+    assert.ok(s.includes(token),'Missing engraving QA parameter: '+token)
+  }
+  for(const risk of ['WiFi.begin(', 'Preferences ', 'OTA.begin(', 'esp_deep_sleep_start(', 'ESP.restart(']){
+    assert.ok(!s.includes(risk),'The artwork-only renderer must not alter device state: '+risk)
+  }
+  const w=await read('.github/workflows/frame-typography-calibration.yml')
+  assert.match(w,/Compile fancy-font Arduino IDE sketch/)
+  assert.match(w,/RE-MIND-Art-And-Fonts-Arduino-IDE.zip/)
+  assert.match(w,/TYPOGRAPHY_ART_AUDIT_ENABLED 1/)
+})
