@@ -18,6 +18,9 @@
 #include <Fonts/FreeSerifBold24pt7b.h>
 #if TYPOGRAPHY_CANDIDATE_FONTS_ENABLED
 #include "EditorialCandidates.h"
+#if TYPOGRAPHY_ART_AUDIT_ENABLED
+#include "TypographyArt.h"
+#endif
 #endif
 #include <Arduino.h>
 
@@ -31,7 +34,11 @@ constexpr int kHeight = 480;
 uint8_t currentPage = 0;
 bool usbConnected = false;
 #if TYPOGRAPHY_CANDIDATE_FONTS_ENABLED
+#if TYPOGRAPHY_ART_AUDIT_ENABLED
+constexpr uint8_t kPageCount = 10;
+#else
 constexpr uint8_t kPageCount = 6;
+#endif
 #else
 constexpr uint8_t kPageCount = 4;
 #endif
@@ -82,7 +89,7 @@ void pageFamilies() {
   const uint16_t ink = GxEPD_BLACK;
   heading(
 #if TYPOGRAPHY_CANDIDATE_FONTS_ENABLED
-    "RE:MIND | FONT CALIBRATION 1/6",
+    "RE:MIND | FONT CALIBRATION 1/10",
 #else
     "RE:MIND | FONT CALIBRATION 1/4",
 #endif
@@ -125,7 +132,7 @@ void pageDistance() {
   d.fillScreen(GxEPD_WHITE);
   heading(
 #if TYPOGRAPHY_CANDIDATE_FONTS_ENABLED
-    "RE:MIND | DISTANCE TEST 2/6",
+    "RE:MIND | DISTANCE TEST 2/10",
 #else
     "RE:MIND | DISTANCE TEST 2/4",
 #endif
@@ -202,7 +209,7 @@ void pageNewType(bool warm) {
   d.fillScreen(GxEPD_WHITE);
   const GFXfont* display = warm ? &RemindFraunces72 : &RemindInstrument72;
   const GFXfont* headingFace = warm ? &RemindFraunces48 : &RemindInstrument48;
-  heading(warm ? "RE:MIND | WARM FONT 6/6" : "RE:MIND | GALLERY FONT 5/6",
+  heading(warm ? "RE:MIND | WARM FONT 6/10" : "RE:MIND | GALLERY FONT 5/10",
     "One-bit custom Norwegian fonts, true sizes. View from 0.5 / 1 / 2 metres.",
     GxEPD_BLACK);
   // 72px is a *bitmap design size*. The real glyph height may be smaller.
@@ -226,11 +233,7 @@ void draw(uint8_t page) {
   if (!usbConnected) return;
   Serial.printf("RE:MIND physical typography QA page %u/%u; full 800x480 refresh\n",
     unsigned(page + 1), unsigned(
-#if TYPOGRAPHY_CANDIDATE_FONTS_ENABLED
-    6
-#else
-    4
-#endif
+kPageCount
     ));
   DisplayCore::begin();
   auto& d = DisplayCore::get();
@@ -245,13 +248,18 @@ void draw(uint8_t page) {
 #if TYPOGRAPHY_CANDIDATE_FONTS_ENABLED
       case 4: pageNewType(false); break;
       case 5: pageNewType(true); break;
+#if TYPOGRAPHY_ART_AUDIT_ENABLED
+      case 6: TypographyArt::drawAtlas(); break;
+      case 7: TypographyArt::drawComparison(); break;
+      case 8: TypographyArt::drawLarge(); break;
+      case 9: TypographyArt::drawLayout(); break;
+#endif
 #endif
       default: pageGrid(true); break;
     }
   } while (d.nextPage());
   DisplayCore::end(); // Turn off the e-paper rail after every completed page.
-  Serial.printf("Type QA page complete; send 1-%u or n/p to change page.\n",
-    unsigned(kPageCount));
+  Serial.println("Page complete; 1-9, 0=page10, n=next or p=previous.");
 }
 }
 
@@ -263,7 +271,7 @@ void begin() {
   // The diagnostic has no battery power policy: only refresh while on USB.
   usbConnected = digitalRead(HardwareProfile::kPgoodN) == LOW;
   Serial.println("RE:MIND TYPOGRAPHY CALIBRATION - NO NETWORK, NO OTA, NO NVS");
-  Serial.printf("USB required. Commands: 1-%u = pages; n = next; p = previous; ? = help.\n",
+  Serial.printf("USB required. Send 1-9 and 0=page10, or n/p to cycle (%u pages).\n",
     unsigned(kPageCount));
   if (!usbConnected) {
     Serial.println("USB not detected; no panel refresh. Connect supplied USB cable.");
@@ -292,14 +300,14 @@ void poll() {
   }
   const char command = static_cast<char>(Serial.read());
   uint8_t nextPage = currentPage;
-  if (command >= '1' && command < '1' + kPageCount)
+  if (command >= '1' && command <= '9' && command < '1' + kPageCount)
     nextPage = command - '1';
+  else if (kPageCount >= 10 && command == '0') nextPage = 9;
   else if (command == 'n' || command == 'N')
     nextPage = (currentPage + 1) % kPageCount;
   else if (command == 'p' || command == 'P') nextPage = (currentPage + kPageCount - 1) % kPageCount;
   else if (command == '?') {
-    Serial.printf("Send 1-%u, n or p. Each command performs ONE full refresh.\n",
-      unsigned(kPageCount));
+    Serial.println("Send 1-9; 0 is page 10; n/p cycle. Each command refreshes once.");
     return;
   } else return;
   if (nextPage != currentPage) {
