@@ -18,6 +18,8 @@ constexpr int kI2cSda = 9;
 constexpr int kEpdSck = 10;
 constexpr int kEpdMosi = 11;
 constexpr int kEpdPower = 12;
+// ALFRED V4: TXB0108 output enable, LOW until switched EPD_VCC is stable.
+constexpr int kEpdOutputEnable = 14;
 constexpr int kPgoodN = 17;
 constexpr int kChargeN = 18;
 constexpr uint8_t kMax17048Address = 0x36;
