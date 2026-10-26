@@ -14201,7 +14201,7 @@ function GroceriesModuleSettingsTab({
             data-ui="secondary-control"
             onClick={() => setRecipeOpen(true)}
             disabled={!activeDeviceId}
-            className="h-[44px] rounded-2xl border text-[10px] tracking-widest transition"
+            className="h-[44px] w-full rounded-2xl border text-[10px] tracking-widest transition"
           >
             {language === 'no' ? 'OPPSKRIFTER' : 'RECIPES'}
           </button>
