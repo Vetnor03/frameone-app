@@ -43,5 +43,5 @@ def test_updating_screen_uses_full_panel_redraw_without_partial_overlay():
     assert "drawRoundRect" not in body
 
 
-def test_firmware_version_is_2_7_2():
-    assert 'static const char* FW_VER = "v2.7.2";' in INO
+def test_firmware_version_is_2_7_3():
+    assert 'static const char* FW_VER = "v2.7.3";' in INO

@@ -16,7 +16,7 @@ def test_alfred_promotes_partial_plan_to_full_after_dirty_detection():
 
 def test_alfred_reason_for_guard_is_controller_reinitialization_after_power_cut():
     assert "DisplayCore::end();" not in SMART  # policy belongs in planning, not renderer shutdown
-    assert "display.init(115200);" in DISPLAY
+    assert "display.init(115200, true, 2, false);" in DISPLAY
     assert "digitalWrite(HardwareProfile::kEpdPower, LOW);" in DISPLAY
     assert "if (result.type == SmartDisplayPlan::PARTIAL) result.type = SmartDisplayPlan::FULL;" in SMART
 
