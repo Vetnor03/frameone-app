@@ -17,6 +17,13 @@ static FrameDisplay display(
 static SPIClass alfredEpdSpi(FSPI);
 static bool g_powered = false;
 
+// Keep the V4 TXB0108 isolated whenever EPD_VCC is off.
+static void forceOutputEnableLow() {
+  digitalWrite(HardwareProfile::kEpdOutputEnable, LOW);
+  pinMode(HardwareProfile::kEpdOutputEnable, OUTPUT);
+  digitalWrite(HardwareProfile::kEpdOutputEnable, LOW);
+}
+
 static void forcePowerLow() {
   digitalWrite(HardwareProfile::kEpdPower, LOW);
   pinMode(HardwareProfile::kEpdPower, OUTPUT);
@@ -58,19 +65,26 @@ void fillThemeBackground() {
 
 void begin() {
 #if defined(FRAME_IS_ALFRED_V1_2)
+  // V4 verified sequence: isolate the level shifter, enable EPD_VCC,
+  // allow it to stabilize, then enable the TXB0108 before any SPI traffic.
+  forceOutputEnableLow();
   forcePowerLow();
   gpio_deep_sleep_hold_dis();
   gpio_hold_dis((gpio_num_t)HardwareProfile::kEpdPower);
+  gpio_hold_dis((gpio_num_t)HardwareProfile::kEpdOutputEnable);
+  forceOutputEnableLow();
   forcePowerLow();
   digitalWrite(HardwareProfile::kEpdPower, HIGH);
-  delay(10);
+  delay(500);
+  digitalWrite(HardwareProfile::kEpdOutputEnable, HIGH);
+  delay(100);
   alfredEpdSpi.begin(HardwareProfile::kEpdSck, -1, HardwareProfile::kEpdMosi,
                      HardwareProfile::kEpdCs);
   display.epd2.selectSPI(alfredEpdSpi,
     SPISettings(HardwareProfile::kEpdSpiHz, MSBFIRST, SPI_MODE0));
   g_powered = true;
 #endif
-  display.init(115200);
+  display.init(115200, true, 2, false);
   display.setRotation(0);
   display.setTextColor(Theme::ink());
   // Initialization must not itself touch the panel: the caller selects either
@@ -80,7 +94,9 @@ void begin() {
 void end() {
 #if defined(FRAME_IS_ALFRED_V1_2)
   if (!g_powered) {
+    forceOutputEnableLow();
     forcePowerLow();
+    gpio_hold_en((gpio_num_t)HardwareProfile::kEpdOutputEnable);
     gpio_hold_en((gpio_num_t)HardwareProfile::kEpdPower);
     return;
   }
@@ -89,7 +105,11 @@ void end() {
   display.end();
   alfredEpdSpi.end();
   safeSignalPins();
+  // Per V4 schematic, disable TXB0108 before switching off the panel rail.
+  forceOutputEnableLow();
+  delay(20);
   digitalWrite(HardwareProfile::kEpdPower, LOW);
+  gpio_hold_en((gpio_num_t)HardwareProfile::kEpdOutputEnable);
   gpio_hold_en((gpio_num_t)HardwareProfile::kEpdPower);
   g_powered = false;
 #else
@@ -99,13 +119,18 @@ void end() {
 
 bool prepareForDeepSleep() {
 #if defined(FRAME_IS_ALFRED_V1_2)
+  forceOutputEnableLow();
   forcePowerLow();
-  const esp_err_t holdResult = gpio_hold_en((gpio_num_t)HardwareProfile::kEpdPower);
+  const esp_err_t oeHold = gpio_hold_en((gpio_num_t)HardwareProfile::kEpdOutputEnable);
+  const esp_err_t powerHold = gpio_hold_en((gpio_num_t)HardwareProfile::kEpdPower);
   gpio_deep_sleep_hold_en();
-  const bool low = gpio_get_level((gpio_num_t)HardwareProfile::kEpdPower) == 0;
-  Serial.printf("EPD_PWR deep-sleep hold: %s, level=%s\n",
-                holdResult == ESP_OK ? "enabled" : "failed", low ? "LOW" : "HIGH");
-  return holdResult == ESP_OK && low;
+  const bool powerLow = gpio_get_level((gpio_num_t)HardwareProfile::kEpdPower) == 0;
+  const bool oeLow = gpio_get_level((gpio_num_t)HardwareProfile::kEpdOutputEnable) == 0;
+  Serial.printf("EPD_PWR/OE deep-sleep hold: power=%s oe=%s, levels=%s/%s\n",
+                powerHold == ESP_OK ? "enabled" : "failed",
+                oeHold == ESP_OK ? "enabled" : "failed",
+                powerLow ? "LOW" : "HIGH", oeLow ? "LOW" : "HIGH");
+  return powerHold == ESP_OK && oeHold == ESP_OK && powerLow && oeLow;
 #else
   return true;
 #endif
