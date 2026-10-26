@@ -14196,22 +14196,7 @@ function GroceriesModuleSettingsTab({
         >
           {language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}
         </button>
-        <div className="mt-3 grid w-[260px] grid-cols-2 gap-2">
-          <button
-            data-ui="secondary-control"
-            onClick={() => {
-              if (dinnerPlanLockedByOtherUser) return
-              const nextOffset = defaultDinnerPlanWeekOffset()
-              setDinnerPlanWeekOffset(nextOffset)
-              void loadDinnerPlan(nextOffset)
-              trackProductEvent({ event: 'dinner_plan_opened', surface: 'groceries' })
-              setDinnerPlanOpen(true)
-            }}
-            disabled={!activeDeviceId || dinnerPlanLockedByOtherUser}
-            className="h-[44px] rounded-2xl border text-[10px] tracking-widest transition"
-          >
-            {language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'}
-          </button>
+        <div className="mt-3 w-[260px]">
           <button
             data-ui="secondary-control"
             onClick={() => setRecipeOpen(true)}
