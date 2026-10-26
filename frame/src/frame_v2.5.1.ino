@@ -44,7 +44,7 @@
 #include <utility>
 
 // Change this string whenever you want to force one redraw after flashing/OTA
-static const char* FW_VER = "v2.7.2";
+static const char* FW_VER = "v2.7.3";
 
 // Public app page shown during pairing
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
@@ -1408,20 +1408,24 @@ static InteractiveModeResult runInteractiveMode(
 // --------------------------------------
 void setup() {
 #if defined(FRAME_IS_ALFRED_V1_2)
-  // Assert the switched display rail off before any peripheral or network work.
+  // V4 cold boot: TXB0108 OE and EPD_VCC must both stay LOW until
+  // DisplayCore::begin() powers the panel and enables GPIO14 in order.
+  digitalWrite(HardwareProfile::kEpdOutputEnable, LOW);
+  pinMode(HardwareProfile::kEpdOutputEnable, OUTPUT);
+  digitalWrite(HardwareProfile::kEpdOutputEnable, LOW);
   digitalWrite(HardwareProfile::kEpdPower, LOW);
   pinMode(HardwareProfile::kEpdPower, OUTPUT);
   digitalWrite(HardwareProfile::kEpdPower, LOW);
   gpio_deep_sleep_hold_dis();
+  gpio_hold_dis((gpio_num_t)HardwareProfile::kEpdOutputEnable);
   gpio_hold_dis((gpio_num_t)HardwareProfile::kEpdPower);
-  digitalWrite(HardwareProfile::kEpdPower, LOW);
-  pinMode(HardwareProfile::kEpdPower, OUTPUT);
+  digitalWrite(HardwareProfile::kEpdOutputEnable, LOW);
   digitalWrite(HardwareProfile::kEpdPower, LOW);
 #endif
   Serial.begin(115200);
   delay(200);
 #if defined(FRAME_IS_ALFRED_V1_2)
-  Serial.printf("Alfred V1.2 PSRAM configured/detected: %u bytes\n", ESP.getPsramSize());
+  Serial.printf("ALFRED V4 PSRAM configured/detected: %u bytes\n", ESP.getPsramSize());
 #endif
 
   logWakeReason();
