@@ -15072,7 +15072,7 @@ const manualItems: ReminderUiItem[] = (data || [])
               .maybeSingle()
             : { data: null }
           const selectedLocalEventArea = String(((localEventsIntegrationData?.encrypted_credentials as any)?.areaPreference?.primaryPlaceId) || '').trim()
-          const visibleIntegrationData = (integrationData || []).filter((row: any) =>
+          const visibleIntegrationData = (integrationData || []).filter((row) =>
             (String(row.provider || '') !== 'waste' || integrationActiveForPilot('waste')) &&
             (String(row.provider || '') !== 'edge-of-norway' || !selectedLocalEventArea || (Array.isArray(row.raw?.areaKeys) ? row.raw.areaKeys.includes(selectedLocalEventArea) : String(row.raw?.areaKey || row.raw?.primaryPlaceId || '').trim() === selectedLocalEventArea)))
           const localEventExternalIds = visibleIntegrationData
