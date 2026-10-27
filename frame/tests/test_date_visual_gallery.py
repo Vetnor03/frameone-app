@@ -20,6 +20,8 @@ def test_gallery_uses_exact_f1_freesans_bitmap_and_all_grid_fixtures(tmp_path):
     assert count["shapes"]==16
     assert count["placements"]==100
     assert count["fullCore"]>0
+    assert count["editorialCandidates"]>0
+    assert "FULL EDITORIAL DATE + CALENDAR + ART CONCEPT" in output.read_text(encoding="utf-8")
     report=output.read_text(encoding="utf-8")
     assert report.count('<article class="tile"')==116
     assert report.count('data-kind="size"')==16

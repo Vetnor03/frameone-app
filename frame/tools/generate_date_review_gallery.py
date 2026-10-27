@@ -14,6 +14,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from date_editorial_svg import draw_editorial
 
 ROOT=Path(__file__).resolve().parents[2]
 FONT_SOURCE=ROOT/"frame/src/assets/fonts/RemindEditorialFonts.cpp"
@@ -194,6 +195,7 @@ def render_tile(case, result, fonts, serial):
     facts=case["facts"]
     context=result.get("context")
     hero=result.get("hero")
+    editorial=result.get("editorial")
     # Only a *three-fact* plan can be considered by the current C++ role
     # painter. JS partial disclosure is not incorrectly shown as firmware.
     if context and context.get("disclosed")!=["day","month","weekday"]:
@@ -205,13 +207,15 @@ def render_tile(case, result, fonts, serial):
           '<rect x="58" y="39" width="680" height="436" fill="#f9f9f7"/>',
           f'<g clip-path="url(#matte{serial})">',
           f'<rect x="{cell["x"]}" y="{cell["y"]}" width="{cell["w"]}" height="{cell["h"]}" fill="#fff"/>']
-    if hero:
+    if editorial:
+        arts.append(draw_editorial(editorial,facts,fonts,glyph_paths,bbox_markup,render_calendar))
+    elif hero:
         for key in ("day","month","weekday"):
             area=hero[key]
             font=fonts[hero["fonts"][key]]
             arts.append(glyph_paths(hero["text"][key],font,area["x"],area["y"],"#191919"))
             arts.append(bbox_markup(area,{"day":"#b45e2d","month":"#5c7790","weekday":"#5c7790"}[key]))
-    if context:
+    if context and not editorial:
         if context["year"]:
             t=context["year"]
             arts.append(glyph_paths(t["text"],fonts[t["font"]],t["rect"]["x"],t["rect"]["y"],"#333"))
@@ -232,10 +236,10 @@ def render_tile(case, result, fonts, serial):
     arts.append('</g>')
     arts.append(f'<rect x="{cell["x"]}" y="{cell["y"]}" width="{cell["w"]}" height="{cell["h"]}" fill="none" stroke="#a3a3a3" stroke-width="2"/>')
     arts.append('<rect x="58" y="39" width="680" height="436" stroke="#888" stroke-width="1" fill="none"/>')
-    status="3-fact candidate" if hero else "No full 3-fact fit — legacy fallback"
-    if hero and context:
+    status="FULL EDITORIAL DATE + CALENDAR + ART CONCEPT" if editorial else "3-fact candidate" if hero else "No full 3-fact fit — legacy fallback"
+    if hero and context and not editorial:
         status+=", contextual reservation candidate"
-    if hero and not context:
+    if hero and not context and not editorial:
         status+=", no context approved"
     svg='<svg viewBox="0 0 800 480" role="img" aria-label="'+html.escape(case["title"])+'">'+ "".join(arts)+"</svg>"
     return (f'<article class="tile" data-kind="{case["kind"]}" data-size="{case["size"]}">'
@@ -254,7 +258,8 @@ def generate(output):
     tiles=[render_tile(case,plan,fonts,i) for i,(case,plan) in enumerate(zip(cases,plans))]
     summary=dict(total=len(cases),shapes=16,placements=100,
                  fullCore=sum(bool(x["hero"]) for x in plans),
-                 contextCandidates=sum(bool(x["context"]) for x in plans))
+                 contextCandidates=sum(bool(x["context"]) for x in plans),
+                 editorialCandidates=sum(bool(x["editorial"]) for x in plans))
     css="""<style>
     body{margin:0;padding:24px;font-family:system-ui,sans-serif;background:#ebebeb;color:#222}
     header{max-width:1050px;margin:auto auto 20px}
@@ -303,7 +308,7 @@ def generate(output):
       'The Date lettering uses original Fraunces/DM Sans GFX 1-bit bitmap glyphs from repository F1 assets. '
       'Calendar uses the legacy FreeSans font bitmaps and source-matched grid calculations; this is '
       '<em>not</em> a captured GxEPD2 framebuffer. C++ preview has additional preflight/fallback rules '
-      'that can reject a shown candidate. Use for legibility/layout review, not proof of actual firmware rendering.</p>'
+      'that can reject a shown candidate. Use for legibility/layout review, not proof of actual firmware rendering. Editorial botanical SVG is a visual direction only, NOT a firmware asset.</p>'
      +f'<p>16 size fixtures + 100 legal placements = {summary["total"]} views; '
        f'{summary["fullCore"]} can fit full Date glyphs; {summary["contextCandidates"]} show contextual candidates. '
       'Panel 800×480, visible matte x58 y39 w680 h436. No Surf or other module content is simulated.</p>'
