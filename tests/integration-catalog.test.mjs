@@ -3,7 +3,7 @@ import test from 'node:test'
 import { INTEGRATION_CATALOGUE, integrationStatusLabel } from '../app/lib/integrations/catalog.ts'
 
 test('shared integrations are ordered and expose lifecycle capabilities', () => {
-  assert.equal(INTEGRATION_CATALOGUE[0].key, 'waste')
+  assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'google-calendar', 'local-events', 'spond', 'waste', 'vigilo', 'transponder'])
   const waste = INTEGRATION_CATALOGUE.find(item => item.key === 'waste')
   assert.deepEqual({ status: waste.status, connectable: waste.connectable }, { status: 'under-evaluation', connectable: false })
   assert.equal(waste.description.en, 'This integration is being evaluated')
