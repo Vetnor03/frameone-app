@@ -95,7 +95,7 @@ def test_role_first_disclosure_all_shapes_positions_and_cases():
         if p["holidays"]:
             original=request["facts"]["holidays"]
             assert all(row["text"] in
-                       [v["dateLabel"]+" · "+v["title"] for v in original]
+                       [v["dateLabel"]+" - "+v["title"] for v in original]
                        for row in p["holidays"])
         assert all(p["boxes"][key] is not None for key in
                    ("day",))

@@ -98,37 +98,37 @@ const monthValid=(y,m)=>Number.isInteger(y)&&y>=1900&&y<=9999&&
   Number.isInteger(m)&&m>=0&&m<=11
 function calendar(available,year,month0){
   if(!monthValid(year,month0))return null
-  const rect=reserve(available,DATE_CALENDAR_MIN.gridWidth,
-    DATE_CALENDAR_MIN.gridHeight,300,240)
+  const rect=reserve(available,P.CALENDAR_MIN_WIDTH,
+    P.CALENDAR_MIN_HEIGHT,P.CONTEXT_CALENDAR_MAX_WIDTH,P.CONTEXT_CALENDAR_MAX_HEIGHT)
   return rect?{rect,year,month0,features:dateCalendarFeatures(rect.w,rect.h,{title:true})}:null
 }
 function yearFact(available,year){
-  if(!Number.isInteger(year)||year<1900||year>9999)return null
+  if(!Number.isInteger(year)||year<P.CONTEXT_YEAR_MIN||year>P.CONTEXT_YEAR_MAX)return null
   const ink=measureDateGfxInk(String(year),'DM18')
   if(!ink)return null
-  const region=reserve(available,ink.w+12,ink.h+12,150,48)
+  const region=reserve(available,ink.w+P.CONTEXT_YEAR_INSET,ink.h+P.CONTEXT_YEAR_INSET,P.CONTEXT_YEAR_MAX_WIDTH,P.CONTEXT_YEAR_MAX_HEIGHT)
   return region?{text:String(year),font:'DM18',rect:center(region,ink.w,ink.h)}:null
 }
 function holidayFacts(available,holidays){
   if(!Array.isArray(holidays)||!holidays.length)return []
   const rows=[]
-  for(const item of holidays.slice(0,2)){
+  for(const item of holidays.slice(0,P.CONTEXT_MAX_HOLIDAY_ROWS)){
     if(typeof item?.dateLabel!=='string'||typeof item?.title!=='string')break
-    const text=item.dateLabel+' · '+item.title
+    const text=item.dateLabel+' - '+item.title
     const ink=measureDateGfxInk(text,'DM18')
     if(!ink)break
     rows.push({text,ink})
   }
   while(rows.length){
-    const h=rows.reduce((v,e)=>v+e.ink.h,0)+(rows.length-1)*6
+    const h=rows.reduce((v,e)=>v+e.ink.h,0)+(rows.length-1)*P.CONTEXT_HOLIDAY_ROW_GAP
     const w=Math.max(...rows.map(e=>e.ink.w))
-    const region=reserve(available,w+12,h+12,w+24,h+24)
+    const region=reserve(available,w+P.CONTEXT_HOLIDAY_INSET,h+P.CONTEXT_HOLIDAY_INSET,w+P.CONTEXT_HOLIDAY_MAX_EXTRA,h+P.CONTEXT_HOLIDAY_MAX_EXTRA)
     if(region){
       let y=region.y+Math.floor((region.h-h)/2)
       return rows.map(e=>{
         const result={text:e.text,font:'DM18',
           rect:box(region.x+Math.floor((region.w-e.ink.w)/2),y,e.ink.w,e.ink.h)}
-        y+=e.ink.h+6
+        y+=e.ink.h+P.CONTEXT_HOLIDAY_ROW_GAP
         return result
       })
     }
