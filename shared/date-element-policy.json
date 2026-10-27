@@ -174,5 +174,44 @@
       "priorityBasedDegradation",
       "atomicDrawOrLegacyFallback"
     ]
+  },
+  "expressionPolicy": {
+    "status": "contract_only_not_implemented",
+    "visualAuthority": "measured_content_and_available_ink_rectangles",
+    "candidateCompositions": [
+      "compact",
+      "ribbon",
+      "column",
+      "card",
+      "spread"
+    ],
+    "compositionSelection": "evaluate_all_feasible_candidates_and_choose_best_measured_whole_plan",
+    "selectionInputs": [
+      "matteClippedVisibleRect",
+      "factualDateAndCalendarContent",
+      "elementRolesAndPriorities",
+      "actualF2GfxGlyphInkBounds",
+      "minimumReadableText",
+      "calendarFunctionalMinimums",
+      "remainingWhitespace",
+      "themeContrast"
+    ],
+    "selectionConstraints": {
+      "noGridSpanToFixedVisualExpression": true,
+      "sameGridShapeCanUseDifferentCompositions": true,
+      "avoidFixedCoordinatesForIndividualFacts": true,
+      "neverEmbedSampleDateOrArtworkInPolicy": true,
+      "typographyPickedByReadableFitNotShapeName": true,
+      "contentFirstDegradation": true,
+      "rejectPartialOrOverlappingPlan": true
+    },
+    "art": {
+      "phase": "R4_after_typography_and_calendar_QA",
+      "decision": "optional_eligible_only_after_reserving_all_factual_ink",
+      "eligibleBy": "measured_remaining_rectangle_not_grid_size",
+      "motifSelection": "curated_data_driven_deterministic",
+      "stableAcrossUnchangedRefreshes": true,
+      "noForcedArt": true
+    }
   }
 }

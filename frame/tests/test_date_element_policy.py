@@ -58,6 +58,39 @@ def test_date_fact_roles_and_priority_never_depend_on_shape():
     assert all(e["priority"] in POLICY["priorities"] for e in elements)
 
 
+def test_visual_expression_is_not_bound_to_grid_size_or_demo_content():
+    # Policy is a design contract only: future runtime must pick a whole layout
+    # from measured facts/ink/space, rather than binding 1x2 to a fixed picture.
+    expression = POLICY["expressionPolicy"]
+    assert expression["status"] == "contract_only_not_implemented"
+    assert expression["visualAuthority"] == "measured_content_and_available_ink_rectangles"
+    assert expression["compositionSelection"] == (
+        "evaluate_all_feasible_candidates_and_choose_best_measured_whole_plan"
+    )
+    assert set(expression["candidateCompositions"]) == {
+        "compact", "ribbon", "column", "card", "spread"
+    }
+    assert {"factualDateAndCalendarContent", "actualF2GfxGlyphInkBounds",
+            "minimumReadableText", "remainingWhitespace",
+            "matteClippedVisibleRect"} <= set(expression["selectionInputs"])
+    constraints = expression["selectionConstraints"]
+    assert all(constraints.values())
+    art = expression["art"]
+    assert art["phase"] == "R4_after_typography_and_calendar_QA"
+    assert art["eligibleBy"] == "measured_remaining_rectangle_not_grid_size"
+    assert art["motifSelection"] == "curated_data_driven_deterministic"
+    assert art["stableAcrossUnchangedRefreshes"] is True
+    assert art["noForcedArt"] is True
+    # Detect accidental per-shape fixed layout/placement coordinates in
+    # semantic descriptors; grid and physical matte dimensions are exempt.
+    banned = {"colSpan", "rowSpan", "cellSize", "fixedX", "fixedY",
+              "x", "y", "left", "top", "layoutFor1x2", "layoutFor2x1",
+              "specificCellLayout", "artworkFile", "sampleDate"}
+    assert all(not (banned & set(element)) for element in POLICY["elements"])
+    assert not (banned & set(expression))
+    assert not (banned & set(expression["selectionConstraints"]))
+
+
 def test_named_fixtures_use_visible_geometry_only():
     ids = set()
     for fixture in FIXTURES:
