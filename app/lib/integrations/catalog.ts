@@ -12,7 +12,7 @@ export type IntegrationDefinition = {
 
 /** Shared catalogue and product ordering used by onboarding and Connect Apps. */
 export const INTEGRATION_CATALOGUE: readonly IntegrationDefinition[] = [
-  { key: 'waste', name: { en: 'Waste collection', no: 'Renovasjon' }, description: { en: 'Automatically find collections for your home address', no: 'Finn hentedager automatisk fra hjemmeadressen din' }, status: 'available', connectable: true },
+  { key: 'waste', name: { en: 'Waste collection', no: 'Renovasjon' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },
   { key: 'teams', name: { en: 'Teams', no: 'Teams' }, description: { en: "Show today's meetings on your frame", no: 'Vis dagens møter på framen din' }, status: 'available', connectable: true },
   { key: 'google-calendar', name: { en: 'Google Calendar', no: 'Google Calendar' }, description: { en: 'Show upcoming events from your Google calendars', no: 'Vis kommende avtaler fra Google-kalenderne dine' }, status: 'available', connectable: true },
   { key: 'local-events', name: { en: 'Local Events', no: 'Lokale arrangementer' }, description: { en: 'Choose your local area for nearby events', no: 'Velg nærområdet ditt for lokale arrangementer' }, status: 'available', connectable: true },
@@ -25,4 +25,12 @@ export function integrationStatusLabel(status: IntegrationStatus, language: 'en'
   if (status === 'experimental') return language === 'no' ? 'Eksperimentell' : 'Experimental'
   if (status === 'under-evaluation') return language === 'no' ? 'Under vurdering' : 'Under evaluation'
   return null
+}
+
+/** Temporarily disable unfinished integrations throughout the first pilot.
+ * Retain their implementations and any existing connection data for reactivation.
+ */
+export function integrationActiveForPilot(key: ConnectAppKey): boolean {
+  const definition = INTEGRATION_CATALOGUE.find(app => app.key === key)
+  return definition?.connectable === true && definition.status !== 'under-evaluation'
 }
