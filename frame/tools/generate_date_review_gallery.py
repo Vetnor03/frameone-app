@@ -145,7 +145,7 @@ def render_calendar(entry,today,holiday_set,fonts):
         is_today=(year,month,day)==today
         if is_today:
             rad=min(16,max(1,min(cw,ch)//2-2))
-            out.append(f'<circle cx="{cx+cw//2}" cy="{cy+ch//2}" r="{rad}" fill="#fff"/>')
+            out.append(f'<circle cx="{cx+cw//2}" cy="{cy+ch//2}" r="{rad}" fill="none" stroke="#292929" stroke-width="1.2"/>')
         out.append(text_centered(str(day),fonts["S9"],cx,cy,cw,ch,"#000" if is_today else ink))
         if (month,day) in holiday_set:
             out.append(f'<circle cx="{cx+cw//2}" cy="{cy+ch-3}" r="2" fill="#000"/>')
