@@ -12,6 +12,14 @@
 #ifndef REMIND_R2A_DATE_MICRO_ENABLED
 #define REMIND_R2A_DATE_MICRO_ENABLED 0
 #endif
+// R2B: only the vertically stacked 1x2 Date experiment, separately enabled.
+// Does not activate R2A or alter the standard F3 4x1 / 2x2 previews.
+#ifndef REMIND_R2B_DATE_TALL_ENABLED
+#define REMIND_R2B_DATE_TALL_ENABLED 0
+#endif
+#if REMIND_R2B_DATE_TALL_ENABLED && !REMIND_F3_DATE_PREVIEW_ENABLED
+#error "R2B 1x2 Date preview requires the F3 editorial font engine"
+#endif
 #if REMIND_R2A_DATE_MICRO_ENABLED && !REMIND_F3_DATE_PREVIEW_ENABLED
 #error "R2A micro preview needs the F3 editorial font engine"
 #endif
@@ -1280,6 +1288,84 @@ bool tryDrawEditorialMicroDatePreview(const Cell& c, const char* weekday,
 }
 #endif  // REMIND_R2A_DATE_MICRO_ENABLED
 
+
+#if REMIND_R2B_DATE_TALL_ENABLED
+// Date-only 1x2 custom-cell preview, opt-in. Decide which facts can be
+// included from ACTUAL e-paper ink bounds before drawing anything.
+bool tryDrawEditorialTallDatePreview(const Cell& c, const char* weekday,
+                                    const char* month, int year, int dayNum) {
+  if (c.size != CELL_ADAPTIVE || c.colSpan != 1 || c.rowSpan != 2 ||
+      c.w <= 0 || c.h <= 0 || !weekday || !weekday[0] ||
+      !month || !month[0] || dayNum < 1 || dayNum > 31) return false;
+
+  // Visible 680x436 matte aperture; 1x2 can begin on row 0, 1, or 2.
+  const int left = max(c.x, 58);
+  const int top = max(c.y, 39);
+  const int right = min(c.x + c.w, 738);
+  const int bottom = min(c.y + c.h, 475);
+  const int padX = 10, padY = 10, gap = 8;
+  const int x = left + padX, y = top + padY;
+  const int w = right - left - 2 * padX;
+  const int h = bottom - top - 2 * padY;
+  if (w < 95 || h < 125) return false;
+
+  const int monthH = 34, weekdayH = 33;
+  // Year is useful, but optional: omit it from matte-clipped top position
+  // rather than shrinking the date to tiny text.
+  const bool showYear = h >= 205;
+  const int yearH = showYear ? 24 : 0;
+  const int dayH = h - monthH - weekdayH - yearH - (showYear ? 3 : 2) * gap;
+  if (dayH < 58) return false;
+
+  char dayText[8], yearText[8];
+  snprintf(dayText, sizeof(dayText), "%d", dayNum);
+  snprintf(yearText, sizeof(yearText), "%d", year);
+  DatePreviewLine yr = {};
+  if (showYear) {
+    yr.font = RemindEditorialFonts::dm18();
+    yr.source = yearText;
+    yr.box = {x, y, w, yearH};
+    if (!planDatePreviewLine(yr, 2)) return false;
+  }
+  const int contentY = y + (showYear ? yearH + gap : 0);
+  DatePreviewLine mo = {};
+  mo.font = RemindEditorialFonts::dm24();
+  mo.source = month;
+  mo.box = {x, contentY, w, monthH};
+  if (!planDatePreviewLine(mo, 2)) {
+    mo.font = RemindEditorialFonts::dm18();
+    if (!planDatePreviewLine(mo, 2)) return false;
+  }
+
+  DatePreviewLine day = {};
+  day.font = RemindEditorialFonts::fraunces72();
+  day.source = dayText;
+  day.box = {x, contentY + monthH + gap, w, dayH};
+  if (!planDatePreviewLine(day, 2)) {
+    day.font = RemindEditorialFonts::fraunces48();
+    if (!planDatePreviewLine(day, 2)) return false;
+  }
+
+  DatePreviewLine wd = {};
+  wd.font = RemindEditorialFonts::dm24();
+  wd.source = weekday;
+  wd.box = {x, contentY + monthH + gap + dayH + gap, w, weekdayH};
+  if (!planDatePreviewLine(wd, 2)) {
+    wd.font = RemindEditorialFonts::dm18();
+    if (!planDatePreviewLine(wd, 2)) return false;
+  }
+
+  if (showYear) drawDatePreviewLine(yr);
+  drawDatePreviewLine(mo);
+  drawDatePreviewLine(day);
+  drawDatePreviewLine(wd);
+  auto& d = DisplayCore::get();
+  d.setFont(nullptr);
+  d.setTextSize(1);
+  return true;
+}
+#endif  // REMIND_R2B_DATE_TALL_ENABLED
+
 }  // namespace
 #endif  // REMIND_F3_DATE_PREVIEW_ENABLED
 
@@ -1306,6 +1392,10 @@ static void renderDate(const Cell& c) {
 #if REMIND_R2A_DATE_MICRO_ENABLED
   // One new opt-in 1×1 Date path; never change the other 15 compositions.
   if (tryDrawEditorialMicroDatePreview(c, wday, dayNum)) return;
+#endif
+#if REMIND_R2B_DATE_TALL_ENABLED
+  // Only custom 1x2: all other shapes preserve their original renderer.
+  if (tryDrawEditorialTallDatePreview(c, wday, month, year, dayNum)) return;
 #endif
   // Original F3 4×1/2×2 previews are unchanged.
   if (tryDrawEditorialDatePreview(c, wday, month, year, dayNum)) return;
