@@ -64,42 +64,68 @@ def test_preview_off_by_default_and_no_global_switch():
     )
 
 
-def test_original_bitmap_bounds_fit_all_4x1_and_2x2_date_strings():
+def test_original_bitmap_bounds_fit_all_visible_anchor_positions():
     fonts = {
         "serif": _glyphs("RemindFraunces72"),
         "main": _glyphs("RemindDM24"),
         "small": _glyphs("RemindDM18"),
     }
-    # Match the explicit constants in tryDrawEditorialDatePreview.
-    width, height = 800 - 2 * 62, 120 - 41 - 6
-    widths = (width * 29 // 100, width * 18 // 100,
-              width * 34 // 100)
-    widths = (*widths, width - sum(widths))
-    small_boxes = (
-        (widths[0], height, "main", WEEKDAYS),
-        (widths[1], height, "serif", tuple(str(x) for x in range(1, 32))),
-        (widths[2], height, "main", MONTHS),
-        (widths[3], height, "small", ("2026", "2030")),
-    )
-    medium_w, medium_h = 400 - 28, 240 - 24
-    medium_heights = (medium_h * 16 // 100, medium_h * 20 // 100,
-                      medium_h * 42 // 100)
-    medium_heights = (*medium_heights, medium_h - sum(medium_heights))
-    medium_boxes = (
-        (medium_w, medium_heights[0], "small", ("2026", "2030")),
-        (medium_w, medium_heights[1], "main", MONTHS),
-        (medium_w, medium_heights[2], "serif", tuple(str(x) for x in range(1, 32))),
-        (medium_w, medium_heights[3], "main", WEEKDAYS),
-    )
-    for size, boxes in (("4x1", small_boxes), ("2x2", medium_boxes)):
-        for box_w, box_h, face, labels in boxes:
+    # The same x=58..737, y=39..474 visible-pixel intersection as F3.
+    # Exercise 4x1 at every row and 2x2 at all 4 anchor placements.
+    anchors = [
+        (0, y, 800, 120, "4x1") for y in (0, 120, 240, 360)
+    ] + [
+        (x, y, 400, 240, "2x2")
+        for x in (0, 400) for y in (0, 240)
+    ]
+    examined = 0
+    for cell_x, cell_y, cell_w, cell_h, mode in anchors:
+        left, top = max(cell_x, 58), max(cell_y, 39)
+        right, bottom = min(cell_x + cell_w, 738), min(cell_y + cell_h, 475)
+        assert left < right and top < bottom
+        if mode == "4x1":
+            x, y = left + 4, top + 2
+            width = right - left - 8
+            height = bottom - top - 2 - 6
+            widths = (width * 29 // 100, width * 18 // 100,
+                      width * 34 // 100)
+            widths = (*widths, width - sum(widths))
+            boxes = (
+                (widths[0], height, "main", WEEKDAYS),
+                (widths[1], height, "serif", tuple(str(v) for v in range(1, 32))),
+                (widths[2], height, "main", MONTHS),
+                (widths[3], height, "small", ("2026", "2030")),
+            )
+            box_rects = []
+            for w, h, face, labels in boxes:
+                box_rects.append((x, y, w, h, face, labels))
+                x += w
+        else:
+            x, y = left + 12, top + 8
+            width = right - left - 24
+            height = bottom - top - 16
+            heights = (height * 16 // 100, height * 20 // 100,
+                       height * 42 // 100)
+            heights = (*heights, height - sum(heights))
+            boxes = (
+                (width, heights[0], "small", ("2026", "2030")),
+                (width, heights[1], "main", MONTHS),
+                (width, heights[2], "serif", tuple(str(v) for v in range(1, 32))),
+                (width, heights[3], "main", WEEKDAYS),
+            )
+            box_rects = []
+            for w, h, face, labels in boxes:
+                box_rects.append((x, y, w, h, face, labels))
+                y += h
+        for box_x, box_y, box_w, box_h, face, labels in box_rects:
             for label in labels:
                 ink_w, ink_h = _ink(fonts[face], label)
-                assert ink_w <= box_w - 4, (size, face, label, "width", ink_w, box_w)
-                assert ink_h <= box_h - 4, (size, face, label, "height", ink_h, box_h)
-    # Shallow Date glyphs stay fully within the physical matte's screen window.
-    # Their individual boxes span [62,738] and [41,114], with 2-px padding.
-    assert 62 + 2 >= 58
-    assert 62 + width - 2 <= 738
-    assert 41 + 2 >= 39
-    assert 41 + height - 2 <= 120
+                assert ink_w <= box_w - 4, (mode, cell_x, cell_y, face, label, "width")
+                assert ink_h <= box_h - 4, (mode, cell_x, cell_y, face, label, "height")
+                # Centering ink box can never draw behind the passepartout.
+                ink_x = box_x + (box_w - ink_w) // 2
+                ink_y = box_y + (box_h - ink_h) // 2
+                assert left <= ink_x <= ink_x + ink_w <= right
+                assert top <= ink_y <= ink_y + ink_h <= bottom
+                examined += 1
+    assert examined >= 400
