@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { integrationActiveForPilot } from '@/app/lib/integrations/catalog'
 import { getAuthenticatedUserId } from '@/app/lib/integrations/spond/server'
 import { connectWasteForUser, previewWasteAddress } from '@/app/lib/integrations/waste/server'
 import type { WasteAddress } from '@/app/lib/integrations/waste/providers'
@@ -10,6 +11,9 @@ export async function POST(req: Request) {
   try {
     const userId = await getAuthenticatedUserId(req)
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!integrationActiveForPilot('waste')) {
+      return NextResponse.json({ error: 'Waste collection is under evaluation and unavailable during the first pilot.' }, { status: 503 })
+    }
     const body = await req.json().catch(() => ({}))
     const address = body?.address as WasteAddress
     if (!address?.addressId || !address?.municipalityNumber) return NextResponse.json({ error: 'Select an address from the search results.' }, { status: 400 })

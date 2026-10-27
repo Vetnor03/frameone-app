@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { integrationActiveForPilot } from '@/app/lib/integrations/catalog'
 import { syncAllWasteUsers } from '@/app/lib/integrations/waste/server'
 import { syncAllConnectedLocalEventsFrames } from '@/app/lib/integrations/local-events/server'
 
@@ -19,7 +20,9 @@ export async function GET(request: Request) {
   if (request.headers.get('authorization') !== `Bearer ${secret}`) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const [waste, localEvents] = await Promise.allSettled([
-    syncAllWasteUsers(),
+    integrationActiveForPilot('waste')
+      ? syncAllWasteUsers()
+      : Promise.resolve({ processed: 0, succeeded: 0, failed: 0, pausedForPilot: true }),
     syncAllConnectedLocalEventsFrames(),
   ])
   const ok = waste.status === 'fulfilled' && localEvents.status === 'fulfilled'
