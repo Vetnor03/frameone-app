@@ -53,6 +53,8 @@ jobs:
       - run: pio run -d frame -e alfred_v1_2_date_preview
       # R2A: separately compile the Date-only micro (1x1) experiment.
       - run: pio run -d frame -e alfred_v1_2_date_micro_preview
+      # R2B: check the opt-in 1x2 Date-only path; never flash or OTA.
+      - run: pio run -d frame -e alfred_v1_2_date_tall_preview
       # TEMP_REFRESH_AUDIT: compile the gated diagnostic code until removal.
       - run: pio run -d frame -e alfred_v1_2_refresh_audit
       - run: pio run -d frame -e frame_esp32
