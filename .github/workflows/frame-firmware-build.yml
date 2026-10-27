@@ -38,6 +38,26 @@ jobs:
             | grep -E '^ *(depth|[0-9]+ s:|[0-9]+ i:|verify return:|Verify return code:)' \
             | head -30
 
+  date-visual-review:
+    # Independent, nonflash QA artifact; NEVER publishes a firmware binary.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Generate actual F1 bitmap Date review (16 sizes + 100 placements)
+        run: python3 frame/tools/generate_date_review_gallery.py --output "$RUNNER_TEMP/date-vnext-review.html"
+      - name: Upload standalone visual review HTML (NOT frame output)
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-vnext-original-gfx-visual-review-unflashed
+          path: ${{ runner.temp }}/date-vnext-review.html
+          if-no-files-found: error
+          retention-days: 7
+
   firmware:
     runs-on: ubuntu-latest
     steps:
