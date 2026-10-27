@@ -2,6 +2,16 @@
 #include "ModuleDate.h"
 #include "DisplayCore.h"
 #include "Theme.h"
+
+// F3 visual preview is a compile-time only experiment. The standard firmware
+// leaves this OFF; no persisted setting, backend flag or Surf pathway is added.
+#ifndef REMIND_F3_DATE_PREVIEW_ENABLED
+#define REMIND_F3_DATE_PREVIEW_ENABLED 0
+#endif
+#if REMIND_F3_DATE_PREVIEW_ENABLED
+#include "EditorialText.h"
+#include "RemindEditorialFonts.h"
+#endif
 #include <time.h>
 
 /* =========================
@@ -1107,6 +1117,99 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
   }
 }
 
+
+#if REMIND_F3_DATE_PREVIEW_ENABLED
+// Deliberately Date-only and cell-bounded. Everything is planned successfully
+// before the first pixel is written; on a planning failure use legacy Date.
+// No change to ModuleRenderer, FrameText, other modules or global font policy.
+namespace {
+struct DatePreviewLine {
+  const GFXfont* font;
+  const char* source;
+  EditorialText::Rect box;
+  char text[32];
+  EditorialText::LinePlan planned;
+};
+
+bool planDatePreviewLine(DatePreviewLine& line, int inset = 0) {
+  return EditorialText::planLine(
+    line.font, line.source, line.text, sizeof(line.text), line.box, inset,
+    EditorialText::Horizontal::CENTER, EditorialText::Vertical::CENTER,
+    line.planned) == EditorialText::Status::OK;
+}
+
+void drawDatePreviewLine(const DatePreviewLine& line) {
+  auto& d = DisplayCore::get();
+  d.setFont(line.font);
+  d.setTextSize(1);
+  d.setTextColor(Theme::ink());
+  d.setCursor(line.planned.cursorX, line.planned.baselineY);
+  // All lines were measured, and their ink boxes fit the respective regions.
+  // No global wrap/default-font changes needed.
+  d.print(line.text);
+}
+
+bool tryDrawEditorialDatePreview(const Cell& c, const char* weekday,
+                                const char* month, int year, int dayNum) {
+  if (c.w < 190 || c.h < 90) return false;
+  const bool shallow = c.size == CELL_SMALL;
+  if (!shallow && c.size != CELL_MEDIUM) return false;
+  char dayText[8], yearText[8];
+  snprintf(dayText, sizeof(dayText), "%d", dayNum);
+  snprintf(yearText, sizeof(yearText), "%d", year);
+
+  DatePreviewLine lines[4] = {};
+  if (shallow) {
+    // 4×1 at the panel top: upper 39 px are behind the frame/matte.
+    // Keep every glyph inside the actually visible central area.
+    const int safeX = c.x == 0 && c.w >= 700 ? 62 : 12;
+    const int safeTop = c.y < 39 && c.y + c.h > 39 ? 41 - c.y : 8;
+    const int width = c.w - 2 * safeX;
+    const int height = c.h - safeTop - 6;
+    if (width < 300 || height < 55) return false;
+    const int weekdayW = width * 29 / 100;
+    const int dayW = width * 18 / 100;
+    const int monthW = width * 34 / 100;
+    const int yearW = width - weekdayW - dayW - monthW;
+    const int x = c.x + safeX, y = c.y + safeTop;
+    lines[0] = {RemindEditorialFonts::dm24(), weekday,
+                {x, y, weekdayW, height}, {}, {}};
+    lines[1] = {RemindEditorialFonts::fraunces72(), dayText,
+                {x + weekdayW, y, dayW, height}, {}, {}};
+    lines[2] = {RemindEditorialFonts::dm24(), month,
+                {x + weekdayW + dayW, y, monthW, height}, {}, {}};
+    lines[3] = {RemindEditorialFonts::dm18(), yearText,
+                {x + weekdayW + dayW + monthW, y, yearW, height}, {}, {}};
+  } else {
+    const int safeX = 14, safeY = 12;
+    const int width = c.w - 2 * safeX;
+    const int height = c.h - 2 * safeY;
+    if (width < 145 || height < 145) return false;
+    const int yearH = height * 16 / 100;
+    const int monthH = height * 20 / 100;
+    const int dayH = height * 42 / 100;
+    const int weekdayH = height - yearH - monthH - dayH;
+    const int x = c.x + safeX, y = c.y + safeY;
+    lines[0] = {RemindEditorialFonts::dm18(), yearText,
+                {x, y, width, yearH}, {}, {}};
+    lines[1] = {RemindEditorialFonts::dm24(), month,
+                {x, y + yearH, width, monthH}, {}, {}};
+    lines[2] = {RemindEditorialFonts::fraunces72(), dayText,
+                {x, y + yearH + monthH, width, dayH}, {}, {}};
+    lines[3] = {RemindEditorialFonts::dm24(), weekday,
+                {x, y + yearH + monthH + dayH, width, weekdayH}, {}, {}};
+  }
+  for (int i = 0; i < 4; ++i)
+    if (!planDatePreviewLine(lines[i], 2)) return false;
+
+  for (int i = 0; i < 4; ++i) drawDatePreviewLine(lines[i]);
+  DisplayCore::get().setFont(nullptr);
+  DisplayCore::get().setTextSize(1);
+  return true;
+}
+}  // namespace
+#endif  // REMIND_F3_DATE_PREVIEW_ENABLED
+
 static void renderDate(const Cell& c) {
 
   tm t;
@@ -1125,6 +1228,12 @@ static void renderDate(const Cell& c) {
   int todayYear = year;
   int todayMonth0 = month0;
   int todayDay = dayNum;
+
+#if REMIND_F3_DATE_PREVIEW_ENABLED
+  // No draw-on-failure: returns true only when all four lines fit. This is
+  // solely an opted-in Date 4×1 or 2×2 visual prototype.
+  if (tryDrawEditorialDatePreview(c, wday, month, year, dayNum)) return;
+#endif
 
   if (c.size == CELL_ADAPTIVE) {
     drawAdaptiveDate(c, month, wday, year, month0, dayNum);
