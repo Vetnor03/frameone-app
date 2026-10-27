@@ -213,5 +213,23 @@
       "stableAcrossUnchangedRefreshes": true,
       "noForcedArt": true
     }
+  },
+  "measuredPlanner": {
+    "status": "geometry_only_unwired_prototype",
+    "requiredFacts": [
+      "month",
+      "day",
+      "weekday"
+    ],
+    "candidateExpressions": [
+      "stack",
+      "ribbon",
+      "card"
+    ],
+    "selection": "choose_feasible_candidate_with_smallest_maximum_axis_occupancy",
+    "measurementUnits": "integer_glyph_ink_pixels",
+    "typography": "caller_supplies_measured_font_variants_after_F2",
+    "omissions": "year_calendars_holidays_and_art_not_yet_allocated",
+    "noDirectSpanBranch": true
   }
 }
