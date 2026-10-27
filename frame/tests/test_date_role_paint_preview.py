@@ -57,6 +57,7 @@ def test_calendar_and_holiday_safety_checks_precede_all_pixels():
     assert "context.holidayCount<count" in section
     assert "calendarLikely&&!context.current" in section
     assert "dualCalendarLikely&&!context.next" in section
+    assert "context.next&&!context.nextTitle" in section
     assert "calendarLikely&&!context.year" in section
     assert "supportsExactDateText(utf8)" in DATE
     assert "return false" in section

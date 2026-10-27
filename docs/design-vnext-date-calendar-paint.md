@@ -16,3 +16,5 @@ This uses the legacy calendar painter (real rendering calls in experimental bran
 No Surf changes. No standard firmware change. ALFRED V4 v2.7.3 original rollback binary + SHA is still unverified.
 
 **FLASH: NEI.**
+
+**Additional factual guard:** A second calendar may only be painted if its independently measured month title is visible. An unlabeled next-month grid falls back to legacy instead of silently removing the month identity.

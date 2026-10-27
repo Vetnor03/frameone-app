@@ -1267,6 +1267,9 @@ static bool preflightDateContext(const Cell& cell,int year,int month0,int day,
     (cell.w>=700&&cell.h>=330)||(cell.w>=520&&cell.h>=400);
   if(calendarLikely&&!context.current)return false;
   if(dualCalendarLikely&&!context.next)return false;
+  // The second calendar has a different month than the hero date. An
+  // unlabeled next-month grid loses factual meaning; use legacy instead.
+  if(context.next&&!context.nextTitle)return false;
   if(calendarLikely&&!context.year)return false;
   if(count>0 && context.holidayCount<count)return false;
 
