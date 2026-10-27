@@ -24,6 +24,7 @@ import { isUpcomingIntegratedCalendarItem } from './lib/device/calendarVisibilit
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, getLocalEventPlace, normalizeLocalEventAreaPreference, nationwideLocalEventArea, type LocalEventAreaPreference } from './lib/integrations/local-events/places'
 import { localEventGroupKeyFromRaw, groupSkipId } from './lib/integrations/local-events/grouping'
+import { localEventVisibleForActiveFrame } from './lib/integrations/local-events/visibility'
 import { INTEGRATION_CATALOGUE, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
 import WasteSetupModal from './components/WasteSetupModal'
 import NewsModuleSettingsTab from './components/NewsModuleSettingsTab'
@@ -15054,7 +15055,7 @@ const manualItems: ReminderUiItem[] = (data || [])
         let localEventSkippedIds = new Set<string>()
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
-          .select('id, provider, external_id, title, starts_at, due_at, raw')
+          .select('id, device_id, provider, external_id, title, starts_at, due_at, raw')
           .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway'])
           .or(activeDeviceId ? `user_id.eq.${userId},device_id.eq.${activeDeviceId}` : `user_id.eq.${userId}`)
           .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso}`)
@@ -15072,7 +15073,8 @@ const manualItems: ReminderUiItem[] = (data || [])
               .maybeSingle()
             : { data: null }
           const selectedLocalEventArea = String(((localEventsIntegrationData?.encrypted_credentials as any)?.areaPreference?.primaryPlaceId) || '').trim()
-          const visibleIntegrationData = (integrationData || []).filter((row: any) => String(row.provider || '') !== 'edge-of-norway' || !selectedLocalEventArea || (Array.isArray(row.raw?.areaKeys) ? row.raw.areaKeys.includes(selectedLocalEventArea) : String(row.raw?.areaKey || row.raw?.primaryPlaceId || '').trim() === selectedLocalEventArea))
+          const visibleIntegrationData = (integrationData || []).filter((row) =>
+            localEventVisibleForActiveFrame(row, activeDeviceId, selectedLocalEventArea))
           const localEventExternalIds = visibleIntegrationData
             .filter((row: any) => String(row.provider || '') === 'edge-of-norway')
             .map((row: any) => String(row.external_id || '').trim())
