@@ -12,11 +12,11 @@
 
 ## Verifiserbare grenser
 
-- [ ] 31 248 *(4 kolonner ×3 mulige startrader ×31 dagstall ×7 ukedager ×12 måneder)* faktiske GFX glyph-bounds-situasjoner passer i synlig aperture og uten innbyrdes overlapp — kjør `pytest -q frame/tests`.
-- [ ] `pio run -d frame -e alfred_v1_2_date_tall_preview` (R2B enabled) grønt.
-- [ ] Standard Alfred, F3-only, R2A-only, refresh-diagnostikk, legacy ESP32 og Arduino CLI bygger grønt uten at R2B aktiveres.
-- [ ] Ingen Surf source-blob eller annen modul endret; PR-diff begrenset til Date, PIO, CI, docs og test.
-- [ ] Statisk flash/RAM mot F3/R2A-baser når firmwarekompilering gir konkrete tall. Dette beviser **ikke** fysisk RAM/strømforbruk.
+- [x] **PASS:** 31 248 *(4 kolonner ×3 mulige startrader ×31 dagstall ×7 ukedager ×12 måneder)* faktiske GFX glyph-bounds-situasjoner i synlig aperture, uten innbyrdes overlapp. Totalt **138 firmware-pytester PASS** i [CI #40545045495](https://github.com/Vetnor03/frameone-app/actions/runs/40545045495).
+- [x] **PASS:** `pio run -d frame -e alfred_v1_2_date_tall_preview` med R2B=1 (Alfred PlatformIO).
+- [x] **PASS:** Standard Alfred, F3-only, R2A-only, refresh-diagnostikk, legacy ESP32 og Arduino CLI bygger grønt med R2B av. Begge firmware- og live-TLS-jobber i CI #40545045495 er `success`.
+- [x] **PASS:** PR-diff begrenset til Date, PIO, CI, docs og test. Alle fire låste Surf source-blob SHA-ene er uendret.
+- [x] **MÅLT:** Standard Alfred **1 571 385 B flash / 123 008 B global RAM**. F3-only **1 634 945 B / 123 008 B**. R2A-only **1 659 293 B / 123 008 B**. R2B/1 1×2 **1 659 793 B / 123 008 B** (**+24 848 B** flash vs F3-only, **+0 B** global RAM). Standard Arduino sketch **1 616 541 B**, globale variabler **122 864 B**. Dette beviser **ikke** fysisk RAM/strømforbruk.
 - [ ] Visuell skarphet/komposisjon i reell Dark/Light, 1–2 meter, samt mattekant – **fysisk prøve krever identifisert, fungerende rollback-binær**. Ingen flashing av kjent v2.7.3 før dette er løst.
 
 ## Prosjektfortsettelse
@@ -24,3 +24,7 @@
 **Neste lille oppgave** etter R2B/1 kilde- og byggeverifisering: separat **R2B/2 2×1 horisontal Date-preview**. Deretter større responsive familier; botaniske/kunstneriske illustrasjoner beholdes som **R4 etter typografi- og kalender-QA**, særlig 4×3/4×4. Surf er ikke del av font- eller designtilpasningen.
 
 **Statusflagg for brukeren akkurat nå: FLASH: NEI**. Denne testkoden er ikke aktiv i default firmware og ingen verifisert fysisk rollback er etablert.
+
+## Endelig kilde-/bygg-verifikasjon (27.10.2026)
+
+**CI [#40545045495](https://github.com/Vetnor03/frameone-app/actions/runs/40545045495): SUCCESS**, 138 firmwaretester PASS, alle 7 PlatformIO-buildsteg/size-profilene PASS og Arduino CLI PASS. **Bare source-/byggefasen er ferdig**. Faktiske lys/mørk-e-paperbilder, lesbarhet og kjent fungerende rollback er **ikke** verifisert. Draft PR skal ikke merges/publiseres/flashes til pilot. **FLASH: NEI.**
