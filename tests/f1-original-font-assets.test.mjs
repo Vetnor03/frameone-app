@@ -30,7 +30,7 @@ for (const [name, meta] of Object.entries(expected)) {
     const bitmap = Buffer.from([...matchBitmaps[1].matchAll(/0x([0-9a-fA-F]{2})/g)].map((x) => Number.parseInt(x[1], 16)));
     assert.equal(bitmap.length, meta.bitmapBytes);
     assert.equal(sha(bitmap), meta.bitmapSha);
-    const glyphs = [...matchGlyphs[1].matchAll(/\\{\\s*(\\d+),\\s*(\\d+),\\s*(\\d+),\\s*(\\d+),\\s*(-?\\d+),\\s*(-?\\d+)\\s*\\}/g)];
+    const glyphs = [...matchGlyphs[1].matchAll(/\{\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(-?\d+),\s*(-?\d+)\s*\}/g)];
     assert.equal(glyphs.length, 224, '0x20–0xFF');
     for (const point of [0xB0, 0xC5, 0xC6, 0xD8, 0xE5, 0xE6, 0xF8]) {
       const [, offset, width, height, advance] = glyphs[point - 0x20].map(Number);
