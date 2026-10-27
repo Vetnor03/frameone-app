@@ -30,14 +30,18 @@ These two build targets are different. The default PlatformIO environment remain
 
 ## F3 acceptance matrix
 
-- [ ] New isolated preview C++ source compiles **with F3=1** in Alfred PlatformIO.
-- [ ] Standard Alfred and Arduino builds pass with **F3=0**.
-- [ ] Original-font glyph-bounds regression checks all weekday/month/day samples in **all four 4×1 row positions and all four 2×2 quadrants**, against the matte viewport.
-- [ ] Existing frame and F1/F2/native regression tests pass.
-- [ ] Actual PR diff contains no edits to any Surf-related source file or shared renderer.
-- [ ] Numerical program flash and RAM delta: standard vs F2 and *opted-in* F3, with sizes.
+- [x] Date-preview C++ path with **F3=1**: Alfred PlatformIO preview target **PASS**, [CI run #40517736135](https://github.com/Vetnor03/frameone-app/actions/runs/40517736135).
+- [x] Standard Alfred PlatformIO, refresh-audit, legacy ESP32 and Arduino CLI with **F3=0**: **PASS**, same CI run.
+- [x] Original-font glyph-bounds regression against the matte viewport: **416 local combinations PASS** across four 4×1 rows and four 2×2 quadrants; CI pytest includes two new F3 tests.
+- [x] Firmware pytest **132 passed**, including existing F1/F2/native tests; all CI firmware build steps passed.
+- [x] F3 PR file diff contains only Date, a separate PlatformIO env, CI, tests and docs; all four Surf blob fingerprints match the frozen Phase-0 SHA values exactly.
+- [x] Measured: standard Alfred flash **1,571,385 B**, RAM **123,008 B**, unchanged from F2. Date-preview-enabled flash **1,634,945 B** (**+63,560 B**), RAM **123,008 B** (**+0 B**). Standard Arduino CLI sketch **1,616,541 B**, globals **122,864 B**, unchanged from F2. Hardware runtime memory and visual performance are **not** established by these static build stats.
 - [ ] Physical photos of **Date 4×1 and 2×2 on a safely restorable test unit**, comparison against baseline, and readable 1–2 m type after a **separately authorized** flash. Not possible just from emulator or green CI.
 - [ ] Confirm actual F1/F2 merge order and known-good physical rollback before any flash/pilot rollout.
 - [ ] One physical Surf smoke test **only when shared renderer changes later and before rollout**. No new Surf reference-image matrix needed now.
 
 **No claim of pixel-perfect equality with the HTML Lab or the approved screen 6 can be made until the panel has been compared.** This isolated F3 preview is for design validation, not an approved new default Date layout.
+
+## Verified build provenance
+
+Final source/test head before documentation-only edit: commit [`b50a1e7b`](https://github.com/Vetnor03/frameone-app/commit/b50a1e7b5d1e3e28273fa50d9297a8a3b8e0253a), which produced successful [GitHub Actions #40517736135](https://github.com/Vetnor03/frameone-app/actions/runs/40517736135) on 27.10.2026. Following documentation-only changes do not modify tested executable source. **Draft remains open; no physical flash or production activation.**
