@@ -15073,7 +15073,7 @@ const manualItems: ReminderUiItem[] = (data || [])
               .maybeSingle()
             : { data: null }
           const selectedLocalEventArea = String(((localEventsIntegrationData?.encrypted_credentials as any)?.areaPreference?.primaryPlaceId) || '').trim()
-          const visibleIntegrationData = (integrationData || []).filter((row: any) =>
+          const visibleIntegrationData = (integrationData || []).filter((row) =>
             localEventVisibleForActiveFrame(row, activeDeviceId, selectedLocalEventArea))
           const localEventExternalIds = visibleIntegrationData
             .filter((row: any) => String(row.provider || '') === 'edge-of-norway')
