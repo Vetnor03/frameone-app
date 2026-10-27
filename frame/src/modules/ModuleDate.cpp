@@ -2,6 +2,14 @@
 #include "ModuleDate.h"
 #include "DisplayCore.h"
 #include "Theme.h"
+
+// R3 opt-in role-first Date experiment. OFF in standard ALFRED; no OTA.
+#ifndef REMIND_DATE_ROLE_PREVIEW_ENABLED
+#define REMIND_DATE_ROLE_PREVIEW_ENABLED 0
+#endif
+#if REMIND_DATE_ROLE_PREVIEW_ENABLED
+#include "DateF2InkAdapter.h"
+#endif
 #include <time.h>
 
 /* =========================
@@ -1107,6 +1115,39 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
   }
 }
 
+#if REMIND_DATE_ROLE_PREVIEW_ENABLED
+// This three-fact preview must never suppress functional legacy calendar or
+// holiday data. Conservative area guard is not a per-grid design template.
+static bool tryDrawMeasuredDatePreview(const Cell& cell, const char* weekday,
+                                       const char* month, int dayNum) {
+  if (cell.size != CELL_ADAPTIVE || !weekday || !month) return false;
+  // Defer all geometry that could contain a functional calendar to legacy.
+  if (cell.w >= 330 && cell.h >= 210) return false;
+  if (g_cfg && g_cfg->date.holidayCount > 0) return false;
+  DateF2Ink::Result planned = {};
+  const DateRolePlanner::Rect bounds = {cell.x, cell.y, cell.w, cell.h};
+  if (!DateF2Ink::planWholeDate(bounds, dayNum, month, weekday, planned) ||
+      !planned.valid) return false;
+  // Complete ink/baseline planning succeeded before touching display pixels.
+  auto& display = DisplayCore::get();
+  display.setTextColor(Theme::ink());
+  display.setTextSize(1);
+  display.setTextWrap(false);
+  const DateF2Ink::Text* lines[] = {
+    &planned.day, &planned.month, &planned.weekday
+  };
+  for (const auto* line : lines) {
+    display.setFont(line->font);
+    display.setCursor(line->line.cursorX, line->line.baselineY);
+    display.print(line->latin1);
+  }
+  display.setFont(nullptr);
+  display.setTextSize(1);
+  display.setTextWrap(true);
+  return true;
+}
+#endif  // REMIND_DATE_ROLE_PREVIEW_ENABLED
+
 static void renderDate(const Cell& c) {
 
   tm t;
@@ -1125,6 +1166,10 @@ static void renderDate(const Cell& c) {
   int todayYear = year;
   int todayMonth0 = month0;
   int todayDay = dayNum;
+#if REMIND_DATE_ROLE_PREVIEW_ENABLED
+  if (tryDrawMeasuredDatePreview(c, wday, month, dayNum)) return;
+#endif
+
 
   if (c.size == CELL_ADAPTIVE) {
     drawAdaptiveDate(c, month, wday, year, month0, dayNum);
