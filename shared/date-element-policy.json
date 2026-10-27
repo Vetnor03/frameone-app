@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "status": "experimental_contract_not_approved_for_rendering",
+  "decision": "one_role_priority_policy_for_all_visible_cell_geometry",
+  "evidence": {
+    "approved": [
+      "Fraunces + DM Sans from physical font test 6",
+      "Essential date first",
+      "Full date strings without ellipsis",
+      "Actual matte viewport and ink bounds",
+      "Surf frozen"
+    ],
+    "candidates": [
+      "numeric geometry thresholds from PR #1423",
+      "calendar and decoration minimum-area thresholds",
+      "font variant ordering subject to F2 ink fit"
+    ]
+  },
+  "panel": {
+    "width": 800,
+    "height": 480,
+    "gridColumns": 4,
+    "gridRows": 4,
+    "matte": {
+      "x": 58,
+      "y": 39,
+      "width": 680,
+      "height": 436
+    }
+  },
+  "priorities": [
+    "essential",
+    "important",
+    "optional",
+    "decorative"
+  ],
+  "elements": [
+    {
+      "id": "day",
+      "source": "localDayNumber",
+      "role": "hero",
+      "priority": "essential",
+      "fonts": [
+        "Fraunces72",
+        "Fraunces48"
+      ],
+      "disclosure": "mandatory_if_date_available",
+      "requireInkFit": true
+    },
+    {
+      "id": "weekday",
+      "source": "localWeekday",
+      "role": "secondary",
+      "priority": "important",
+      "fonts": [
+        "DMSans24",
+        "DMSans18"
+      ],
+      "disclosure": "after_day_if_measured_fit",
+      "requireInkFit": true
+    },
+    {
+      "id": "month",
+      "source": "localMonthName",
+      "role": "heading",
+      "priority": "important",
+      "fonts": [
+        "DMSans24",
+        "DMSans18"
+      ],
+      "disclosure": "after_day_if_measured_fit",
+      "requireInkFit": true
+    },
+    {
+      "id": "currentCalendar",
+      "source": "calendarCurrent",
+      "role": "functional",
+      "priority": "important",
+      "fonts": [],
+      "disclosure": "only_if_useful_grid_fits_after_main_facts",
+      "requireInkFit": true
+    },
+    {
+      "id": "year",
+      "source": "localYear",
+      "role": "secondary",
+      "priority": "optional",
+      "fonts": [
+        "DMSans18"
+      ],
+      "disclosure": "after_essential_and_important",
+      "requireInkFit": true
+    },
+    {
+      "id": "nextCalendar",
+      "source": "calendarNext",
+      "role": "functional",
+      "priority": "optional",
+      "fonts": [],
+      "disclosure": "only_after_current_calendar_and_facts",
+      "requireInkFit": true
+    },
+    {
+      "id": "holidays",
+      "source": "upcomingHolidays",
+      "role": "listItem",
+      "priority": "optional",
+      "fonts": [
+        "DMSans18"
+      ],
+      "disclosure": "only_if_present_in_actual_data_and_readable",
+      "requireInkFit": true
+    },
+    {
+      "id": "botanical",
+      "source": "optionalArt",
+      "role": "figure",
+      "priority": "decorative",
+      "fonts": [],
+      "disclosure": "only_after_all_facts_calendars_and_breathing_room",
+      "requireInkFit": true
+    }
+  ],
+  "candidateGeometry": {
+    "ribbon": {
+      "minWidth": 300,
+      "maxHeightExclusive": 152
+    },
+    "column": {
+      "maxWidthExclusive": 260,
+      "minHeight": 152
+    },
+    "spread": {
+      "minWidth": 530,
+      "minHeight": 215
+    },
+    "inset": {
+      "tight": 8,
+      "regular": 12,
+      "spacious": 16,
+      "tightHeightExclusive": 155,
+      "tightWidthExclusive": 260
+    },
+    "gap": {
+      "tight": 6,
+      "regular": 8,
+      "spacious": 12
+    },
+    "optionalYear": {
+      "minSafeWidth": 220,
+      "minSafeHeight": 165
+    },
+    "currentCalendar": {
+      "minUsefulWidth": 154,
+      "minUsefulHeight": 92
+    },
+    "illustration": {
+      "minSafeWidth": 560,
+      "minSafeHeight": 240
+    }
+  },
+  "guardrails": {
+    "defaultFirmwareUnchanged": true,
+    "routeToRuntime": false,
+    "noShapeSpecificRenderers": true,
+    "neverTruncateDate": true,
+    "noPartialRendering": true,
+    "doNotAssumeCalendarOrArtFitsFromShape": true,
+    "evaluationOrder": [
+      "facts",
+      "matteIntersection",
+      "candidateComposition",
+      "F2GlyphMeasurement",
+      "priorityBasedDegradation",
+      "atomicDrawOrLegacyFallback"
+    ]
+  },
+  "expressionPolicy": {
+    "status": "contract_only_not_implemented",
+    "visualAuthority": "measured_content_and_available_ink_rectangles",
+    "candidateCompositions": [
+      "compact",
+      "ribbon",
+      "column",
+      "card",
+      "spread"
+    ],
+    "compositionSelection": "evaluate_all_feasible_candidates_and_choose_best_measured_whole_plan",
+    "selectionInputs": [
+      "matteClippedVisibleRect",
+      "factualDateAndCalendarContent",
+      "elementRolesAndPriorities",
+      "actualF2GfxGlyphInkBounds",
+      "minimumReadableText",
+      "calendarFunctionalMinimums",
+      "remainingWhitespace",
+      "themeContrast"
+    ],
+    "selectionConstraints": {
+      "noGridSpanToFixedVisualExpression": true,
+      "sameGridShapeCanUseDifferentCompositions": true,
+      "avoidFixedCoordinatesForIndividualFacts": true,
+      "neverEmbedSampleDateOrArtworkInPolicy": true,
+      "typographyPickedByReadableFitNotShapeName": true,
+      "contentFirstDegradation": true,
+      "rejectPartialOrOverlappingPlan": true
+    },
+    "art": {
+      "phase": "R4_after_typography_and_calendar_QA",
+      "decision": "optional_eligible_only_after_reserving_all_factual_ink",
+      "eligibleBy": "measured_remaining_rectangle_not_grid_size",
+      "motifSelection": "curated_data_driven_deterministic",
+      "stableAcrossUnchangedRefreshes": true,
+      "noForcedArt": true
+    }
+  }
+}
