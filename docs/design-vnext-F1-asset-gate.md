@@ -1,6 +1,6 @@
 # RE:MIND Design vNext — F1 asset handoff (NOT YET READY TO MERGE)
 
-Work belongs to main [#1429](https://github.com/Vetnor03/frameone-app/issues/1429), Phase-0 [#1430](https://github.com/Vetnor03/frameone-app/issues/1430). **This draft branch does not yet contain the generated 4-font `RemindEditorialFonts.cpp` (about 497 KB C++ source).** Do not merge or flash based on this branch. No Surf or production renderer file is modified.
+Work belongs to main [#1429](https://github.com/Vetnor03/frameone-app/issues/1429), Phase-0 [#1430](https://github.com/Vetnor03/frameone-app/issues/1430). **This draft branch NOW contains the generated 4-font `RemindEditorialFonts.cpp` (508,302 byte C++ source, 27 Oct 2026).** Do not merge or flash based on this branch. No Surf or production renderer file is modified.
 
 ## Verified independently, 27 Oct 2026
 
@@ -19,15 +19,24 @@ Offline generation:
 ```sh
 python frame/tools/recover_screen6_fonts.py /path/to/RE-MIND-Fancy-Fonts-Arduino-IDE.zip
 ```
-Then inspect `RemindEditorialFonts.cpp` and *commit it on this branch*, build normal Alfred firmware in CI using `frame/platformio.ini`, check ELF/map flash impact, and compare font byte hashes. Do not change existing module renderers until separate F2/F3. Keep `RemindEditorialFonts.cpp` isolated and unused so Surf cannot inherit new assets.
+The generated `RemindEditorialFonts.cpp` is now committed on this branch. Git blob SHA `ce233c113d28bf9be01bbfdfb6d9ad9cac488495` matches the Git blob SHA of the locally tested original; SHA-256 is `e533f0431d3bf1d7ba47be7be2de89b8221d828d26947c17df8fae2e3a0c5083`. The `tests/f1-original-font-assets.test.mjs` test locks those bytes, all bitmap hashes, 224-glyph Latin-1 ranges, Norwegian glyphs and official OFL license texts. GitHub Actions full Alfred/Arduino firmware build and measured ELF/map impact remain pending verification; don't mark them PASS until actual logs are reviewed. Do not change existing module renderers until separate F2/F3. Keep `RemindEditorialFonts.cpp` isolated and unused so Surf cannot inherit new assets.
 
 ## Missing F1 merge gates
 
-- [ ] Generated `RemindEditorialFonts.cpp` committed to GitHub (prepared and native-tested locally but **not yet transferred into this repository**).
-- [ ] Actual GitHub Actions Alfred PlatformIO and Arduino build pass with the committed source.
+- [x] Generated `RemindEditorialFonts.cpp` committed to GitHub and its Git blob hash verified identical to the tested local file (508,302 bytes).
+- [ ] Actual GitHub Actions Alfred PlatformIO and Arduino build pass with the committed source; **run in progress** on this PR, result to be verified.
 - [ ] Actual memory/flash map review with and without newly linked font assets.
 - [ ] Verify font-license attribution in firmware distribution and source-provenance caveat.
 - [x] Both OFL texts versioned; original byte fingerprint and Norwegian glyph coverage recorded.
 - [x] Source-level Surf files untouched; existing frame continues on 2.7.3 with no flash.
 
 **No real-flash rollback identity has yet been established.** F1 is not authorizing a flash or OTA.
+
+
+## Transfer and CI checkpoint — 27.10.2026
+
+- PR head added exact F1 source via GitHub contents API: commit `1663bb5da365beac32a5a320121626dc35fabf95`; identical Git blob `ce233c113d28bf9be01bbfdfb6d9ad9cac488495` confirmed via repository file metadata and local `git hash-object`.
+- Added `tests/f1-original-font-assets.test.mjs` and corrected its glyph tuple expression in commit `23368978597ed23200b46e65b601dbc8e7d9bba9`.
+- The local offline native compiler and 12-definition byte-for-byte source comparison **PASS**; don't conflate that with GitHub CI or physical flash.
+- Official OFL text is checked in for both font families. The original source comments mention a generic OFL file; use the canonical full license copies under `frame/src/assets/fonts/licenses/`.
+- Source/provenance and build-memory remain explicit gates; **no production module references any of the new font accessors**. Surf untouched.
