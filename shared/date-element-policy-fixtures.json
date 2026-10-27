@@ -1,0 +1,82 @@
+[
+  {
+    "id": "1x1_top_left",
+    "cell": {
+      "x": 0,
+      "y": 0,
+      "w": 200,
+      "h": 120
+    },
+    "expectedCandidate": "compact"
+  },
+  {
+    "id": "1x2_top_left",
+    "cell": {
+      "x": 0,
+      "y": 0,
+      "w": 200,
+      "h": 240
+    },
+    "expectedCandidate": "column"
+  },
+  {
+    "id": "1x2_lower_right",
+    "cell": {
+      "x": 600,
+      "y": 240,
+      "w": 200,
+      "h": 240
+    },
+    "expectedCandidate": "column"
+  },
+  {
+    "id": "2x1_top",
+    "cell": {
+      "x": 200,
+      "y": 0,
+      "w": 400,
+      "h": 120
+    },
+    "expectedCandidate": "ribbon"
+  },
+  {
+    "id": "2x2_centre",
+    "cell": {
+      "x": 200,
+      "y": 120,
+      "w": 400,
+      "h": 240
+    },
+    "expectedCandidate": "card"
+  },
+  {
+    "id": "4x1_top",
+    "cell": {
+      "x": 0,
+      "y": 0,
+      "w": 800,
+      "h": 120
+    },
+    "expectedCandidate": "ribbon"
+  },
+  {
+    "id": "4x3_bottom",
+    "cell": {
+      "x": 0,
+      "y": 120,
+      "w": 800,
+      "h": 360
+    },
+    "expectedCandidate": "spread"
+  },
+  {
+    "id": "4x4",
+    "cell": {
+      "x": 0,
+      "y": 0,
+      "w": 800,
+      "h": 480
+    },
+    "expectedCandidate": "spread"
+  }
+]
