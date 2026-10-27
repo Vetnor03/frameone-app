@@ -152,8 +152,8 @@ def test_f2_bridge_is_opt_in_and_not_grid_hardcoded():
     mod=(FRAME/"src/modules/ModuleDate.cpp").read_text(encoding="utf-8")
     # The opt-in preview is permitted, but only behind the default-OFF gate.
     assert "#define REMIND_DATE_ROLE_PREVIEW_ENABLED 0" in mod
-    assert '#if REMIND_DATE_ROLE_PREVIEW_ENABLED\n#include "DateF2InkAdapter.h"\n#endif' in mod
-    assert "if (tryDrawMeasuredDatePreview(c, wday, month, dayNum)) return;" in mod
+    assert '#if REMIND_DATE_ROLE_PREVIEW_ENABLED\n#include "DateF2InkAdapter.h"\n#include "DateContextReservations.h"\n#include "DateMonthGridPlan.h"\n#include "RemindEditorialFonts.h"\n#endif' in mod
+    assert "if (tryDrawMeasuredDatePreview(c, wday, month, dayNum, year, month0)) return;" in mod
     # Unknown printable symbols are rejected rather than silently removed
     # by the existing UTF-8 display normalizer.
     assert "(*p >= 'A' && *p <= 'Z')" in c
