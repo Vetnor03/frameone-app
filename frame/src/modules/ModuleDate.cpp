@@ -17,6 +17,13 @@
 #ifndef REMIND_R2B_DATE_TALL_ENABLED
 #define REMIND_R2B_DATE_TALL_ENABLED 0
 #endif
+// Separate short/wide 2x1 Date experiment. Production and R2B 1x2 are OFF.
+#ifndef REMIND_R2B_DATE_WIDE_ENABLED
+#define REMIND_R2B_DATE_WIDE_ENABLED 0
+#endif
+#if REMIND_R2B_DATE_WIDE_ENABLED && !REMIND_F3_DATE_PREVIEW_ENABLED
+#error "R2B 2x1 Date preview requires F3 editorial font engine"
+#endif
 #if REMIND_R2B_DATE_TALL_ENABLED && !REMIND_F3_DATE_PREVIEW_ENABLED
 #error "R2B 1x2 Date preview requires the F3 editorial font engine"
 #endif
@@ -1366,6 +1373,96 @@ bool tryDrawEditorialTallDatePreview(const Cell& c, const char* weekday,
 }
 #endif  // REMIND_R2B_DATE_TALL_ENABLED
 
+
+#if REMIND_R2B_DATE_WIDE_ENABLED
+// Short, wide 2x1 has a different information geometry than vertical 1x2:
+// one expressive Fraunces day on the left, compact month/weekday on the right.
+// All four glyph rectangles are preflighted BEFORE writing any pixel.
+bool tryDrawEditorialWideDatePreview(const Cell& c, const char* weekday,
+                                    const char* month, int year, int dayNum) {
+  if (c.size != CELL_ADAPTIVE || c.colSpan != 2 || c.rowSpan != 1 ||
+      c.w <= 0 || c.h <= 0 || !weekday || !weekday[0] ||
+      !month || !month[0] || dayNum < 1 || dayNum > 31) return false;
+
+  // Intersection with the visible 680x436 panel opening on ALL 12 possible
+  // grid placements; avoid hiding the date behind side/top/bottom mattes.
+  const int left = max(c.x, 58);
+  const int top = max(c.y, 39);
+  const int right = min(c.x + c.w, 738);
+  const int bottom = min(c.y + c.h, 475);
+  const int padX = 6, padY = 6, gapX = 9, gapY = 4;
+  const int x = left + padX, y = top + padY;
+  const int w = right - left - 2 * padX;
+  const int h = bottom - top - 2 * padY;
+  if (w < 220 || h < 63) return false;
+
+  // A fixed horizontal hierarchy is kept even when the top matte makes the
+  // visible space just 81px tall. Optional year is dropped on that top row.
+  const int dayW = w * 35 / 100;
+  const int detailsX = x + dayW + gapX;
+  const int detailsW = w - dayW - gapX;
+  if (dayW < 90 || detailsW < 115) return false;
+
+  const bool showYear = h >= 100;
+  const int yearH = showYear ? 22 : 0;
+  const int monthH = showYear ? 35 : 33;
+  const int weekdayH = showYear ? 35 : 32;
+  const int total = monthH + weekdayH + (showYear ? yearH : 0)
+                  + gapY * (showYear ? 2 : 1);
+  if (total > h) return false;
+  const int detailsY = y + (h - total) / 2;
+
+  char dayText[8], yearText[8];
+  snprintf(dayText, sizeof(dayText), "%d", dayNum);
+  snprintf(yearText, sizeof(yearText), "%d", year);
+
+  DatePreviewLine day = {};
+  day.font = RemindEditorialFonts::fraunces72();
+  day.source = dayText;
+  day.box = {x, y, dayW, h};
+  if (!planDatePreviewLine(day, 2)) {
+    day.font = RemindEditorialFonts::fraunces48();
+    if (!planDatePreviewLine(day, 2)) return false;
+  }
+
+  DatePreviewLine mo = {};
+  mo.font = RemindEditorialFonts::dm24();
+  mo.source = month;
+  mo.box = {detailsX, detailsY, detailsW, monthH};
+  if (!planDatePreviewLine(mo, 2)) {
+    mo.font = RemindEditorialFonts::dm18();
+    if (!planDatePreviewLine(mo, 2)) return false;
+  }
+
+  DatePreviewLine wd = {};
+  wd.font = RemindEditorialFonts::dm24();
+  wd.source = weekday;
+  wd.box = {detailsX, detailsY + monthH + gapY, detailsW, weekdayH};
+  if (!planDatePreviewLine(wd, 2)) {
+    wd.font = RemindEditorialFonts::dm18();
+    if (!planDatePreviewLine(wd, 2)) return false;
+  }
+
+  DatePreviewLine yr = {};
+  if (showYear) {
+    yr.font = RemindEditorialFonts::dm18();
+    yr.source = yearText;
+    yr.box = {detailsX, detailsY + monthH + gapY + weekdayH + gapY,
+              detailsW, yearH};
+    if (!planDatePreviewLine(yr, 2)) return false;
+  }
+
+  drawDatePreviewLine(day);
+  drawDatePreviewLine(mo);
+  drawDatePreviewLine(wd);
+  if (showYear) drawDatePreviewLine(yr);
+  auto& d = DisplayCore::get();
+  d.setFont(nullptr);
+  d.setTextSize(1);
+  return true;
+}
+#endif  // REMIND_R2B_DATE_WIDE_ENABLED
+
 }  // namespace
 #endif  // REMIND_F3_DATE_PREVIEW_ENABLED
 
@@ -1396,6 +1493,10 @@ static void renderDate(const Cell& c) {
 #if REMIND_R2B_DATE_TALL_ENABLED
   // Only custom 1x2: all other shapes preserve their original renderer.
   if (tryDrawEditorialTallDatePreview(c, wday, month, year, dayNum)) return;
+#endif
+#if REMIND_R2B_DATE_WIDE_ENABLED
+  // Only custom 2x1: separate from 1x2 and independent of the older previews.
+  if (tryDrawEditorialWideDatePreview(c, wday, month, year, dayNum)) return;
 #endif
   // Original F3 4×1/2×2 previews are unchanged.
   if (tryDrawEditorialDatePreview(c, wday, month, year, dayNum)) return;
