@@ -1169,9 +1169,14 @@ static bool gridFontFits(const DateMonthGridPlan::Grid& grid) {
   if(!grid.valid)return false;
   int16_t x1=0,y1=0;
   uint16_t width=0,height=0;
-  // Actual legacy FreeSans9 GFX ink for largest two-digit day/week labels.
-  measureText("31",FONT_9,x1,y1,width,height);
-  if(width>grid.cellW || height>grid.cellH)return false;
+  // Preflight every number: in proportional fonts "31" is NOT necessarily
+  // the widest two-digit string. The calendar must never clip a different day.
+  for(int day=1;day<=31;++day){
+    char number[4]={};
+    snprintf(number,sizeof number,"%d",day);
+    measureText(number,FONT_9,x1,y1,width,height);
+    if(width>grid.cellW || height>grid.cellH)return false;
+  }
   if(grid.showDow){
     const char* labels[]={"Mo","Tu","We","Th","Fr","Sa","Su"};
     for(const char* label:labels) {
@@ -1180,8 +1185,13 @@ static bool gridFontFits(const DateMonthGridPlan::Grid& grid) {
     }
   }
   if(grid.showWeekNums){
-    measureText("53",FONT_9,x1,y1,width,height);
-    if(width>18 ||height>grid.cellH)return false;
+    // ISO week numbers use the same proportional GFX font: check all 1..53.
+    for(int week=1;week<=53;++week){
+      char number[4]={};
+      snprintf(number,sizeof number,"%d",week);
+      measureText(number,FONT_9,x1,y1,width,height);
+      if(width>18 ||height>grid.cellH)return false;
+    }
   }
   if(grid.showTitle){
     measureText(safeMonth(grid.month0),FONT_B12,x1,y1,width,height);
