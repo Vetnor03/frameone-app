@@ -13,7 +13,9 @@ bool strictDateLabel(const char* s) {
   if (!s || !*s || strlen(s) >= 96) return false;
   const unsigned char* p = reinterpret_cast<const unsigned char*>(s);
   while (*p) {
-    if (*p >= 0x20 && *p <= 0x7E) { ++p; continue; }
+    if ((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') ||
+        (*p >= '0' && *p <= '9') || *p == ' ' || *p == '-' ||
+        *p == '.' || *p == 0x27) { ++p; continue; }
     if (p[0] == 0xC3 && p[1] &&
         (p[1] == 0x86 || p[1] == 0x98 || p[1] == 0x85 ||
          p[1] == 0xA6 || p[1] == 0xB8 || p[1] == 0xA5)) {
