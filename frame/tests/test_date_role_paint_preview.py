@@ -49,6 +49,8 @@ def test_calendar_and_holiday_safety_checks_precede_all_pixels():
     assert "DateContextReservations::plan(input)" in section
     assert "DateMonthGridPlan::plan(" in section
     assert "gridFontFits(" in section
+    assert "grid.block.y+grid.titleH+grid.titleGap" in DATE
+    assert "inkTop+static_cast<int>(height)" in DATE
     assert "for(int day=1;day<=31;++day)" in DATE
     assert "for(int week=1;week<=53;++week)" in DATE
     assert "DateMonthGridPlan::nextMonth(" in section

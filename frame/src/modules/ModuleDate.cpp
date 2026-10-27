@@ -1194,8 +1194,15 @@ static bool gridFontFits(const DateMonthGridPlan::Grid& grid) {
     }
   }
   if(grid.showTitle){
+    // The unchanged legacy painter centers FreeSansBold12 in the 22px
+    // title slot; actual ink may be 23px tall. The extra 10px gap is
+    // RESERVED for this overhang: verify physical ink stays before DOW.
     measureText(safeMonth(grid.month0),FONT_B12,x1,y1,width,height);
-    if(width>grid.block.w ||height>grid.titleH)return false;
+    const int inkTop=grid.block.y+
+      (grid.titleH-static_cast<int>(height))/2;
+    if(width>grid.block.w || inkTop<grid.block.y ||
+       inkTop+static_cast<int>(height)>
+         grid.block.y+grid.titleH+grid.titleGap)return false;
   }
   return true;
 }
