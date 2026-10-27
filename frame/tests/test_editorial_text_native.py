@@ -116,7 +116,7 @@ def test_editorial_text_native_contract(tmp_path):
         """).lstrip())
     executable = tmp_path / "f2_native"
     command = [
-        cxx, "-std=c++17", "-Wall", "-Wextra", "-Werror", "-O2",
+        cxx, "-std=c++11", "-Wall", "-Wextra", "-Werror", "-O2",
         "-I", str(tmp_path), "-I", str(FRAME / "src" / "display"),
         str(FRAME / "src" / "display" / "EditorialText.cpp"),
         str(FRAME / "src" / "display" / "FrameText.cpp"),
