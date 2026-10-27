@@ -100,14 +100,14 @@ Ikke hevde at en modul som er **kode-støttet** er **estetisk godkjent** eller *
 - `frame/src/modules/SurfAdaptivePolicy.h` = `9a8b29e6671916d90bfa5ef1142b6c24d1e12492`.
 - `app/lib/surfResponsive.mjs` = `fabaee92bf3de7ce2761f18fdc4bfbf82756d11f`.
 
-Regresjonsmatrise: minst **Surf 2×2 Medium** (400×240; ratingrektangler, erfaringsterninger, bølge, vind, periode, underline) og **4×1 SMALL** (800×120) som første golden Light+Dark; deretter LARGE 4×2, XL 4×4 og representative custom 1×2, 2×3, 3×2 i begge temaer. Samme testdata, °/ÆØÅ og samme refresh/USB-forhold. Ta fysisk bilde og Mirror View-side-ved-side, og bevar hashes, device, commit og scenarionavn. **Per 27.10 finnes ingen verifisert fysisk Surf-bildesnapshot knyttet til denne fasen; ingen «golden screens captured»-claim.**
+Regresjonsmatrise: minst **Surf 2×2 Medium** (400×240; ratingrektangler, erfaringsterninger, bølge, vind, periode, underline) og **4×1 SMALL** (800×120) som første golden Light+Dark; deretter LARGE 4×2, XL 4×4 og representative custom 1×2, 2×3, 3×2 i begge temaer. Samme testdata, °/ÆØÅ og samme refresh/USB-forhold. Ta fysisk bilde og Mirror View-side-ved-side, og bevar hashes, device, commit og scenarionavn. **27.10 er ett fysisk Surf MEDIUM 2×2 Dark-foto (S2) mottatt privat og hash-logget i [opptaksprotokollen](design-vnext-phase0-physical-golden-capture.md); det er ikke et verifisert buffer-/pixel-golden og ikke arkivert offentlig. Øvrige Surf-tilfeller avventer.**
 
 Automatiserte fase-0 tester fryser kilde-fingerprints og preset/fixture-geo; de er **ikke** erstatning for fysisk bilderegresjon. En endring i frosset Surf skal stoppe PR før bilde-QA eller kreve eksplisitt beslutning i #1429.
 
 ## 7. Testplan/gates før fase 1
 
 1. **Fase-0 CI:** kjør `node --test tests/design-vnext-phase0-baseline.test.mjs`, `npm run check:frame-layouts`, `npm run typecheck`, stabilt testsett og changed-file lint. GitHub Actions på PR dokumenterer resultater. Denne PR-en har kun dokumentasjon/test, ikke firmwarekode.
-2. **Benchmark/fysisk baseline (delvis dokumentert):** P0 Dark Pyramid-foto mottatt privat 27.10.2026 med firmware 2.7.3 *oppgitt av eier*; se [opptakslogg](design-vnext-phase0-physical-golden-capture.md). Identifiser fortsatt ekte kjent god flash-SHA/binær + original skjerm-6-fontkilde, og fotografer Surf 2×2/4×1 i begge temaer. Første pilotkomparasjon skal ikke bruke eksperimentell PR #1423 som om den var fysisk referanse.
+2. **Benchmark/fysisk baseline (delvis dokumentert):** P0 Dark Pyramid og S2 Surf 2×2 MEDIUM Dark er mottatt som private fotografier 27.10.2026 med firmware 2.7.3 *tidligere oppgitt av eier*; se [opptakslogg](design-vnext-phase0-physical-golden-capture.md). Identifiser fortsatt ekte kjent god flash-SHA/binær + original skjerm-6-fontkilde, og fotografer Surf 4×1 Dark/Light samt 2×2 Light. Første pilotkomparasjon skal ikke bruke eksperimentell PR #1423 som om den var fysisk referanse.
 3. **Visuelle differanser:** projiser input for seed 20261027 og gjeldende Pyramid identisk gjennom Lab, Mirror og firmware. Mål geometri/bounds/line count/overflow/visuell hierarki, både lang/tom/normal tekst, 1×1..4×4, 1..16 moduler og Light/Dark. Ikke godkjenn basert bare på PDF eller 352 Canvas-tilfeller.
 4. **Pilotregresjon:** ikke endre MQTT, pairing, OTA, wake, batteri, Power Save, modulfelt/data eller aktiv Supabase-config. Sikre full fallback og mulighet for rollback. Delt layout-/fontmotor må bestå Surf-source-gate og fysisk Surf-golden.
 5. **Exit-kriterium fase 0:** ADR + kilde/kart + seeddokumentasjon verifisert i PR; resterende *fysiske* gate-punkter og manglende fontproveniens dokumentert som åpne, ikke skjult bak grønn CI. **Fase 1/fontmotor startes først etter baselinebeslutning og fysisk referanse er lagret.**
@@ -115,6 +115,6 @@ Automatiserte fase-0 tester fryser kilde-fingerprints og preset/fixture-geo; de 
 ### Åpne avklaringer / ikke påstå verifisert
 
 - Eksakt flash-commit og binær som ga «font test screen 6» samt de faktiske fontfilene, lisens og genereringsparametre.
-- P0 fysisk Pyramid Dark-foto er mottatt privat for oppgitt firmware 2.7.3, **ikke offentlig publisert eller verifisert mot binær**; Surf Light/Dark-bilder og e-papirets faktiske bit-depth/kontrast under denne firmware gjenstår.
+- P0 Pyramid Dark og S2 Surf MEDIUM Dark er mottatt som private fysiske foto for tidligere oppgitt firmware 2.7.3, **ikke offentlig publisert eller verifisert mot binær**; øvrige Surf-varianter og e-papirets faktiske bit-depth/kontrast under denne firmware gjenstår.
 - Om seed-fixture viser identisk faktisk output i den umodifiserte draft Lab ved PR-head; scenarioet er deterministisk fra dokumentert generator, men selve Playwright-bildet er ikke vedlagt denne PR.
 - Verifisert pixel-paritet Lab/Mirror/firmware utover geometri; ingen slik generell paritet er hevdet her.
