@@ -143,7 +143,7 @@ def test_f2_bridge_is_opt_in_and_not_grid_hardcoded():
     # Ignore comments: a warning saying "no colSpan/rowSpan" is not a
     # renderer switch. Inspect executable source instead of prose.
     import re
-    code=re.sub(r"//[^\\n]*|/\\*[\\s\\S]*?\\*/", "", c+"\\n"+h)
+    code=re.sub(r"//[^\n]*|/\*[\s\S]*?\*/", "", c+"\n"+h)
     assert all(token not in code for token in
                ("colSpan","rowSpan","drawDate", "ModuleSurf",
                 "DisplayCore::", "setCursor(", "fillRect(", "drawPixel("))
@@ -153,7 +153,6 @@ def test_f2_bridge_is_opt_in_and_not_grid_hardcoded():
     assert "DateF2InkAdapter" not in mod
     # Unknown printable symbols are rejected rather than silently removed
     # by the existing UTF-8 display normalizer.
-    from inspect import cleandoc
     assert "(*p >= 'A' && *p <= 'Z')" in c
     assert "*p == 0x27" in c
 
