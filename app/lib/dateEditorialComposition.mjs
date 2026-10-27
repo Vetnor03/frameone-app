@@ -1,7 +1,7 @@
 // EXPERIMENTAL Date editorial ensemble: role-based, NOT imported by live app or frame.
 // Based on Layout Lab original full-screen Date PDF (2026-10-23, page 1).
 // Calendar and day typography are composed TOGETHER, never leftover-zone packing.
-// No colSpan/rowSpan branches or decorative requirement for smaller cells.
+// No grid-span visual templates or mandatory decoration on smaller cells.
 import {DateRolePolicy as P} from './dateRolePolicy.generated.mjs'
 import {measureDateGfxInk as measure} from './dateGfxInk.mjs'
 import {dateCalendarFeatures} from './dateResponsive.mjs'
@@ -105,7 +105,7 @@ export function planDateEditorial(cell,source){
        factual.some((v,i)=>factual.slice(i+1).some(w=>overlaps(v,w))))continue
     // Higher score = balanced columns, genuine whitespace, useful calendar.
     const whitespace=(hero.w-longest)+(calendar.w-calMin)
-    const visualBalance=100-Math.round(Math.abs(hero.w*.45-calendar.w*.55)/4)
+    const visualBalance=100-Math.round(Math.abs(hero.w*.55-calendar.w*.45)/4)
     const score=whitespace+visualBalance+Math.min(40,Math.floor(art.h*.4))
     candidates.push({
       kind:'editorial-two-column',mode:'editorial',score,visible:vis,safe,
