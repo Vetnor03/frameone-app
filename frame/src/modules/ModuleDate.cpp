@@ -8,6 +8,13 @@
 #ifndef REMIND_F3_DATE_PREVIEW_ENABLED
 #define REMIND_F3_DATE_PREVIEW_ENABLED 0
 #endif
+// Separate R2A micro experiment. A regular F3 preview does not enable it.
+#ifndef REMIND_R2A_DATE_MICRO_ENABLED
+#define REMIND_R2A_DATE_MICRO_ENABLED 0
+#endif
+#if REMIND_R2A_DATE_MICRO_ENABLED && !REMIND_F3_DATE_PREVIEW_ENABLED
+#error "R2A micro preview needs the F3 editorial font engine"
+#endif
 #if REMIND_F3_DATE_PREVIEW_ENABLED
 #include "EditorialText.h"
 #include "RemindEditorialFonts.h"
@@ -1214,6 +1221,65 @@ bool tryDrawEditorialDatePreview(const Cell& c, const char* weekday,
   DisplayCore::get().setTextSize(1);
   return true;
 }
+
+#if REMIND_R2A_DATE_MICRO_ENABLED
+// 1×1 has limited readable real estate: preserve a beautiful clear DAY first.
+// Try the full weekday only if it can be measured and placed without clipping.
+// The source Date state and all other adaptive shapes remain unchanged.
+bool tryDrawEditorialMicroDatePreview(const Cell& c, const char* weekday,
+                                     int dayNum) {
+  if (c.size != CELL_ADAPTIVE || c.colSpan != 1 || c.rowSpan != 1 ||
+      c.w <= 0 || c.h <= 0 || !weekday || !weekday[0]) return false;
+
+  // The matte makes top/side corner 1×1 cells substantially smaller than
+  // their nominal 200×120 grid box; measure available *visible* ink area.
+  const int left = max(c.x, 58);
+  const int top = max(c.y, 39);
+  const int right = min(c.x + c.w, 738);
+  const int bottom = min(c.y + c.h, 475);
+  const int padX = 6, padY = 4, gap = 3, weekdayHeight = 22;
+  const int x = left + padX, y = top + padY;
+  const int w = right - left - 2 * padX;
+  const int h = bottom - top - 2 * padY;
+  if (w < 70 || h < 40) return false;
+
+  char dayText[8];
+  snprintf(dayText, sizeof(dayText), "%d", dayNum);
+  if (dayNum < 1 || dayNum > 31) return false;
+
+  char weekdayLabel[20];
+  uppercaseAscii(weekday, weekdayLabel, sizeof(weekdayLabel));
+  DatePreviewLine day = {};
+  day.source = dayText;
+
+  DatePreviewLine weekdayLine = {};
+  weekdayLine.font = RemindEditorialFonts::dm18();
+  weekdayLine.source = weekdayLabel;
+  weekdayLine.box = {x, y + h - weekdayHeight, w, weekdayHeight};
+
+  // Reserve secondary row ONLY when its true DM Sans glyph ink fits.
+  bool showWeekday = h >= 63 && planDatePreviewLine(weekdayLine, 2);
+  const int dayHeight = showWeekday ? h - weekdayHeight - gap : h;
+  day.box = {x, y, w, dayHeight};
+
+  // Short top-row cells fit Fraunces48; tall visible cells use Fraunces72.
+  // If even the smaller glyph does not fit, draw nothing and allow legacy
+  // Date fallback without leaving half of a new composition on screen.
+  day.font = RemindEditorialFonts::fraunces72();
+  if (!planDatePreviewLine(day, 2)) {
+    day.font = RemindEditorialFonts::fraunces48();
+    if (!planDatePreviewLine(day, 2)) return false;
+  }
+
+  drawDatePreviewLine(day);
+  if (showWeekday) drawDatePreviewLine(weekdayLine);
+  auto& d = DisplayCore::get();
+  d.setFont(nullptr);
+  d.setTextSize(1);
+  return true;
+}
+#endif  // REMIND_R2A_DATE_MICRO_ENABLED
+
 }  // namespace
 #endif  // REMIND_F3_DATE_PREVIEW_ENABLED
 
@@ -1237,8 +1303,11 @@ static void renderDate(const Cell& c) {
   int todayDay = dayNum;
 
 #if REMIND_F3_DATE_PREVIEW_ENABLED
-  // No draw-on-failure: returns true only when all four lines fit. This is
-  // solely an opted-in Date 4×1 or 2×2 visual prototype.
+#if REMIND_R2A_DATE_MICRO_ENABLED
+  // One new opt-in 1×1 Date path; never change the other 15 compositions.
+  if (tryDrawEditorialMicroDatePreview(c, wday, dayNum)) return;
+#endif
+  // Original F3 4×1/2×2 previews are unchanged.
   if (tryDrawEditorialDatePreview(c, wday, month, year, dayNum)) return;
 #endif
 
