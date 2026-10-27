@@ -1232,7 +1232,7 @@ static bool preflightDateContext(const Cell& cell,int year,int month0,int day,
   int count=0,used[2]={};
   const int todayKey=ymd(year,month0,day);
   for(int row=0;row<2;++row){
-    const HolidayItem* best=null;
+    const HolidayItem* best=nullptr;
     int bestKey=99999999;
     if(g_cfg)for(int i=0;i<(int)g_cfg->date.holidayCount;++i){
       const HolidayItem& item=g_cfg->date.holidays[i];
