@@ -1,6 +1,6 @@
 # RE:MIND Design vNext — 0E fysisk golden-opptak
 
-**Status: OPPTAK AVVENTER. Ingen fysisk golden eller kjent god flash-binær er verifisert i denne PR-en.**
+**Status: P0-foto mottatt privat fra fysisk ramme 27.10.2026 (firmware 2.7.3 oppgitt av eier). Surf-golden og kjent god flash-binær AVVENTER.**
 Under [#1430](https://github.com/Vetnor03/frameone-app/issues/1430), master [#1429](https://github.com/Vetnor03/frameone-app/issues/1429). Kildekontrakt: [fase-0 ADR](design-vnext-phase0-visual-contract.md). Dette er **en opptaksprotokoll**, ikke instruks om å flashe, endre Surf eller sette pilotbrukere i testmodus.
 
 ## 1. Første opptak: eksisterende ramme, helt uten konfigurasjonsendringer
@@ -17,7 +17,7 @@ For Surf skal gjeldende produksjonsuttrykk **fryses**, ikke gjenskapes ved å re
 
 | ID | Fysisk scenario | Logisk panelområde | Tema | Opptak | Status |
 | --- | --- | --- | --- | --- | --- |
-| P0 | Nåværende Pyramid, Date/News/Reminders/Weather:1 **hvis bekreftet på enheten** | to 4×1 + to 2×2 | Dark | fysisk foto + optional Mirror | **AVVENTER** |
+| P0 | Faktisk Pyramid: Date/News/Reminders/Weather | to 4×1 + to 2×2 | Dark | privat fysisk foto 27.10.2026, ingen Mirror | **MOTTATT; fysisk aksept/arkivering avventer** |
 | S1 | Surf SMALL | 4×1 = 800×120 | Dark | fysisk foto + Mirror | **AVVENTER** |
 | S2 | Surf MEDIUM | 2×2 = 400×240 | Dark | fysisk foto + Mirror | **AVVENTER** |
 | S3 | Surf SMALL | 4×1 = 800×120 | Light | fysisk foto + Mirror | **AVVENTER** |
@@ -54,4 +54,14 @@ Vurdering: AVVENTER / PASS / FAIL, med begrunnelse
 - **Fysisk gullstandard (AVVENTER):** hele Surf-modulen og dens 1-bit/tema-opplevelse må være identisk med referansen ved samme data/geometri, inkludert scorer, bølge/vind/periode, hierarki, spacing, tegn, divider og clipping. Differanser fra foto-perspektiv/belysning vurderes separat fra output; direkte pikselregresjon krever faktiske render-buffer-dumper.
 - **Fonttest 6 (AVVENTER):** finn originalfiler, build-parametre og fysisk foto av godkjent Fraunces/DM Sans. Ikke start å bytte fonter basert på et nettleser-preview eller en rekonstruert font.
 - **Rollback (AVVENTER):** kjent god binær og faktisk hardware/build-match må dokumenteres før fremtidig eksperimentflash. Ingen `main`-SHA eller branch regnes automatisk som kjent god.
-- **Statusgrense:** #1430 og fase 0 i #1429 forblir åpne til de fysiske opptakene, fontproveniens og rollback-identitet er verifisert. Denne filen er bare forberedelsen; ingen golden-bilder er levert.
+- **Statusgrense:** #1430 og fase 0 i #1429 forblir åpne til Surf-opptakene, privat arkivering av P0, fontproveniens og rollback-identitet er verifisert. Ett P0-foto er mottatt i privat samtale; det er **ikke** lagt i repo eller godkjent som endelig fysisk golden.
+
+## 5. P0: mottatt fysisk Pyramid Dark, firmware 2.7.3 (27.10.2026)
+
+**Kilde:** Originalt 1536×1152 JPEG-foto sendt av eier i privat ChatGPT-samtale 27.10.2026. Firmware `2.7.3` oppgitt eksplisitt av eier; **ikke bekreftet** mot Serial, build-ID, Git-commit eller bevart binær. Originalfilen er **ikke** offentlig delt eller versjonert i GitHub, fordi den inneholder private påminnelser/avtaledetaljer og aktuelle overskrifter. Ikke legg originalbildet i en offentlig issue/PR.
+
+- **Originalfoto SHA-256 (JPEG, ikke panelbuffer):** `9b0ff94b4d8782dd865ed57694f6593475a89fbc4a7e05c8616a6ab656240933`; 469499 byte, 1536×1152 px. Må kontrolleres mot den samme original-JPEG-filen før bruk som bevis; hash sier ingenting om flashet binær eller rendererens pixelbuffer.
+- **Fysisk komposisjon observert:** mørkt tema, Pyramid med øvre fullbredde Date, én fullbredde News-region delt i tre tekstkolonner, nederst Reminders venstre og Weather høyre; horisontale og vertikale skillelinjer. Dette samsvarer med de fire regionene i baseline-geometrien og den tidligere dokumenterte modulrekkefølgen. Individuelle private tekstinnhold er bevisst utelatt.
+- **Synlig typografisk hierarki:** datoen er stor/sentrert og tydeligst; News-teksten er forholdsvis liten og tett i tre kolonner; Reminders har stor 'Today'-overskrift med betydelig tomrom, men innhold nær bunnen; Weather har temperaturer øverst, et værvarsel, et lite ikon og små nedre målinger. Fotografiets skarphet, perspektiv og lys er **ikke** et pålitelig mål på GFX-glyph-piksler, kontrast på 2 m eller eksakt fysisk bit-depth. Ingen påstand om pikselgodkjenning eller testet lesbarhet fra 1–2 m.
+- **Metadata som gjenstår:** HW-revisjon, faktisk flashed commit, original firmware-binær + SHA256, USB-status, eventuell Mirror-visning og et sikkert privat arkiv av originalbildet. Ingen handlinger eller omkonfigurering ble gjort på den fysiske rammen for dette opptaket.
+- **Resultat:** P0-bildet **mottatt og dokumentert**; P0 **ikke endelig golden-godkjent**. S1–S4 Surf Light/Dark SMALL/MEDIUM **AVVENTER**. De fullstendige fase-0-gatene er åpne. Ikke flash ny kode bare for å etablere dette fotografiet.
