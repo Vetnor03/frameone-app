@@ -43,7 +43,7 @@ def test_editorial_text_native_contract(tmp_path):
         #define pgm_read_ptr(addr) (*(addr))
         """))
     src = tmp_path / "test.cpp"
-    src.write_text(textwrap.dedent(r"""\
+    src.write_text(textwrap.dedent(r"""
         #include "EditorialText.h"
         #include <cassert>
         #include <cstring>
@@ -113,7 +113,7 @@ def test_editorial_text_native_contract(tmp_path):
             // Return-path failure should never advertise a drawable plan.
             assert(plan.cursorX == 0 && plan.baselineY == 0);
         }
-        """))
+        """).lstrip())
     executable = tmp_path / "f2_native"
     command = [
         cxx, "-std=c++17", "-Wall", "-Wextra", "-Werror", "-O2",
