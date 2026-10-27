@@ -8,10 +8,11 @@
 namespace EditorialText {
 
 struct Rect {
-  int32_t x = 0;
-  int32_t y = 0;
-  int32_t w = 0;
-  int32_t h = 0;
+  int32_t x, y, w, h;
+  // ESP32 Arduino builds under GNU++11; keep aggregate-style calls valid.
+  Rect(int32_t left = 0, int32_t top = 0,
+       int32_t width = 0, int32_t height = 0)
+      : x(left), y(top), w(width), h(height) {}
 };
 
 enum class Horizontal : uint8_t { LEFT, CENTER, RIGHT };
