@@ -9,6 +9,9 @@
 #endif
 #if REMIND_DATE_ROLE_PREVIEW_ENABLED
 #include "DateF2InkAdapter.h"
+#include "DateContextReservations.h"
+#include "DateMonthGridPlan.h"
+#include "RemindEditorialFonts.h"
 #endif
 #include <time.h>
 
@@ -1118,32 +1121,226 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
 #if REMIND_DATE_ROLE_PREVIEW_ENABLED
 // This three-fact preview must never suppress functional legacy calendar or
 // holiday data. Conservative area guard is not a per-grid design template.
-static bool tryDrawMeasuredDatePreview(const Cell& cell, const char* weekday,
-                                       const char* month, int dayNum) {
-  if (cell.size != CELL_ADAPTIVE || !weekday || !month) return false;
-  // Defer all geometry that could contain a functional calendar to legacy.
-  if (cell.w >= 330 && cell.h >= 210) return false;
-  if (g_cfg && g_cfg->date.holidayCount > 0) return false;
-  DateF2Ink::Result planned = {};
-  const DateRolePlanner::Rect bounds = {cell.x, cell.y, cell.w, cell.h};
-  if (!DateF2Ink::planWholeDate(bounds, dayNum, month, weekday, planned) ||
-      !planned.valid) return false;
-  // Complete ink/baseline planning succeeded before touching display pixels.
-  auto& display = DisplayCore::get();
-  display.setTextColor(Theme::ink());
-  display.setTextSize(1);
-  display.setTextWrap(false);
-  const DateF2Ink::Text* lines[] = {
-    &planned.day, &planned.month, &planned.weekday
-  };
-  for (const auto* line : lines) {
-    display.setFont(line->font);
-    display.setCursor(line->line.cursorX, line->line.baselineY);
-    display.print(line->latin1);
+// All prospective pixels are prepared before the first draw operation. The
+// renderer calls the unchanged legacy calendar routine ONLY after an exact
+// allocation + 4-6 week grid preflight (including font ink widths) succeeds.
+static bool supportsExactDateText(const char* input) {
+  if(!input || !input[0])return false;
+  const unsigned char* p=reinterpret_cast<const unsigned char*>(input);
+  while(*p){
+    if((*p>='A'&&*p<='Z')||(*p>='a'&&*p<='z')||
+       (*p>='0'&&*p<='9')||*p==' '||*p=='-'||*p=='.'||*p==0x27){
+      ++p; continue;
+    }
+    if(p[0]==0xC3 && p[1] &&
+       (p[1]==0x86||p[1]==0x98||p[1]==0x85||
+        p[1]==0xA6||p[1]==0xB8||p[1]==0xA5)) {
+      p+=2;continue;
+    }
+    return false;
   }
-  display.setFont(nullptr);
-  display.setTextSize(1);
-  display.setTextWrap(true);
+  return true;
+}
+static bool measureF2DateLabel(const char* utf8,const GFXfont* font,
+                               DateRolePlanner::Ink& ink) {
+  if(!supportsExactDateText(utf8))return false;
+  char latin1[96]={};
+  FrameText::normalizeUtf8ForDisplay(latin1,sizeof latin1,utf8);
+  EditorialText::LineMetrics metrics={};
+  if(EditorialText::measureLine(font,latin1,metrics)!=EditorialText::Status::OK
+     ||metrics.inkWidth<=0||metrics.inkHeight<=0)return false;
+  ink={static_cast<int>(metrics.inkWidth),static_cast<int>(metrics.inkHeight)};
+  return true;
+}
+static bool roleLine(const char* utf8,const GFXfont* font,
+                     DateRolePlanner::Rect inkArea,DateF2Ink::Text& result) {
+  if(!supportsExactDateText(utf8))return false;
+  result={};
+  result.font=font;
+  const EditorialText::Rect place(inkArea.x,inkArea.y,inkArea.w,inkArea.h);
+  const auto outcome=EditorialText::planLine(font,utf8,result.latin1,
+    sizeof result.latin1,place,0,EditorialText::Horizontal::CENTER,
+    EditorialText::Vertical::CENTER,result.line);
+  return outcome==EditorialText::Status::OK &&
+         result.line.ink.x==inkArea.x && result.line.ink.y==inkArea.y &&
+         result.line.ink.w==inkArea.w && result.line.ink.h==inkArea.h;
+}
+static bool gridFontFits(const DateMonthGridPlan::Grid& grid) {
+  if(!grid.valid)return false;
+  int16_t x1=0,y1=0;
+  uint16_t width=0,height=0;
+  // Preflight every number: in proportional fonts "31" is NOT necessarily
+  // the widest two-digit string. The calendar must never clip a different day.
+  for(int day=1;day<=31;++day){
+    char number[4]={};
+    snprintf(number,sizeof number,"%d",day);
+    measureText(number,FONT_9,x1,y1,width,height);
+    if(width>grid.cellW || height>grid.cellH)return false;
+  }
+  if(grid.showDow){
+    const char* labels[]={"Mo","Tu","We","Th","Fr","Sa","Su"};
+    for(const char* label:labels) {
+      measureText(label,FONT_9,x1,y1,width,height);
+      if(width>grid.cellW || height>grid.dowH)return false;
+    }
+  }
+  if(grid.showWeekNums){
+    // ISO week numbers use the same proportional GFX font: check all 1..53.
+    for(int week=1;week<=53;++week){
+      char number[4]={};
+      snprintf(number,sizeof number,"%d",week);
+      measureText(number,FONT_9,x1,y1,width,height);
+      if(width>18 ||height>grid.cellH)return false;
+    }
+  }
+  if(grid.showTitle){
+    // The unchanged legacy painter centers FreeSansBold12 in the 22px
+    // title slot; actual ink may be 23px tall. The extra 10px gap is
+    // RESERVED for this overhang: verify physical ink stays before DOW.
+    measureText(safeMonth(grid.month0),FONT_B12,x1,y1,width,height);
+    const int inkTop=grid.block.y+
+      (grid.titleH-static_cast<int>(height))/2;
+    if(width>grid.block.w || inkTop<grid.block.y ||
+       inkTop+static_cast<int>(height)>
+         grid.block.y+grid.titleH+grid.titleGap)return false;
+  }
+  return true;
+}
+struct RoleDateDraw {
+  bool year=false,current=false,next=false;
+  int holidayCount=0;
+  DateF2Ink::Text yearText,holidays[2];
+  DateMonthGridPlan::Grid currentGrid,nextGrid;
+};
+static bool preflightDateContext(const Cell& cell,int year,int month0,int day,
+                                 const DateF2Ink::Result& hero,
+                                 RoleDateDraw& draw) {
+  draw={};
+  char yearText[8]={};
+  snprintf(yearText,sizeof yearText,"%d",year);
+  DateRolePlanner::Ink yearInk={};
+  if(!measureF2DateLabel(yearText,RemindEditorialFonts::dm18(),yearInk))
+    return false;
+  int nextYear=0,nextMonth0=0;
+  const bool hasNext=DateMonthGridPlan::nextMonth(year,month0,nextYear,nextMonth0);
+  if(year<DateRolePolicy::CONTEXT_YEAR_MIN||
+     year>DateRolePolicy::CONTEXT_YEAR_MAX||month0<0||month0>11)return false;
+
+  // The adaptive legacy calendar renders at most two next upcoming dates.
+  // Preserve its chronology, duplicate-date handling, and complete names.
+  const HolidayItem* selected[2]={};
+  int count=0,used[2]={};
+  const int todayKey=ymd(year,month0,day);
+  for(int row=0;row<2;++row){
+    const HolidayItem* best=nullptr;
+    int bestKey=99999999;
+    if(g_cfg)for(int i=0;i<(int)g_cfg->date.holidayCount;++i){
+      const HolidayItem& item=g_cfg->date.holidays[i];
+      const int key=holidayYMD(item);
+      if(key<todayKey||key>=bestKey||key==used[0]||key==used[1])continue;
+      bestKey=key;best=&item;
+    }
+    if(!best)break;
+    selected[count]=best;used[count]=bestKey;++count;
+  }
+  char holidayText[2][96]={};
+  DateContextReservations::Input input={};
+  input.visible=hero.geometry.visible;
+  input.group=hero.geometry.group;
+  input.hasCurrent=true;
+  input.hasNext=hasNext;
+  input.year=yearInk;
+  input.holidayCount=count;
+  for(int i=0;i<count;++i){
+    const auto* hi=selected[i];
+    const int n=snprintf(holidayText[i],sizeof holidayText[i],
+      "%02d.%02d - %s",(int)hi->day,(int)hi->month,hi->name);
+    if(n<=0||n>=static_cast<int>(sizeof holidayText[i]) ||
+       !measureF2DateLabel(holidayText[i],RemindEditorialFonts::dm18(),
+          input.holidays[i]))return false;
+  }
+  const auto context=DateContextReservations::plan(input);
+  // For calendar-capable legacy cells, replacing a grid with typography alone
+  // would silently remove functional data. Keep the old renderer instead.
+  const bool calendarLikely=cell.w>=330&&cell.h>=210;
+  const bool dualCalendarLikely=
+    (cell.w>=700&&cell.h>=330)||(cell.w>=520&&cell.h>=400);
+  if(calendarLikely&&!context.current)return false;
+  if(dualCalendarLikely&&!context.next)return false;
+  // The second calendar has a different month than the hero date. An
+  // unlabeled next-month grid loses factual meaning; use legacy instead.
+  if(context.next&&!context.nextTitle)return false;
+  if(calendarLikely&&!context.year)return false;
+  if(count>0 && context.holidayCount<count)return false;
+
+  if(context.current){
+    const auto& area=context.currentRect;
+    draw.currentGrid=DateMonthGridPlan::plan(area,year,month0,
+      context.title,context.weeks,context.dow);
+    if(!gridFontFits(draw.currentGrid))return false;
+    draw.current=true;
+  }
+  if(context.next){
+    const auto& area=context.nextRect;
+    draw.nextGrid=DateMonthGridPlan::plan(area,nextYear,nextMonth0,
+      context.nextTitle,context.nextWeeks,context.nextDow);
+    if(!gridFontFits(draw.nextGrid))return false;
+    draw.next=true;
+  }
+  if(context.year){
+    if(!roleLine(yearText,RemindEditorialFonts::dm18(),
+        context.yearRect,draw.yearText))return false;
+    draw.year=true;
+  }
+  for(int i=0;i<context.holidayCount;++i){
+    if(!roleLine(holidayText[i],RemindEditorialFonts::dm18(),
+        context.holidayRects[i],draw.holidays[i]))return false;
+  }
+  draw.holidayCount=context.holidayCount;
+  return true;
+}
+static void paintRoleLine(const DateF2Ink::Text& line){
+  auto& d=DisplayCore::get();
+  d.setFont(line.font);
+  d.setCursor(line.line.cursorX,line.line.baselineY);
+  d.print(line.latin1);
+}
+static bool tryDrawMeasuredDatePreview(const Cell& cell,const char* weekday,
+                      const char* month,int dayNum,int year,int month0) {
+  if(cell.size!=CELL_ADAPTIVE||!weekday||!month)return false;
+  DateF2Ink::Result hero={};
+  const DateRolePlanner::Rect bounds={cell.x,cell.y,cell.w,cell.h};
+  if(!DateF2Ink::planWholeDate(bounds,dayNum,month,weekday,hero)||
+     !hero.valid)return false;
+  RoleDateDraw context={};
+  if(!preflightDateContext(cell,year,month0,dayNum,hero,context))
+    return false;
+
+  // ATOMIC PAINT BOUNDARY: every role, date, calendar and holiday has already
+  // been checked. Every failure above falls back to the unchanged legacy Date.
+  auto& d=DisplayCore::get();
+  d.setTextColor(Theme::ink());
+  d.setTextSize(1);
+  d.setTextWrap(false);
+  paintRoleLine(hero.day);
+  paintRoleLine(hero.month);
+  paintRoleLine(hero.weekday);
+  if(context.year)paintRoleLine(context.yearText);
+  if(context.current){
+    const auto& g=context.currentGrid;
+    drawMonthCalendar(g.area.x,g.area.y,g.area.w,g.area.h,g.year,g.month0,
+      year,month0,dayNum,g.showTitle,g.showWeekNums,g.showDow,true);
+  }
+  if(context.next){
+    const auto& g=context.nextGrid;
+    drawMonthCalendar(g.area.x,g.area.y,g.area.w,g.area.h,g.year,g.month0,
+      year,month0,dayNum,g.showTitle,g.showWeekNums,g.showDow,true);
+  }
+  d.setTextColor(Theme::ink());
+  for(int i=0;i<context.holidayCount;++i)paintRoleLine(context.holidays[i]);
+  d.setFont(nullptr);
+  d.setTextSize(1);
+  d.setTextWrap(true);
   return true;
 }
 #endif  // REMIND_DATE_ROLE_PREVIEW_ENABLED
@@ -1167,7 +1364,7 @@ static void renderDate(const Cell& c) {
   int todayMonth0 = month0;
   int todayDay = dayNum;
 #if REMIND_DATE_ROLE_PREVIEW_ENABLED
-  if (tryDrawMeasuredDatePreview(c, wday, month, dayNum)) return;
+  if (tryDrawMeasuredDatePreview(c, wday, month, dayNum, year, month0)) return;
 #endif
 
 
