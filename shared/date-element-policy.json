@@ -152,7 +152,12 @@
     },
     "currentCalendar": {
       "minUsefulWidth": 154,
-      "minUsefulHeight": 92
+      "minUsefulHeight": 92,
+      "dowWidth": 168,
+      "dowHeight": 112,
+      "weekWidth": 190,
+      "weekHeight": 126,
+      "titleHeight": 146
     },
     "illustration": {
       "minSafeWidth": 560,
@@ -231,5 +236,19 @@
     "typography": "caller_supplies_measured_font_variants_after_F2",
     "omissions": "year_calendars_holidays_and_art_not_yet_allocated",
     "noDirectSpanBranch": true
+  },
+  "contextReservation": {
+    "status": "measured_eligibility_not_calendar_pixel_qa",
+    "calendarMaxWidth": 300,
+    "calendarMaxHeight": 240,
+    "yearInset": 12,
+    "yearMaxWidth": 150,
+    "yearMaxHeight": 48,
+    "holidayInset": 12,
+    "holidayMaxExtra": 24,
+    "holidayRowGap": 6,
+    "maxHolidayRows": 2,
+    "yearMin": 1900,
+    "yearMax": 9999
   }
 }
