@@ -107,7 +107,7 @@ Automatiserte fase-0 tester fryser kilde-fingerprints og preset/fixture-geo; de 
 ## 7. Testplan/gates før fase 1
 
 1. **Fase-0 CI:** kjør `node --test tests/design-vnext-phase0-baseline.test.mjs`, `npm run check:frame-layouts`, `npm run typecheck`, stabilt testsett og changed-file lint. GitHub Actions på PR dokumenterer resultater. Denne PR-en har kun dokumentasjon/test, ikke firmwarekode.
-2. **Benchmark/fysisk baseline (åpen):** identifiser ekte kjent god flash-SHA/binær + original skjerm-6-fontkilde; fotografer gjeldende dark Pyramid slot 0..3 og nøyaktig Surf 2×2/4×1 i begge temaer. Første pilotkomparasjon skal ikke bruke eksperimentell PR #1423 som om den var fysisk referanse.
+2. **Benchmark/fysisk baseline (delvis dokumentert):** P0 Dark Pyramid-foto mottatt privat 27.10.2026 med firmware 2.7.3 *oppgitt av eier*; se [opptakslogg](design-vnext-phase0-physical-golden-capture.md). Identifiser fortsatt ekte kjent god flash-SHA/binær + original skjerm-6-fontkilde, og fotografer Surf 2×2/4×1 i begge temaer. Første pilotkomparasjon skal ikke bruke eksperimentell PR #1423 som om den var fysisk referanse.
 3. **Visuelle differanser:** projiser input for seed 20261027 og gjeldende Pyramid identisk gjennom Lab, Mirror og firmware. Mål geometri/bounds/line count/overflow/visuell hierarki, både lang/tom/normal tekst, 1×1..4×4, 1..16 moduler og Light/Dark. Ikke godkjenn basert bare på PDF eller 352 Canvas-tilfeller.
 4. **Pilotregresjon:** ikke endre MQTT, pairing, OTA, wake, batteri, Power Save, modulfelt/data eller aktiv Supabase-config. Sikre full fallback og mulighet for rollback. Delt layout-/fontmotor må bestå Surf-source-gate og fysisk Surf-golden.
 5. **Exit-kriterium fase 0:** ADR + kilde/kart + seeddokumentasjon verifisert i PR; resterende *fysiske* gate-punkter og manglende fontproveniens dokumentert som åpne, ikke skjult bak grønn CI. **Fase 1/fontmotor startes først etter baselinebeslutning og fysisk referanse er lagret.**
@@ -115,6 +115,6 @@ Automatiserte fase-0 tester fryser kilde-fingerprints og preset/fixture-geo; de 
 ### Åpne avklaringer / ikke påstå verifisert
 
 - Eksakt flash-commit og binær som ga «font test screen 6» samt de faktiske fontfilene, lisens og genereringsparametre.
-- Fysisk foto av aktiv Pyramid og Surf Light/Dark; e-papirets faktiske bit-depth/kontrast under denne firmware.
+- P0 fysisk Pyramid Dark-foto er mottatt privat for oppgitt firmware 2.7.3, **ikke offentlig publisert eller verifisert mot binær**; Surf Light/Dark-bilder og e-papirets faktiske bit-depth/kontrast under denne firmware gjenstår.
 - Om seed-fixture viser identisk faktisk output i den umodifiserte draft Lab ved PR-head; scenarioet er deterministisk fra dokumentert generator, men selve Playwright-bildet er ikke vedlagt denne PR.
 - Verifisert pixel-paritet Lab/Mirror/firmware utover geometri; ingen slik generell paritet er hevdet her.
