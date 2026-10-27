@@ -60,7 +60,7 @@ def test_role_first_disclosure_all_shapes_positions_and_cases():
             cell=dict(x=col*200,y=row*120,w=cols*200,h=rows*120)
             for facts,theme in product(PRESETS,("dark","light")):
                 # Theme and grid ID must never silently change date facts.
-                requests.append(dict(cell=cell,facts={**facts,theme=theme}))
+                requests.append(dict(cell=cell,facts={**facts,"theme":theme}))
     assert len(requests)==800
     plans=run(requests)
     valid=calendars=0
