@@ -1,6 +1,6 @@
 # RE:MIND Design vNext — 0E fysisk golden-opptak
 
-**Status: P0-foto mottatt privat fra fysisk ramme 27.10.2026 (firmware 2.7.3 oppgitt av eier). Surf-golden og kjent god flash-binær AVVENTER.**
+**Status: P0 Pyramid Dark og S2 Surf MEDIUM Dark er mottatt som private fysiske foto 27.10.2026 (firmware 2.7.3 oppgitt av eier tidligere). S1/S3/S4 Surf, fysisk golden-aksept og kjent god flash-binær AVVENTER.**
 Under [#1430](https://github.com/Vetnor03/frameone-app/issues/1430), master [#1429](https://github.com/Vetnor03/frameone-app/issues/1429). Kildekontrakt: [fase-0 ADR](design-vnext-phase0-visual-contract.md). Dette er **en opptaksprotokoll**, ikke instruks om å flashe, endre Surf eller sette pilotbrukere i testmodus.
 
 ## 1. Første opptak: eksisterende ramme, helt uten konfigurasjonsendringer
@@ -19,7 +19,7 @@ For Surf skal gjeldende produksjonsuttrykk **fryses**, ikke gjenskapes ved å re
 | --- | --- | --- | --- | --- | --- |
 | P0 | Faktisk Pyramid: Date/News/Reminders/Weather | to 4×1 + to 2×2 | Dark | privat fysisk foto 27.10.2026, ingen Mirror | **MOTTATT; fysisk aksept/arkivering avventer** |
 | S1 | Surf SMALL | 4×1 = 800×120 | Dark | fysisk foto + Mirror | **AVVENTER** |
-| S2 | Surf MEDIUM | 2×2 = 400×240 | Dark | fysisk foto + Mirror | **AVVENTER** |
+| S2 | Surf MEDIUM | 2×2 = 400×240 | Dark | privat fysisk JPEG mottatt 27.10.2026, ingen Mirror | **MOTTATT; pixel-/rollback-aksept avventer** |
 | S3 | Surf SMALL | 4×1 = 800×120 | Light | fysisk foto + Mirror | **AVVENTER** |
 | S4 | Surf MEDIUM | 2×2 = 400×240 | Light | fysisk foto + Mirror | **AVVENTER** |
 
@@ -51,10 +51,10 @@ Vurdering: AVVENTER / PASS / FAIL, med begrunnelse
 ## 4. Godkjenningsregler
 
 - **Source-guard (allerede bestått i PR #1431):** Surf-fingerprints i `tests/design-vnext-phase0-baseline.test.mjs`. Dette beskytter bestemte kildefiler, **ikke** fysisk komposisjon ved endringer i delte tekst-/layoutlag.
-- **Fysisk gullstandard (AVVENTER):** hele Surf-modulen og dens 1-bit/tema-opplevelse må være identisk med referansen ved samme data/geometri, inkludert scorer, bølge/vind/periode, hierarki, spacing, tegn, divider og clipping. Differanser fra foto-perspektiv/belysning vurderes separat fra output; direkte pikselregresjon krever faktiske render-buffer-dumper.
+- **Fysisk gullstandard (delvis mottatt, AVVENTER full aksept):** hele Surf-modulen og dens 1-bit/tema-opplevelse må være identisk med referansen ved samme data/geometri, inkludert scorer, bølge/vind/periode, hierarki, spacing, tegn, divider og clipping. Differanser fra foto-perspektiv/belysning vurderes separat fra output; direkte pikselregresjon krever faktiske render-buffer-dumper.
 - **Fonttest 6 (AVVENTER):** finn originalfiler, build-parametre og fysisk foto av godkjent Fraunces/DM Sans. Ikke start å bytte fonter basert på et nettleser-preview eller en rekonstruert font.
 - **Rollback (AVVENTER):** kjent god binær og faktisk hardware/build-match må dokumenteres før fremtidig eksperimentflash. Ingen `main`-SHA eller branch regnes automatisk som kjent god.
-- **Statusgrense:** #1430 og fase 0 i #1429 forblir åpne til Surf-opptakene, privat arkivering av P0, fontproveniens og rollback-identitet er verifisert. Ett P0-foto er mottatt i privat samtale; det er **ikke** lagt i repo eller godkjent som endelig fysisk golden.
+- **Statusgrense:** #1430 og fase 0 i #1429 forblir åpne til gjenstående Surf-opptak, privat arkivering av P0/S2, fontproveniens og rollback-identitet er verifisert. P0 og S2 er mottatt som private kamerafoto; **ingen** av dem er publisert i repo eller godkjent som endelig pixel-golden.
 
 ## 5. P0: mottatt fysisk Pyramid Dark, firmware 2.7.3 (27.10.2026)
 
@@ -64,7 +64,7 @@ Vurdering: AVVENTER / PASS / FAIL, med begrunnelse
 - **Fysisk komposisjon observert:** mørkt tema, Pyramid med øvre fullbredde Date, én fullbredde News-region delt i tre tekstkolonner, nederst Reminders venstre og Weather høyre; horisontale og vertikale skillelinjer. Dette samsvarer med de fire regionene i baseline-geometrien og den tidligere dokumenterte modulrekkefølgen. Individuelle private tekstinnhold er bevisst utelatt.
 - **Synlig typografisk hierarki:** datoen er stor/sentrert og tydeligst; News-teksten er forholdsvis liten og tett i tre kolonner; Reminders har stor 'Today'-overskrift med betydelig tomrom, men innhold nær bunnen; Weather har temperaturer øverst, et værvarsel, et lite ikon og små nedre målinger. Fotografiets skarphet, perspektiv og lys er **ikke** et pålitelig mål på GFX-glyph-piksler, kontrast på 2 m eller eksakt fysisk bit-depth. Ingen påstand om pikselgodkjenning eller testet lesbarhet fra 1–2 m.
 - **Metadata som gjenstår:** HW-revisjon, faktisk flashed commit, original firmware-binær + SHA256, USB-status, eventuell Mirror-visning og et sikkert privat arkiv av originalbildet. Ingen handlinger eller omkonfigurering ble gjort på den fysiske rammen for dette opptaket.
-- **Resultat:** P0-bildet **mottatt og dokumentert**; P0 **ikke endelig golden-godkjent**. S1–S4 Surf Light/Dark SMALL/MEDIUM **AVVENTER**. De fullstendige fase-0-gatene er åpne. Ikke flash ny kode bare for å etablere dette fotografiet.
+- **Resultat:** P0-bildet **mottatt og dokumentert**; P0 **ikke endelig golden-godkjent**. Surf S2 Dark MEDIUM er senere mottatt (se §7); S1, S3 og S4 **AVVENTER**. De fullstendige fase-0-gatene er åpne. Ikke flash ny kode bare for å etablere dette fotografiet.
 
 ## 6. Sporbarhet for firmware 2.7.3 — kildekode funnet, binær fortsatt ukjent (27.10.2026)
 
@@ -74,3 +74,15 @@ Vurdering: AVVENTER / PASS / FAIL, med begrunnelse
 - På inspisert `main` finnes **ingen `public/firmware/frame-2.7.3.bin`**. Versjonerte binærfiler i repoets `public/firmware/` går til `frame-2.5.4.bin`; appens sjekk-endepunkt `app/api/device/firmware/route.ts` har `LATEST_VERSION = 'v2.5.7'`. Dette er **ikke** grunnlag for å anta at en tilsvarende 2.7.3-binær kan hentes derfra eller via OTA.
 - **Ikke flash på nytt:** behold fungerende 2.7.3 på rammen, og hvis den eksakte opprinnelige lokalt eksporterte binæren finnes, arkiver den privat med SHA-256 + Arduino-/PlatformIO-profil. Dersom kun kilde finnes, kan vi bygge *en kandidat* senere, men den må ikke fremstilles som byte-identisk gjenoppretting. Sikreste neste fysiske datapunkt er en allerede eksisterende Serial build-ID/versjon hvis den finnes uten risiko for reset, og Surf-foto fra nåværende firmware.
 - Fase 0-status: **FW_VER kilde-label KARTLAGT; nøyaktig flashet commit = UKJENT; byte-identisk rollback-binær = UKJENT.** Ingen endringer i firmware, OTA eller Surf er utført i denne sporbarhetsundersøkelsen.
+
+## 7. S2: Surf MEDIUM 2×2 Dark — fysisk foto mottatt 27.10.2026
+
+**Kilde og vern:** Eier sendte privat original-JPEG av en faktisk e-paper-ramme, 1152×1536 px, 478055 byte; SHA-256 `03fbafc77e0c387b82add27a9936581c76eb99f596740cec08f1324b96a7c3fa`. Fotofilen viser private kalenderhendelser og er **ikke** lastet opp til GitHub. Hash gjelder kamerafotoets byteinnhold, **ikke** GFX-bildedata eller firmware. Originalen må fortsatt arkiveres sikkert før varig golden-aksept.
+
+**Hva vi faktisk kan bekrefte i fotoet:** Pyramid-geometri med øvre fullbredde Tomorrow, fullbredde News, nederst Surf venstre (**2×2 = 400×240 logiske piksler**) og Weather høyre; mørkt skjermtema. Surf viser tittel/spot **Bore** med understrekning, «Best next 4h», vurderingen «Poor to Fair», rekken av graderingsruter til venstre, «Details» på høyre side av sin Surf-celle, piler/indikatorer samt bølge-/periode-/vindinformasjon. Regionens interne inndeling og informasjonsprioritering er dermed dokumentert som **fotoreferanse**, ikke som maskinlest pixel-perfect gullstandard. Faktiske numeriske vær- og surfverdier er tidsavhengige og ikke kontraktsfestet som fasit.
+
+**Kvalitetsbegrensninger:** Bilde er tatt på avstand og i skrått perspektiv med innendørs lys. Helt venstre kant av enkelte tekstlinjer ser nær panelkanten ut, men bilde/perspektiv alene kan ikke avgjøre om firmware faktisk klipper glyphs. Krev eventuelt et rett-på nærfoto før eksakte pixelasserts. Ingen testbuffer, paritet med Mirror, 1–2 m skriftmåling eller kontrollert gjentakelse med identiske Surf-data er levert.
+
+**Firmware:** `v2.7.3` er tidligere oppgitt av eier ved P0; S2-fotoet viser ikke en serial firmware-logg. Dette knytter S2 til samme rapporterte testfase, **ikke** sikkert til en bestemt flashet SHA eller binær.
+
+**Status:** **S2 fysisk referanse MOTTATT**; Surf fortsatt **helt frosset**. Surf S1 (SMALL Dark), S3 (SMALL Light), S4 (MEDIUM Light), eksakt firmware-binær, fonttest-6-proveniens og QA-akzept **AVVENTER**. Ingen firmware- eller framekonfig er endret gjennom dokumentasjonsarbeidet.
