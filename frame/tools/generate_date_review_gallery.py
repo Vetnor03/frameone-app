@@ -28,7 +28,7 @@ class Font:
 def load_font(path, name):
     src=path.read_text(encoding="utf-8")
     def block(suffix):
-        pattern=rf"(?:static\s+)?const\s+(?:uint8_t|GFXglyph)\s+{re.escape(name+suffix)}\[\]\s+PROGMEM\s*=\s*\{{(.*?)\n\}};"
+        pattern=rf"(?:static\s+)?const\s+(?:uint8_t|GFXglyph)\s+{re.escape(name+suffix)}\[\]\s+PROGMEM\s*=\s*\{{(.*?)\s+\}};"
         found=re.search(pattern,src,re.S)
         if not found:
             raise ValueError(f"Missing GFX {name+suffix}: {path}")
