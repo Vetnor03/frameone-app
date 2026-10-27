@@ -1,6 +1,7 @@
 // app/api/device/reminders/route.ts
 
 import { after, NextResponse } from 'next/server'
+import { integrationActiveForPilot } from '@/app/lib/integrations/catalog'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsIfStaleForUser } from '@/app/lib/integrations/teams/server'
@@ -760,7 +761,7 @@ export async function GET(req: Request) {
       } catch (error) {
         logOptionalReminderProviderFailure('google-calendar', error)
       } })(), (async () => { try {
-        if (!providerEnabled('waste')) return
+        if (!integrationActiveForPilot('waste') || !providerEnabled('waste')) return
 
         const { data: wasteIntegrationItemsData, error: wasteIntegrationItemsError } = await supabase
           .from('integration_items')
