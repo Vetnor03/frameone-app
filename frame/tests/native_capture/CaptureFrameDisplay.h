@@ -16,6 +16,9 @@ class CaptureFrameDisplay {
 public:
   static const int WIDTH=800, HEIGHT=480;
   std::vector<uint8_t> pixels;
+  // Host-only mirror of GxEPD2_BW 1.6.4 800x480, rotation=0,
+  // full-window, one-page MSB-first buffer. This is NOT library-owned RAM.
+  std::vector<uint8_t> packed;
   int outOfBounds=0;
   const GFXfont* font=nullptr;
   int16_t cursorX=0,cursorY=0;
@@ -23,9 +26,10 @@ public:
   bool wrap=true;
   uint8_t textSize=1;
 
-  CaptureFrameDisplay():pixels(WIDTH*HEIGHT,0){}
+  CaptureFrameDisplay():pixels(WIDTH*HEIGHT,0),packed(WIDTH*HEIGHT/8,0xFF){}
   void clear(uint16_t paper) {
     std::fill(pixels.begin(),pixels.end(),paper==GxEPD_BLACK?1:0);
+    std::fill(packed.begin(),packed.end(),paper==GxEPD_BLACK?0x00:0xFF);
     outOfBounds=0;font=nullptr;cursorX=cursorY=0;textSize=1;
     color=paper==GxEPD_BLACK?GxEPD_WHITE:GxEPD_BLACK;wrap=true;
   }
@@ -36,7 +40,25 @@ public:
   void setTextColor(uint16_t c){color=c;}
   void drawPixel(int16_t x,int16_t y,uint16_t c) {
     if(x<0||y<0||x>=WIDTH||y>=HEIGHT){++outOfBounds;return;}
-    pixels[static_cast<size_t>(y)*WIDTH+x]=(c==GxEPD_BLACK)?1:0;
+    const size_t pos=static_cast<size_t>(y)*WIDTH+x;
+    pixels[pos]=(c==GxEPD_BLACK)?1:0;
+    // Matches GxEPD2_BW::drawPixel() for rotation=0/full-window:
+    // bit=1 for white, bit=0 for black; leftmost pixel is bit 7.
+    const size_t byteIndex=static_cast<size_t>(y)*(WIDTH/8)+x/8;
+    const uint8_t mask=static_cast<uint8_t>(0x80u>>(x&7));
+    if(c==GxEPD_BLACK)packed[byteIndex]&=static_cast<uint8_t>(~mask);
+    else packed[byteIndex]|=mask;
+  }
+  int packedPixelMismatches() const {
+    int mismatches=0;
+    for(size_t pixel=0;pixel<pixels.size();++pixel){
+      const size_t byteIndex=pixel/8;
+      const uint8_t mask=static_cast<uint8_t>(0x80u>>(pixel&7));
+      const bool packedWhite=(packed[byteIndex]&mask)!=0;
+      const bool capturedWhite=pixels[pixel]==0;
+      if(packedWhite!=capturedWhite)++mismatches;
+    }
+    return mismatches;
   }
   void fillRect(int16_t x,int16_t y,int16_t w,int16_t h,uint16_t c){
     if(w<=0||h<=0)return;
