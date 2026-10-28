@@ -96,7 +96,7 @@ export function planDateEditorial(cell,source){
         const yearBox=centerX(hero,roles.year.ink,y);y+=roles.year.ink.h+gaps
         const monthBox=centerX(hero,roles.month.ink,y);y+=roles.month.ink.h
         const rule=style.rule?rect(
-          hero.x+Math.floor(hero.w*.22),y+Math.floor(gaps*.30),
+          hero.x+Math.floor(hero.w*.22),y+Math.max(6,Math.floor(gaps/2)),
           Math.floor(hero.w*.56),1):null
         y+=gaps+ruleH
         const dayBox=centerX(hero,roles.day.ink,y);y+=roles.day.ink.h+gaps
