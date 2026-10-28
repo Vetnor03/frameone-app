@@ -325,7 +325,8 @@ static void drawMonthCalendar(int x, int y, int w, int h,
 
   if (availW < 7 * 10 || availH < (titleH + titleGap + dowH + rows * 10)) return;
 
-  const int weekW = showWeekNums ? 26 : 0;
+  // Date-editorial uses 19px week-number ink; legacy remains 18px.
+  const int weekW = showWeekNums ? (editorialTitleFont ? 27 : 26) : 0;
   const int weekPadLeft = showWeekNums ? 2 : 0;
   const int weekPadRight = showWeekNums ? 6 : 0;
 
@@ -1228,7 +1229,9 @@ static bool gridFontFits(const DateMonthGridPlan::Grid& grid,
       char number[4]={};
       snprintf(number,sizeof number,"%d",week);
       measureText(number,FONT_9,x1,y1,width,height);
-      if(width>18 ||height>grid.cellH)return false;
+      // Renderer leaves 2px left + 6px right. The measured original
+      // FreeSans9 ISO week text can be 19px, not always 18px.
+      if(width>grid.weekW-8 ||height>grid.cellH)return false;
     }
   }
   if(grid.showTitle){
@@ -1502,7 +1505,7 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   if(needsDual&&!dual.valid)return false;
   const DateRolePlanner::Rect calendarArea=needsDual?dual.current:p.calendar;
   const auto grid=DateMonthGridPlan::plan(calendarArea,year,month0,
-                 p.showTitle,p.showWeeks,p.showDow);
+                 p.showTitle,p.showWeeks,p.showDow,true);
   if(!grid.valid||
      !gridFontFits(grid,false,RemindEditorialFonts::dm18())||
      !p.showTitle||!p.showDow)
@@ -1510,7 +1513,7 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   DateMonthGridPlan::Grid nextGrid={};
   if(needsDual){
     nextGrid=DateMonthGridPlan::plan(dual.next,dual.nextYear,dual.nextMonth0,
-                                    true,p.showWeeks,true);
+                                    true,p.showWeeks,true,true);
     if(!nextGrid.valid||
        !gridFontFits(nextGrid,dual.showNextYear,
                      RemindEditorialFonts::dm18()))return false;
