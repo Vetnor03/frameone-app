@@ -26,12 +26,12 @@ def test_calendar_and_all_text_preflight_before_any_pixels():
                 DATE.index("#endif // REMIND_DATE_EDITORIAL_PREVIEW_ENABLED")]
     assert "DateEditorialF2::plan(" in region
     assert "DateMonthGridPlan::plan(" in region
-    assert "gridFontFits(grid)" in region
+    assert "gridFontFits(grid,false,RemindEditorialFonts::dm18())" in region
     assert "radius<11" in region
     first_draw=region.index("auto& d=DisplayCore::get();")
     assert region.index("DateEditorialF2::plan(")<first_draw
     assert region.index("DateMonthGridPlan::plan(")<first_draw
-    assert region.index("gridFontFits(grid)")<first_draw
+    assert region.index("gridFontFits(grid,false,RemindEditorialFonts::dm18())")<first_draw
     assert region.index("radius<11")<first_draw
     for fact in ("candidate.year","candidate.month","candidate.day",
                  "candidate.weekday"):
@@ -51,7 +51,8 @@ def test_legacy_calendar_and_holiday_data_not_silently_removed():
     assert "const bool needsDual=" in preview
     assert "DateEditorialDual::plan(" in preview
     assert "if(needsDual&&!dual.valid)return false" in preview
-    assert "gridFontFits(nextGrid,dual.showNextYear)" in preview
+    assert "gridFontFits(nextGrid,dual.showNextYear," in preview
+    assert "RemindEditorialFonts::dm18()))return false" in preview
     assert "drawMonthCalendar(dual.next.x,dual.next.y" in preview
     assert "preflightEditorialHolidays(p,year,month0,dayNum,holidays)" in preview
     assert "titleWithYear" in DATE
