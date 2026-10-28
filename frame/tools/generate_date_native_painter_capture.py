@@ -27,6 +27,9 @@ def compile_native(executable:Path):
         raise RuntimeError("GNU++ compiler required")
     cmd=[
         "g++","-std=c++11","-O1","-Wall","-Wextra","-Werror","-pedantic",
+        # Native production code has legacy printf/unused-function warnings
+        # under Linux GCC; these are unrelated to the pixel-capture ABI.
+        "-Wno-error=format-truncation","-Wno-error=unused-function",
         "-DREMIND_DATE_ROLE_PREVIEW_ENABLED=1",
         "-DREMIND_DATE_EDITORIAL_PREVIEW_ENABLED=1",
         "-I",str(HOST/"include"),
