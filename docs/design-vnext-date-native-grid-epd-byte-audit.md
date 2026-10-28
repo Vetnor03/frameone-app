@@ -23,3 +23,9 @@ The report paints Date **only**, never simulates another module's real pixel con
 **Missing physical gate:** known-good original v2.7.3 firmware `.bin` and SHA256 independently verified; then specifically authorized experimental flash and physical Light/Dark viewing/ESP32 GxEPD2 page bytes. Do not infer approval from this report.
 
 **FLASH: NEI. No merge/deploy/OTA.**
+
+## Critical finding: real full 4×4 was incorrectly disallowed
+
+The first **truthfully classified** matrix showed 24/400 native-admitted cases (3×3 and 3×4) but **0/4 at 4×4**. The former five-case host capture had wrongly constructed `Cell{...,CELL_ADAPTIVE}` for all cases, including full-screen, even though actual `Layout::cellSizeForGeometry(4,4)` returns `CELL_XL`. The experimental painter rejected anything whose `cell.size != CELL_ADAPTIVE` before any measured preflight. Thus the owner’s original full-screen target was silently impossible despite the promising gallery.
+
+This draft corrects both sides: the host CLI populates the **real** Cell metadata for all shapes; the experimental painter removes the cell-size-name gate and relies instead on its existing strict complete native F2/calendar/bitmap/holiday/ring preflight. Valid XL editorial is no longer arbitrarily rejected. Every legacy, nonadmitted cell continues to draw its original layout; the experimental feature remains compile-time OFF by default. The new regression test **requires all four full-screen 4×4 Oct/Dec Light/Dark cases to be natively admitted**, not just any convenient custom cell. This is a Date-only runtime change: no Surf changes.
