@@ -47,13 +47,13 @@ def test_legacy_calendar_and_holiday_data_not_silently_removed():
                  DATE.index("#endif // REMIND_DATE_EDITORIAL_PREVIEW_ENABLED")]
     assert "cell.w>=700&&cell.h>=330" in preview
     assert "cell.w>=520&&cell.h>=400" in preview
-    assert "g_cfg&&g_cfg->date.holidayCount>0" in preview
+    assert "preflightEditorialHolidays(p,year,month0,dayNum,holidays)" in preview
     assert "const bool needsDual=" in preview
     assert "DateEditorialDual::plan(" in preview
     assert "if(needsDual&&!dual.valid)return false" in preview
     assert "gridFontFits(nextGrid,dual.showNextYear)" in preview
     assert "drawMonthCalendar(dual.next.x,dual.next.y" in preview
-    assert "if(g_cfg&&g_cfg->date.holidayCount>0)return false" in preview
+    assert "preflightEditorialHolidays(p,year,month0,dayNum,holidays)" in preview
     assert "titleWithYear" in DATE
     assert "if(titleWithYear)" in DATE
     render=DATE[DATE.index("static void renderDate("):]
