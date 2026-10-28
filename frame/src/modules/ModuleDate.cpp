@@ -13,6 +13,16 @@
 #include "DateMonthGridPlan.h"
 #include "RemindEditorialFonts.h"
 #endif
+// R4 editorial Date is an independent explicit opt-in from legacy role preview.
+#ifndef REMIND_DATE_EDITORIAL_PREVIEW_ENABLED
+#define REMIND_DATE_EDITORIAL_PREVIEW_ENABLED 0
+#endif
+#if REMIND_DATE_EDITORIAL_PREVIEW_ENABLED && !REMIND_DATE_ROLE_PREVIEW_ENABLED
+#error "Editorial preview needs measured role preview for calendar-grid preflight"
+#endif
+#if REMIND_DATE_EDITORIAL_PREVIEW_ENABLED
+#include "DateEditorialF2Adapter.h"
+#endif
 #include <time.h>
 
 /* =========================
@@ -1345,6 +1355,103 @@ static bool tryDrawMeasuredDatePreview(const Cell& cell,const char* weekday,
 }
 #endif  // REMIND_DATE_ROLE_PREVIEW_ENABLED
 
+#if REMIND_DATE_EDITORIAL_PREVIEW_ENABLED
+// Restrained black/white botanical proof. Strokes remain strictly inside an
+// already approved optional region; this is NOT final R4 approved artwork.
+static void paintEditorialSprig(const DateRolePlanner::Rect& box){
+  if(box.w<1||box.h<1)return;
+  auto& d=DisplayCore::get();
+  const uint16_t ink=Theme::ink();
+  const auto seg=[&](int x0,int y0,int x1,int y1){
+    d.drawLine(box.x+x0*box.w/84,box.y+y0*box.h/88,
+               box.x+x1*box.w/84,box.y+y1*box.h/88,ink);
+  };
+  // Fine offset stem, small asymmetrical leaves and deliberately open air.
+  seg(41,87,40,74);seg(40,74,42,62);seg(42,62,40,49);
+  seg(40,49,36,33);seg(36,33,29,10);
+  seg(40,59,27,45);seg(27,45,13,31);
+  seg(41,52,54,42);seg(54,42,60,23);
+  seg(40,42,27,30);seg(27,30,17,19);
+  seg(38,32,49,21);seg(49,21,52,8);
+  // Each leaf is an original, open outline; no filled rectangles or clipping.
+  seg(27,48,17,49);seg(17,49,9,42);seg(9,42,7,33);
+  seg(7,33,19,32);seg(19,32,27,40);seg(27,40,27,48);
+  seg(48,42,58,40);seg(58,40,66,33);seg(66,33,67,24);
+  seg(67,24,56,25);seg(56,25,49,33);seg(49,33,48,42);
+  seg(31,31,21,31);seg(21,31,15,24);seg(15,24,13,16);
+  seg(13,16,23,15);seg(23,15,31,22);seg(31,22,31,31);
+  seg(43,25,52,21);seg(52,21,57,14);seg(57,14,57,7);
+  seg(57,7,49,10);seg(49,10,44,17);seg(44,17,43,25);
+  seg(44,67,54,65);seg(54,65,61,58);seg(61,58,62,50);
+  seg(62,50,52,50);seg(52,50,45,56);seg(45,56,44,67);
+}
+static void paintEditorialText(const DateEditorialF2::Label& label){
+  auto& d=DisplayCore::get();
+  d.setFont(label.font);
+  d.setCursor(label.line.cursorX,label.line.baselineY);
+  d.print(label.latin1);
+}
+// Only admit complete functional equivalence. Expanded old Date shows TWO
+// months; the current editorial candidate has only ONE. Until the second
+// calendar is co-planned, those regions MUST use the old complete renderer.
+static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
+    const char* month,int year,int month0,int dayNum) {
+  if(cell.size!=CELL_ADAPTIVE||!weekday||!month)return false;
+  if((cell.w>=700&&cell.h>=330)||(cell.w>=520&&cell.h>=400))
+    return false; // Preserve legacy expanded current+next-month functionality.
+  if(g_cfg&&g_cfg->date.holidayCount>0)return false;
+  DateEditorialF2::Result candidate={};
+  const DateRolePlanner::Rect bounds={cell.x,cell.y,cell.w,cell.h};
+  if(!DateEditorialF2::plan(bounds,year,month0,dayNum,month,weekday,0,
+                           candidate)||!candidate.valid)return false;
+  const auto& p=candidate.geometry;
+  // Functional calendar must be wholly visible, with actual legacy F9/B12
+  // ink validated BEFORE the first pixel. Do not silently omit the calendar.
+  const auto grid=DateMonthGridPlan::plan(p.calendar,year,month0,
+                 p.showTitle,p.showWeeks,p.showDow);
+  if(!grid.valid||!gridFontFits(grid)||!p.showTitle||!p.showDow)
+    return false;
+  // The outlined today marker must not collide with the calendar text.
+  const int radius=min(16,min(grid.cellW,grid.cellH)/2-2);
+  if(radius<11)return false;
+
+  // ATOMIC BOUNDARY — text, calendar, optional art are fully placed.
+  // Any error above returns to original Date WITHOUT drawing.
+  auto& d=DisplayCore::get();
+  d.setTextColor(Theme::ink());
+  d.setTextSize(1);
+  d.setTextWrap(false);
+  paintEditorialText(candidate.year);
+  paintEditorialText(candidate.month);
+  paintEditorialText(candidate.day);
+  paintEditorialText(candidate.weekday);
+  if(p.rule){
+    const int cx=p.monthRule.x+p.monthRule.w/2;
+    const int cy=p.monthRule.y;
+    const uint16_t ink=Theme::ink();
+    d.drawLine(p.monthRule.x,cy,cx-14,cy,ink);
+    d.drawLine(cx+14,cy,p.monthRule.x+p.monthRule.w-1,cy,ink);
+    d.drawLine(cx,cy-5,cx+5,cy,ink);
+    d.drawLine(cx+5,cy,cx,cy+5,ink);
+    d.drawLine(cx,cy+5,cx-5,cy,ink);
+    d.drawLine(cx-5,cy,cx,cy-5,ink);
+  }
+  if(p.art)paintEditorialSprig(p.botanical);
+  drawMonthCalendar(p.calendar.x,p.calendar.y,p.calendar.w,p.calendar.h,
+    year,month0,year,month0,dayNum,p.showTitle,p.showWeeks,p.showDow,true);
+  // Legacy calendar paints today white, which can be invisible on e-paper.
+  // Overlay a proper 1-bit ring after all calendar text has been drawn.
+  const int index=DateMonthGridPlan::firstMonday(year,month0)+dayNum-1;
+  const int cx=grid.dowX+(index%7)*grid.cellW+grid.cellW/2;
+  const int cy=grid.gridTop+(index/7)*grid.cellH+grid.cellH/2;
+  d.drawCircle(cx,cy,radius,Theme::ink());
+  d.setFont(nullptr);
+  d.setTextSize(1);
+  d.setTextWrap(true);
+  return true;
+}
+#endif // REMIND_DATE_EDITORIAL_PREVIEW_ENABLED
+
 static void renderDate(const Cell& c) {
 
   tm t;
@@ -1363,6 +1470,9 @@ static void renderDate(const Cell& c) {
   int todayYear = year;
   int todayMonth0 = month0;
   int todayDay = dayNum;
+#if REMIND_DATE_EDITORIAL_PREVIEW_ENABLED
+  if(tryDrawEditorialDatePreview(c,wday,month,year,month0,dayNum))return;
+#endif
 #if REMIND_DATE_ROLE_PREVIEW_ENABLED
   if (tryDrawMeasuredDatePreview(c, wday, month, dayNum, year, month0)) return;
 #endif

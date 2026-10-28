@@ -70,6 +70,8 @@ jobs:
       - run: pio run -v -d frame -e alfred_v1_2
       # R3 role-first Date-only opt-in path; compile without flashing.
       - run: pio run -d frame -e alfred_v1_2_date_role_preview
+      # R4: isolated Date editorial preview with actual original-F1 GFX paint.
+      - run: pio run -d frame -e alfred_v1_2_date_editorial_preview
       # TEMP_REFRESH_AUDIT: compile the gated diagnostic code until removal.
       - run: pio run -d frame -e alfred_v1_2_refresh_audit
       - run: pio run -d frame -e frame_esp32
