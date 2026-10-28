@@ -1361,7 +1361,10 @@ static void paintRoleLine(const DateF2Ink::Text& line){
 }
 static bool tryDrawMeasuredDatePreview(const Cell& cell,const char* weekday,
                       const char* month,int dayNum,int year,int month0) {
-  if(cell.size!=CELL_ADAPTIVE||!weekday||!month)return false;
+  // Admission is content/ink measured, never decided by a named cell size.
+  // In actual Layout::resolveGridCell a full 4x4 is CELL_XL, not ADAPTIVE.
+  // Still fail closed before painting on every downstream calendar/text check.
+  if(!weekday||!month)return false;
   DateF2Ink::Result hero={};
   const DateRolePlanner::Rect bounds={cell.x,cell.y,cell.w,cell.h};
   if(!DateF2Ink::planWholeDate(bounds,dayNum,month,weekday,hero)||
