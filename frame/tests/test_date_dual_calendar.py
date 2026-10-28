@@ -7,6 +7,8 @@ import json
 import subprocess
 from pathlib import Path
 from itertools import product
+from calendar import monthrange
+from datetime import date
 
 ROOT=Path(__file__).resolve().parents[2]
 JS=ROOT/"frame/tests/helpers/date_editorial_dual_js.mjs"
@@ -90,6 +92,14 @@ def test_full_two_calendar_native_js_parity(tmp_path):
         assert not overlap(current,nxt)
         assert jsplan["next"]["features"]["showMonthTitle"]
         assert jsplan["next"]["features"]["showDowHeader"]
+        # The visual gallery previously passed while 6-week rows collided.
+        # Check actual Gregorian week count and visible row pitch, not only
+        # outer rectangle containment. 26px protects today's >=11px ring.
+        for month,minimum in ((jsplan["current"],26),(jsplan["next"],21)):
+            yy,mm=month["year"],month["month0"]+1
+            weeks=max(4,min(6,(date(yy,mm,1).weekday()+
+                               monthrange(yy,mm)[1]+6)//7))
+            assert (month["rect"]["h"]-66)//weeks>=minimum,(month,weeks)
         withRollover+=showYear
     assert accepted>0
     assert withRollover>0
@@ -105,7 +115,9 @@ def test_4x4_october_requires_both_months_without_template_ids():
     assert item["dual"]["current"]["month0"]==9
     assert item["dual"]["next"]["month0"]==10
     assert not item["dual"]["next"]["showYear"]
-    assert item["dual"]["current"]["rect"]["h"]>item["dual"]["next"]["rect"]["h"]
+    # October has five rows, November six: more height MUST go to
+    # November. The old hardcoded 56/44 split caused overlapping bitmaps.
+    assert item["dual"]["current"]["rect"]["h"]<item["dual"]["next"]["rect"]["h"]
     assert not item["dual"]["current"]["rect"]==item["dual"]["next"]["rect"]
     source=(ROOT/"frame/src/display/DateEditorialDualCalendar.h").read_text()
     assert "colSpan" not in source and "rowSpan" not in source
