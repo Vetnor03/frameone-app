@@ -1409,6 +1409,15 @@ static void paintEditorialText(const DateEditorialF2::Label& label){
   d.setCursor(label.line.cursorX,label.line.baselineY);
   d.print(label.latin1);
 }
+// The optional holiday slots are preflighted with the existing DateF2Ink
+// role planner (same ink/baseline fields, distinct C++ type). Never force
+// an unsafe cast to DateEditorialF2::Label.
+static void paintEditorialText(const DateF2Ink::Text& label){
+  auto& d=DisplayCore::get();
+  d.setFont(label.font);
+  d.setCursor(label.line.cursorX,label.line.baselineY);
+  d.print(label.latin1);
+}
 // Only admit complete functional equivalence. Expanded old Date shows TWO
 // months; the current editorial candidate has only ONE. Until the second
 // calendar is co-planned, those regions MUST use the old complete renderer.
