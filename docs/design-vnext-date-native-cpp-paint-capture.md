@@ -1,0 +1,13 @@
+# R4 Date: native C++ painter host 1-bit capture (DRAFT, NO FLASH)
+
+**Purpose.** Previous #1458–#1462 HTML galleries are original-GFX SVG software studies, but the actual `ModuleDate.cpp` can reject candidates or paint different bitmaps. This independent diagnostic compiles **the unmodified production C++ `ModuleDate.cpp` itself** with original full `RemindEditorialFonts.cpp`, the original FreeSansNO glyph arrays and the real F2 role/calendar preflight. It exercises the public `ModuleDate::render(cell)` entrypoint; after saving pixels it separately calls the *same native, static editorial painter* to identify **native-admitted vs legacy-fallback** output and asserts identical byte-for-byte pixels for admitted cases.
+
+The only replacement is a **host-only** `DisplayCore::get()` test device, with Adafruit_GFX-like original glyph bearings and pixel methods storing a full 800×480 **1-bit** frame in memory. This host capture renders GFX bitmap glyphs and records drawLine/drawCircle/fillRect/fillCircle results. It fails on any admitted pixel outside its assigned cell or visible matte `(58,39,680,436)`, on out-of-panel writes, missing ink, or mismatch between the real entrypoint and direct native editorial rendering. Cases include full Oct 2026 light/dark, Dec→Jan year rollover, 3×4 Date next to other modules and a holiday replacing botanical art. Native-admission failures are shown **as labelled legacy fallback only**, not misrepresented using the missing stock legacy 24pt font.
+
+**Hard limitation:** This is a host-raster capture of actual C++ firmware drawing calls—not `GxEPD2_BW`'s internal buffer, panel-specific paged updates, a wire-level SPI transaction, or a physical epaper photo. Bresenham glyph rendering tracks Adafruit GFX semantics; `fillCircle` uses mathematically bounded disc raster. The legacy FreeSansBold24 dependency is represented by a host-only stand-in, **only to compile unrelated fallback branches**; therefore no legacy pixel mock is an approval target.
+
+**Scope:** Files under `frame/tests/native_capture/`, `frame/tools/generate_date_native_painter_capture.py`, `frame/tests/test_date_native_painter_capture.py`, and an isolated non-flashing workflow step. No production C++ code changed. Surf, legacy runtime defaults, app/backend/OTA and pilot hardware untouched.
+
+**Acceptance gates still open:** actual GxEPD2 hardware framebuffer/panel waveform behavior; mixed modules painted together on-device; Day/Dark physical inspection at 1–2m; original known-good v2.7.3 rollback BIN+SHA independently verified. The original `RE-MIND-layout-review-100 (2).pdf` page 1 seed `347015390` remains the aesthetic target.
+
+**FLASH: NEI. Draft and unmerged.**
