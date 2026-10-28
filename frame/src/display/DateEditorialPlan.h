@@ -112,7 +112,7 @@ inline Plan plan(const Input& input){
           const Rect year=centered(hero,yrInk,yy);yy+=yrInk.h+gaps;
           const Rect month=centered(hero,moInk,yy);yy+=moInk.h;
           const Rect monthRule=rule?rect(
-            hero.x+hero.w*22/100,yy+gaps*30/100,hero.w*56/100,1):Rect{};
+            hero.x+hero.w*22/100,yy+ma(6,gaps/2),hero.w*56/100,1):Rect{};
           yy+=gaps+ruleH;
           const Rect day=centered(hero,diInk,yy);yy+=diInk.h+gaps;
           const Rect weekday=centered(hero,wdInk,yy);

@@ -117,7 +117,15 @@ def test_all_100_legal_positions_preserve_facts_matte_and_contrast_independence(
         assert rectangle_inside(a["visible"],matte)
         assert rectangle_inside(a["safe"],a["visible"])
         block=list(a["boxes"].values())+[a["calendar"]["rect"]]
-        if a["ornaments"]["monthRule"]:block.append(a["ornaments"]["monthRule"])
+        if a["ornaments"]["monthRule"]:
+            rule=a["ornaments"]["monthRule"]
+            # The ink is not only the 1px horizontal rule: the native draw
+            # also renders a diamond extending 5px above and below it.
+            diamond=dict(x=rule["x"]+rule["w"]//2-5,
+                         y=rule["y"]-5,w=11,h=11)
+            assert rectangle_inside(diamond,a["regions"]["hero"])
+            assert all(not overlap(diamond,r) for r in a["boxes"].values())
+            block.append(a["ornaments"]["monthRule"])
         if a["illustration"]:block.append(a["illustration"]["rect"])
         assert all(rectangle_inside(r,a["safe"]) for r in block)
         assert all(not overlap(r,k) for j,r in enumerate(block)
