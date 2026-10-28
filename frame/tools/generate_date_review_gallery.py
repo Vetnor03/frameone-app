@@ -107,7 +107,8 @@ def render_calendar(entry,today,holiday_set,fonts):
     titleH=22 if title else 0
     titleGap=10 if title else 0
     dowH=18 if dow else 0
-    weekW=26 if weeks else 0
+    # Match native Date-only 27px week gutter; legacy remains 26px.
+    weekW=(27 if entry.get("editorialTitle") else 26) if weeks else 0
     availW=box["w"]-24; availH=box["h"]-16
     cw=(availW-weekW)//7
     ch=(availH-titleH-titleGap-dowH)//rows

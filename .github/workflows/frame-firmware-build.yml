@@ -75,6 +75,15 @@ jobs:
           path: ${{ runner.temp }}/date-vnext-mixed-layout.html
           if-no-files-found: error
           retention-days: 7
+      - name: Compile real native Date painter and capture host 1-bit pixels (NOT GxEPD2 hardware)
+        run: python3 frame/tools/generate_date_native_painter_capture.py --output "$RUNNER_TEMP/date-native-cpp-capture.html"
+      - name: Upload actual C++ Date paint-call host capture (NO FLASH)
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-vnext-native-cpp-painter-1bit-unflashed
+          path: ${{ runner.temp }}/date-native-cpp-capture.html
+          if-no-files-found: error
+          retention-days: 7
 
   firmware:
     runs-on: ubuntu-latest

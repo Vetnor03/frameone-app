@@ -30,7 +30,8 @@ inline int firstMonday(int year,int month0) {
   const int sun=(y+y/4-y/100+y/400+t[month0]+1)%7;
   return sun==0?6:sun-1;
 }
-inline Grid plan(Rect area,int year,int month0,bool title,bool weeks,bool dow) {
+inline Grid plan(Rect area,int year,int month0,bool title,bool weeks,bool dow,
+                 bool editorialWeekWidth=false) {
   Grid out={};
   if(year<DateRolePolicy::CONTEXT_YEAR_MIN ||
      year>DateRolePolicy::CONTEXT_YEAR_MAX ||
@@ -44,7 +45,9 @@ inline Grid plan(Rect area,int year,int month0,bool title,bool weeks,bool dow) {
   const int titleH=title?22:0;
   const int titleGap=title?10:0;
   const int dowH=dow?18:0;
-  const int weekW=weeks?26:0;
+  // Original GFX FreeSans9 has ISO week digits up to 19px wide.
+  // Editorial gets 1px extra; all older callers retain 26px exactly.
+  const int weekW=weeks?(editorialWeekWidth?27:26):0;
   const int availW=area.w-24,availH=area.h-16;
   if(availW<70||availH<titleH+titleGap+dowH+60 ||
      availW-weekW<63)return out;
