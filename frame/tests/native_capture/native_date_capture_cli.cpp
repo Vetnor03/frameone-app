@@ -81,7 +81,16 @@ int main(int argc,char** argv){
     snprintf(item.name,sizeof item.name,"%s","Halloween");
   }
   ModuleDate::setConfig(&config);
-  Cell cell={x,y,w,h,0,0,0,4,4,CELL_ADAPTIVE};
+  // Real firmware GridCell metadata, not hard-coded 4x4 for every cell.
+  // These values mirror Layout::resolveGridCell / cellSizeForGeometry.
+  const int colSpan=w/200,rowSpan=h/120;
+  const CellSize size=(colSpan==4&&rowSpan==1)?CELL_SMALL:
+     (colSpan==2&&rowSpan==2)?CELL_MEDIUM:
+     (colSpan==4&&rowSpan==2)?CELL_LARGE:
+     (colSpan==4&&rowSpan==4)?CELL_XL:CELL_ADAPTIVE;
+  Cell cell={x,y,w,h,0,static_cast<uint8_t>(x/200),
+    static_cast<uint8_t>(y/120),static_cast<uint8_t>(colSpan),
+    static_cast<uint8_t>(rowSpan),size};
   g_captureDisplay.clear(Theme::paper());
   // Actual production entrypoint. No mocked data/placement beyond fixture.
   ModuleDate::render(cell);
