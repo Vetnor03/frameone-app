@@ -1522,9 +1522,9 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
     d.drawLine(cx-5,cy,cx,cy-5,ink);
   }
   if(holidays.count){
-    paintEditorialText(holidays.heading);
+    paintRoleLine(holidays.heading);
     for(int i=0;i<holidays.count;++i)
-      paintEditorialText(holidays.rows[i]);
+      paintRoleLine(holidays.rows[i]);
   }else if(p.art)paintEditorialSprig(p.botanical);
   drawMonthCalendar(calendarArea.x,calendarArea.y,
     calendarArea.w,calendarArea.h,year,month0,year,month0,
