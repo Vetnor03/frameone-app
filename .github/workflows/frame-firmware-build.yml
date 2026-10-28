@@ -66,6 +66,15 @@ jobs:
           path: ${{ runner.temp }}/date-vnext-dual-holiday.html
           if-no-files-found: error
           retention-days: 7
+      - name: Generate physical-grid mixed Date ink study (NOT module/frame capture)
+        run: python3 frame/tools/generate_date_mixed_layout_review.py --output "$RUNNER_TEMP/date-vnext-mixed-layout.html"
+      - name: Upload real-grid mixed Date review (UNFLASHED)
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-vnext-mixed-layout-ink-study-unflashed
+          path: ${{ runner.temp }}/date-vnext-mixed-layout.html
+          if-no-files-found: error
+          retention-days: 7
 
   firmware:
     runs-on: ubuntu-latest
