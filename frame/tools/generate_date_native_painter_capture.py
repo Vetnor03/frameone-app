@@ -27,6 +27,8 @@ def compile_native(executable:Path):
         raise RuntimeError("GNU++ compiler required")
     cmd=[
         "g++","-std=c++11","-O1","-Wall","-Wextra","-Werror","-pedantic",
+        "-DREMIND_DATE_ROLE_PREVIEW_ENABLED=1",
+        "-DREMIND_DATE_EDITORIAL_PREVIEW_ENABLED=1",
         "-I",str(HOST/"include"),
         "-I",str(HOST),
         "-I",str(FRAME/"src/modules"),
