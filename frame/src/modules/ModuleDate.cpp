@@ -303,7 +303,8 @@ static void drawMonthCalendar(int x, int y, int w, int h,
                               bool showWeekNums,
                               bool showDowHeader,
                               bool hardBounds = false,
-                              bool titleWithYear = false) {
+                              bool titleWithYear = false,
+                              const GFXfont* editorialTitleFont = nullptr) {
   auto& d = DisplayCore::get();
   d.setTextSize(1);
 
@@ -372,13 +373,28 @@ static void drawMonthCalendar(int x, int y, int w, int h,
       mname=fullTitle;
     }
     int16_t x1, y1; uint16_t tw, th;
-    measureText(mname, FONT_B12, x1, y1, tw, th);
+    // Only the separate default-OFF editorial caller supplies DM Sans.
+    // Legacy title drawing stays exactly FreeSansBold12.
+    const GFXfont* titleFont=editorialTitleFont ? editorialTitleFont : FONT_B12;
+    measureText(mname, titleFont, x1, y1, tw, th);
     int tx = blockX + (blockW - (int)tw) / 2;
     int ty = curY + (titleH - (int)th) / 2;
     d.setTextColor(ink);
-    d.setFont(FONT_B12);
+    d.setFont(titleFont);
     d.setCursor(tx - x1, ty - y1);
     d.print(mname);
+    if(editorialTitleFont) {
+      // Restrained 1-bit engraving in the existing 10px title gap:
+      // no added height and no lost week rows or weekday headings.
+      const int midX=blockX+blockW/2, ruleY=curY+titleH+titleGap/2;
+      const int halfSpan=min(68,blockW/4);
+      d.drawLine(midX-halfSpan,ruleY,midX-8,ruleY,ink);
+      d.drawLine(midX+8,ruleY,midX+halfSpan,ruleY,ink);
+      d.drawLine(midX,ruleY-3,midX+3,ruleY,ink);
+      d.drawLine(midX+3,ruleY,midX,ruleY+3,ink);
+      d.drawLine(midX,ruleY+3,midX-3,ruleY,ink);
+      d.drawLine(midX-3,ruleY,midX,ruleY-3,ink);
+    }
     curY += titleH + titleGap;
   }
 
@@ -1186,7 +1202,8 @@ static bool roleLine(const char* utf8,const GFXfont* font,
          result.line.ink.w==inkArea.w && result.line.ink.h==inkArea.h;
 }
 static bool gridFontFits(const DateMonthGridPlan::Grid& grid,
-                         bool titleWithYear=false) {
+                         bool titleWithYear=false,
+                         const GFXfont* editorialTitleFont=nullptr) {
   if(!grid.valid)return false;
   int16_t x1=0,y1=0;
   uint16_t width=0,height=0;
@@ -1226,12 +1243,17 @@ static bool gridFontFits(const DateMonthGridPlan::Grid& grid,
       if(n<=0||n>=(int)sizeof nextTitle)return false;
       titleText=nextTitle;
     }
-    measureText(titleText,FONT_B12,x1,y1,width,height);
+    const GFXfont* titleFont=editorialTitleFont?editorialTitleFont:FONT_B12;
+    measureText(titleText,titleFont,x1,y1,width,height);
     const int inkTop=grid.block.y+
       (grid.titleH-static_cast<int>(height))/2;
+    // The 1-bit ornament occupies the existing 10px title gap. DM Sans
+    // must stay entirely in the 22px title slot; old FreeSansB12 may still
+    // use the reserved gap as before.
+    const int bottom=grid.block.y+grid.titleH+
+      (editorialTitleFont?0:grid.titleGap);
     if(width>grid.block.w || inkTop<grid.block.y ||
-       inkTop+static_cast<int>(height)>
-         grid.block.y+grid.titleH+grid.titleGap)return false;
+       inkTop+static_cast<int>(height)>bottom)return false;
   }
   return true;
 }
@@ -1481,14 +1503,17 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   const DateRolePlanner::Rect calendarArea=needsDual?dual.current:p.calendar;
   const auto grid=DateMonthGridPlan::plan(calendarArea,year,month0,
                  p.showTitle,p.showWeeks,p.showDow);
-  if(!grid.valid||!gridFontFits(grid)||!p.showTitle||!p.showDow)
+  if(!grid.valid||
+     !gridFontFits(grid,false,RemindEditorialFonts::dm18())||
+     !p.showTitle||!p.showDow)
     return false;
   DateMonthGridPlan::Grid nextGrid={};
   if(needsDual){
     nextGrid=DateMonthGridPlan::plan(dual.next,dual.nextYear,dual.nextMonth0,
                                     true,p.showWeeks,true);
     if(!nextGrid.valid||
-       !gridFontFits(nextGrid,dual.showNextYear))return false;
+       !gridFontFits(nextGrid,dual.showNextYear,
+                     RemindEditorialFonts::dm18()))return false;
   }
   // The outlined today marker must not collide with the calendar text.
   const int radius=min(16,min(grid.cellW,grid.cellH)/2-2);
@@ -1525,11 +1550,13 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   }else if(p.art)paintEditorialSprig(p.botanical);
   drawMonthCalendar(calendarArea.x,calendarArea.y,
     calendarArea.w,calendarArea.h,year,month0,year,month0,
-    dayNum,p.showTitle,p.showWeeks,p.showDow,true);
+    dayNum,p.showTitle,p.showWeeks,p.showDow,true,false,
+    RemindEditorialFonts::dm18());
   if(needsDual){
     drawMonthCalendar(dual.next.x,dual.next.y,dual.next.w,dual.next.h,
       dual.nextYear,dual.nextMonth0,year,month0,dayNum,
-      true,p.showWeeks,true,true,dual.showNextYear);
+      true,p.showWeeks,true,true,dual.showNextYear,
+      RemindEditorialFonts::dm18());
   }
   // Legacy calendar paints today white, which can be invisible on e-paper.
   // Overlay a proper 1-bit ring after all calendar text has been drawn.

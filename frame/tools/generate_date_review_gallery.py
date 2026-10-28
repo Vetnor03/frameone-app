@@ -122,7 +122,22 @@ def render_calendar(entry,today,holiday_set,fonts):
         month_name=calendar.month_name[month]
         if entry.get("showYear"):
             month_name+=f" {year}"
-        out.append(text_centered(month_name,fonts["B12"],bx,top,bw,titleH,ink))
+        # Original-F1 1-bit DM Sans is editorial-only; the 116-case
+        # legacy/role gallery still uses exactly the original B12 font.
+        title_font=fonts["DM18"] if entry.get("editorialTitle") else fonts["B12"]
+        out.append(text_centered(month_name,title_font,bx,top,bw,titleH,ink))
+        if entry.get("editorialTitle"):
+            # Match the native 1-bit line/diamond coordinates; no CSS strokes
+            # or smooth browser line primitives masquerading as frame pixels.
+            from date_botanical_1bit import bresenham
+            mid=bx+bw//2; y=by+titleH+titleGap//2
+            span=min(68,bw//4)
+            segments=((mid-span,y,mid-8,y),(mid+8,y,mid+span,y),
+                      (mid,y-3,mid+3,y),(mid+3,y,mid,y+3),
+                      (mid,y+3,mid-3,y),(mid-3,y,mid,y-3))
+            pixels=sorted({p for seg in segments for p in bresenham(*seg)})
+            ink_path="".join(f"M{x},{yy}h1v1h-1z" for x,yy in pixels)
+            out.append(f'<path data-calendar-title-accent="original-1bit" fill="{ink}" d="{ink_path}"/>')
         top+=titleH+titleGap
     dowx=bx+weekW
     if dow:

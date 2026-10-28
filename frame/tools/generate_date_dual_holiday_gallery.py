@@ -73,7 +73,10 @@ def show(sample,plan,fonts,index):
             if match:dots.add((int(match.group(2)),int(match.group(1))))
         today=(facts["year"],facts["month0"]+1,facts["day"])
         for month in (dual["current"],dual["next"]):
-            items.append(render_calendar(month,today,dots,fonts))
+            # Only the opt-in editorial painter uses the original DM18 title
+            # and 1-bit rule; this is not a style change to legacy calendars.
+            items.append(render_calendar({**month,"editorialTitle":True},
+                                         today,dots,fonts))
             items.append(bbox_markup(month["rect"],"#759075"))
         if holiday["count"]:
             header=holiday["heading"]
