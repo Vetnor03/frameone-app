@@ -28,6 +28,9 @@ def test_seven_source_bitmap_cases_and_factual_fallbacks(tmp_path):
     # Exactly the two calendar-only scenarios may use optional native art.
     # One/two dated holiday rows REPLACE the illustration, never overlap it.
     assert doc.count('data-botanical="native-line-ink-v1"')==2
+    # Every admitted case has two complete, measured month headings.
+    # One 1-bit rule/diamond belongs to each; none on legacy fallback.
+    assert doc.count('data-calendar-title-accent="original-1bit"')==2*stat["admitted"]
     assert '<body class="hide">' in doc  # clean view; guides are opt-in
     assert "NOT A FRAME CAPTURE" in doc
     assert "dual calendar and holiday" in doc.lower()
