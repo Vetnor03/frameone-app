@@ -84,6 +84,15 @@ jobs:
           path: ${{ runner.temp }}/date-native-cpp-capture.html
           if-no-files-found: error
           retention-days: 7
+      - name: Audit actual native Date admission in all 11 mixed-layout scenarios (NOT full other-module paint)
+        run: python3 frame/tools/audit_date_native_mixed_parity.py --output "$RUNNER_TEMP/date-native-mixed-admission.json"
+      - name: Upload mixed SVG/native C++ admission comparison (NOT panel capture)
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-vnext-mixed-native-vs-source-admission-unflashed
+          path: ${{ runner.temp }}/date-native-mixed-admission.json
+          if-no-files-found: error
+          retention-days: 7
 
   firmware:
     runs-on: ubuntu-latest
