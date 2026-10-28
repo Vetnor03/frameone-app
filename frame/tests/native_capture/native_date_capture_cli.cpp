@@ -3,6 +3,7 @@
 // DisplayCore/Theme/Arduino headers are host shims; their 1-bit rasterization
 // is NOT the GxEPD2 controller's actual paged framebuffer or waveform.
 #include "CaptureFrameDisplay.h"
+#include "DisplayCore.h"
 #include "Theme.h"
 #include <fstream>
 #include <iostream>
