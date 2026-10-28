@@ -18,7 +18,14 @@ def test_actual_firmware_date_renderer_on_host_1bit_buffer(tmp_path):
     assert data["nativePainterSource"]=="frame/src/modules/ModuleDate.cpp"
     records=data["cases"]
     assert len(records)==5
-    assert len([r for r in records if r["admitted"]])>=1,records
+    # The old 26px week-number gutter silently rejected every editorial Date
+    # because some original FreeSans9 ISO-week pairs need 19px (not 18px).
+    # Native proof must actually admit BOTH a regular and year-turn month.
+    assert records[0]["admitted"],records[0]["preflight"]
+    assert records[2]["admitted"],records[2]["preflight"]
+    assert records[0]["preflight"]["gridFont"]
+    assert records[0]["preflight"]["nextFont"]
+    assert len([r for r in records if r["admitted"]])>=2,records
     assert all(r["inkInside"]>=300 for r in records if r["admitted"])
     assert all(r["outOfBounds"]==0 for r in records if r["admitted"])
     assert all(r["inkOutside"]==0 and r["inkOutsideMatte"]==0
@@ -46,3 +53,11 @@ def test_capture_is_host_only_and_executes_unmodified_native_painter():
     assert "#define REMIND_DATE_EDITORIAL_PREVIEW_ENABLED 0" in module
     assert "date-vnext-native-cpp-painter-1bit-unflashed" in workflow
     assert "ModuleSurf.cpp" not in runner
+    # Week gutter is calibrated to the ORIGINAL FreeSans9 ISO week text.
+    module=(ROOT/"frame/src/modules/ModuleDate.cpp").read_text()
+    planner=(ROOT/"frame/src/display/DateMonthGridPlan.h").read_text()
+    source_gallery=(ROOT/"frame/tools/generate_date_review_gallery.py").read_text()
+    assert "editorialTitleFont ? 27 : 26" in module
+    assert "width>grid.weekW-8" in module
+    assert "editorialWeekWidth?27:26" in planner
+    assert 'entry.get("editorialTitle") else 26' in source_gallery
