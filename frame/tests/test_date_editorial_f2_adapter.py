@@ -137,7 +137,7 @@ def test_f2_editorial_is_only_a_measurement_adapter_without_unsafe_paint():
     # Native adapter is now used only in explicitly enabled experimental
     # firmware; standard Alfred still compiles out the entire painter.
     assert "#define REMIND_DATE_EDITORIAL_PREVIEW_ENABLED 0" in mod
-    assert ('#if REMIND_DATE_EDITORIAL_PREVIEW_ENABLED\\n'
-            '#include "DateEditorialF2Adapter.h"\\n'
-            '#include "DateEditorialDualCalendar.h"\\n#endif') in mod
+    assert ('#if REMIND_DATE_EDITORIAL_PREVIEW_ENABLED\n'
+            '#include "DateEditorialF2Adapter.h"\n'
+            '#include "DateEditorialDualCalendar.h"\n#endif') in mod
     assert "tryDrawEditorialDatePreview(" in mod
