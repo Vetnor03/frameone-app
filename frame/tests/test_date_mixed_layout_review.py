@@ -49,6 +49,8 @@ def test_real_firmware_grid_and_mixed_source_ink_report(tmp_path):
     assert "NOT A NATIVE FRAMEBUFFER" in html
     assert "NOT RENDERED: SURF:1" in html
     assert "LEGACY DATE FALLBACK" in html
+    assert ".qa-box{display:none}" in html
+    assert "Show original-ink measurement guides" in html
     assert "BLANK SLOT" in html
     assert "800×480" in html
     assert 'data-calendar-title-accent="original-1bit"' in html
