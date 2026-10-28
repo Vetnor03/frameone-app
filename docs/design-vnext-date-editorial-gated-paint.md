@@ -4,7 +4,7 @@ This draft connects #1452's native all-facts editorial geometry and #1453's orig
 
 ## Exact conditions before *any* pixels
 1. Only `CELL_ADAPTIVE`. Date/weekday/month source values come from the unchanged frame clock and existing Date module.
-2. **Functional preservation gate:** existing expanded adaptive Date displays **current + next months**; the new ensemble currently holds only **current**, so expanded pixel areas (w≥700/h≥330 or w≥520/h≥400) are *not admitted*, and legacy Date renders both. This temporarily excludes a typical 4×4, despite the new 4×4 plan's excellent visual score. This is deliberate rather than dropping next month.
+2. **Functional preservation gate:** existing expanded adaptive Date displays **current + next months**; the new ensemble currently holds only **current**, so expanded pixel areas (w≥700/h≥330 or w≥520/h≥400) are *not admitted*, and the untouched legacy Date then renders both. This temporarily excludes a typical 4×4, despite the new 4×4 plan's excellent visual score. This is deliberate rather than dropping next month.
 3. Any configured holiday means legacy: the new candidate currently cannot fit the complete holiday list; dots and rows must not disappear. A subsequent slice can add a factual holiday ledger to the editorial layout.
 4. Complete F2 native original font preflight succeeds for year, month, day, weekday; one whole calendar is allocated and `DateMonthGridPlan`/legacy FreeSans 9/Bold 12 ink preflight confirms the complete grid and a sufficiently large today ring. On failure, fall through before touching the display.
 5. Only then draw four exact glyph lines at measured cursor/baselines, restrained month rule, an *original deterministic 1-bit stroke botanical study* inside the optional botanical box, and **existing `drawMonthCalendar`** to preserve day number/weekday/week number/holiday dot logic. An explicit black ink circle is placed around today after legacy calendar draw to make it visible.
@@ -16,3 +16,6 @@ The artwork is a **first experimental e-paper stroke treatment**, not the final 
 This is **not production, not OTA, not a user-approved flash package**. Reconcile F1/F2 branches before merging any stage. Original ALFRED V4 v2.7.3 rollback binary and SHA remain unverified. No Surf changes.
 
 **FLASH: NEI.**
+
+## Fail-safe branch selection
+The editorial preview and the older three-fact preview are now mutually exclusive at the `renderDate` entry point. In the **editorial test build**, any rejection (including expanded 4×4, configured holidays, insufficient calendar ink) goes *directly* to the unchanged `drawAdaptiveDate` legacy path, rather than accidentally trying the other experimental renderer. The role-only build still uses the older experimental branch unchanged.

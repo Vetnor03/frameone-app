@@ -1472,9 +1472,10 @@ static void renderDate(const Cell& c) {
   int todayDay = dayNum;
 #if REMIND_DATE_EDITORIAL_PREVIEW_ENABLED
   if(tryDrawEditorialDatePreview(c,wday,month,year,month0,dayNum))return;
-#endif
+#else
 #if REMIND_DATE_ROLE_PREVIEW_ENABLED
   if (tryDrawMeasuredDatePreview(c, wday, month, dayNum, year, month0)) return;
+#endif
 #endif
 
 

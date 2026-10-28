@@ -54,6 +54,10 @@ def test_legacy_calendar_and_holiday_data_not_silently_removed():
     assert "tryDrawEditorialDatePreview(c,wday,month,year,month0,dayNum)" in render
     assert "drawAdaptiveDate(c, month, wday, year, month0, dayNum);" in render
     assert render.index("tryDrawEditorialDatePreview")<render.index("drawAdaptiveDate(")
+    assert "#else\\n#if REMIND_DATE_ROLE_PREVIEW_ENABLED" in render
+    # In the editorial-only target, failed editorial admission must go
+    # STRAIGHT to the untouched legacy renderer, not to the old 3-role proof.
+    assert render.index("#else\\n#if REMIND_DATE_ROLE_PREVIEW_ENABLED") < render.index("tryDrawMeasuredDatePreview")
 
 def test_art_is_deterministic_bounded_original_strokes():
     area=DATE[DATE.index("static void paintEditorialSprig("):
