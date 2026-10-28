@@ -117,7 +117,7 @@ int main(int argc,char** argv){
        wantsDual?dual.current:p.calendar;
     const auto grid=DateMonthGridPlan::plan(calendarArea,
        NativeCapture::year,NativeCapture::month0,
-       p.showTitle,p.showWeeks,p.showDow);
+       p.showTitle,p.showWeeks,p.showDow,true);
     gridValid=grid.valid;
     if(gridValid){
       fontValid=gridFontFits(grid,false,RemindEditorialFonts::dm18());
@@ -126,7 +126,7 @@ int main(int argc,char** argv){
     }
     if(wantsDual&&dual.valid){
       const auto next=DateMonthGridPlan::plan(
-         dual.next,dual.nextYear,dual.nextMonth0,true,p.showWeeks,true);
+         dual.next,dual.nextYear,dual.nextMonth0,true,p.showWeeks,true,true);
       nextGridValid=next.valid;
       nextFontValid=next.valid&&
         gridFontFits(next,dual.showNextYear,RemindEditorialFonts::dm18());
