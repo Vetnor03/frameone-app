@@ -102,6 +102,15 @@ jobs:
           path: ${{ runner.temp }}/date-gxepd-packed/
           if-no-files-found: error
           retention-days: 7
+      - name: Run exact upstream GxEPD2_BW v1.6.4 class against real Date host pixels (mock T7, NO SPI)
+        run: python3 frame/tools/generate_date_real_gxepd_bw_capture.py --output "$RUNNER_TEMP/date-real-bw-host"
+      - name: Upload actual GxEPD2_BW class host transfers (NOT a physical panel capture)
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-vnext-real-gxepd2-bw-mock-t7-unflashed
+          path: ${{ runner.temp }}/date-real-bw-host/
+          if-no-files-found: error
+          retention-days: 7
 
   firmware:
     runs-on: ubuntu-latest
