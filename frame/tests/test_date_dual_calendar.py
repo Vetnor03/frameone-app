@@ -115,9 +115,13 @@ def test_4x4_october_requires_both_months_without_template_ids():
     assert item["dual"]["current"]["month0"]==9
     assert item["dual"]["next"]["month0"]==10
     assert not item["dual"]["next"]["showYear"]
-    # October has five rows, November six: more height MUST go to
-    # November. The old hardcoded 56/44 split caused overlapping bitmaps.
-    assert item["dual"]["current"]["rect"]["h"]<item["dual"]["next"]["rect"]["h"]
+    # October's outlined today ring requires 26px per row; November's
+    # six complete weeks require >=21px. Compare factual row pitch rather
+    # than incorrectly demanding that the whole second box be taller.
+    current=item["dual"]["current"]["rect"]["h"]
+    next_=item["dual"]["next"]["rect"]["h"]
+    assert (current-66)//5>=26
+    assert (next_-66)//6>=21
     assert not item["dual"]["current"]["rect"]==item["dual"]["next"]["rect"]
     source=(ROOT/"frame/src/display/DateEditorialDualCalendar.h").read_text()
     assert "colSpan" not in source and "rowSpan" not in source
