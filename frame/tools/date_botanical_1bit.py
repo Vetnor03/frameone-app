@@ -14,12 +14,12 @@ SOURCE=ROOT/"frame/src/display/DateEditorialBotanical.h"
 
 def native_strokes():
     text=SOURCE.read_text(encoding="utf-8")
-    width=int(re.search(r"DESIGN_W=(\\d+)",text).group(1))
-    height=int(re.search(r"DESIGN_H=(\\d+)",text).group(1))
+    width=int(re.search(r"DESIGN_W=(\d+)",text).group(1))
+    height=int(re.search(r"DESIGN_H=(\d+)",text).group(1))
     block=text.split("// BOTANICAL_STROKES_BEGIN",1)[1].split(
         "// BOTANICAL_STROKES_END",1)[0]
     segments=[tuple(map(int,m)) for m in re.findall(
-        r"\\{\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\}",block)]
+        r"\{\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\}",block)]
     assert len(segments)>=60,"Botanical source missing or incomplete"
     assert all(0<=x<width and 0<=y<height for a,b,c,d in segments
                for x,y in ((a,b),(c,d))),"Unbounded 1-bit botanical point"
