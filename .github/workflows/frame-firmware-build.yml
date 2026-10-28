@@ -84,6 +84,15 @@ jobs:
           path: ${{ runner.temp }}/date-native-cpp-capture.html
           if-no-files-found: error
           retention-days: 7
+      - name: Audit 400 native Date ink cases across actual 4x4 grid (NO FLASH)
+        run: python3 frame/tools/generate_date_native_grid_matrix.py --output "$RUNNER_TEMP/date-native-grid-matrix.html"
+      - name: Upload native 400-case grid acceptance report (NOT hardware capture)
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-vnext-native-grid-matrix-unflashed
+          path: ${{ runner.temp }}/date-native-grid-matrix.html
+          if-no-files-found: error
+          retention-days: 7
 
   firmware:
     runs-on: ubuntu-latest

@@ -1488,7 +1488,10 @@ static bool preflightEditorialHolidays(const DateEditorialPlan::Plan& p,
 }
 static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
     const char* month,int year,int month0,int dayNum) {
-  if(cell.size!=CELL_ADAPTIVE||!weekday||!month)return false;
+  // Content-measured Date must not be rejected merely because Layout
+  // classifies the physical 4x4 as CELL_XL rather than CELL_ADAPTIVE.
+  // All original F2, dual-calendar, glyph, holiday and matte gates stay.
+  if(!weekday||!month)return false;
   // Only replace a legacy expanded Date if both months can fit.
   const bool needsDual=(cell.w>=700&&cell.h>=330)||
                        (cell.w>=520&&cell.h>=400);
