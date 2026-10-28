@@ -24,6 +24,7 @@
 #include "DateEditorialF2Adapter.h"
 #include "DateEditorialDualCalendar.h"
 #include "DateEditorialHolidays.h"
+#include "DateEditorialBotanical.h"
 #endif
 #include <time.h>
 
@@ -1374,34 +1375,21 @@ static bool tryDrawMeasuredDatePreview(const Cell& cell,const char* weekday,
 #endif  // REMIND_DATE_ROLE_PREVIEW_ENABLED
 
 #if REMIND_DATE_EDITORIAL_PREVIEW_ENABLED
-// Restrained black/white botanical proof. Strokes remain strictly inside an
-// already approved optional region; this is NOT final R4 approved artwork.
+// Restrained 1-bit botanical study from a shared C++ stroke source.
+// Strictly within optional measured space; not final physical acceptance.
 static void paintEditorialSprig(const DateRolePlanner::Rect& box){
   if(box.w<1||box.h<1)return;
   auto& d=DisplayCore::get();
   const uint16_t ink=Theme::ink();
-  const auto seg=[&](int x0,int y0,int x1,int y1){
-    d.drawLine(box.x+x0*box.w/84,box.y+y0*box.h/88,
-               box.x+x1*box.w/84,box.y+y1*box.h/88,ink);
-  };
-  // Fine offset stem, small asymmetrical leaves and deliberately open air.
-  seg(41,87,40,74);seg(40,74,42,62);seg(42,62,40,49);
-  seg(40,49,36,33);seg(36,33,29,10);
-  seg(40,59,27,45);seg(27,45,13,31);
-  seg(41,52,54,42);seg(54,42,60,23);
-  seg(40,42,27,30);seg(27,30,17,19);
-  seg(38,32,49,21);seg(49,21,52,8);
-  // Each leaf is an original, open outline; no filled rectangles or clipping.
-  seg(27,48,17,49);seg(17,49,9,42);seg(9,42,7,33);
-  seg(7,33,19,32);seg(19,32,27,40);seg(27,40,27,48);
-  seg(48,42,58,40);seg(58,40,66,33);seg(66,33,67,24);
-  seg(67,24,56,25);seg(56,25,49,33);seg(49,33,48,42);
-  seg(31,31,21,31);seg(21,31,15,24);seg(15,24,13,16);
-  seg(13,16,23,15);seg(23,15,31,22);seg(31,22,31,31);
-  seg(43,25,52,21);seg(52,21,57,14);seg(57,14,57,7);
-  seg(57,7,49,10);seg(49,10,44,17);seg(44,17,43,25);
-  seg(44,67,54,65);seg(54,65,61,58);seg(61,58,62,50);
-  seg(62,50,52,50);seg(52,50,45,56);seg(45,56,44,67);
+  // One source, one integer transform: gallery reads these very same segments.
+  // Original, spare 1-bit botanical linework; no random variation per refresh.
+  for(int i=0;i<DateEditorialBotanical::strokeCount;++i){
+    const auto& line=DateEditorialBotanical::strokes[i];
+    d.drawLine(DateEditorialBotanical::scaledX(box,line.x0),
+               DateEditorialBotanical::scaledY(box,line.y0),
+               DateEditorialBotanical::scaledX(box,line.x1),
+               DateEditorialBotanical::scaledY(box,line.y1),ink);
+  }
 }
 static void paintEditorialText(const DateEditorialF2::Label& label){
   auto& d=DisplayCore::get();

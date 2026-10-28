@@ -25,6 +25,10 @@ def test_seven_source_bitmap_cases_and_factual_fallbacks(tmp_path):
     assert doc.count('<article>')==7
     assert doc.count('<svg viewBox="0 0 800 480"')==7
     assert "Legacy fallback — no candidate drawn" in doc
+    # Exactly the two calendar-only scenarios may use optional native art.
+    # One/two dated holiday rows REPLACE the illustration, never overlap it.
+    assert doc.count('data-botanical="native-line-ink-v1"')==2
+    assert '<body class="hide">' in doc  # clean view; guides are opt-in
     assert "NOT A FRAME CAPTURE" in doc
     assert "dual calendar and holiday" in doc.lower()
     assert "src=\"http" not in doc
