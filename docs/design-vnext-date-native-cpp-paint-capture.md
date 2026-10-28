@@ -11,3 +11,9 @@ The only replacement is a **host-only** `DisplayCore::get()` test device, with A
 **Acceptance gates still open:** actual GxEPD2 hardware framebuffer/panel waveform behavior; mixed modules painted together on-device; Day/Dark physical inspection at 1–2m; original known-good v2.7.3 rollback BIN+SHA independently verified. The original `RE-MIND-layout-review-100 (2).pdf` page 1 seed `347015390` remains the aesthetic target.
 
 **FLASH: NEI. Draft and unmerged.**
+
+## Native-gate defect discovered and corrected in this PR
+
+The first successful compilation ran the genuine C++ entrypoint and found **0/5 Date-editorial admissions**, even though earlier source-GFX gallery images were green. Stage-by-stage replay of *unaltered* native planner functions located the failure at `gridFontFits` on BOTH current and next calendar grids. For the actual original `FreeSans9ptNO` GFXglyph assets, several of the 53 ISO week strings occupy **19px of ink** (e.g. `22`, `25`, `52`). The existing week column allocated 26px, but reserves 2px left and 6px right, leaving only 18px. Preflight responsibly rejected all such calendar proposals.
+
+The fix is **only for explicit editorial Date calls**: reserve 27px (19px of inner ink), pass the same optional editorial width into `DateMonthGridPlan::plan`, measure actual `grid.weekW-8` in `gridFontFits`, and use 27px in the original-F1 QA gallery. Every old legacy/role caller retains default 26px and its unchanged drawing; no data or rows are removed, and fail-closed behavior remains intact. New native capture tests explicitly require successful admission on both October and December→January rather than declaring an all-fallback report successful.
