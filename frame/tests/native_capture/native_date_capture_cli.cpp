@@ -96,6 +96,46 @@ int main(int argc,char** argv){
       cell,safeWday(local.tm_wday),safeMonth(local.tm_mon),
       NativeCapture::year,NativeCapture::month0,NativeCapture::day);
   const auto editorial=g_captureDisplay.pixels;
+  // DEBUG/QA ONLY: replay the real native preflight stages with their actual
+  // functions, without altering a single byte of ModuleDate.cpp.
+  DateEditorialF2::Result candidate={};
+  const DateRolePlanner::Rect bounds={x,y,w,h};
+  const bool f2=DateEditorialF2::plan(bounds,NativeCapture::year,
+     NativeCapture::month0,NativeCapture::day,safeMonth(local.tm_mon),
+     safeWday(local.tm_wday),0,candidate);
+  const bool wantsDual=(w>=700&&h>=330)||(w>=520&&h>=400);
+  bool dualValid=false,gridValid=false,fontValid=false,
+       nextGridValid=false,nextFontValid=false,radiusValid=false,
+       holidayValid=false;
+  int gridCellW=0,gridCellH=0;
+  if(f2){
+    const auto& p=candidate.geometry;
+    const auto dual=DateEditorialDual::plan(p,NativeCapture::year,
+                                            NativeCapture::month0);
+    dualValid=dual.valid;
+    const DateRolePlanner::Rect calendarArea=
+       wantsDual?dual.current:p.calendar;
+    const auto grid=DateMonthGridPlan::plan(calendarArea,
+       NativeCapture::year,NativeCapture::month0,
+       p.showTitle,p.showWeeks,p.showDow);
+    gridValid=grid.valid;
+    if(gridValid){
+      fontValid=gridFontFits(grid,false,RemindEditorialFonts::dm18());
+      gridCellW=grid.cellW;gridCellH=grid.cellH;
+      radiusValid=min(16,min(grid.cellW,grid.cellH)/2-2)>=11;
+    }
+    if(wantsDual&&dual.valid){
+      const auto next=DateMonthGridPlan::plan(
+         dual.next,dual.nextYear,dual.nextMonth0,true,p.showWeeks,true);
+      nextGridValid=next.valid;
+      nextFontValid=next.valid&&
+        gridFontFits(next,dual.showNextYear,RemindEditorialFonts::dm18());
+    }else if(!wantsDual){nextGridValid=true;nextFontValid=true;}
+    EditorialHolidayDraw hdraw={};
+    holidayValid=preflightEditorialHolidays(
+       p,NativeCapture::year,NativeCapture::month0,
+       NativeCapture::day,hdraw);
+  }
   if(admitted&&editorial!=frame){
     std::cerr<<"Actual ModuleDate::render differs from same native editorial painter";
     return 5;
@@ -125,6 +165,16 @@ int main(int argc,char** argv){
            <<",\"outOfBounds\":"<<firstOob
            <<",\"dark\":"<<(dark?"true":"false")
            <<",\"holiday\":"<<(holiday?"true":"false")
+           <<",\"preflight\":{\"f2\":"<<(f2?"true":"false")
+           <<",\"needsDual\":"<<(wantsDual?"true":"false")
+           <<",\"dual\":"<<(dualValid?"true":"false")
+           <<",\"grid\":"<<(gridValid?"true":"false")
+           <<",\"gridFont\":"<<(fontValid?"true":"false")
+           <<",\"nextGrid\":"<<(nextGridValid?"true":"false")
+           <<",\"nextFont\":"<<(nextFontValid?"true":"false")
+           <<",\"ring\":"<<(radiusValid?"true":"false")
+           <<",\"holiday\":"<<(holidayValid?"true":"false")
+           <<",\"cellW\":"<<gridCellW<<",\"cellH\":"<<gridCellH<<"}"
            <<",\"hash\":\""<<std::hex<<fnv1a(frame)<<std::dec<<"\"}\n";
   return 0;
 }
