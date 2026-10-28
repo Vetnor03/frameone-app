@@ -57,6 +57,15 @@ jobs:
           path: ${{ runner.temp }}/date-vnext-review.html
           if-no-files-found: error
           retention-days: 7
+      - name: Generate full editorial 4x4 two-month and holiday review
+        run: python3 frame/tools/generate_date_dual_holiday_gallery.py --output "$RUNNER_TEMP/date-vnext-dual-holiday.html"
+      - name: Upload dual-month and holiday visual comparison (NOT frame output)
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-vnext-dual-holiday-review-unflashed
+          path: ${{ runner.temp }}/date-vnext-dual-holiday.html
+          if-no-files-found: error
+          retention-days: 7
 
   firmware:
     runs-on: ubuntu-latest

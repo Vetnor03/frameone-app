@@ -120,6 +120,8 @@ def render_calendar(entry,today,holiday_set,fonts):
     out=[]
     if title:
         month_name=calendar.month_name[month]
+        if entry.get("showYear"):
+            month_name+=f" {year}"
         out.append(text_centered(month_name,fonts["B12"],bx,top,bw,titleH,ink))
         top+=titleH+titleGap
     dowx=bx+weekW
