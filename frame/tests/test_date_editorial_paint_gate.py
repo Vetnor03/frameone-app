@@ -69,9 +69,9 @@ def test_legacy_calendar_and_holiday_data_not_silently_removed():
 def test_art_is_deterministic_bounded_original_strokes():
     area=DATE[DATE.index("static void paintEditorialSprig("):
               DATE.index("static void paintEditorialText(")]
-    assert "box.x+x0*box.w/84" in area
-    assert "box.y+y0*box.h/88" in area
-    assert "stroke" not in area  # visual SVG not copied as runtime source
+    assert "DateEditorialBotanical::strokes[i]" in area
+    assert "DateEditorialBotanical::scaledX(box,line.x0)" in area
+    assert "DateEditorialBotanical::scaledY(box,line.y0)" in area
     assert "d.drawLine(" in area
     assert "DisplayCore::get()" in area
     assert "ModuleSurf" not in area
