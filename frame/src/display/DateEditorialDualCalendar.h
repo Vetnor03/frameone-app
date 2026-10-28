@@ -18,11 +18,25 @@ inline Result plan(const DateEditorialPlan::Plan& editorial,int year,int month0)
   if(!DateMonthGridPlan::nextMonth(year,month0,nextYear,nextMonth0))
     return out;
   const Rect safe=editorial.safe, region=editorial.calendar;
-  const int margin=DateEditorialPlan::ma(8,safe.h/45);
-  const int gap=DateEditorialPlan::ma(8,DateEditorialPlan::mi(14,safe.h/30));
+  // Content-first split. The previous fixed 56/44 split squeezed
+  // six-week following months to ~16px rows in a full 4x4 Date.
+  // 66px reserves both 8px vertical paddings, 22px title, 10px gap
+  // and 18px weekday header from drawMonthCalendar / DateMonthGridPlan.
+  const int firstRows=DateMonthGridPlan::firstMonday(year,month0)+
+                      DateMonthGridPlan::days(year,month0);
+  const int secondRows=DateMonthGridPlan::firstMonday(nextYear,nextMonth0)+
+                       DateMonthGridPlan::days(nextYear,nextMonth0);
+  const int aRows=DateEditorialPlan::mi(6,DateEditorialPlan::ma(4,(firstRows+6)/7));
+  const int bRows=DateEditorialPlan::mi(6,DateEditorialPlan::ma(4,(secondRows+6)/7));
+  const int chrome=16+22+10+18;
+  const int margin=4,gap=8;
   const int usable=safe.h-2*margin-gap;
-  const int currentH=usable*56/100,nextH=usable-currentH;
-  if(currentH<185||nextH<150)return out;
+  const int firstMin=chrome+26*aRows; // >=11px today-ring radius
+  const int secondMin=chrome+21*bRows; // complete original FreeSans9 rows
+  const int spare=usable-firstMin-secondMin;
+  if(spare<0)return out; // never squeeze a month; legacy remains untouched
+  const int currentH=firstMin+spare*aRows/(aRows+bRows);
+  const int nextH=usable-currentH;
   const Rect current={region.x,safe.y+margin,region.w,currentH};
   const Rect next={region.x,current.y+current.h+gap,region.w,nextH};
   if(!DateEditorialPlan::inside(current,safe)||
