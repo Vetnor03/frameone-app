@@ -75,7 +75,7 @@ def test_original_f1_holiday_ink_native_js_parity(tmp_path):
         assert len(segments)==4,line
         assert int(segments[0])==jsplan["count"]
         heading=tuple(map(int,segments[1].split(",")))
-        rows=[tuple(map(int,x.split(",")) for x in segments[2:]]
+        rows=[tuple(map(int,x.split(","))) for x in segments[2:]]
         if not jsplan["count"]:
             assert heading==(0,0,0,0)
             assert rows==[(0,0,0,0)]*2
