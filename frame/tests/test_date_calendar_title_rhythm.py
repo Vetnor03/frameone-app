@@ -64,4 +64,5 @@ def test_original_gfx_title_renders_without_removing_calendar_facts():
     old={**entry,"editorialTitle":False}
     legacy=render_calendar(old,(2026,12,31),{(1,1)},fonts)
     assert 'data-calendar-title-accent=' not in legacy
-    assert len(result)>len(legacy)
+    assert result.count('<circle')==legacy.count('<circle')
+    assert 'January 2027' not in result # glyph pixels, not browser text
