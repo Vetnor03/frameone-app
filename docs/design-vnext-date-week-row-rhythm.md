@@ -13,7 +13,7 @@ The October 2026 + November 2026 gallery shows **overlapping November numbers**.
 - Current month: minimum **26px per week row**, protecting the physical Date painter's >=11px outlined today-ring radius. Following month: at least **21px per week row** to separate original FreeSans9 pixel bounds. Further actual glyph fitting still runs in native `gridFontFits`.
 - The 8px inter-calendar gutter is in addition to both calendars' 8px internal vertical paddings. Outer margins 4px; any spare height is shared by actual row counts.
 - If two complete calendars cannot meet these constraints, reject the *experimental* two-calendar plan **before painting anything** and use unchanged legacy Date. Do not hide or drop either month, holidays or other facts.
-- Oct→Nov 2026 therefore reserves **more height for the six-row November** than for five-row October. December 2026→January 2027 keeps year rollover title.
+- Oct→Nov 2026 therefore reserves a **larger share for November than the old 56/44 split**. October can still have a slightly taller box because its outlined today marker requires 26px/row rather than the next month's 21px/row. December 2026→January 2027 keeps year rollover title.
 - This is an interim density fix, **not final artistic approval**. Original PDF is still visually cleaner; week-number display, text contrast, ornamental details, other themes and mixed modules need independent review.
 
 ## Evidence and remaining gates
