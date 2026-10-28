@@ -63,8 +63,8 @@ def show(sample,plan,fonts,index):
             editorial["illustration"]=None
             editorial["ornaments"]["botanical"]=None
         editorial["calendar"]=dual["current"]
-        # Render all factual F1 bitmaps plus optional SVG concept sprig, but
-        # override the old one-month calendar with two checked grids below.
+        # All factual F1 bitmaps plus optional native-source 1-bit strokes.
+        # Override the previous single-month grid with two measured months.
         items.append(draw_editorial(editorial,facts,fonts,glyph_paths,
                                    bbox_markup,lambda *_:""))
         dots=set()
@@ -117,18 +117,22 @@ def generate(output):
     body.dark svg{filter:invert(1)}body.hide .qa-box{display:none}
     </style>"""
     toggles="""<label><input type="checkbox" id="dark"> Invert black/white inspection</label>
-    <label><input type="checkbox" id="hide"> Hide ink guides</label>
-    <script>for(const id of ['dark','hide'])document.getElementById(id).addEventListener(
-      'change',e=>document.body.classList.toggle(id,e.target.checked));</script>"""
+    <label><input type="checkbox" id="guides"> Show measurement guides</label>
+    <script>document.getElementById('dark').addEventListener('change',e=>
+      document.body.classList.toggle('dark',e.target.checked));
+    document.getElementById('guides').addEventListener('change',e=>
+      document.body.classList.toggle('hide',!e.target.checked));</script>"""
     body=('<!doctype html><html lang="en"><meta charset="utf-8">'
       '<meta name="viewport" content="width=device-width,initial-scale=1">'
       '<title>RE:MIND Date 4x4 dual calendar and holiday visual QA</title>'+css+
-      '<header><h1>RE:MIND Date vNext — full editorial composition</h1>'
+      '<body class="hide"><header><h1>RE:MIND Date vNext — full editorial composition</h1>'
       '<p><strong>EXPERIMENTAL OFFLINE SIMULATION — NOT A FRAME CAPTURE.</strong> '
       'Original Fraunces/DM Sans and FreeSans GFX pixels, 800×480 panel, '
       'physical matte x58/y39/w680/h436. Second month and fully measured '
-      'holiday labels included; the botanical remains an SVG concept. '
-      'Actual C++ painter may reject additional candidates after strict '
+      'holiday labels included; optional botanical uses exact native '
+      'C++ stroke endpoints with software 1-bit Bresenham pixels. '
+      'This is still NOT a GxEPD2 framebuffer; the actual C++ painter '
+      'may reject additional candidates after strict '
       'calendar font checks. Compare with the 100-page Layout Lab 4×4 PDF '
       'before approving artwork or density.</p>'+toggles+'</header><main>'
       +panels+'</main></html>')
