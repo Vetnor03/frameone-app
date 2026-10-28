@@ -77,10 +77,29 @@ public:
   }
   void fillCircle(int16_t x0,int16_t y0,int16_t r,uint16_t c){
     if(r<0)return;
-    // Exact geometry for full disc; controller-independent host raster.
-    for(int y=-r;y<=r;++y)
-      for(int x=-r;x<=r;++x)
-        if(x*x+y*y<=r*r)drawPixel(x0+x,y0+y,c);
+    // Match Adafruit_GFX 1.12.6 fillCircle + fillCircleHelper(corners=3,
+    // delta=0). GxEPD2_BW 1.6.4 inherits this upstream rasterizer.
+    // A Euclidean x*x+y*y disc is NOT pixel-identical at small radii.
+    const auto vline=[this,c](int x,int y,int h){
+      for(int i=0;i<h;++i)drawPixel(x,y+i,c);
+    };
+    vline(x0,y0-r,2*r+1);
+    int f=1-r,ddF_x=1,ddF_y=-2*r,x=0,y=r,px=0,py=r;
+    const int delta=1; // fillCircleHelper increments the caller's zero.
+    while(x<y){
+      if(f>=0){--y;ddF_y+=2;f+=ddF_y;}
+      ++x;ddF_x+=2;f+=ddF_x;
+      if(x<y+1){
+        vline(x0+x,y0-y,2*y+delta);
+        vline(x0-x,y0-y,2*y+delta);
+      }
+      if(y!=py){
+        vline(x0+py,y0-px,2*px+delta);
+        vline(x0-py,y0-px,2*px+delta);
+        py=y;
+      }
+      px=x;
+    }
   }
   void getTextBounds(const char* text,int16_t x,int16_t y,
                      int16_t* x1,int16_t* y1,uint16_t* w,uint16_t* h){
