@@ -137,8 +137,14 @@ def test_f2_editorial_is_only_a_measurement_adapter_without_unsafe_paint():
     # Native adapter is now used only in explicitly enabled experimental
     # firmware; standard Alfred still compiles out the entire painter.
     assert "#define REMIND_DATE_EDITORIAL_PREVIEW_ENABLED 0" in mod
-    assert ('#if REMIND_DATE_EDITORIAL_PREVIEW_ENABLED\n'
-            '#include "DateEditorialF2Adapter.h"\n'
-            '#include "DateEditorialDualCalendar.h"\n'
-            '#include "DateEditorialHolidays.h"\n#endif') in mod
+    # Verify ALL editorial headers stay inside the default-OFF gated block.
+    # Do not hardcode its number of include lines; R4 adds new Date-only
+    # native ink sources without changing the production compile boundary.
+    guarded=mod.split('#if REMIND_DATE_EDITORIAL_PREVIEW_ENABLED\n',1)[1].split(
+        '\n#endif',1)[0]
+    for filename in ("DateEditorialF2Adapter.h",
+                     "DateEditorialDualCalendar.h",
+                     "DateEditorialHolidays.h",
+                     "DateEditorialBotanical.h"):
+        assert f'#include "{filename}"' in guarded
     assert "tryDrawEditorialDatePreview(" in mod
