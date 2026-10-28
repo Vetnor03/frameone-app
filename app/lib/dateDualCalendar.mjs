@@ -9,11 +9,25 @@ export function planDateDualCalendar(editorial,source){
   if(nextYear>9999)return null
   const safe=editorial.safe,region=editorial.calendar.rect
   if(!safe||safe.h<320||region.w<254)return null
-  const margin=Math.max(8,Math.floor(safe.h/45))
-  const gap=Math.max(8,Math.min(14,Math.floor(safe.h/30)))
+  // Week counts, not a fixed 56/44 split, determine the vertical rhythm.
+  // Keep all 1-bit calendar ink and the main month's outlined today ring
+  // separated. A row needs 26px for the outlined marker; the secondary
+  // calendar needs 21px for the original FreeSans9 bitmap ink.
+  const rows=(y,m)=>{
+    const sunday=new Date(Date.UTC(y,m,1)).getUTCDay()
+    const monday=(sunday+6)%7
+    const days=new Date(Date.UTC(y,m+1,0)).getUTCDate()
+    return Math.max(4,Math.min(6,Math.ceil((monday+days)/7)))
+  }
+  const firstRows=rows(year,month0),secondRows=rows(nextYear,nextMonth0)
+  const chrome=16+22+10+18 // padding, title, title gap, DOW header
+  const margin=4,gap=8 // the calendars each have their own 8px padding
   const usable=safe.h-2*margin-gap
-  const currentH=Math.floor(usable*56/100),nextH=usable-currentH
-  if(currentH<185||nextH<150)return null
+  const firstMin=chrome+26*firstRows,secondMin=chrome+21*secondRows
+  const spare=usable-firstMin-secondMin
+  if(spare<0)return null // never compress calendar rows to fit
+  const currentH=firstMin+Math.floor(spare*firstRows/(firstRows+secondRows))
+  const nextH=usable-currentH
   const current={x:region.x,y:safe.y+margin,w:region.w,h:currentH}
   const next={x:region.x,y:current.y+current.h+gap,w:region.w,h:nextH}
   if(next.y+next.h>safe.y+safe.h)return null
