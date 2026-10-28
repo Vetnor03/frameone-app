@@ -3,6 +3,9 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <time.h>
+#include <string>
+// Only declarations in Types.h / FrameConfig.h need String on host.
+using String = std::string;
 #define PROGMEM
 #define pgm_read_byte(addr) (*reinterpret_cast<const uint8_t*>(addr))
 #define pgm_read_word(addr) (*reinterpret_cast<const uint16_t*>(addr))
