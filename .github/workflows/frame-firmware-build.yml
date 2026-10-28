@@ -93,6 +93,15 @@ jobs:
           path: ${{ runner.temp }}/date-native-mixed-admission.json
           if-no-files-found: error
           retention-days: 7
+      - name: Capture native Date into independent 48000-byte GxEPD2-style host buffer (NOT controller RAM)
+        run: python3 frame/tools/generate_date_gxepd_packed_evidence.py --output "$RUNNER_TEMP/date-gxepd-packed"
+      - name: Upload host-only packed bytes and parity manifest (NO FLASH)
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-vnext-gxepd-compatible-host-48k-unflashed
+          path: ${{ runner.temp }}/date-gxepd-packed/
+          if-no-files-found: error
+          retention-days: 7
 
   firmware:
     runs-on: ubuntu-latest
