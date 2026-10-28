@@ -44,7 +44,9 @@ def compile_driver(binary:Path,source_dir:Path):
     source_dir.mkdir(parents=True,exist_ok=True)
     (source_dir/"GxEPD2_BW.h").write_bytes(pinned_header_bytes())
     cmd=["g++","-std=c++11","-O1","-Wall","-Wextra","-Werror",
-         "-pedantic","-I",str(source_dir),"-I",str(STUBS),
+         # The ORIGINAL upstream header has a legal-but-pedantic extra ';'
+         # after _swap_ (v1.6.4 line 724); do not patch its bytes.
+         "-pedantic","-Wno-error=pedantic","-I",str(source_dir),"-I",str(STUBS),
          str(SOURCE),"-o",str(binary)]
     build=subprocess.run(cmd,cwd=ROOT,text=True,capture_output=True,timeout=75)
     if build.returncode:
