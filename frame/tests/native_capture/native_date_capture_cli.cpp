@@ -86,6 +86,8 @@ int main(int argc,char** argv){
   // Actual production entrypoint. No mocked data/placement beyond fixture.
   ModuleDate::render(cell);
   const auto frame=g_captureDisplay.pixels;
+  const auto packed=g_captureDisplay.packed;
+  const int packedPixelMismatches=g_captureDisplay.packedPixelMismatches();
   const int firstOob=g_captureDisplay.outOfBounds;
   // Native editorial admission is assessed through the SAME function after
   // reset; fallback render paint is NOT misrepresented as Date editorial.
@@ -136,6 +138,14 @@ int main(int argc,char** argv){
        p,NativeCapture::year,NativeCapture::month0,
        NativeCapture::day,hdraw);
   }
+  if(admitted&&g_captureDisplay.packed!=packed){
+    std::cerr<<"Packed byte capture differs from replay of native editorial painter";
+    return 9;
+  }
+  if(packed.size()!=800*480/8||packedPixelMismatches){
+    std::cerr<<"Host one-byte pixels and 48k GxEPD2-style packed bits disagree";
+    return 10;
+  }
   if(admitted&&editorial!=frame){
     std::cerr<<"Actual ModuleDate::render differs from same native editorial painter";
     return 5;
@@ -158,6 +168,12 @@ int main(int argc,char** argv){
     pgm.write(reinterpret_cast<const char*>(&gray),1);
   }
   if(!pgm.good()){std::cerr<<"PGM write failed";return 8;}
+  // Test-only evidence: data bytes match the pinned GxEPD2_BW packing
+  // convention, NOT a GxEPD2 object's actual framebuffer or SPI capture.
+  std::ofstream bitstream((path+".packed.bin").c_str(),std::ios::binary);
+  if(!bitstream){std::cerr<<"Unable to write packed host buffer";return 11;}
+  bitstream.write(reinterpret_cast<const char*>(packed.data()),packed.size());
+  if(!bitstream.good()){std::cerr<<"Packed host write failed";return 12;}
   std::cout<<"{\"admitted\":"<<(admitted?"true":"false")
            <<",\"inkInside\":"<<inkInside
            <<",\"inkOutside\":"<<inkOutside
@@ -175,6 +191,10 @@ int main(int argc,char** argv){
            <<",\"ring\":"<<(radiusValid?"true":"false")
            <<",\"holiday\":"<<(holidayValid?"true":"false")
            <<",\"cellW\":"<<gridCellW<<",\"cellH\":"<<gridCellH<<"}"
-           <<",\"hash\":\""<<std::hex<<fnv1a(frame)<<std::dec<<"\"}\n";
+           <<",\"hash\":\""<<std::hex<<fnv1a(frame)<<std::dec<<"\""
+           <<",\"packedHash\":\""<<std::hex<<fnv1a(packed)<<std::dec<<"\""
+           <<",\"packedBytes\":"<<packed.size()
+           <<",\"packedPixelMismatches\":"<<packedPixelMismatches
+           <<"}\n";
   return 0;
 }
