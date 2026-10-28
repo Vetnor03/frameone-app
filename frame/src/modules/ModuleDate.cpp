@@ -23,6 +23,7 @@
 #if REMIND_DATE_EDITORIAL_PREVIEW_ENABLED
 #include "DateEditorialF2Adapter.h"
 #include "DateEditorialDualCalendar.h"
+#include "DateEditorialHolidays.h"
 #endif
 #include <time.h>
 
@@ -1411,13 +1412,66 @@ static void paintEditorialText(const DateEditorialF2::Label& label){
 // Only admit complete functional equivalence. Expanded old Date shows TWO
 // months; the current editorial candidate has only ONE. Until the second
 // calendar is co-planned, those regions MUST use the old complete renderer.
+struct EditorialHolidayDraw {
+  int count=0;
+  DateF2Ink::Text heading,rows[2];
+};
+// Collect actual dated entries in the same chronological, unique-day order as
+// legacy drawAdaptiveHolidays; never silently omit a future fact.
+static bool preflightEditorialHolidays(const DateEditorialPlan::Plan& p,
+    int year,int month0,int day,EditorialHolidayDraw& draw){
+  draw={};
+  if(!g_cfg||g_cfg->date.holidayCount==0)return true;
+  const HolidayItem* selected[2]={};
+  int keys[2]={0,0},count=0;
+  const int today=ymd(year,month0,day);
+  for(int row=0;row<2;++row){
+    const HolidayItem* best=nullptr;
+    int key=99999999;
+    for(int i=0;i<(int)g_cfg->date.holidayCount;++i){
+      const HolidayItem& item=g_cfg->date.holidays[i];
+      const int candidate=holidayYMD(item);
+      if(candidate<today||candidate>=key||
+         candidate==keys[0]||candidate==keys[1])continue;
+      key=candidate;best=&item;
+    }
+    if(!best)break;
+    selected[count]=best;keys[count]=key;++count;
+  }
+  if(!count)return true;
+  if(!p.art)return false; // Reserve the botanical slot for real data.
+  const GFXfont* font=RemindEditorialFonts::dm18();
+  const char* heading="UPCOMING HOLIDAYS";
+  DateEditorialHolidays::Input input={};
+  input.editorial=p;input.count=count;
+  if(!measureF2DateLabel(heading,font,input.heading))return false;
+  char lines[2][96]={};
+  for(int i=0;i<count;++i){
+    const HolidayItem& h=*selected[i];
+    const int n=snprintf(lines[i],sizeof lines[i],"%02d.%02d - %s",
+                         (int)h.day,(int)h.month,h.name);
+    if(n<=0||n>=(int)sizeof lines[i]||
+       !measureF2DateLabel(lines[i],font,input.rows[i]))return false;
+  }
+  const auto slots=DateEditorialHolidays::plan(input);
+  if(!slots.valid||slots.count!=count)return false;
+  EditorialHolidayDraw prepared={};
+  if(!roleLine(heading,font,slots.heading,prepared.heading))return false;
+  for(int i=0;i<count;++i)
+    if(!roleLine(lines[i],font,slots.rows[i],prepared.rows[i]))
+      return false;
+  prepared.count=count;
+  draw=prepared;
+  return true;
+}
 static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
     const char* month,int year,int month0,int dayNum) {
   if(cell.size!=CELL_ADAPTIVE||!weekday||!month)return false;
   // Only replace a legacy expanded Date if both months can fit.
   const bool needsDual=(cell.w>=700&&cell.h>=330)||
                        (cell.w>=520&&cell.h>=400);
-  if(g_cfg&&g_cfg->date.holidayCount>0)return false;
+  // Configured entries are handled after the full Date/calendar plan.
+  // Unknown or nonfitting rows must fall back without dropping data.
   DateEditorialF2::Result candidate={};
   const DateRolePlanner::Rect bounds={cell.x,cell.y,cell.w,cell.h};
   if(!DateEditorialF2::plan(bounds,year,month0,dayNum,month,weekday,0,
@@ -1442,6 +1496,9 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   // The outlined today marker must not collide with the calendar text.
   const int radius=min(16,min(grid.cellW,grid.cellH)/2-2);
   if(radius<11)return false;
+  EditorialHolidayDraw holidays={};
+  if(!preflightEditorialHolidays(p,year,month0,dayNum,holidays))
+    return false;
 
   // ATOMIC BOUNDARY — text, calendar, optional art are fully placed.
   // Any error above returns to original Date WITHOUT drawing.
@@ -1464,7 +1521,11 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
     d.drawLine(cx,cy+5,cx-5,cy,ink);
     d.drawLine(cx-5,cy,cx,cy-5,ink);
   }
-  if(p.art)paintEditorialSprig(p.botanical);
+  if(holidays.count){
+    paintEditorialText(holidays.heading);
+    for(int i=0;i<holidays.count;++i)
+      paintEditorialText(holidays.rows[i]);
+  }else if(p.art)paintEditorialSprig(p.botanical);
   drawMonthCalendar(calendarArea.x,calendarArea.y,
     calendarArea.w,calendarArea.h,year,month0,year,month0,
     dayNum,p.showTitle,p.showWeeks,p.showDow,true);
