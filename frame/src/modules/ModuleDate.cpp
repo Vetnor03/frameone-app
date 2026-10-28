@@ -22,6 +22,7 @@
 #endif
 #if REMIND_DATE_EDITORIAL_PREVIEW_ENABLED
 #include "DateEditorialF2Adapter.h"
+#include "DateEditorialDualCalendar.h"
 #endif
 #include <time.h>
 
@@ -299,7 +300,8 @@ static void drawMonthCalendar(int x, int y, int w, int h,
                               bool showMonthTitle,
                               bool showWeekNums,
                               bool showDowHeader,
-                              bool hardBounds = false) {
+                              bool hardBounds = false,
+                              bool titleWithYear = false) {
   auto& d = DisplayCore::get();
   d.setTextSize(1);
 
@@ -361,6 +363,12 @@ static void drawMonthCalendar(int x, int y, int w, int h,
 
   if (showMonthTitle) {
     const char* mname = safeMonth(month0);
+    char fullTitle[48] = {};
+    if(titleWithYear) {
+      const int n=snprintf(fullTitle,sizeof fullTitle,"%s %d",mname,year);
+      if(n<=0||n>=(int)sizeof fullTitle)return;
+      mname=fullTitle;
+    }
     int16_t x1, y1; uint16_t tw, th;
     measureText(mname, FONT_B12, x1, y1, tw, th);
     int tx = blockX + (blockW - (int)tw) / 2;
@@ -1175,7 +1183,8 @@ static bool roleLine(const char* utf8,const GFXfont* font,
          result.line.ink.x==inkArea.x && result.line.ink.y==inkArea.y &&
          result.line.ink.w==inkArea.w && result.line.ink.h==inkArea.h;
 }
-static bool gridFontFits(const DateMonthGridPlan::Grid& grid) {
+static bool gridFontFits(const DateMonthGridPlan::Grid& grid,
+                         bool titleWithYear=false) {
   if(!grid.valid)return false;
   int16_t x1=0,y1=0;
   uint16_t width=0,height=0;
@@ -1207,7 +1216,15 @@ static bool gridFontFits(const DateMonthGridPlan::Grid& grid) {
     // The unchanged legacy painter centers FreeSansBold12 in the 22px
     // title slot; actual ink may be 23px tall. The extra 10px gap is
     // RESERVED for this overhang: verify physical ink stays before DOW.
-    measureText(safeMonth(grid.month0),FONT_B12,x1,y1,width,height);
+    const char* titleText=safeMonth(grid.month0);
+    char nextTitle[48]={};
+    if(titleWithYear){
+      const int n=snprintf(nextTitle,sizeof nextTitle,"%s %d",
+                           titleText,grid.year);
+      if(n<=0||n>=(int)sizeof nextTitle)return false;
+      titleText=nextTitle;
+    }
+    measureText(titleText,FONT_B12,x1,y1,width,height);
     const int inkTop=grid.block.y+
       (grid.titleH-static_cast<int>(height))/2;
     if(width>grid.block.w || inkTop<grid.block.y ||
@@ -1397,8 +1414,9 @@ static void paintEditorialText(const DateEditorialF2::Label& label){
 static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
     const char* month,int year,int month0,int dayNum) {
   if(cell.size!=CELL_ADAPTIVE||!weekday||!month)return false;
-  if((cell.w>=700&&cell.h>=330)||(cell.w>=520&&cell.h>=400))
-    return false; // Preserve legacy expanded current+next-month functionality.
+  // Only replace a legacy expanded Date if both months can fit.
+  const bool needsDual=(cell.w>=700&&cell.h>=330)||
+                       (cell.w>=520&&cell.h>=400);
   if(g_cfg&&g_cfg->date.holidayCount>0)return false;
   DateEditorialF2::Result candidate={};
   const DateRolePlanner::Rect bounds={cell.x,cell.y,cell.w,cell.h};
@@ -1407,10 +1425,20 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   const auto& p=candidate.geometry;
   // Functional calendar must be wholly visible, with actual legacy F9/B12
   // ink validated BEFORE the first pixel. Do not silently omit the calendar.
-  const auto grid=DateMonthGridPlan::plan(p.calendar,year,month0,
+  const auto dual=DateEditorialDual::plan(p,year,month0);
+  if(needsDual&&!dual.valid)return false;
+  const DateRolePlanner::Rect calendarArea=needsDual?dual.current:p.calendar;
+  const auto grid=DateMonthGridPlan::plan(calendarArea,year,month0,
                  p.showTitle,p.showWeeks,p.showDow);
   if(!grid.valid||!gridFontFits(grid)||!p.showTitle||!p.showDow)
     return false;
+  DateMonthGridPlan::Grid nextGrid={};
+  if(needsDual){
+    nextGrid=DateMonthGridPlan::plan(dual.next,dual.nextYear,dual.nextMonth0,
+                                    true,p.showWeeks,true);
+    if(!nextGrid.valid||
+       !gridFontFits(nextGrid,dual.showNextYear))return false;
+  }
   // The outlined today marker must not collide with the calendar text.
   const int radius=min(16,min(grid.cellW,grid.cellH)/2-2);
   if(radius<11)return false;
@@ -1437,8 +1465,14 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
     d.drawLine(cx-5,cy,cx,cy-5,ink);
   }
   if(p.art)paintEditorialSprig(p.botanical);
-  drawMonthCalendar(p.calendar.x,p.calendar.y,p.calendar.w,p.calendar.h,
-    year,month0,year,month0,dayNum,p.showTitle,p.showWeeks,p.showDow,true);
+  drawMonthCalendar(calendarArea.x,calendarArea.y,
+    calendarArea.w,calendarArea.h,year,month0,year,month0,
+    dayNum,p.showTitle,p.showWeeks,p.showDow,true);
+  if(needsDual){
+    drawMonthCalendar(dual.next.x,dual.next.y,dual.next.w,dual.next.h,
+      dual.nextYear,dual.nextMonth0,year,month0,dayNum,
+      true,p.showWeeks,true,true,dual.showNextYear);
+  }
   // Legacy calendar paints today white, which can be invisible on e-paper.
   // Overlay a proper 1-bit ring after all calendar text has been drawn.
   const int index=DateMonthGridPlan::firstMonday(year,month0)+dayNum-1;
