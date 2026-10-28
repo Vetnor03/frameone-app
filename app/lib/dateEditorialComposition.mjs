@@ -73,8 +73,8 @@ export function planDateEditorial(cell,source){
     for(const style of [
       {art:true,rule:true},{art:false,rule:true},{art:false,rule:false}
     ]){
-      for(const fraction of [.40,.44,.48,.52,.56]){
-        const heroW=Math.floor(available*fraction),calW=available-heroW
+      for(const fraction of [40,44,48,52,56]){
+        const heroW=Math.floor(available*fraction/100),calW=available-heroW
         if(heroW<minHero||calW<calMin)continue
         const hero=rect(safe.x,safe.y,heroW,safe.h)
         const calendar=rect(hero.x+heroW+sep,safe.y+Math.floor(safe.h*.075),
