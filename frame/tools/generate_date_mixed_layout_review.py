@@ -210,6 +210,7 @@ def generate(output):
        'main{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}'
        'article{background:white;border:1px solid #ccc;padding:10px;border-radius:8px}'
        'svg{width:100%;display:block}.inverted{filter:invert(1)}'
+       '.qa-box{display:none}body.guides .qa-box{display:block}'
        'h3{font-size:15px;margin:12px 0 4px}p{font-size:12px;line-height:1.45}</style>'
        '<header><h1>RE Date — real 800×480 grid, mixed layouts</h1>'
        '<p><strong>NOT A NATIVE FRAMEBUFFER OR OTHER MODULE CAPTURE.</strong> '
@@ -217,8 +218,9 @@ def generate(output):
        'measured JS/C++-parity geometry. All other modules and legacy Date '
        'are visibly labelled placeholders. The actual matte is 58,39,680,436. '
        'Dark case is an inverted contrast study, not a hardware theme capture. '
-       'Custom layouts include multiple Dates and empty cells.</p></header>'
-       '<main>'+cards+'</main></html>')
+       'Custom layouts include multiple Dates and empty cells.</p>'
+       '<label><input type="checkbox" onchange="document.body.classList.toggle(\'guides\',this.checked)"> Show original-ink measurement guides</label>'
+       '</header><main>'+cards+'</main></html>')
     output.parent.mkdir(parents=True,exist_ok=True)
     output.write_text(page,encoding="utf-8")
     return summary
