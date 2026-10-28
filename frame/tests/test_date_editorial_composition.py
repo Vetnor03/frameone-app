@@ -48,7 +48,7 @@ def test_full_date_and_real_calendar_never_overlap_over_100_cell_placements():
         dict(day=21,month="October",weekday="Wednesday",year=2026,month0=9,holidays=[]),
         dict(day=31,month="December",weekday="Thursday",year=2026,month0=11,holidays=[]),
         dict(day=30,month="September",weekday="Wednesday",year=2099,month0=8,holidays=[]),
-        dict(day=1,month="May",weekday="Sunday",year=2026,month0=4,holidays=[]),
+        dict(day=1,month="May",weekday="Friday",year=2026,month0=4,holidays=[]),
         dict(day=17,month="May",weekday="Sunday",year=2026,month0=4,
              holidays=[dict(dateLabel="17.05",title="Constitution Day")]),
     ]
