@@ -109,6 +109,13 @@ def test_driver_identification_and_explicit_rotation_zero_are_source_grounded():
     assert "display.setFullWindow();" in display_core
     assert "display.firstPage();" in display_core
     assert "display.nextPage();" in display_core
+    # The original source blocker only admitted CELL_ADAPTIVE, while
+    # firmware actually reports full 4x4 as CELL_XL. No size-name gate.
+    module=(ROOT/"frame/src/modules/ModuleDate.cpp").read_text()
+    block=module.split("bool tryDrawEditorialDatePreview(",1)[1].split(
+        "const bool needsDual=",1)[0]
+    assert "cell.size!=CELL_ADAPTIVE" not in block
+    assert "if(!weekday||!month)return false;" in block
     runner=(ROOT/"frame/tools/generate_date_native_grid_matrix.py").read_text()
     assert "ModuleDate.cpp" in runner
     assert "actualGxEPD2Buffer=False" in runner
