@@ -66,6 +66,37 @@ def count_different(a:bytes,b:bytes)->int:
     return sum((x^y).bit_count() for x,y in zip(a,b))
 
 
+def count_ink(page:bytes,dark:bool,x0:int,y0:int,w:int,h:int)->int:
+    assert len(page)==BYTES
+    assert 0<=x0<x0+w<=WIDTH and 0<=y0<y0+h<=HEIGHT
+    inkbit=1 if dark else 0
+    return sum(((page[y*100+x//8]>>(7-(x%8)))&1)==inkbit
+               for y in range(y0,y0+h) for x in range(x0,x0+w))
+
+
+def physical_matte_png(page:bytes)->bytes:
+    # Export the ONLY physically visible 680x436 window, independent of the
+    # 800x480 digital host frame. This does not simulate glass or e-paper.
+    import struct
+    import zlib
+    x0,y0,w,h=58,39,680,436
+    lines=[]
+    for y in range(y0,y0+h):
+        line=bytearray(b"\x00")
+        for x in range(x0,x0+w):
+            bit=(page[y*100+x//8]>>(7-(x%8)))&1
+            line.append(255 if bit else 0)
+        lines.append(bytes(line))
+    def chunk(typ,data):
+        raw=typ+data
+        return (struct.pack(">I",len(data))+raw+
+                struct.pack(">I",zlib.crc32(raw)&0xffffffff))
+    return (b"\x89PNG\r\n\x1a\n"+
+            chunk(b"IHDR",struct.pack(">IIBBBBB",w,h,8,0,0,0,0))+
+            chunk(b"IDAT",zlib.compress(b"".join(lines),9))+
+            chunk(b"IEND",b""))
+
+
 def generate(out:Path)->dict:
     out.mkdir(parents=True,exist_ok=True)
     records=[]
@@ -125,7 +156,24 @@ def generate(out:Path)->dict:
             assert direct==independent==reverse, "real module paint collided"
             png=out/(prefix.name+".png")
             png.write_bytes(png_from_bits(direct))
+            cropped=out/(prefix.name+"-physical-matte-680x436.png")
+            cropped.write_bytes(physical_matte_png(direct))
+            # Unlike Date editorial, existing News has no matte-admission gate.
+            # Record actual hidden pixels as a design/QA finding rather than
+            # failing the independent *cell ownership* proof.
+            newsVisible=count_ink(pages["news-only"],bool(dark),58,39,680,436)
+            newsHidden=status["newsInk"]-newsVisible
+            hiddenAbove=count_ink(pages["news-only"],bool(dark),600,0,200,39)
+            hiddenRight=count_ink(pages["news-only"],bool(dark),738,39,62,436)
+            hiddenBelow=count_ink(pages["news-only"],bool(dark),600,475,200,5)
+            assert newsHidden==hiddenAbove+hiddenRight+hiddenBelow
             records.append(dict(theme="dark" if dark else "light",
+                newsInkInsideVisibleMatte=newsVisible,
+                newsInkOutsideVisibleMatte=newsHidden,
+                newsInkClippedAboveMatte=hiddenAbove,
+                newsInkClippedRightOfMatte=hiddenRight,
+                newsInkClippedBelowMatte=hiddenBelow,
+                physicalMattePng=cropped.name,
                 originalProductionModules=["ModuleDate.cpp","ModuleNews.cpp"],
                 realModuleRenderers=2,syntheticNewsHeadlines=3,
                 realBackendRequested=False,frameInkBytes=BYTES,
@@ -139,6 +187,9 @@ def generate(out:Path)->dict:
         realBackend=False,otherModules=("Date","News"),
         realT7Transport=False,realSPI=False,physicalPanel=False,
         deployed=False,flashed=False,physicalReadabilityApproved=False,
+        matteClipAssessment="Computed from exact 680x436 physical aperture; does NOT prove actual e-paper output",
+        newsMatteClippingDetected=any(
+            c["newsInkOutsideVisibleMatte"]>0 for c in records),
         cases=records)
     (out/"manifest.json").write_text(
         json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
