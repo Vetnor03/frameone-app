@@ -75,7 +75,11 @@ def generate(out:Path)->dict:
         binary=compile_original_chain(
             tmp/"date-news-driver",tmp/"upstream",CLI,
             extra_includes=(tmp/"arduinojson",ROOT/"frame/src/device",
-                            ROOT/"frame/src/network"))
+                            ROOT/"frame/src/network"),
+            extra_sources=(ROOT/"frame/tests/driver_capture/date_news_fixture_adapter.cpp",),
+            # Original ModuleNews.cpp uses memset for a trivially copyable
+            # class with initializers. Preserve source, allow its host warning.
+            extra_flags=("-Wno-error=class-memaccess",))
         for dark in (0,1):
             prefix=out/("news-date-"+("dark" if dark else "light"))
             run=subprocess.run(
