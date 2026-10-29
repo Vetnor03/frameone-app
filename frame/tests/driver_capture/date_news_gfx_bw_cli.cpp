@@ -55,11 +55,15 @@ static int bitDifferences(const std::vector<uint8_t>& a,
   return n;
 }
 int main(int argc,char**argv){
-  if(argc!=6){std::cerr<<"usage: news-composite out-prefix year month0 day dark\n";return 2;}
+  if(argc!=7){std::cerr<<"usage: news-composite out-prefix year month0 day dark newsSide\n";return 2;}
   try{
     const std::string prefix=argv[1];
     NativeCapture::year=atoi(argv[2]);NativeCapture::month0=atoi(argv[3]);
     NativeCapture::day=atoi(argv[4]);const bool dark=atoi(argv[5])!=0;
+    const std::string newsSide=argv[6];
+    if(newsSide!="left"&&newsSide!="right")
+      throw std::runtime_error("newsSide must be left/right");
+    const bool newsOnLeft=(newsSide=="left");
     if(NativeCapture::year<1900||NativeCapture::year>2099||
        NativeCapture::month0<0||NativeCapture::month0>11||
        NativeCapture::day<1||NativeCapture::day>31)throw std::runtime_error("bad date");
@@ -70,8 +74,12 @@ int main(int argc,char**argv){
     ModuleNews::setConfig(&config);
     seedRealNewsHeadlines(); // test-only cache setup in separate News TU
 
-    const Cell date={0,0,600,480,0,0,0,3,4,CELL_ADAPTIVE};
-    const Cell news={600,0,200,480,1,3,0,1,4,CELL_ADAPTIVE};
+    // Same full-panel 4x4 layout, two mirror placements. Production renderers
+    // retain their actual cell geometry; tests do not change module source.
+    const int dateX=newsOnLeft?200:0;
+    const int newsX=newsOnLeft?0:600;
+    const Cell date={dateX,0,600,480,0,static_cast<uint8_t>(newsOnLeft?1:0),0,3,4,CELL_ADAPTIVE};
+    const Cell news={newsX,0,200,480,1,static_cast<uint8_t>(newsOnLeft?0:3),0,1,4,CELL_ADAPTIVE};
     struct tm local={};
     if(!getLocalTime(&local,10))throw std::runtime_error("bad local time");
     // Prove Date is actually admitted in this width, not a legacy fallback.
@@ -90,11 +98,12 @@ int main(int argc,char**argv){
       independent[i]=dark?uint8_t(onlyDate[i]|onlyNews[i])
                          :uint8_t(onlyDate[i]&onlyNews[i]);
 
-    // No hidden clipping and no previously blank News: require true ink.
-    const int dateInk=nonBackground(onlyDate,dark,0,0,600,480);
-    const int newsInk=nonBackground(onlyNews,dark,600,0,200,480);
-    const int dateLeak=nonBackground(onlyDate,dark,600,0,200,480);
-    const int newsLeak=nonBackground(onlyNews,dark,0,0,600,480);
+    // Full 800x480 is the current logical viewport, NOT a 680x436 matte.
+    // Both original renderers must paint within their own nominal cells.
+    const int dateInk=nonBackground(onlyDate,dark,dateX,0,600,480);
+    const int newsInk=nonBackground(onlyNews,dark,newsX,0,200,480);
+    const int dateLeak=nonBackground(onlyDate,dark,newsX,0,200,480);
+    const int newsLeak=nonBackground(onlyNews,dark,dateX,0,600,480);
     const int dateVsComposite=bitDifferences(dateThenNews,independent);
     const int reverseVsComposite=bitDifferences(newsThenDate,independent);
     if(dateInk<300||newsInk<30||dateLeak||newsLeak||dateVsComposite||
@@ -112,7 +121,9 @@ int main(int argc,char**argv){
         <<"\"realAdafruitGfxCpp\":true,\"realGxEPD2BW\":true,"
         <<"\"syntheticNewsFixture\":true,\"networkAttempted\":false,"
         <<"\"realT7Transport\":false,\"realSPI\":false,\"realPanel\":false,"
-        <<"\"dateEditorialAdmitted\":true,\"dateInk\":"<<dateInk
+        <<"\"dateEditorialAdmitted\":true,\"newsSide\":\""<<newsSide<<"\""
+        <<",\"dateCellX\":"<<dateX<<",\"newsCellX\":"<<newsX
+        <<",\"dateInk\":"<<dateInk
         <<",\"newsInk\":"<<newsInk
         <<",\"newsInkInsideDate\":"<<newsLeak
         <<",\"dateInkInsideNews\":"<<dateLeak

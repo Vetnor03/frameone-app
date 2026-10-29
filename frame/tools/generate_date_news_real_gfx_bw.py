@@ -74,29 +74,6 @@ def count_ink(page:bytes,dark:bool,x0:int,y0:int,w:int,h:int)->int:
                for y in range(y0,y0+h) for x in range(x0,x0+w))
 
 
-def physical_matte_png(page:bytes)->bytes:
-    # Export the ONLY physically visible 680x436 window, independent of the
-    # 800x480 digital host frame. This does not simulate glass or e-paper.
-    import struct
-    import zlib
-    x0,y0,w,h=58,39,680,436
-    lines=[]
-    for y in range(y0,y0+h):
-        line=bytearray(b"\x00")
-        for x in range(x0,x0+w):
-            bit=(page[y*100+x//8]>>(7-(x%8)))&1
-            line.append(255 if bit else 0)
-        lines.append(bytes(line))
-    def chunk(typ,data):
-        raw=typ+data
-        return (struct.pack(">I",len(data))+raw+
-                struct.pack(">I",zlib.crc32(raw)&0xffffffff))
-    return (b"\x89PNG\r\n\x1a\n"+
-            chunk(b"IHDR",struct.pack(">IIBBBBB",w,h,8,0,0,0,0))+
-            chunk(b"IDAT",zlib.compress(b"".join(lines),9))+
-            chunk(b"IEND",b""))
-
-
 def generate(out:Path)->dict:
     out.mkdir(parents=True,exist_ok=True)
     records=[]
@@ -119,81 +96,91 @@ def generate(out:Path)->dict:
                 "-DARDUINOJSON_ENABLE_ARDUINO_PRINT=0",
                 "-DARDUINOJSON_ENABLE_STD_STRING=1",
             ))
-        for dark in (0,1):
-            prefix=out/("news-date-"+("dark" if dark else "light"))
-            run=subprocess.run(
-                [str(binary),str(prefix),"2026","9","21",str(dark)],
-                cwd=ROOT,text=True,capture_output=True,timeout=45)
-            if run.returncode:
-                raise RuntimeError("Actual News+Date draw failed:\n"+
-                                   run.stdout[-3000:]+"\n"+run.stderr[-8000:])
-            status=json.loads(run.stdout)
-            assert status["realModuleDateCpp"]
-            assert status["realModuleNewsCpp"]
-            assert status["realAdafruitGfxCpp"]
-            assert status["realGxEPD2BW"]
-            assert status["syntheticNewsFixture"]
-            assert status["networkAttempted"] is False
-            assert status["dateEditorialAdmitted"]
-            assert status["frameBytes"]==BYTES
-            assert status["dateInk"]>=300 and status["newsInk"]>=30
-            assert status["dateInkInsideNews"]==0
-            assert status["newsInkInsideDate"]==0
-            pages={
-                key:(out/(prefix.name+"-"+key+".bin")).read_bytes()
-                for key in (
-                  "date-only","news-only","date-then-news","news-then-date")
-            }
-            assert all(len(page)==BYTES for page in pages.values())
-            independent=bytes((a|b) if dark else (a&b)
-                for a,b in zip(pages["date-only"],pages["news-only"]))
-            direct=pages["date-then-news"]
-            reverse=pages["news-then-date"]
-            assert status["dateThenNewsVsIndependentBits"]==count_different(
-                direct,independent)
-            assert status["newsThenDateVsIndependentBits"]==count_different(
-                reverse,independent)
-            assert direct==independent==reverse, "real module paint collided"
-            png=out/(prefix.name+".png")
-            png.write_bytes(png_from_bits(direct))
-            cropped=out/(prefix.name+"-physical-matte-680x436.png")
-            cropped.write_bytes(physical_matte_png(direct))
-            # Unlike Date editorial, existing News has no matte-admission gate.
-            # Record actual hidden pixels as a design/QA finding rather than
-            # failing the independent *cell ownership* proof.
-            newsVisible=count_ink(pages["news-only"],bool(dark),58,39,680,436)
-            newsHidden=status["newsInk"]-newsVisible
-            hiddenAbove=count_ink(pages["news-only"],bool(dark),600,0,200,39)
-            hiddenRight=count_ink(pages["news-only"],bool(dark),738,39,62,436)
-            hiddenBelow=count_ink(pages["news-only"],bool(dark),600,475,200,5)
-            assert newsHidden==hiddenAbove+hiddenRight+hiddenBelow
-            records.append(dict(theme="dark" if dark else "light",
-                newsInkInsideVisibleMatte=newsVisible,
-                newsInkOutsideVisibleMatte=newsHidden,
-                newsInkClippedAboveMatte=hiddenAbove,
-                newsInkClippedRightOfMatte=hiddenRight,
-                newsInkClippedBelowMatte=hiddenBelow,
-                physicalMattePng=cropped.name,
-                originalProductionModules=["ModuleDate.cpp","ModuleNews.cpp"],
-                realModuleRenderers=2,syntheticNewsHeadlines=3,
-                realBackendRequested=False,frameInkBytes=BYTES,
-                outputPng=png.name,
-                outputBin=prefix.name+"-date-then-news.bin",
-                sha256=hashlib.sha256(direct).hexdigest(),**status))
+        for date_key,year,month0,day in (
+            ("october",2026,9,21),
+            ("rollover",2026,11,31),
+        ):
+            for news_side in ("right","left"):
+                for dark in (0,1):
+                    theme="dark" if dark else "light"
+                    prefix=out/("news-date-"+date_key+"-"+news_side+"-"+theme)
+                    run=subprocess.run(
+                        [str(binary),str(prefix),str(year),str(month0),
+                         str(day),str(dark),news_side],
+                        cwd=ROOT,text=True,capture_output=True,timeout=45)
+                    if run.returncode:
+                        raise RuntimeError("Actual News+Date draw failed:\n"+
+                                           run.stdout[-3000:]+"\n"+
+                                           run.stderr[-8000:])
+                    status=json.loads(run.stdout)
+                    assert status["realModuleDateCpp"]
+                    assert status["realModuleNewsCpp"]
+                    assert status["realAdafruitGfxCpp"]
+                    assert status["realGxEPD2BW"]
+                    assert status["syntheticNewsFixture"]
+                    assert status["networkAttempted"] is False
+                    assert status["dateEditorialAdmitted"]
+                    assert status["frameBytes"]==BYTES
+                    assert status["newsSide"]==news_side
+                    assert status["dateCellX"]==(200 if news_side=="left" else 0)
+                    assert status["newsCellX"]==(0 if news_side=="left" else 600)
+                    assert status["dateInk"]>=300 and status["newsInk"]>=30
+                    assert status["dateInkInsideNews"]==0
+                    assert status["newsInkInsideDate"]==0
+                    pages={
+                        key:(out/(prefix.name+"-"+key+".bin")).read_bytes()
+                        for key in (
+                            "date-only","news-only",
+                            "date-then-news","news-then-date")
+                    }
+                    assert all(len(page)==BYTES for page in pages.values())
+                    independent=bytes((a|b) if dark else (a&b)
+                        for a,b in zip(
+                            pages["date-only"],pages["news-only"]))
+                    direct=pages["date-then-news"]
+                    reverse=pages["news-then-date"]
+                    assert status["dateThenNewsVsIndependentBits"]==count_different(
+                        direct,independent)
+                    assert status["newsThenDateVsIndependentBits"]==count_different(
+                        reverse,independent)
+                    assert direct==independent==reverse, "real module paint collided"
+                    # Current frame viewport is the WHOLE 800x480 panel.
+                    # Check every visible ink bit is from an owned Date/News
+                    # cell. Legacy 680x436 crop is NOT used for acceptance.
+                    ink_full=count_ink(direct,bool(dark),0,0,WIDTH,HEIGHT)
+                    assert ink_full==status["dateInk"]+status["newsInk"]
+                    png=out/(prefix.name+".png")
+                    png.write_bytes(png_from_bits(direct))
+                    records.append(dict(theme=theme,
+                        dateScenario=date_key,year=year,month0=month0,day=day,
+                        newsPosition=news_side,fullPanelViewport=[0,0,800,480],
+                        totalFullPanelInk=ink_full,
+                        actualNewsCellInk=status["newsInk"],
+                        actualDateCellInk=status["dateInk"],
+                        outOfAssignedCells=(
+                            status["newsInkInsideDate"]+
+                            status["dateInkInsideNews"]),
+                        originalProductionModules=["ModuleDate.cpp","ModuleNews.cpp"],
+                        realModuleRenderers=2,syntheticNewsHeadlines=3,
+                        realBackendRequested=False,frameInkBytes=BYTES,
+                        outputPng=png.name,
+                        outputBin=prefix.name+"-date-then-news.bin",
+                        sha256=hashlib.sha256(direct).hexdigest(),**status))
     report=dict(dateProductionCpp=True,newsProductionCpp=True,
         originalAdafruitGFX=True,originalGxEPD2BW=True,
         ArduinoJson=arduinojson,
         syntheticOfflineHeadlines=True,
-        realBackend=False,otherModules=("Date","News"),
+        realBackend=False,otherModules=["Date","News"],
         realT7Transport=False,realSPI=False,physicalPanel=False,
         deployed=False,flashed=False,physicalReadabilityApproved=False,
-        matteClipAssessment="Computed from exact 680x436 physical aperture; does NOT prove actual e-paper output",
-        newsMatteClippingDetected=any(
-            c["newsInkOutsideVisibleMatte"]>0 for c in records),
+        fullPanelViewport=[0,0,800,480],
+        apertureBasis="Production Config.h VIEWPORT_*; 680x436 legacy crop is NOT an acceptance boundary",
+        twoOriginalModules=True,passesPerCase=4,
         cases=records)
     (out/"manifest.json").write_text(
         json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
-    print(json.dumps({"cases":len(records),"genuineOtherModule":"News",
+    print(json.dumps({"cases":len(records),"dateScenarios":2,
+        "newsPlacements":2,"themes":2,"genuineOtherModule":"News",
         "zeroBitDifferences":all(x["dateThenNewsVsIndependentBits"]==0 and
                                  x["newsThenDateVsIndependentBits"]==0
                                  for x in records),
