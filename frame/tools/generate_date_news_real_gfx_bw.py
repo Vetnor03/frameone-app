@@ -170,7 +170,7 @@ def generate(out:Path)->dict:
         originalAdafruitGFX=True,originalGxEPD2BW=True,
         ArduinoJson=arduinojson,
         syntheticOfflineHeadlines=True,
-        realBackend=False,otherModules=("Date","News"),
+        realBackend=False,otherModules=["Date","News"],
         realT7Transport=False,realSPI=False,physicalPanel=False,
         deployed=False,flashed=False,physicalReadabilityApproved=False,
         fullPanelViewport=[0,0,800,480],
