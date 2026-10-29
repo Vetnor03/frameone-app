@@ -42,6 +42,7 @@ static int blackBit(const std::vector<uint8_t>& bytes,int x,int y) {
   return !(bytes[static_cast<size_t>(y)*100+x/8]&(0x80u>>(x&7)));
 }
 
+#ifndef REMIND_MIXED_DIRECT_GFX_AUDIT
 int main(int argc,char**argv) {
   if(argc!=12) {
     std::cerr<<"usage: direct-gfx outfile.bin expected.bin year month0 day x y w h dark holiday\n";
@@ -133,3 +134,5 @@ int main(int argc,char**argv) {
     return 3;
   }
 }
+
+#endif // REMIND_MIXED_DIRECT_GFX_AUDIT
