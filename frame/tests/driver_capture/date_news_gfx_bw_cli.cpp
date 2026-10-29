@@ -5,20 +5,10 @@
 #define REMIND_MIXED_DIRECT_GFX_AUDIT
 #include "direct_gfx_bw_date_cli.cpp"
 #include <stdarg.h>
-struct HostSerial {
-  void printf(const char*,...)const {}
-  void print(const char*)const {}
-  void println(const char*)const {}
-};
-static HostSerial Serial;
-
-#include "../../src/modules/ModuleNews.cpp"
-
-const char* BASE_URL = "https://offline-host-test.invalid";
-namespace DeviceIdentity { String getToken() { return ""; } }
-bool NetClient::httpGetAuth(const String&,const String&,int&,String&){
-  throw std::runtime_error("No network allowed in seeded News host QA");
-}
+#include "../../src/modules/ModuleNews.h"
+// ModuleNews.cpp is a SEPARATE translation unit as in real firmware. The only
+// test-only extension is seeded cache data; module implementation is unpatched.
+void seedRealNewsHeadlines();
 
 static std::vector<uint8_t> paint(int mode,const Cell& date,const Cell& news){
   g_display.setRotation(0);
@@ -78,21 +68,7 @@ int main(int argc,char**argv){
     snprintf(config.language,sizeof(config.language),"en");
     ModuleDate::setConfig(&config);
     ModuleNews::setConfig(&config);
-    if(!ModuleNews::ensureCacheAllocated())throw std::runtime_error("News cache init failed");
-    ModuleNews::clearCache();
-    const char* headlines[]={
-      "Wind forecast updated for the coast",
-      "Pilot frames arrive this week",
-      "New editorial design review completed"
-    };
-    for(int i=0;i<3;++i){
-      auto& item=ModuleNews::g_cache->items[i];
-      snprintf(item.title,sizeof(item.title),"%s",headlines[i]);
-      item.used=true;
-    }
-    ModuleNews::g_cache->count=3;
-    ModuleNews::g_cache->loaded=true; // prevents HTTP; fails if renderer tries network
-    ModuleNews::g_cache->ok=true;
+    seedRealNewsHeadlines(); // test-only cache setup in separate News TU
 
     const Cell date={0,0,600,480,0,0,0,3,4,CELL_ADAPTIVE};
     const Cell news={600,0,200,480,1,3,0,1,4,CELL_ADAPTIVE};
