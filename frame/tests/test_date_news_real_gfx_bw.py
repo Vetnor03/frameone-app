@@ -23,6 +23,16 @@ def test_real_date_news_modules_share_exact_gfx_framebuffer(tmp_path):
         assert item["dateEditorialAdmitted"]
         assert item["dateInk"]>300 and item["newsInk"]>30
         assert item["newsInkInsideDate"]==item["dateInkInsideNews"]==0
+        assert (item["newsInkInsideVisibleMatte"]+
+                item["newsInkOutsideVisibleMatte"]==item["newsInk"])
+        assert (item["newsInkClippedAboveMatte"]+
+                item["newsInkClippedRightOfMatte"]+
+                item["newsInkClippedBelowMatte"]==
+                item["newsInkOutsideVisibleMatte"])
+        matte=(out/item["physicalMattePng"]).read_bytes()
+        assert matte.startswith(b"\x89PNG\r\n\x1a\n")
+        assert int.from_bytes(matte[16:20],"big")==680
+        assert int.from_bytes(matte[20:24],"big")==436
         assert item["dateThenNewsVsIndependentBits"]==0
         assert item["newsThenDateVsIndependentBits"]==0
         data=(out/item["outputBin"]).read_bytes()
