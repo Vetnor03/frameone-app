@@ -57,6 +57,7 @@ void writeAll(const std::string& path,const std::vector<uint8_t>& data) {
   file.write(reinterpret_cast<const char*>(data.data()),data.size());
   if(!file.good())throw std::runtime_error("unable to finish "+path);
 }
+#ifndef REMIND_DRIVER_REUSE_MOCK_ONLY
 int main(int argc,char**argv) {
   if(argc!=4)return 2;
   try {
@@ -103,3 +104,5 @@ int main(int argc,char**argv) {
     return differing?1:0;
   }catch(const std::exception&e){std::cerr<<e.what()<<"\n";return 3;}
 }
+
+#endif // REMIND_DRIVER_REUSE_MOCK_ONLY
