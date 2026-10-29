@@ -78,8 +78,8 @@ int main(int argc,char**argv){
     // retain their actual cell geometry; tests do not change module source.
     const int dateX=newsOnLeft?200:0;
     const int newsX=newsOnLeft?0:600;
-    const Cell date={dateX,0,600,480,0,newsOnLeft?1:0,0,3,4,CELL_ADAPTIVE};
-    const Cell news={newsX,0,200,480,1,newsOnLeft?0:3,0,1,4,CELL_ADAPTIVE};
+    const Cell date={dateX,0,600,480,0,static_cast<uint8_t>(newsOnLeft?1:0),0,3,4,CELL_ADAPTIVE};
+    const Cell news={newsX,0,200,480,1,static_cast<uint8_t>(newsOnLeft?0:3),0,1,4,CELL_ADAPTIVE};
     struct tm local={};
     if(!getLocalTime(&local,10))throw std::runtime_error("bad local time");
     // Prove Date is actually admitted in this width, not a legacy fallback.
