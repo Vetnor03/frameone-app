@@ -129,6 +129,15 @@ jobs:
           path: ${{ runner.temp }}/date-mixed-original-gfx-bw/
           if-no-files-found: error
           retention-days: 7
+      - name: Draw real Date plus real News with seeded offline headlines (original GFX/BW; NO SPI)
+        run: python3 frame/tools/generate_date_news_real_gfx_bw.py --output "$RUNNER_TEMP/date-real-news-gfx-bw"
+      - name: Upload genuine Date + News synthetic-feed pixel proof (NOT physical panel)
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-vnext-genuine-news-and-date-unflashed
+          path: ${{ runner.temp }}/date-real-news-gfx-bw/
+          if-no-files-found: error
+          retention-days: 7
 
   firmware:
     runs-on: ubuntu-latest
