@@ -11,6 +11,12 @@ This test-only draft extends #1469 (Date-only multi-cell checks) to **two actual
 
 The harness renders four complete 48,000-byte pages per theme: Date-only, News-only, Date then News, and News then Date. **Light and dark themes** both use original `Theme` and 1-bit GFX draw behavior. It requires Date editorial admission, nonempty real News/Date ink, zero cross-cell pixels in individual passes, and the bit-identical equality of **(independently composited Date + News)** to each of the two original-driver draw orders. Full rendered bytes + SHA256 + PNG previews + JSON manifest are archived.
 
+## Newly discovered physical-matte clipping
+
+The first actual Date+News light/dark buffers show **4,140 News ink pixels** in the assigned 1×4 cell, of which **3,463 lie within the 680×436 visible window and 677 fall outside it** (including part of the News heading above y=39 and content right of x=738). These are real host-buffer pixel counts with the matte geometry `x=58..737, y=39..474`, not a physical photo. The actual 800×480 output correctly maintains **cell ownership**, but **cell-safe is not matte-visible**.
+
+The generator now records per-theme `newsInkInsideVisibleMatte`, `newsInkOutsideVisibleMatte` and above/right/below subdivisions, plus exports dedicated **physical-matte-only 680×436 PNG crops**. The legacy News renderer is NOT altered in this QA PR: selecting a physical-visibility-safe layout policy or revising News is a separate design decision. **Do not classify the live News layout as visually approved**, even when its compositing tests pass.
+
 ## Limits / approval gates
 
 - This is a **real two-module C++ painter composition**, but **not `ModuleRenderer::renderPlaceholders` dispatcher**, actual Weather/Surf/Reminders, or a real live News feed. Only synthetic News headlines are provided. Other combinations remain open.
