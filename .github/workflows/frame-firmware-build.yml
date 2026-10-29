@@ -120,6 +120,15 @@ jobs:
           path: ${{ runner.temp }}/date-direct-gfx-bw/
           if-no-files-found: error
           retention-days: 7
+      - name: Validate all mixed Date slots via real C++ Adafruit GFX and GxEPD2 BW (NO OTHER MODULES)
+        run: python3 frame/tools/generate_date_mixed_original_gfx_bw.py --output "$RUNNER_TEMP/date-mixed-original-gfx-bw"
+      - name: Upload mixed Date-only original GFX/BW captures and audit (NO FLASH)
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-vnext-mixed-original-gfx-bw-date-only-unflashed
+          path: ${{ runner.temp }}/date-mixed-original-gfx-bw/
+          if-no-files-found: error
+          retention-days: 7
 
   firmware:
     runs-on: ubuntu-latest
