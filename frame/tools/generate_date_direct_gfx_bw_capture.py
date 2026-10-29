@@ -43,7 +43,7 @@ def checked_blob(name:str,sha:str)->bytes:
     if blob!=sha:raise RuntimeError(name+" pinned Git blob mismatch: "+blob)
     return data
 
-def compile_original_chain(executable:Path,upstream:Path):
+def compile_original_chain(executable:Path,upstream:Path,source:Path=CLI):
     upstream.mkdir(parents=True,exist_ok=True)
     (upstream/"GxEPD2_BW.h").write_bytes(pinned_header_bytes())
     for name,sha in ADAFRUIT_FILES.items():
@@ -62,7 +62,7 @@ def compile_original_chain(executable:Path,upstream:Path):
         FRAME/"src/core",FRAME/"src/assets/fonts",
     ]
     source=[
-        CLI,upstream/"Adafruit_GFX.cpp",
+        source,upstream/"Adafruit_GFX.cpp",
         FRAME/"src/display/DateEditorialF2Adapter.cpp",
         FRAME/"src/display/DateF2InkAdapter.cpp",
         FRAME/"src/display/EditorialText.cpp",
