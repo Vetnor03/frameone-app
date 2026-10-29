@@ -79,7 +79,15 @@ def generate(out:Path)->dict:
             extra_sources=(ROOT/"frame/tests/driver_capture/date_news_fixture_adapter.cpp",),
             # Original ModuleNews.cpp uses memset for a trivially copyable
             # class with initializers. Preserve source, allow its host warning.
-            extra_flags=("-Wno-error=class-memaccess",))
+            extra_flags=(
+                "-Wno-error=class-memaccess",
+                # Host String is std::string. Compile original ArduinoJson in
+                # its supported standard C++ mode, not Arduino Stream mode.
+                "-DARDUINOJSON_ENABLE_ARDUINO_STRING=0",
+                "-DARDUINOJSON_ENABLE_ARDUINO_STREAM=0",
+                "-DARDUINOJSON_ENABLE_ARDUINO_PRINT=0",
+                "-DARDUINOJSON_ENABLE_STD_STRING=1",
+            ))
         for dark in (0,1):
             prefix=out/("news-date-"+("dark" if dark else "light"))
             run=subprocess.run(
