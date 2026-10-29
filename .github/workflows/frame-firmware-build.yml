@@ -111,6 +111,15 @@ jobs:
           path: ${{ runner.temp }}/date-real-bw-host/
           if-no-files-found: error
           retention-days: 7
+      - name: Paint actual Date directly with pinned Adafruit_GFX and GxEPD2_BW (mock T7, NO SPI)
+        run: python3 frame/tools/generate_date_direct_gfx_bw_capture.py --output "$RUNNER_TEMP/date-direct-gfx-bw"
+      - name: Upload direct Adafruit_GFX to GxEPD2_BW pixel comparison (NOT panel capture)
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-vnext-direct-gfx-bw-original-cpp-unflashed
+          path: ${{ runner.temp }}/date-direct-gfx-bw/
+          if-no-files-found: error
+          retention-days: 7
 
   firmware:
     runs-on: ubuntu-latest
