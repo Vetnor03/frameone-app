@@ -74,7 +74,8 @@ def generate(out:Path)->dict:
         arduinojson=fetch_arduinojson_header_tree(tmp/"arduinojson")
         binary=compile_original_chain(
             tmp/"date-news-driver",tmp/"upstream",CLI,
-            extra_includes=(tmp/"arduinojson",))
+            extra_includes=(tmp/"arduinojson",ROOT/"frame/src/device",
+                            ROOT/"frame/src/network"))
         for dark in (0,1):
             prefix=out/("news-date-"+("dark" if dark else "light"))
             run=subprocess.run(
