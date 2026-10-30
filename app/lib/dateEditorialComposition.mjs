@@ -91,8 +91,12 @@ export function planDateEditorial(cell,source){
         const ruleH=style.rule?20:0
         const extra=safe.h-(roles.year.ink.h+roles.month.ink.h+
           roles.day.ink.h+roles.weekday.ink.h)
-        const gaps=Math.floor(
+        const rawGaps=Math.floor(
           (extra-artH-artGap-topPad-bottomPad-ruleH)/3)
+        // The figure is an accent: preserve a quiet lower margin on roomy
+        // panels rather than stretching the year/month/day/week rhythm.
+        // Other expressions retain their original role spacing.
+        const gaps=style.art?Math.min(38,rawGaps):rawGaps
         if(gaps<12)continue
         let y=safe.y+topPad
         const yearBox=centerX(hero,roles.year.ink,y);y+=roles.year.ink.h+gaps
