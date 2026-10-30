@@ -30,6 +30,12 @@ def scenarios():
              day=31,x=600,y=240,w=200,h=240,dark=1,holiday=0),
         dict(name="2x2 four-fact stack / December / Dark",year=2026,month0=11,
              day=31,x=400,y=240,w=400,h=240,dark=1,holiday=0),
+        dict(name="1x3 tall botanical / October / Light",year=2026,month0=9,
+             day=21,x=0,y=0,w=200,h=360,dark=0,holiday=0),
+        dict(name="2x3 tall botanical / October / Dark",year=2026,month0=9,
+             day=21,x=200,y=0,w=400,h=360,dark=1,holiday=0),
+        dict(name="1x4 tall botanical / December / Light",year=2026,month0=11,
+             day=31,x=0,y=0,w=200,h=480,dark=0,holiday=0),
     ]
 
 def generate(output):
@@ -63,12 +69,12 @@ def generate(output):
           for item in scenes)
         doc=('<html lang="en"><meta charset="utf-8">'
            '<meta name="viewport" content="width=device-width,initial-scale=1">'
-           '<title>RE Date R4.7 original C++ compact and medium pixel study</title>'
+           '<title>RE Date R4.8 original C++ optional botanical ink study</title>'
            '<style>body{font-family:system-ui;background:#eae9e5;margin:20px;color:#222}'
            'main{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}'
            'article{background:white;padding:10px;border:1px solid #aaa}'
            'img{width:100%;image-rendering:pixelated}h2{font-size:15px}p{font-size:12px}'
-           '</style><h1>RE Date R4.7: actual compact and medium C++ painter</h1>'
+           '</style><h1>RE Date R4.8: original shared 1-bit botanical on fitted stacks</h1>'
            '<p>Separate default-OFF host-only compact preview, original Fraunces / DM Sans '
            'GFX bitmaps, all Date labels are runtime facts. NOT a physical e-paper '
            'capture, GxEPD2 controller output, shipping firmware or flashing approval.</p>'
