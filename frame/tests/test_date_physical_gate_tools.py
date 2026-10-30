@@ -183,7 +183,7 @@ def test_partition_md5_corruption_and_wrong_firmware_chip_are_rejected(tmp_path)
     checker=imported(RECOVERY,"recovery_corrupt")
     backup,digest=make_structural_fixture(tmp_path)
     with backup.open("r+b") as out:
-        out.seek(0x9000-32) # last partition entry, before MD5 footer
+        out.seek(0x8000+32*5) # sixth partition entry covered by MD5 digest
         out.write(b"BAD BAD BAD BAD BAD BAD BAD BAD ")
     p=tmp_path/"manifest.json"
     p.write_text(json.dumps(example_manifest(
