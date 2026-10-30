@@ -21,9 +21,11 @@ const measureVariants=(text,fonts)=>fonts.map(font=>{
 const safeSpace=cell=>{
   if(!cell||!['x','y','w','h'].every(k=>Number.isInteger(cell[k]))||
      cell.w<=0||cell.h<=0)return null
-  const x=Math.max(cell.x,P.MATTE_X),y=Math.max(cell.y,P.MATTE_Y)
-  const right=Math.min(cell.x+cell.w,P.MATTE_X+P.MATTE_WIDTH)
-  const bottom=Math.min(cell.y+cell.h,P.MATTE_Y+P.MATTE_HEIGHT)
+  // Experimental editorial Date follows the full logical 800x480 frame.
+  // Intersect with the actual user-owned cell; keep measured safe insets.
+  const x=Math.max(cell.x,0),y=Math.max(cell.y,0)
+  const right=Math.min(cell.x+cell.w,P.PANEL_WIDTH)
+  const bottom=Math.min(cell.y+cell.h,P.PANEL_HEIGHT)
   if(right<=x||bottom<=y)return null
   const vis=rect(x,y,right-x,bottom-y)
   // Same policy inset as existing measured planner. No grid-size condition.
