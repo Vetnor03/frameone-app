@@ -129,7 +129,9 @@ def test_real_f1_font_measures_feed_same_cpp_layout_across_100_locations(tmp_pat
              ink["month"]["w"],ink["month"]["h"],
              ink["weekday"]["w"],ink["weekday"]["h"]))+"\n")
         valid.append(result)
-    assert len(valid)>0 and len(valid)<len(requests)
+    # No fake 680×436 crop should force unnecessary fallback. These actual
+    # 800×480 one-bit glyph sources fit all 800 valid geometry/date cases.
+    assert len(valid)==len(requests)
     proc=subprocess.run([str(exe)],cwd=ROOT,input="".join(cxx_inputs),
                         text=True,check=True,capture_output=True,timeout=40)
     values=proc.stdout.splitlines()
