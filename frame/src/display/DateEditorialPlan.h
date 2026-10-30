@@ -109,7 +109,11 @@ inline Plan plan(const Input& input){
           // JS Math.floor, including negative: require >=12 for acceptance.
           const int usable=extra-artH-artGap-topPad-bottomPad-ruleH;
           if(usable<36)continue;
-          const int gaps=usable/3;
+          // Botanical art is a small editorial accent, not a bottom-filling
+          // spacer. Cap only the ART composition's vertical rhythm so
+          // generous panels leave intentional white space under the sprig.
+          // Preserve the full-fact fit and legacy fallback decisions.
+          const int gaps=art?mi(38,usable/3):usable/3;
           int yy=safe.y+topPad;
           const Rect year=centered(hero,yrInk,yy);yy+=yrInk.h+gaps;
           const Rect month=centered(hero,moInk,yy);yy+=moInk.h;

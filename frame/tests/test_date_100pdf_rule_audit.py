@@ -46,6 +46,11 @@ def test_pdf_4x4_original_editorial_design_retains_full_calendar_and_art():
     assert item["calendar"]["features"]["showDowHeader"]
     assert item["fonts"]["day"]=="Fraunces72"
     assert item["fonts"]["month"]=="DM24"
+    # Non-decorative typography stays at full eligible size while the
+    # botanical finishes above the lower whitespace margin.
+    art=item["ornaments"]["botanical"]
+    safe=item["safe"]
+    assert safe["y"]+safe["h"]-(art["y"]+art["h"])>=safe["h"]//9
     assert item["text"]==dict(day="21",month="October",
                                weekday="Wednesday",year="2026")
 

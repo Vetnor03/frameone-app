@@ -42,6 +42,13 @@ def test_original_fullscreen_date_is_a_complete_editorial_ensemble():
                                 weekday="Wednesday",year="2026")
     assert result["illustration"]["role"]=="botanical-sprig"
     assert inside(result["ornaments"]["botanical"],result["regions"]["hero"])
+    # Layout Lab seed 347015390: the sprig is a deliberate accent, not
+    # a bottom-aligned ornament. This quality guard is independent of
+    # grid span and preserves the existing exact-ink fit guarantees.
+    art=result["ornaments"]["botanical"]
+    safe=result["safe"]
+    lower_margin=safe["y"]+safe["h"]-(art["y"]+art["h"])
+    assert lower_margin>=safe["h"]//9
     assert inside(result["calendar"]["rect"],result["regions"]["calendar"])
 
 def test_full_date_and_real_calendar_never_overlap_over_100_cell_placements():
