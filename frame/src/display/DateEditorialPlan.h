@@ -53,10 +53,12 @@ inline Plan plan(const Input& input){
     return result;
 
   const Rect c=input.cell;
-  const int x=ma(c.x,DateRolePolicy::MATTE_X);
-  const int y=ma(c.y,DateRolePolicy::MATTE_Y);
-  const int right=mi(c.x+c.w,DateRolePolicy::MATTE_X+DateRolePolicy::MATTE_WIDTH);
-  const int bottom=mi(c.y+c.h,DateRolePolicy::MATTE_Y+DateRolePolicy::MATTE_HEIGHT);
+  // Editorial preview owns its actual full-panel cell, not the historical
+  // 680x436 diagnostic crop. Still intersect with the caller-owned cell.
+  const int x=ma(c.x,0);
+  const int y=ma(c.y,0);
+  const int right=mi(c.x+c.w,DateRolePolicy::PANEL_WIDTH);
+  const int bottom=mi(c.y+c.h,DateRolePolicy::PANEL_HEIGHT);
   if(right<=x||bottom<=y)return result;
   const Rect visible=rect(x,y,right-x,bottom-y);
   const bool spacious=visible.w>=DateRolePolicy::SPREAD_MIN_WIDTH&&
