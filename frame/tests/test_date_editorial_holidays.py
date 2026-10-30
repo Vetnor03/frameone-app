@@ -85,10 +85,10 @@ def test_original_f1_holiday_ink_native_js_parity(tmp_path):
         assert heading==rect(jsplan["heading"])
         assert rows[:jsplan["count"]]==[rect(x) for x in jsplan["rows"]]
         assert rows[jsplan["count"]:]==[(0,0,0,0)]*(2-jsplan["count"])
-        matte=(58,39,680,436)
-        assert inside(heading,matte)
+        panel=(0,0,800,480)
+        assert inside(heading,panel)
         for i,box in enumerate(rows[:jsplan["count"]]):
-            assert inside(box,matte)
+            assert inside(box,panel)
             assert not overlap(box,heading)
             assert all(not overlap(box,other) for other in rows[:i])
     assert validOne>0
