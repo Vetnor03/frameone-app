@@ -61,7 +61,7 @@ def test_legacy_calendar_and_holiday_data_not_silently_removed():
     assert "preflightEditorialHolidays(p,year,month0,dayNum,holidays)" in preview
     assert "titleWithYear" in DATE
     assert "editorialGridDayFont" in DATE
-    assert "height>grid.cellH-12" in DATE
+    assert "height>grid.cellH-10" in DATE
     assert "width>2*radius-4" in DATE
     assert "if(titleWithYear)" in DATE
     render=DATE[DATE.index("static void renderDate("):]
