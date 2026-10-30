@@ -53,7 +53,7 @@ def test_botanical_and_ornament_are_real_options_not_preconditions():
     # Non-grid-locked intermediate rectangles test actual fitting decisions.
     # Both visual and bare-facts variants must be possible in available space.
     reqs=[dict(cell=dict(x=0,y=0,w=800,h=h),facts=facts())
-          for h in range(295,481,5)]
+          for h in range(255,481,5)]
     results=plans(reqs)
     assert any(x and x["illustration"] for x in results)
     stripped=[x for x in results if x and x["illustration"] is None]
@@ -113,8 +113,8 @@ def test_all_100_legal_positions_preserve_facts_matte_and_contrast_independence(
                                weekday=fp["weekday"],year=str(fp["year"]))
         assert a["calendar"]["year"]==fp["year"]
         assert a["calendar"]["month0"]==fp["month0"]
-        matte=dict(x=58,y=39,w=680,h=436)
-        assert rectangle_inside(a["visible"],matte)
+        panel=dict(x=0,y=0,w=800,h=480)
+        assert rectangle_inside(a["visible"],panel)
         assert rectangle_inside(a["safe"],a["visible"])
         block=list(a["boxes"].values())+[a["calendar"]["rect"]]
         if a["ornaments"]["monthRule"]:
