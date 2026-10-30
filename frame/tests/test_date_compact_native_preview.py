@@ -1,4 +1,4 @@
-"""Real C++ Date compact micro/ribbon first-stage native-pixel proof.
+"""Real C++ Date compact micro/ribbon/stack native-pixel proof.
 
 The entire new variant stays behind a separate default-OFF flag, including
 the editorial CI build; this test alone enables it in a Linux host raster.
@@ -23,8 +23,16 @@ def native_compact(tmp_path_factory):
     (0,0,400,120,9,21,0,True),    # 2x1 ribbon — three facts
     (200,120,600,120,11,31,1,True), # 3x1 — year included
     (0,0,800,120,9,21,0,True),    # 4x1 — year included
-    (0,0,200,240,9,21,0,False),  # 1x2 — no replacement (yet)
-    (0,0,400,240,9,21,0,False),  # 2x2 — no replacement (yet)
+    (0,0,200,240,9,21,0,True),   # 1x2 — all four original facts
+    (0,0,400,240,9,21,0,True),   # 2x2 — all four original facts
+    (600,240,200,240,11,31,1,True), # 1x2 / December / Dark
+    (400,240,400,240,11,31,1,True), # 2x2 / December / Dark
+    (0,0,200,360,9,21,0,True),   # 1x3 no calendar
+    (0,0,400,360,9,21,0,True),   # 2x3 no calendar
+    (0,0,200,480,9,21,0,True),   # 1x4 no calendar
+    (0,0,400,480,9,21,0,False),  # 2x4 legacy calendar retained
+    (0,0,600,240,9,21,0,False),  # 3x2 legacy calendar retained
+    (0,0,800,360,9,21,0,False),  # 4x3 legacy calendar retained
 ])
 def test_original_cpp_compact_admission_and_ink_bounds(
         native_compact,tmp_path,x,y,w,h,month0,day,dark,expected):
@@ -41,7 +49,7 @@ def test_original_cpp_compact_admission_and_ink_bounds(
     assert pgm.is_file()
     if expected:
         assert result["inkInside"]>=300,result
-        # Original editorial two-calendar planner is not faking small success.
+        # Original editorial two-calendar planner is not faking compact success.
         assert result["preflight"]["f2"] is False,result
 
 def test_compact_feature_disabled_in_normal_firmware_and_prior_preview():
