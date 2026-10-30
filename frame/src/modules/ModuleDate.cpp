@@ -405,7 +405,9 @@ static void drawMonthCalendar(int x, int y, int w, int h,
 
   if (showDowHeader) {
     static const char* const DOW[] = {"Mo","Tu","We","Th","Fr","Sa","Su"};
-    d.setFont(FONT_9);
+    const GFXfont* dowFont=editorialTitleFont && editorialDowFont ?
+      editorialDowFont : FONT_9;
+    d.setFont(dowFont);
     d.setTextColor(ink);
 
     for (int c = 0; c < cols; c++) {
