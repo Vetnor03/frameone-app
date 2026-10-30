@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the actual original ModuleDate.cpp compact preview on host 1-bit pixels.
+"""Render the original ModuleDate.cpp compact, medium and tall host pixels.
 
 Separate default-OFF, host-only compile define. No real panel/OTA/flash.
 """
@@ -22,6 +22,14 @@ def scenarios():
              day=31,x=200,y=120,w=600,h=120,dark=1,holiday=0),
         dict(name="4x1 ribbon with year / October / Light",year=2026,month0=9,
              day=21,x=0,y=0,w=800,h=120,dark=0,holiday=0),
+        dict(name="1x2 four-fact stack / October / Light",year=2026,month0=9,
+             day=21,x=0,y=0,w=200,h=240,dark=0,holiday=0),
+        dict(name="2x2 four-fact stack / October / Light",year=2026,month0=9,
+             day=21,x=0,y=0,w=400,h=240,dark=0,holiday=0),
+        dict(name="1x2 four-fact stack / December / Dark",year=2026,month0=11,
+             day=31,x=600,y=240,w=200,h=240,dark=1,holiday=0),
+        dict(name="2x2 four-fact stack / December / Dark",year=2026,month0=11,
+             day=31,x=400,y=240,w=400,h=240,dark=1,holiday=0),
     ]
 
 def generate(output):
@@ -55,12 +63,12 @@ def generate(output):
           for item in scenes)
         doc=('<html lang="en"><meta charset="utf-8">'
            '<meta name="viewport" content="width=device-width,initial-scale=1">'
-           '<title>RE Date R4.6 original C++ compact pixel study</title>'
+           '<title>RE Date R4.7 original C++ compact and medium pixel study</title>'
            '<style>body{font-family:system-ui;background:#eae9e5;margin:20px;color:#222}'
            'main{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}'
            'article{background:white;padding:10px;border:1px solid #aaa}'
            'img{width:100%;image-rendering:pixelated}h2{font-size:15px}p{font-size:12px}'
-           '</style><h1>RE Date R4.6: actual compact C++ painter</h1>'
+           '</style><h1>RE Date R4.7: actual compact and medium C++ painter</h1>'
            '<p>Separate default-OFF host-only compact preview, original Fraunces / DM Sans '
            'GFX bitmaps, all Date labels are runtime facts. NOT a physical e-paper '
            'capture, GxEPD2 controller output, shipping firmware or flashing approval.</p>'

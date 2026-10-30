@@ -16,9 +16,14 @@ export function planDateEditorialCompact(input){
      c.w<=0||c.h<=0||!validInk(d)||!validInk(w))return null
   const micro=c.w<150||c.h<88||(c.w<230&&c.h<140)
   const shallow=!micro&&c.w>c.h&&c.h<170
-  if(!micro&&!shallow)return null
-  const hasYear=shallow&&c.w>=500
-  if(shallow&&(!validInk(m)||(hasYear&&!validInk(y))))return null
+  // Complete existing factual disclosure; no calendars are ever dropped.
+  const maybeCalendar=(c.w>=430&&c.h>=210)||(c.w>=330&&c.h>=400)
+  const stack=!micro&&!shallow&&!maybeCalendar&&c.h>=170
+  if(!micro&&!shallow&&!stack)return null
+  const hasYear=stack||(shallow&&c.w>=500)
+  const hasMonth=shallow||stack
+  if(hasMonth&&!validInk(m))return null
+  if(hasYear&&!validInk(y))return null
   if(!inside(c,rect(0,0,P.PANEL_WIDTH,P.PANEL_HEIGHT)))return null
   const inset=micro?8:12
   const safe=rect(c.x+inset,c.y+inset,c.w-2*inset,c.h-2*inset)
@@ -34,7 +39,7 @@ export function planDateEditorialCompact(input){
     day=rect(group.x+Math.floor((group.w-d.w)/2),group.y,d.w,d.h)
     weekday=rect(group.x+Math.floor((group.w-w.w)/2),
       day.y+day.h+gap,w.w,w.h)
-  }else{
+  }else if(shallow){
     const lineGap=12,colsGap=Math.max(16,Math.min(30,Math.floor(safe.w/20)))
     const contextW=Math.max(m.w,w.w)
     const contextH=m.h+lineGap+w.h
@@ -52,14 +57,28 @@ export function planDateEditorialCompact(input){
       month.y+month.h+lineGap,w.w,w.h)
     if(hasYear)year=rect(contextX+contextW+colsGap,
       group.y+Math.floor((groupH-y.h)/2),y.w,y.h)
+  }else{
+    const gap=Math.max(12,Math.min(24,Math.floor(safe.h/12)))
+    const groupW=Math.max(d.w,m.w,y.w,w.w)
+    const groupH=y.h+m.h+d.h+w.h+3*gap
+    if(groupW>safe.w||groupH>safe.h)return null
+    group=rect(safe.x+Math.floor((safe.w-groupW)/2),
+      safe.y+Math.floor((safe.h-groupH)/2),groupW,groupH)
+    year=rect(group.x+Math.floor((groupW-y.w)/2),group.y,y.w,y.h)
+    month=rect(group.x+Math.floor((groupW-m.w)/2),
+      year.y+year.h+gap,m.w,m.h)
+    day=rect(group.x+Math.floor((groupW-d.w)/2),
+      month.y+month.h+gap,d.w,d.h)
+    weekday=rect(group.x+Math.floor((groupW-w.w)/2),
+      day.y+day.h+gap,w.w,w.h)
   }
   if(!inside(day,safe)||!inside(weekday,safe)||overlap(day,weekday))
     return null
-  if(shallow&&(!inside(month,safe)||overlap(day,month)||
+  if(hasMonth&&(!inside(month,safe)||overlap(day,month)||
      overlap(month,weekday)))return null
   if(hasYear&&(!inside(year,safe)||overlap(year,day)||
      overlap(year,month)||overlap(year,weekday)))return null
-  return {kind:'editorial-compact',mode:micro?'micro':'ribbon',
-    valid:true,showMonth:shallow,showYear:hasYear,
+  return {kind:'editorial-compact',mode:micro?'micro':shallow?'ribbon':'stack',
+    valid:true,showMonth:hasMonth,showYear:hasYear,
     safe,group,day,month,weekday,year}
 }

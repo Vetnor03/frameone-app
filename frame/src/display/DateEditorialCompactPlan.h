@@ -7,7 +7,7 @@
 namespace DateEditorialCompact {
 using DateRolePlanner::Rect;
 using DateRolePlanner::Ink;
-enum Mode { REJECT=0, MICRO=1, RIBBON=2 };
+enum Mode { REJECT=0, MICRO=1, RIBBON=2, STACK=3 };
 struct Input {
   Rect cell;
   Ink day, month, weekday, year;
@@ -38,10 +38,18 @@ inline Plan plan(const Input& in){
      in.weekday.w<=0||in.weekday.h<=0)return out;
   const bool micro=c.w<150||c.h<88||(c.w<230&&c.h<140);
   const bool shallow=!micro&&c.w>c.h&&c.h<170;
-  if(!micro&&!shallow)return out;
-  const bool year=shallow&&c.w>=500;
-  if(shallow&&(in.month.w<=0||in.month.h<=0||
-     (year&&(in.year.w<=0||in.year.h<=0))))return out;
+  // Only add the four-fact editorial stack where the original renderer
+  // never reserves a calendar. Do not use named 1x2 / 2x2 layout cases.
+  // Conservative upper-bound of legacy calendarSplit geometry: if either
+  // calendar branch might apply, leave the complete old Date untouched.
+  const bool maybeCalendar=(c.w>=430&&c.h>=210)||
+                           (c.w>=330&&c.h>=400);
+  const bool stack=!micro&&!shallow&&!maybeCalendar&&c.h>=170;
+  if(!micro&&!shallow&&!stack)return out;
+  const bool year=stack||(shallow&&c.w>=500);
+  const bool showMonth=shallow||stack;
+  if(showMonth&&(in.month.w<=0||in.month.h<=0))return out;
+  if(year&&(in.year.w<=0||in.year.h<=0))return out;
   // This preview follows the current full logical 800x480 device and clips
   // each independent user-owned cell. Physical housing still unverified.
   const Rect panel=r(0,0,DateRolePolicy::PANEL_WIDTH,
@@ -61,7 +69,7 @@ inline Plan plan(const Input& in){
     day=r(group.x+(group.w-in.day.w)/2,group.y,in.day.w,in.day.h);
     weekday=r(group.x+(group.w-in.weekday.w)/2,day.y+day.h+gap,
               in.weekday.w,in.weekday.h);
-  }else{
+  }else if(shallow){
     // Fraunces date / DM Sans month+weekday / optional subtle year. Source
     // ink and actual available width determine all positions.
     const int lineGap=12,colsGap=mx(16,mn(30,safe.w/20));
@@ -83,16 +91,35 @@ inline Plan plan(const Input& in){
     if(year)yearBox=r(contextX+contextW+colsGap,
                       group.y+(groupH-in.year.h)/2,
                       in.year.w,in.year.h);
+  }else{
+    // Editorial four-fact vertical reading order matches legacy content:
+    // subtle year, month, Fraunces hero day, weekday. No optional illustration
+    // or calendar can displace any factual string. Rule depends on measured ink.
+    const int gap=mx(12,mn(24,safe.h/12));
+    const int groupW=mx(mx(in.day.w,in.month.w),
+                        mx(in.year.w,in.weekday.w));
+    const int groupH=in.year.h+in.month.h+in.day.h+in.weekday.h+3*gap;
+    if(groupW>safe.w||groupH>safe.h)return out;
+    group=r(safe.x+(safe.w-groupW)/2,safe.y+(safe.h-groupH)/2,
+            groupW,groupH);
+    yearBox=r(group.x+(groupW-in.year.w)/2,group.y,
+              in.year.w,in.year.h);
+    month=r(group.x+(groupW-in.month.w)/2,yearBox.y+yearBox.h+gap,
+            in.month.w,in.month.h);
+    day=r(group.x+(groupW-in.day.w)/2,month.y+month.h+gap,
+          in.day.w,in.day.h);
+    weekday=r(group.x+(groupW-in.weekday.w)/2,day.y+day.h+gap,
+              in.weekday.w,in.weekday.h);
   }
   if(!inside(day,safe)||!inside(weekday,safe)||
      overlap(day,weekday))return out;
-  if(shallow&&(!inside(month,safe)||overlap(day,month)||
+  if(showMonth&&(!inside(month,safe)||overlap(day,month)||
        overlap(month,weekday)))return out;
   if(year&&(!inside(yearBox,safe)||overlap(yearBox,day)||
             overlap(yearBox,month)||overlap(yearBox,weekday)))return out;
-  out.valid=true;out.mode=micro?MICRO:RIBBON;out.safe=safe;
+  out.valid=true;out.mode=micro?MICRO:(shallow?RIBBON:STACK);out.safe=safe;
   out.group=group;out.day=day;out.month=month;out.weekday=weekday;
-  out.year=yearBox;out.showMonth=shallow;out.showYear=year;
+  out.year=yearBox;out.showMonth=showMonth;out.showYear=year;
   return out;
 }
 } // namespace DateEditorialCompact

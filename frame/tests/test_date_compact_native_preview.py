@@ -1,4 +1,4 @@
-"""Real C++ Date compact micro/ribbon first-stage native-pixel proof.
+"""Real C++ Date compact micro/ribbon/stack native-pixel proof.
 
 The entire new variant stays behind a separate default-OFF flag, including
 the editorial CI build; this test alone enables it in a Linux host raster.
@@ -23,8 +23,16 @@ def native_compact(tmp_path_factory):
     (0,0,400,120,9,21,0,True),    # 2x1 ribbon — three facts
     (200,120,600,120,11,31,1,True), # 3x1 — year included
     (0,0,800,120,9,21,0,True),    # 4x1 — year included
-    (0,0,200,240,9,21,0,False),  # 1x2 — no replacement (yet)
-    (0,0,400,240,9,21,0,False),  # 2x2 — no replacement (yet)
+    (0,0,200,240,9,21,0,True),   # 1x2 — all four original facts
+    (0,0,400,240,9,21,0,True),   # 2x2 — all four original facts
+    (600,240,200,240,11,31,1,True), # 1x2 / December / Dark
+    (400,240,400,240,11,31,1,True), # 2x2 / December / Dark
+    (0,0,200,360,9,21,0,True),   # 1x3 no calendar
+    (0,0,400,360,9,21,0,True),   # 2x3 no calendar
+    (0,0,200,480,9,21,0,True),   # 1x4 no calendar
+    (0,0,400,480,9,21,0,False),  # 2x4 legacy calendar retained
+    (0,0,600,240,9,21,0,False),  # 3x2 legacy calendar retained
+    (0,0,800,360,9,21,0,False),  # 4x3 legacy calendar retained
 ])
 def test_original_cpp_compact_admission_and_ink_bounds(
         native_compact,tmp_path,x,y,w,h,month0,day,dark,expected):
@@ -41,7 +49,7 @@ def test_original_cpp_compact_admission_and_ink_bounds(
     assert pgm.is_file()
     if expected:
         assert result["inkInside"]>=300,result
-        # Original editorial two-calendar planner is not faking small success.
+        # Original editorial two-calendar planner is not faking compact success.
         assert result["preflight"]["f2"] is False,result
 
 def test_compact_feature_disabled_in_normal_firmware_and_prior_preview():
@@ -57,3 +65,42 @@ def test_compact_feature_disabled_in_normal_firmware_and_prior_preview():
     assert "colSpan" not in compact and "rowSpan" not in compact
     assert "DateRolePolicy::PANEL_WIDTH" in compact
     assert "showYear=year" in compact
+
+
+@pytest.mark.parametrize("cw,rh",[(w,h) for w in range(1,5) for h in range(1,5)])
+def test_all_16_grid_shapes_preserve_native_bounds_and_calendar_fallback(
+        native_compact,tmp_path,cw,rh):
+    # Invoke the actual Date firmware entry point for all 16 *real* shapes.
+    # A calendar-capable shape may be admitted by the full editorial stage;
+    # the four-fact stack itself must never replace a calendar.
+    w,h=cw*200,rh*120
+    file=tmp_path/f"date_{cw}x{rh}.pgm"
+    case=dict(year=2026,month0=9,day=21,x=0,y=0,w=w,h=h,
+              dark=0,holiday=0)
+    result=capture(native_compact,case,file)
+    assert result["packedPixelMismatches"]==0,result
+    assert result["packedBytes"]==48000,result
+    assert result["outOfBounds"]==0,result
+    if result["admitted"]:
+        assert result["inkOutside"]==0,result
+        assert result["inkOutsideMatte"]==0,result
+    # The no-calendar micro/ribbon/stack family always admits four-fact
+    # source ink in these nine physical shapes, including both 1x2/2x2.
+    if (cw,rh) in {(1,1),(2,1),(3,1),(4,1),
+                   (1,2),(2,2),(1,3),(2,3),(1,4)}:
+        assert result["admitted"],(cw,rh,result)
+
+
+@pytest.mark.parametrize("w,h",[(200,240),(400,240)])
+def test_holidays_do_not_remove_or_change_compact_factual_date(
+        native_compact,tmp_path,w,h):
+    # In these two legacy sizes the configured holiday list is not drawn,
+    # so adding one must not change the displayed four factual lines.
+    def rendered(holiday):
+        target=tmp_path/f"stack_{w}_{h}_{holiday}.pgm"
+        return capture(native_compact,dict(
+            year=2026,month0=9,day=21,x=0,y=0,w=w,h=h,
+            dark=0,holiday=holiday),target)
+    plain,with_holiday=rendered(0),rendered(1)
+    assert plain["admitted"] and with_holiday["admitted"]
+    assert plain["hash"]==with_holiday["hash"]
