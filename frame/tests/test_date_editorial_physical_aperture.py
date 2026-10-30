@@ -58,26 +58,30 @@ def test_full_4x4_both_complete_calendar_months_inside_aperture(
 
 def test_all_100_legal_positions_clip_only_their_own_full_editorial_ink(
         native_editorial,tmp_path):
-    # Physical QA of actual 1-bit pixels wherever the full-editorial
-    # candidate is admitted; valid smaller layouts stay with legacy.
+    # BOTH Light and Dark, all 100 legal grid locations and all 16 shapes.
+    # Check actual 1-bit original-C++ painted pixels, not CSS/JS rectangles.
+    # Non-admitted positions remain the legacy renderer: never misrepresent
+    # them as proof of safe FULL EDITORIAL drawing.
     admitted=0
+    checked=0
     for w,h in product(range(1,5),repeat=2):
         for col,row in product(range(5-w),range(5-h)):
             x,y=col*200,row*120
-            # Include dark once per legal location, light everywhere else.
-            dark=(col+row)%2
-            target=tmp_path/f"cell_{w}_{h}_{col}_{row}.pgm"
-            case=dict(name="grid slot",year=2026,month0=9,day=21,
-                x=x,y=y,w=200*w,h=120*h,dark=dark,holiday=0)
-            state=capture(native_editorial,case,target)
-            assert state["packedBytes"]==48000,state
-            assert state["packedPixelMismatches"]==0,state
-            assert state["outOfBounds"]==0,state
-            if not state["admitted"]:continue
-            admitted+=1
-            assert state["inkOutside"]==0,case
-            assert behind_opening(target,bool(dark))==0,(case,state)
-    assert admitted>0
+            for dark in (0,1):
+                checked+=1
+                target=tmp_path/f"cell_{w}_{h}_{col}_{row}_{dark}.pgm"
+                case=dict(name="grid slot",year=2026,month0=9,day=21,
+                    x=x,y=y,w=200*w,h=120*h,dark=dark,holiday=0)
+                state=capture(native_editorial,case,target)
+                assert state["packedBytes"]==48000,state
+                assert state["packedPixelMismatches"]==0,state
+                assert state["outOfBounds"]==0,state
+                if not state["admitted"]:continue
+                admitted+=1
+                assert state["inkOutside"]==0,case
+                assert behind_opening(target,bool(dark))==0,(case,state)
+    assert checked==200
+    assert admitted>=2  # full 4x4 is accepted in both themes
 
 def test_known_legacy_fallback_and_missing_holiday_info_not_misrepresented(
         native_editorial,tmp_path):
