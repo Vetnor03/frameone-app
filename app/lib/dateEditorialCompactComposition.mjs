@@ -28,7 +28,7 @@ export function planDateEditorialCompact(input){
   const inset=micro?8:12
   const safe=rect(c.x+inset,c.y+inset,c.w-2*inset,c.h-2*inset)
   if(safe.w<=0||safe.h<=0)return null
-  let day,month=null,weekday,year=null,group
+  let day,month=null,weekday,year=null,group,botanical=null,art=false
   if(micro){
     const gap=12
     const groupW=Math.max(d.w,w.w)
@@ -62,8 +62,17 @@ export function planDateEditorialCompact(input){
     const groupW=Math.max(d.w,m.w,y.w,w.w)
     const groupH=y.h+m.h+d.h+w.h+3*gap
     if(groupW>safe.w||groupH>safe.h)return null
+    // Same 84:88 original botanical source and integer C++ geometry.
+    const artH=Math.min(56,Math.max(32,Math.floor(safe.h/6)))
+    const artW=Math.floor(artH*84/88)
+    const artGap=10,outer=8
+    const extra=artH+artGap
+    art=artW<=safe.w&&groupH+extra+2*outer<=safe.h
+    const ensembleH=groupH+(art?extra:0)
     group=rect(safe.x+Math.floor((safe.w-groupW)/2),
-      safe.y+Math.floor((safe.h-groupH)/2),groupW,groupH)
+      safe.y+Math.floor((safe.h-ensembleH)/2),groupW,groupH)
+    if(art)botanical=rect(safe.x+Math.floor((safe.w-artW)/2),
+      group.y+groupH+artGap,artW,artH)
     year=rect(group.x+Math.floor((groupW-y.w)/2),group.y,y.w,y.h)
     month=rect(group.x+Math.floor((groupW-m.w)/2),
       year.y+year.h+gap,m.w,m.h)
@@ -78,7 +87,10 @@ export function planDateEditorialCompact(input){
      overlap(month,weekday)))return null
   if(hasYear&&(!inside(year,safe)||overlap(year,day)||
      overlap(year,month)||overlap(year,weekday)))return null
+  if(art&&(!inside(botanical,safe)||overlap(botanical,day)||
+    overlap(botanical,month)||overlap(botanical,weekday)||
+    overlap(botanical,year)))return null
   return {kind:'editorial-compact',mode:micro?'micro':shallow?'ribbon':'stack',
     valid:true,showMonth:hasMonth,showYear:hasYear,
-    safe,group,day,month,weekday,year}
+    safe,group,day,month,weekday,year,art,botanical}
 }
