@@ -14,6 +14,12 @@
 #include "RemindEditorialFonts.h"
 #endif
 // R4 editorial Date is an independent explicit opt-in from legacy role preview.
+#ifndef REMIND_DATE_COMPACT_PREVIEW_ENABLED
+#define REMIND_DATE_COMPACT_PREVIEW_ENABLED 0
+#endif
+#if REMIND_DATE_COMPACT_PREVIEW_ENABLED && !REMIND_DATE_EDITORIAL_PREVIEW_ENABLED
+#error "Compact Date preview requires editorial Date preview"
+#endif
 #ifndef REMIND_DATE_EDITORIAL_PREVIEW_ENABLED
 #define REMIND_DATE_EDITORIAL_PREVIEW_ENABLED 0
 #endif
@@ -25,6 +31,9 @@
 #include "DateEditorialDualCalendar.h"
 #include "DateEditorialHolidays.h"
 #include "DateEditorialBotanical.h"
+#if REMIND_DATE_COMPACT_PREVIEW_ENABLED
+#include "DateEditorialCompactPlan.h"
+#endif
 #endif
 #include <time.h>
 
@@ -1641,6 +1650,71 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   d.setTextWrap(true);
   return true;
 }
+#if REMIND_DATE_COMPACT_PREVIEW_ENABLED
+// R4.6 separate host-proof switch; NOT enabled in any existing firmware target.
+// Small Date is factual: a micro Date shows day+weekday, a shallow ribbon adds
+// month and only adds year if the unchanged legacy width rule does so.
+// Measure ALL original font glyphs and place them before the first pixel.
+static bool tryDrawEditorialCompactDatePreview(const Cell& c,
+    const char* weekday,const char* month,int year,int month0,int dayNum){
+  if(c.size!=CELL_ADAPTIVE||!weekday||!month||
+     year<DateRolePolicy::CONTEXT_YEAR_MIN||
+     year>DateRolePolicy::CONTEXT_YEAR_MAX||
+     month0<0||month0>11||dayNum<1||
+     dayNum>DateMonthGridPlan::days(year,month0))return false;
+  const bool micro=c.w<150||c.h<88||(c.w<230&&c.h<140);
+  const bool shallow=!micro&&c.w>c.h&&c.h<170;
+  if(!micro&&!shallow)return false;
+  const bool showYear=shallow&&c.w>=500;
+  DateEditorialCompact::Input input={};
+  input.cell={c.x,c.y,c.w,c.h};
+  if(!measureF2DateLabel(weekday,RemindEditorialFonts::dm18(),
+                         input.weekday))return false;
+  char dayText[8]={},yearText[8]={};
+  snprintf(dayText,sizeof dayText,"%d",dayNum);
+  snprintf(yearText,sizeof yearText,"%d",year);
+  if(showYear&&!measureF2DateLabel(yearText,RemindEditorialFonts::dm18(),
+                                  input.year))return false;
+  const GFXfont* days[]={
+    RemindEditorialFonts::fraunces72(),RemindEditorialFonts::fraunces48()};
+  const GFXfont* months[]={
+    RemindEditorialFonts::dm24(),RemindEditorialFonts::dm18()};
+  for(const GFXfont* dayFont:days) {
+    if(!measureF2DateLabel(dayText,dayFont,input.day))continue;
+    const int variants=shallow?2:1;
+    for(int variant=0;variant<variants;++variant){
+      const GFXfont* monthFont=months[variant];
+      if(shallow&&!measureF2DateLabel(month,monthFont,input.month))
+        continue;
+      const auto layout=DateEditorialCompact::plan(input);
+      if(!layout.valid)continue;
+      DateF2Ink::Text dayDraw={},weekdayDraw={},monthDraw={},yearDraw={};
+      if(!roleLine(dayText,dayFont,layout.day,dayDraw)||
+         !roleLine(weekday,RemindEditorialFonts::dm18(),
+                   layout.weekday,weekdayDraw)||
+         (layout.showMonth&&!roleLine(month,monthFont,
+                          layout.month,monthDraw))||
+         (layout.showYear&&!roleLine(yearText,RemindEditorialFonts::dm18(),
+                         layout.year,yearDraw)))continue;
+      // ATOMIC PAINT BOUNDARY. This is the exact original C++ F2 font ink,
+      // not an SVG, pre-painted fallback or arbitrary text clipping.
+      auto& d=DisplayCore::get();
+      d.setTextColor(Theme::ink());
+      d.setTextSize(1);
+      d.setTextWrap(false);
+      paintRoleLine(dayDraw);
+      if(layout.showMonth)paintRoleLine(monthDraw);
+      paintRoleLine(weekdayDraw);
+      if(layout.showYear)paintRoleLine(yearDraw);
+      d.setFont(nullptr);
+      d.setTextSize(1);
+      d.setTextWrap(true);
+      return true;
+    }
+  }
+  return false;
+}
+#endif  // REMIND_DATE_COMPACT_PREVIEW_ENABLED
 #endif // REMIND_DATE_EDITORIAL_PREVIEW_ENABLED
 
 static void renderDate(const Cell& c) {
@@ -1662,6 +1736,10 @@ static void renderDate(const Cell& c) {
   int todayMonth0 = month0;
   int todayDay = dayNum;
 #if REMIND_DATE_EDITORIAL_PREVIEW_ENABLED
+#if REMIND_DATE_COMPACT_PREVIEW_ENABLED
+  if(tryDrawEditorialCompactDatePreview(c,wday,month,year,month0,dayNum))
+    return;
+#endif
   if(tryDrawEditorialDatePreview(c,wday,month,year,month0,dayNum))return;
 #else
 #if REMIND_DATE_ROLE_PREVIEW_ENABLED
