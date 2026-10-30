@@ -58,16 +58,21 @@ export function planDateEditorialCompact(input){
     if(hasYear)year=rect(contextX+contextW+colsGap,
       group.y+Math.floor((groupH-y.h)/2),y.w,y.h)
   }else{
-    const gap=Math.max(12,Math.min(24,Math.floor(safe.h/12)))
+    let gap=Math.max(12,Math.min(24,Math.floor(safe.h/12)))
     const groupW=Math.max(d.w,m.w,y.w,w.w)
-    const groupH=y.h+m.h+d.h+w.h+3*gap
+    const factsH=y.h+m.h+d.h+w.h
+    let groupH=factsH+3*gap
     if(groupW>safe.w||groupH>safe.h)return null
-    // Same 84:88 original botanical source and integer C++ geometry.
-    const artH=Math.min(56,Math.max(32,Math.floor(safe.h/6)))
+    // Same original 84:88 ink and optional measured 14px fact rhythm.
+    const artH=Math.min(56,Math.max(36,Math.floor(safe.h/5)))
     const artW=Math.floor(artH*84/88)
     const artGap=10,outer=8
     const extra=artH+artGap
     art=artW<=safe.w&&groupH+extra+2*outer<=safe.h
+    if(!art&&artW<=safe.w&&gap>14&&
+       factsH+3*14+extra+2*outer<=safe.h){
+      gap=14;groupH=factsH+3*gap;art=true
+    }
     const ensembleH=groupH+(art?extra:0)
     group=rect(safe.x+Math.floor((safe.w-groupW)/2),
       safe.y+Math.floor((safe.h-ensembleH)/2),groupW,groupH)
