@@ -22,8 +22,7 @@ export function planDateDualCalendar(editorial,source){
   const firstRows=rows(year,month0),secondRows=rows(nextYear,nextMonth0)
   // ISO week numbers are secondary. Give the seven date columns a minimum
   // 40px pitch after 24px padding and a 27px week-number gutter.
-  const showWeekNums=Boolean(editorial.calendar.features?.showWeekNums)&&
-    region.w>=24+27+7*40
+  const showWeekNums=region.w>=24+27+7*40
   const chrome=16+22+10+18 // padding, title, title gap, DOW header
   const margin=4,gap=8 // the calendars each have their own 8px padding
   const usable=safe.h-2*margin-gap
