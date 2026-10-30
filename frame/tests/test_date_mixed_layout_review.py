@@ -1,6 +1,6 @@
 """Date R4 mixed custom-grid containment and source/native geometry parity.
 
-This checks the real 800x480 firmware coordinate scale and matte crop, not
+This checks the real 800x480 firmware coordinate scale and full Date viewport, not
 other modules' actual rendering. NO physical GxEPD2 framebuffer is captured.
 """
 import json
@@ -26,7 +26,7 @@ def test_real_firmware_grid_and_mixed_source_ink_report(tmp_path):
     assert "VIEWPORT_W = 800" in source and "VIEWPORT_H = 480" in source
     assert "gridX(uint8_t boundary) { return VIEWPORT_X +" in layout
     assert "gridY(uint8_t boundary) { return VIEWPORT_Y +" in layout
-    assert PANEL==(800,480) and MATTE==(58,39,680,436)
+    assert PANEL==(800,480) and MATTE==(0,0,800,480)
     items=scenarios()
     assert len(items)==11
     decision=plans(items)
