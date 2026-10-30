@@ -53,11 +53,10 @@ inline Plan plan(const Input& input){
     return result;
 
   const Rect c=input.cell;
-  // The grid remains 800x480, but the documented installed aperture
-  // hides its outer pixels. The full factual ensemble belongs to this Date
-  // cell only: intersect BOTH boundaries before any font/calendar placement.
-  // Do not translate other modules, and never sacrifice the second month.
-  // This measured phase-0 aperture still requires physical alignment QA.
+  // Full logical 800x480 is authoritative until V4's opening is measured.
+  // Generated MATTE is the design viewport (currently the full panel),
+  // not an assertion that the historical 680x436 aperture exists on V4.
+  // Preserve the user-owned cell and both calendar months.
   const int x=ma(c.x,DateRolePolicy::MATTE_X);
   const int y=ma(c.y,DateRolePolicy::MATTE_Y);
   const int right=mi(c.x+c.w,
