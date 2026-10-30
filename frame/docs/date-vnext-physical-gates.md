@@ -65,7 +65,7 @@ Validate existing local files *without connecting to a board*:
 
 `python frame/tools/verify_firmware_recovery.py --manifest C:/PRIVATE/BACKUPS/recovery-manifest.json`
 
-It checks a 16 MiB backup, ESP image magic at bootloader/app addresses, partition-table magic at 0x8000, the exact SHA256 and whether **manual** evidence fields have been populated truthfully. It cannot authenticate the truth of an attestation or prove that recovery works. It only prints **METADATA CHECK PASSED** after all supplied preconditions match. It never writes or flashes anything.
+It checks a 16 MiB backup, the **actual ESP-IDF partition entries and MD5 digest at 0x8000**, every app region's bounds/overlap, 16 MiB bootloader header and **ESP32-S3 chip ID (9)**, real bootloader/app segments and their XOR checksums, appended image SHA256 where available, the **whole-file SHA256**, and whether **manual** evidence fields have been populated truthfully. The validator deliberately accepts either valid OTA app slot, rather than blindly assuming app0 is active. It cannot determine the active OTA slot, secure-boot signatures, flash-encryption/eFuse compatibility or actual boot/restore success. A structurally valid synthetic image is therefore **not proof** of working firmware. It cannot authenticate the truth of an attestation or prove that recovery works. It only prints **METADATA CHECK PASSED** after all supplied preconditions match. It never writes or flashes anything.
 
 ## Release decision
 
