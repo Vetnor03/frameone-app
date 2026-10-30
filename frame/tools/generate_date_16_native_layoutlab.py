@@ -32,13 +32,13 @@ def old_crop_impact(pgm,dark):
 
 def crop_cell_png(pgm,x,y,w,h):
     p=raster(pgm)
-    scan=b"".join(b"\\x00"+p[yy*800+x:yy*800+x+w].tobytes()
+    scan=b"".join(b"\x00"+p[yy*800+x:yy*800+x+w].tobytes()
                   for yy in range(y,y+h))
     def chunk(name,data):
         body=name+data
         return struct.pack("!I",len(data))+body+struct.pack(
             "!I",zlib.crc32(body)&0xffffffff)
-    return (b"\\x89PNG\\r\\n\\x1a\\n"+
+    return (b"\x89PNG\r\n\x1a\n"+
       chunk(b"IHDR",struct.pack("!IIBBBBB",w,h,8,0,0,0,0))+
       chunk(b"IDAT",zlib.compress(scan,9))+chunk(b"IEND",b""))
 
