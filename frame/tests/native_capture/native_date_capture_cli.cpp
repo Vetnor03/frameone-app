@@ -130,7 +130,7 @@ int main(int argc,char** argv){
     if(gridValid){
       fontValid=gridFontFits(grid,false,RemindEditorialFonts::dm18());
       gridCellW=grid.cellW;gridCellH=grid.cellH;
-      radiusValid=min(16,min(grid.cellW,grid.cellH)/2-2)>=11;
+      radiusValid=min(16,min(grid.cellW,grid.cellH)/2-2)>=9;
     }
     if(wantsDual&&dual.valid){
       const auto next=DateMonthGridPlan::plan(
