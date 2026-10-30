@@ -97,7 +97,7 @@ def test_all_100_grid_positions_and_measured_ink_edge_parity(native):
     assert seen=={"micro","ribbon","stack"}
 
 def test_functional_disclosure_matches_legacy_micro_and_shallow(native):
-    base=dict(day=dict(w=65,h=54),month=dict(w=96,h=18),
+    base=dict(day=dict(w=49,h=36),month=dict(w=96,h=18),
               weekday=dict(w=93,h=15),year=dict(w=39,h=15))
     for w,h,mode,year in [
       (200,120,"micro",False),
@@ -126,12 +126,14 @@ def test_botanical_admits_only_if_four_facts_and_separate_margins_fit(native):
     base=dict(day=dict(w=71,h=53),month=dict(w=95,h=19),
               weekday=dict(w=100,h=17),year=dict(w=43,h=14))
     examples=[
-      (200,240,True),(400,240,True), (200,360,True),
-      (400,360,True),(200,480,True),(400,120,False),
-      (400,480,False), # legacy calendar must be preserved
+      (0,0,200,240,False),(0,0,400,240,False), # top bezel
+      (0,0,200,360,True),(0,0,400,360,True),
+      (0,0,200,480,True),(0,0,400,120,False),
+      (0,0,400,480,False), # legacy calendar must be preserved
+      (200,120,200,240,True),(200,120,400,240,True),
     ]
-    for w,h,expected_art in examples:
-        source={**base,"cell":dict(x=0,y=0,w=w,h=h)}
+    for x,y,w,h,expected_art in examples:
+        source={**base,"cell":dict(x=x,y=y,w=w,h=h)}
         js=subprocess.run(["node",str(JS)],
             input=json.dumps(source)+"\n",text=True,capture_output=True,
             cwd=ROOT,timeout=15)
@@ -149,7 +151,7 @@ def test_botanical_admits_only_if_four_facts_and_separate_margins_fit(native):
             assert flower["y"]+flower["h"]<=result["safe"]["y"]+result["safe"]["h"]-8
     # Without ample room the figure vanishes; text stays at the approved
     # native font and remains fully visible.
-    narrow={**base,"cell":dict(x=0,y=0,w=400,h=240),
+    narrow={**base,"cell":dict(x=200,y=120,w=400,h=240),
             "day":dict(w=71,h=100)}
     js=subprocess.run(["node",str(JS)],input=json.dumps(narrow)+"\n",
                       text=True,capture_output=True,cwd=ROOT,timeout=15)
