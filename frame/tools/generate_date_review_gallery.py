@@ -155,6 +155,19 @@ def render_calendar(entry,today,holiday_set,fonts):
             sample=min(dim,max(1,firstday))
             iso=__import__("datetime").date(year,month,sample).isocalendar().week
             out.append(text_centered(str(iso),fonts["S9"],bx+2,gridtop+row*ch,18,ch,ink))
+    # Match the exact C++ editorial-only DM Sans 18 measured admission.
+    # Keep original FreeSans9 numerals on cramped calendars and all legacy.
+    dayfont=fonts["S9"]
+    if entry.get("editorialTitle") and cw>=30 and ch>=25:
+        larger=fonts["DM18"]
+        fits=all(metrics(str(n),larger)[2]<=cw-6 and
+                 metrics(str(n),larger)[3]<=ch-10 for n in range(1,32))
+        if (year,month)==today[:2]:
+            radius=min(16,min(cw,ch)//2-2)
+            _,_,inkw,inkh=metrics(str(today[2]),larger)
+            fits=fits and radius>=11 and inkw<=2*radius-4 and inkh<=2*radius-4
+        if fits:
+            dayfont=larger
     for day in range(1,dim+1):
         index=offset+day-1
         row,col=divmod(index,7)
@@ -164,7 +177,7 @@ def render_calendar(entry,today,holiday_set,fonts):
         if is_today:
             rad=min(16,max(1,min(cw,ch)//2-2))
             out.append(f'<circle cx="{cx+cw//2}" cy="{cy+ch//2}" r="{rad}" fill="none" stroke="#292929" stroke-width="1.2"/>')
-        out.append(text_centered(str(day),fonts["S9"],cx,cy,cw,ch,"#000" if is_today else ink))
+        out.append(text_centered(str(day),dayfont,cx,cy,cw,ch,"#000" if is_today else ink))
         if (month,day) in holiday_set:
             out.append(f'<circle cx="{cx+cw//2}" cy="{cy+ch-3}" r="2" fill="#000"/>')
     return "".join(out)

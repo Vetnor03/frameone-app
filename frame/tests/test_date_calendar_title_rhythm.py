@@ -1,6 +1,7 @@
 """Editorial calendar title quality checks; source GFX ink, not web typography.
 
-Calendar month/day/week numbers and holiday markers stay unchanged. This is
+Legacy calendar month/day/week labels and holiday markers remain unchanged.
+Editorial-only day labels may adopt measured original DM Sans 18. This is
 not a GxEPD2 frame capture or physical 1–2m readability approval.
 """
 import calendar
@@ -37,7 +38,9 @@ def test_editorial_only_draw_preflight_and_legacy_title_default():
     assert "if(editorialTitleFont) {" in DATE
     assert "gridFontFits(grid,false,RemindEditorialFonts::dm18())" in DATE
     assert "gridFontFits(nextGrid,dual.showNextYear," in DATE
-    assert "RemindEditorialFonts::dm18());" in DATE
+    assert "RemindEditorialFonts::dm18(),currentDays);" in DATE
+    assert "RemindEditorialFonts::dm18(),nextDays);" in DATE
+    assert "const GFXfont* currentDays=uniformDays?candidateCurrentDays:nullptr" in DATE
     assert "d.drawLine(midX-halfSpan,ruleY,midX-8,ruleY,ink);" in DATE
     assert 'true,showWeekNums,true,true,dual.showNextYear,' in DATE
     assert 'const bool showWeekNums=needsDual?dual.showWeekNums:p.showWeeks;' in DATE
