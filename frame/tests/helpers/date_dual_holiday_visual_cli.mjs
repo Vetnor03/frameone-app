@@ -13,7 +13,7 @@ if(src)for(const row of src.split(/\r?\n/)){
   // The mixed-grid QA prediction must disclose the SAME full one-month
   // source facts admitted by C++ when legacy was not an expanded Date.
   // Never invent next month to obtain an accepted checkbox.
-  const single=editorial&&!expanded?{
+  const single=allowSingle&&editorial&&!expanded?{
     current:editorial.calendar,next:null,visible:editorial.visible,
     safe:editorial.safe,kind:'measured-single-calendar'
   }:null
