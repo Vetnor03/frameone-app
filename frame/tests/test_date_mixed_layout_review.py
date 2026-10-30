@@ -130,7 +130,7 @@ def test_real_cpp_dual_planner_matches_js_at_all_100_firmware_placements(tmp_pat
         assert nxt==coords(pl["next"]["rect"])
         assert ym==",".join(map(str,(pl["next"]["year"],pl["next"]["month0"],
                                       int(pl["next"]["showYear"]))))
-        assert gaps==f'{pl["gap"]},{pl["margin"]}'
+        assert gaps==f'{pl["gap"]},{pl["margin"]},{int(pl["current"]["features"]["showWeekNums"])}'
     assert accepted>0
 
 def test_no_surf_changes_and_native_renderer_still_default_off():
