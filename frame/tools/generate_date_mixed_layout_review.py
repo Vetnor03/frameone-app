@@ -82,7 +82,7 @@ def plans(scenes):
     slots=[(i,j,c,scene["facts"]) for i,scene in enumerate(scenes)
            for j,c in enumerate(scene["cells"]) if c["module"]=="date"]
     stdin="".join(json.dumps(dict(cell={k:c[k] for k in ("x","y","w","h")},
-                                  facts=f),ensure_ascii=False)+"\n"
+                                  facts=f,allowSingle=True),ensure_ascii=False)+"\n"
                   for _,_,c,f in slots)
     out=subprocess.run(["node",str(CLI)],input=stdin,
         cwd=ROOT,text=True,capture_output=True,timeout=40)
