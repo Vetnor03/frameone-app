@@ -13,8 +13,9 @@ policy = json.loads((ROOT / "shared/date-element-policy.json").read_text(encodin
 m = policy["panel"]["matte"]
 g = policy["candidateGeometry"]
 vals = {
-    # Shared physical panel coordinates for editorial Date; legacy diagnostic
-    # matte remains untouched for the older role-only experiments.
+    # DATE composition uses all 800x480 logical pixels until the aperture is
+    # physically measured on V4. The historical crop is diagnostic ONLY; it
+    # remains in panel.historicalMatte, never in active MATTE viewport fields.
     "PANEL_WIDTH": policy["panel"]["width"],
     "PANEL_HEIGHT": policy["panel"]["height"],
     "MATTE_X": m["x"], "MATTE_Y": m["y"],

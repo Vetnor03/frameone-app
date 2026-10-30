@@ -65,18 +65,18 @@ def generate(output):
                 raise ValueError(f"Actual Date painter did not safely admit {item['name']}: {status}")
             content=pgm.read_bytes()
             behind=hidden_physical_ink(content,item["dark"])
-            if behind:
-                raise ValueError(f"Compact Date ink behind phase-0 aperture: "
-                                 f"{item['name']}, pixels={behind}")
+            # Historical 680x436 hypothesis only. It is NOT verified on V4
+            # and must NEVER reject an otherwise full-panel-valid design.
             filename=f"compact_{i}.png"
             (output/filename).write_bytes(pgm_to_png(content))
             scenes.append(dict(name=item["name"],png=filename,
                                cell={k:item[k] for k in ("x","y","w","h")},
-                               inkInside=status["inkInside"],hiddenBezelInk=behind,
+                               inkInside=status["inkInside"],hypotheticalOldMatteInk=behind,
                                hash=status["hash"],admitted=status["admitted"]))
         summary=dict(scenes=scenes,physicalPanel=False,flashed=False,
                      standardFirmwareFlagEnabled=False,
-                     phase0Aperture=dict(x=58,y=39,w=680,h=436),
+                     logicalViewport=dict(x=0,y=0,w=800,h=480),
+                     historicalMatteUnverified=dict(x=58,y=39,w=680,h=436),
                      renderer="original ModuleDate.cpp/Fraunces+DM Sans F2 host-pixel")
         (output/"manifest.json").write_text(json.dumps(summary,indent=2))
         cards="".join(
@@ -87,12 +87,12 @@ def generate(output):
           for item in scenes)
         doc=('<html lang="en"><meta charset="utf-8">'
            '<meta name="viewport" content="width=device-width,initial-scale=1">'
-           '<title>RE Date R4.8 original C++ optional botanical ink study</title>'
+           '<title>RE Date R4.13 full-panel Date original GFX ink study</title>'
            '<style>body{font-family:system-ui;background:#eae9e5;margin:20px;color:#222}'
            'main{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}'
            'article{background:white;padding:10px;border:1px solid #aaa}'
            'img{width:100%;image-rendering:pixelated}h2{font-size:15px}p{font-size:12px}'
-           '</style><h1>RE Date R4.8: original shared 1-bit botanical on fitted stacks</h1>'
+           '</style><h1>RE Date R4.13: full logical viewport + optional botanical</h1>'
            '<p>Separate default-OFF host-only compact preview, original Fraunces / DM Sans '
            'GFX bitmaps, all Date labels are runtime facts. NOT a physical e-paper '
            'capture, GxEPD2 controller output, shipping firmware or flashing approval.</p>'

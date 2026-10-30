@@ -93,6 +93,15 @@ jobs:
           path: ${{ runner.temp }}/date-native-compact/
           if-no-files-found: error
           retention-days: 7
+      - name: Render all 16 original native C++ Date shapes — full logical 800x480
+        run: python3 frame/tools/generate_date_16_native_layoutlab.py --output "$RUNNER_TEMP/date-all-16-native"
+      - name: Upload all 16 shapes Light/Dark native Layout Lab review (NOT PHYSICAL PANEL)
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-vnext-16-shapes-native-full-panel-unflashed
+          path: ${{ runner.temp }}/date-all-16-native/
+          if-no-files-found: error
+          retention-days: 7
       - name: Audit actual native Date admission in all 11 mixed-layout scenarios (NOT full other-module paint)
         run: python3 frame/tools/audit_date_native_mixed_parity.py --output "$RUNNER_TEMP/date-native-mixed-admission.json"
       - name: Upload mixed SVG/native C++ admission comparison (NOT panel capture)

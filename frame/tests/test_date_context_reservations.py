@@ -137,7 +137,7 @@ def test_native_calendar_year_and_holiday_reservations_match_js(tmp_path):
         rectangles.extend([actual["nextCalendar"][0]] if actual["nextCalendar"] else [])
         rectangles.extend([actual["year"]] if actual["year"] else [])
         rectangles.extend(v for v in actual["holidays"] if v)
-        matte=(58,39,680,436)
+        matte=(0,0,800,480)
         for k,v in enumerate(rectangles):
             assert inside(v,matte)
             for w in rectangles[k+1:]:

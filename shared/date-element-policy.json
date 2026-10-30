@@ -7,13 +7,14 @@
       "Fraunces + DM Sans from physical font test 6",
       "Essential date first",
       "Full date strings without ellipsis",
-      "Actual matte viewport and ink bounds",
+      "Full 800x480 display and passepartout edge confirmed by owner for current V4; exact F2 glyph ink bounds",
       "Surf frozen"
     ],
     "candidates": [
       "numeric geometry thresholds from PR #1423",
       "calendar and decoration minimum-area thresholds",
-      "font variant ordering subject to F2 ink fit"
+      "font variant ordering subject to F2 ink fit",
+      "historical diagnostic matte x58,y39,w680,h436 is NOT a V4 physical measurement"
     ]
   },
   "panel": {
@@ -22,10 +23,24 @@
     "gridColumns": 4,
     "gridRows": 4,
     "matte": {
+      "x": 0,
+      "y": 0,
+      "width": 800,
+      "height": 480
+    },
+    "historicalMatte": {
       "x": 58,
       "y": 39,
       "width": 680,
-      "height": 436
+      "height": 436,
+      "verification": "unverified_for_current_V4",
+      "use": "diagnostic_scenario_only"
+    },
+    "layoutViewportAuthority": "owner_confirmed_current_V4_full_800x480",
+    "ownerConfirmation": {
+      "date": "2026-10-30",
+      "finding": "Passepartout opening follows the display outer edge; entire 800x480 usable",
+      "type": "owner_statement_not_independent_pixel_measurement"
     }
   },
   "priorities": [
@@ -173,7 +188,7 @@
     "doNotAssumeCalendarOrArtFitsFromShape": true,
     "evaluationOrder": [
       "facts",
-      "matteIntersection",
+      "logicalPanelIntersection",
       "candidateComposition",
       "F2GlyphMeasurement",
       "priorityBasedDegradation",
@@ -192,7 +207,7 @@
     ],
     "compositionSelection": "evaluate_all_feasible_candidates_and_choose_best_measured_whole_plan",
     "selectionInputs": [
-      "matteClippedVisibleRect",
+      "DateCellIntersectedWithFullLogicalPanel",
       "factualDateAndCalendarContent",
       "elementRolesAndPriorities",
       "actualF2GfxGlyphInkBounds",

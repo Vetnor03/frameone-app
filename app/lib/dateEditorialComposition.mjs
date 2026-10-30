@@ -21,9 +21,8 @@ const measureVariants=(text,fonts)=>fonts.map(font=>{
 const safeSpace=cell=>{
   if(!cell||!['x','y','w','h'].every(k=>Number.isInteger(cell[k]))||
      cell.w<=0||cell.h<=0)return null
-  // Keep the full 800x480 user grid, but place this Date's original
-  // ink inside its own intersection with the physical phase-0 aperture.
-  // This is a measured preview, not approval of mounted-panel alignment.
+  // Full logical panel is the design viewport. The 680x436 history is
+  // only an unverified comparison scenario, not a physical V4 measurement.
   const x=Math.max(cell.x,P.MATTE_X),y=Math.max(cell.y,P.MATTE_Y)
   const right=Math.min(cell.x+cell.w,P.PANEL_WIDTH,P.MATTE_X+P.MATTE_WIDTH)
   const bottom=Math.min(cell.y+cell.h,P.PANEL_HEIGHT,P.MATTE_Y+P.MATTE_HEIGHT)
