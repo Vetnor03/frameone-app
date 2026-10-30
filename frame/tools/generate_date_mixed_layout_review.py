@@ -113,7 +113,9 @@ def ink_rects(pl):
         result.extend(pl["holiday"]["rows"])
     elif e["ornaments"]["botanical"]:
         result.append(e["ornaments"]["botanical"])
-    result.extend([pl["dual"]["current"]["rect"],pl["dual"]["next"]["rect"]])
+    result.append(pl["dual"]["current"]["rect"])
+    if pl["dual"]["next"]:
+        result.append(pl["dual"]["next"]["rect"])
     return result
 
 def checked(scenes,decisions):
@@ -177,6 +179,7 @@ def card(scene,index,decisions,fonts):
             m=match(r"(\d{1,2})\.(\d{1,2})",day["dateLabel"])
             if m:dots.add((int(m.group(2)),int(m.group(1))))
         for cal in (pl["dual"]["current"],pl["dual"]["next"]):
+            if cal is None:continue # legacy's original SINGLE calendar
             parts.append(render_calendar({**cal,"editorialTitle":True},
                  (scene["facts"]["year"],scene["facts"]["month0"]+1,scene["facts"]["day"]),
                  dots,fonts))
