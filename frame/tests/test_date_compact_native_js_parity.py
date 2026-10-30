@@ -126,7 +126,7 @@ def test_botanical_admits_only_if_four_facts_and_separate_margins_fit(native):
     base=dict(day=dict(w=71,h=53),month=dict(w=95,h=19),
               weekday=dict(w=100,h=17),year=dict(w=43,h=14))
     examples=[
-      (0,0,200,240,False),(0,0,400,240,False), # top bezel
+      (0,0,200,240,True),(0,0,400,240,True), # full panel permits botanical
       (0,0,200,360,True),(0,0,400,360,True),
       (0,0,200,480,True),(0,0,400,120,False),
       (0,0,400,480,False), # legacy calendar must be preserved
