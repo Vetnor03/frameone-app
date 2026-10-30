@@ -1,6 +1,6 @@
 """C++/JS dual-month editorial reservation parity and safety gates.
 
-Real 680x436 matte, all 100 legal placements, December rollover, complete
+Full 800x480 Date-preview panel, all 100 placements, December rollover, complete
 title flags. Does NOT assert actual e-paper pixels or 1-2m readability.
 """
 import json
@@ -91,8 +91,8 @@ def test_full_two_calendar_native_js_parity(tmp_path):
         assert bool(weeks)==bool(expected_weeks)
         assert inside(current,rect(jsplan["safe"]))
         assert inside(nxt,rect(jsplan["safe"]))
-        assert inside(current,(58,39,680,436))
-        assert inside(nxt,(58,39,680,436))
+        assert inside(current,(0,0,800,480))
+        assert inside(nxt,(0,0,800,480))
         assert not overlap(current,nxt)
         assert jsplan["next"]["features"]["showMonthTitle"]
         assert jsplan["next"]["features"]["showDowHeader"]
