@@ -128,7 +128,7 @@ def test_unchanged_active_renderer_frozen_surf_and_no_named_shape_visuals():
     assert "ModuleSurf" not in source
     for term in ("DisplayCore", "setCursor(", "fillRect(", "drawPixel(", "print("):
         assert term not in source
-    assert "DateRolePolicy::MATTE_X" in source
+    assert "DateRolePolicy::PANEL_WIDTH" in source
     assert "DateMonthGridPlan::days" in source
     assert "return result;" in source
     mod=(ROOT/"frame/src/modules/ModuleDate.cpp").read_text()
