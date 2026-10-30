@@ -1503,9 +1503,10 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   // ink validated BEFORE the first pixel. Do not silently omit the calendar.
   const auto dual=DateEditorialDual::plan(p,year,month0);
   if(needsDual&&!dual.valid)return false;
+  const bool showWeekNums=needsDual?dual.showWeekNums:p.showWeeks;
   const DateRolePlanner::Rect calendarArea=needsDual?dual.current:p.calendar;
   const auto grid=DateMonthGridPlan::plan(calendarArea,year,month0,
-                 p.showTitle,p.showWeeks,p.showDow,true);
+                 p.showTitle,showWeekNums,p.showDow,true);
   if(!grid.valid||
      !gridFontFits(grid,false,RemindEditorialFonts::dm18())||
      !p.showTitle||!p.showDow)
@@ -1513,7 +1514,7 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   DateMonthGridPlan::Grid nextGrid={};
   if(needsDual){
     nextGrid=DateMonthGridPlan::plan(dual.next,dual.nextYear,dual.nextMonth0,
-                                    true,p.showWeeks,true,true);
+                                    true,showWeekNums,true,true);
     if(!nextGrid.valid||
        !gridFontFits(nextGrid,dual.showNextYear,
                      RemindEditorialFonts::dm18()))return false;
@@ -1553,12 +1554,12 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   }else if(p.art)paintEditorialSprig(p.botanical);
   drawMonthCalendar(calendarArea.x,calendarArea.y,
     calendarArea.w,calendarArea.h,year,month0,year,month0,
-    dayNum,p.showTitle,p.showWeeks,p.showDow,true,false,
+    dayNum,p.showTitle,showWeekNums,p.showDow,true,false,
     RemindEditorialFonts::dm18());
   if(needsDual){
     drawMonthCalendar(dual.next.x,dual.next.y,dual.next.w,dual.next.h,
       dual.nextYear,dual.nextMonth0,year,month0,dayNum,
-      true,p.showWeeks,true,true,dual.showNextYear,
+      true,showWeekNums,true,true,dual.showNextYear,
       RemindEditorialFonts::dm18());
   }
   // Legacy calendar paints today white, which can be invisible on e-paper.
