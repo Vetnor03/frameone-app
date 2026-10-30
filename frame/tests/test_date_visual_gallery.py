@@ -28,7 +28,7 @@ def test_gallery_uses_exact_f1_freesans_bitmap_and_all_grid_fixtures(tmp_path):
     assert report.count('data-kind="size"')==16
     assert report.count('data-kind="placement"')==100
     assert report.count('<svg viewBox="0 0 800 480"')==116
-    assert report.count('x="58" y="39" width="680" height="436"')>=116
+    assert report.count('x="0" y="0" width="800" height="480"')>=116
     assert 'ORIGINAL F1' not in report or 'original F1 pixel-font' in report
     assert "NOT APPROVED FRAME OUTPUT" in report
     assert "NOT" in report and "GxEPD2" in report
