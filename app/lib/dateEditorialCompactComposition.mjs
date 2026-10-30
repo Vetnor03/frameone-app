@@ -25,8 +25,16 @@ export function planDateEditorialCompact(input){
   if(hasMonth&&!validInk(m))return null
   if(hasYear&&!validInk(y))return null
   if(!inside(c,rect(0,0,P.PANEL_WIDTH,P.PANEL_HEIGHT)))return null
-  const inset=micro?8:12
-  const safe=rect(c.x+inset,c.y+inset,c.w-2*inset,c.h-2*inset)
+  // Same phase-0 aperture intersection as the original C++ Date planner.
+  const aperture=rect(P.MATTE_X,P.MATTE_Y,P.MATTE_WIDTH,P.MATTE_HEIGHT)
+  const l=Math.max(c.x,aperture.x),t=Math.max(c.y,aperture.y)
+  const right=Math.min(c.x+c.w,aperture.x+aperture.w)
+  const bottom=Math.min(c.y+c.h,aperture.y+aperture.h)
+  if(right<=l||bottom<=t)return null
+  const visible=rect(l,t,right-l,bottom-t)
+  const inset=micro?(visible.h<95?4:8):(visible.h<220?6:12)
+  const safe=rect(visible.x+inset,visible.y+inset,
+    visible.w-2*inset,visible.h-2*inset)
   if(safe.w<=0||safe.h<=0)return null
   let day,month=null,weekday,year=null,group,botanical=null,art=false
   if(micro){
