@@ -7,7 +7,7 @@
       "Fraunces + DM Sans from physical font test 6",
       "Essential date first",
       "Full date strings without ellipsis",
-      "Full logical 800x480 panel and exact F2 glyph ink bounds; physical mat opening not yet verified",
+      "Full 800x480 display and passepartout edge confirmed by owner for current V4; exact F2 glyph ink bounds",
       "Surf frozen"
     ],
     "candidates": [
@@ -36,7 +36,12 @@
       "verification": "unverified_for_current_V4",
       "use": "diagnostic_scenario_only"
     },
-    "layoutViewportAuthority": "logical_800x480_until_real_V4_measurement"
+    "layoutViewportAuthority": "owner_confirmed_current_V4_full_800x480",
+    "ownerConfirmation": {
+      "date": "2026-10-30",
+      "finding": "Passepartout opening follows the display outer edge; entire 800x480 usable",
+      "type": "owner_statement_not_independent_pixel_measurement"
+    }
   },
   "priorities": [
     "essential",
