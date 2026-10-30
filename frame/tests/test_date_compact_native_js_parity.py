@@ -1,4 +1,4 @@
-"""C++11 ↔ JS Date R4.6 compact micro/ribbon geometry parity at every grid slot.
+"""C++11 ↔ JS Date R4.7 compact micro/ribbon/stack geometry parity at every slot.
 
 Original C++/JS plans derive all ink locations from measured role sizes.
 Production stays OFF; rendered host pixels are checked by separate tests.
@@ -83,7 +83,7 @@ def test_all_100_grid_positions_and_measured_ink_edge_parity(native):
         if candidate is None:
             assert source=="fallback",source
             continue
-        mode=1 if candidate["mode"]=="micro" else 2
+        mode={"micro":1,"ribbon":2,"stack":3}[candidate["mode"]]
         seen.add(candidate["mode"])
         parts=source.split("|")
         assert len(parts)==8,(source,candidate)
@@ -94,7 +94,7 @@ def test_all_100_grid_positions_and_measured_ink_edge_parity(native):
                                 "weekday","year"),parts[2:]):
             actual=tuple(map(int,rawrect.split(",")))
             assert actual==rect(candidate[key]),(key,actual,candidate[key])
-    assert seen=={"micro","ribbon"}
+    assert seen=={"micro","ribbon","stack"}
 
 def test_functional_disclosure_matches_legacy_micro_and_shallow(native):
     base=dict(day=dict(w=65,h=54),month=dict(w=96,h=18),
@@ -104,7 +104,12 @@ def test_functional_disclosure_matches_legacy_micro_and_shallow(native):
       (400,120,"ribbon",False),
       (600,120,"ribbon",True),
       (800,120,"ribbon",True),
-      (200,240,None,False),(400,240,None,False)
+      (200,240,"stack",True),(400,240,"stack",True),
+      (200,360,"stack",True),(400,360,"stack",True),
+      (200,480,"stack",True),
+      (400,480,None,False), # legacy has calendar
+      (600,240,None,False), # legacy has calendar
+      (800,360,None,False)  # legacy has calendar
     ]:
         src={**base,"cell":dict(x=0,y=0,w=w,h=h)}
         q=subprocess.run(["node",str(JS)],input=json.dumps(src)+"\n",
@@ -113,5 +118,5 @@ def test_functional_disclosure_matches_legacy_micro_and_shallow(native):
         obj=json.loads(q.stdout)
         assert (obj["mode"] if obj else None)==mode
         if obj:
-            assert obj["showMonth"]==(mode=="ribbon")
+            assert obj["showMonth"]==(mode in ("ribbon","stack"))
             assert obj["showYear"]==year
