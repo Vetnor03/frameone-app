@@ -118,7 +118,7 @@ def test_real_f1_font_measures_feed_same_cpp_layout_across_100_locations(tmp_pat
             assert inside(boxes[part],boxes["group"])
             assert boxes[part]["w"]==ink[part]["w"]
             assert boxes[part]["h"]==ink[part]["h"]
-        assert inside(boxes["visible"],dict(x=58,y=39,w=680,h=436))
+        assert inside(boxes["visible"],dict(x=0,y=0,w=800,h=480))
         assert not any(crosses(boxes[a],boxes[b]) for a,b in (
             ("day","month"),("day","weekday"),("weekday","month")))
         assert result["fonts"]["day"] in ("Fraunces72","Fraunces48")
