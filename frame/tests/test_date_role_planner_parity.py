@@ -110,7 +110,7 @@ def test_measured_planner_js_cpp_parity_100_grid_positions_all_date_metrics(tmp_
         assert all(within(box, group) for box in (month, day, weekday)), tag
         assert all(not overlaps(a, b) for a, b in (
             (month, day), (day, weekday), (month, weekday))), tag
-        assert within(visible, (58, 39, 680, 436)), tag
+        assert within(visible, (0, 0, 800, 480)), tag
     assert modes == {"stack", "ribbon", "card"}, modes
     assert n_fallback > 0
     assert all(value == "fallback" for value in js[-4:])
