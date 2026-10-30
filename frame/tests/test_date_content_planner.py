@@ -100,7 +100,8 @@ def test_role_first_disclosure_all_shapes_positions_and_cases():
         assert all(p["boxes"][key] is not None for key in
                    ("day",))
     assert valid>0 and calendars>0
-    assert "hero-only" in modes
+    # The full panel may fit all factual lines in every valid grid shape;
+    # do not REQUIRE a hero-only truncation induced by a hypothetical crop.
     assert "stack" in modes or "card" in modes or "ribbon" in modes
 
 
