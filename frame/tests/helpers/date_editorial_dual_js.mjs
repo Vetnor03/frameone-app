@@ -14,5 +14,5 @@ if(input)for(const row of input.split(/\r?\n/)){
     ...Object.values(editorial.calendar.rect),
     facts.year,facts.month0
   ]:null
-  console.log(JSON.stringify({dual,args:a}))
+  console.log(JSON.stringify({dual,args:a,requestedWeekNums:Boolean(editorial?.calendar?.features?.showWeekNums),calendarWidth:editorial?.calendar?.rect?.w??0}))
 }

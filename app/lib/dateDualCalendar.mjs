@@ -20,6 +20,9 @@ export function planDateDualCalendar(editorial,source){
     return Math.max(4,Math.min(6,Math.ceil((monday+days)/7)))
   }
   const firstRows=rows(year,month0),secondRows=rows(nextYear,nextMonth0)
+  // ISO week numbers are secondary. Give the seven date columns a minimum
+  // 40px pitch after 24px padding and a 27px week-number gutter.
+  const showWeekNums=region.w>=24+27+7*40
   const chrome=16+22+10+18 // padding, title, title gap, DOW header
   const margin=4,gap=8 // the calendars each have their own 8px padding
   const usable=safe.h-2*margin-gap
@@ -36,10 +39,10 @@ export function planDateDualCalendar(editorial,source){
   return {
     current:{rect:current,year,month0,
       features:{showMonthTitle:true,showDowHeader:true,
-                showWeekNums:region.w>=190&&currentH>=126}},
+                showWeekNums}},
     next:{rect:next,year:nextYear,month0:nextMonth0,
       features:{showMonthTitle:true,showDowHeader:true,
-                showWeekNums:region.w>=190&&nextH>=126},
+                showWeekNums},
       showYear:nextYear!==year},
     gap,margin,visible:editorial.visible,safe
   }

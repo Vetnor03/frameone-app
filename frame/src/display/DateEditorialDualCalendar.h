@@ -6,7 +6,7 @@
 namespace DateEditorialDual {
 using DateRolePlanner::Rect;
 struct Result {
-  bool valid,showNextYear;
+  bool valid,showNextYear,showWeekNums;
   int nextYear,nextMonth0,gap,margin;
   Rect current,next;
 };
@@ -47,6 +47,11 @@ inline Result plan(const DateEditorialPlan::Plan& editorial,int year,int month0)
   out.valid=true;out.current=current;out.next=next;
   out.margin=margin;out.gap=gap;
   out.nextYear=nextYear;out.nextMonth0=nextMonth0;
+  // Week labels are secondary: reserve 24px calendar padding, 27px for
+  // two-digit ISO weeks and >=40px per day column before displaying them.
+  // When narrow, removing week labels restores breathing room to all 7 days;
+  // full calendar dates, headings, dual months and year rollover stay intact.
+  out.showWeekNums=region.w>=24+27+7*40;
   out.showNextYear=nextYear!=year;
   return out;
 }

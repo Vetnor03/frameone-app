@@ -15,6 +15,6 @@ int main(){
     std::cout<<a.x<<','<<a.y<<','<<a.w<<','<<a.h<<'|'
       <<b.x<<','<<b.y<<','<<b.w<<','<<b.h<<'|'
       <<out.nextYear<<','<<out.nextMonth0<<','<<out.showNextYear<<'|'
-      <<out.gap<<','<<out.margin<<'\n';
+      <<out.gap<<','<<out.margin<<','<<out.showWeekNums<<'\n';
   }
 }
