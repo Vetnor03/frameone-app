@@ -1,6 +1,6 @@
 # RE Date R4.13 — viewport provenance and Layout Lab acceptance
 
-**Decision (30 October 2026):** Design on the **full logical 800×480 active panel** until an actual mounted V4 frame measurement demonstrates a smaller optical opening. The historical `58,39,680,436` diagnostic crop is **NOT** an established V4 physical requirement. Never silently clamp every module to it.
+**Confirmed by owner (30 October 2026):** Current V4 passepartout opening follows the **outer edge of the display** and the **entire 800×480 panel is available**. Treat full panel as the layout authority. Retain comfortable, content-driven padding *inside each Date cell* for an airy editorial composition; this is intentional whitespace, **not** a fabricated hidden-pixel margin. The historical `58,39,680,436` crop is NOT the current V4 opening.
 
 ## What is actually known
 
@@ -16,9 +16,9 @@
 - Standalone C++ native Light/Dark layout gallery: **16 shapes × 2 dates/themes = 32 scenes**, including October and December→January, from actual `ModuleDate.cpp` / Fraunces+DM Sans GFX. Every scene saves the whole 800×480 render and a crop of the Date-owned cell. Labels explicitly distinguish experimental editorial admission from **LEGACY fallback**, rather than claiming that all 16 already use new typography.
 - For comparison only, the gallery manifest reports foreground pixels that *would* lie outside the historical crop, with `verifiedOnV4=false`. This is **not a failing test**. Real failures remain text outside owned Date cell, 800×480 panel, bad date calculations, lost calendar/holiday functionality, changed News/Surf source or failed native C++/JS measured parity.
 
-## Future V4 measurement — a separate practical acceptance action
+## Physical QA remains a separate release check
 
-With the real frame assembled, confirm e-paper display rotation, housing/case/matte geometry, and image-to-opening alignment. If the actual V4 visible bounds differ from full 800×480, record coordinates **with photos and independent measurement** before changing the shared viewport and rerunning the entire Date QA matrix. Do not extrapolate from July/old frame or the current SVG.
+The **viewport decision is settled by the owner** for current V4: full 800×480 screen, passepartout flush to the outer edge. Independent ruler/photo calibration is not a prerequisite for continuing Layout Lab design. Before release, visually smoke-test real screen alignment and readability from 1–2m, including Light/Dark and actual in-cell whitespace. If a contrary *measured* V4 issue appears later, record photos and measured pixel coordinates before revisiting policy.
 
 **Release/flash remains blocked** on a separately verifiable working rollback firmware BIN + SHA256 and an explicit user decision to conduct a physical test. Do not expand the rollback analyzer or bring this into Date visual PR.
 
