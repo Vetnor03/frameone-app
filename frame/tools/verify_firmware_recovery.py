@@ -15,6 +15,8 @@ from pathlib import Path
 import re
 import sys
 
+from inspect_esp32s3_backup import inspect_merged_image
+
 FLASH_SIZE = 16 * 1024 * 1024
 ESP_IMAGE_MAGIC = 0xE9
 PARTITION_MAGIC = b"\xaa\x50"
@@ -80,37 +82,25 @@ def check_manifest(manifest_path: Path) -> dict:
             if size != FLASH_SIZE:
                 errors.append(f"Wrong file length: {size} bytes; expected {FLASH_SIZE}")
             else:
-                digest = hashlib.sha256()
-                with path.open("rb") as file:
-                    head = file.read(1)
-                    file.seek(0x8000)
-                    partition = file.read(2)
-                    file.seek(0x10000)
-                    app_head = file.read(1)
-                    file.seek(0)
-                    for block in iter(lambda: file.read(1024 * 1024), b""):
-                        digest.update(block)
-                actual = digest.hexdigest()
-                info["checks"].update({
-                    "bootloader_image_magic": head == bytes([ESP_IMAGE_MAGIC]),
-                    "partition_table_magic": partition == PARTITION_MAGIC,
-                    "app_image_magic": app_head == bytes([ESP_IMAGE_MAGIC]),
-                    "sha256_matches_manifest": bool(expected and
-                                                     actual.lower() == expected.lower()),
-                })
-                if head != bytes([ESP_IMAGE_MAGIC]):
-                    errors.append("No ESP32-S3 image header at bootloader offset 0x0")
-                if partition != PARTITION_MAGIC:
-                    errors.append("No ESP partition table signature at 0x8000")
-                if app_head != bytes([ESP_IMAGE_MAGIC]):
-                    errors.append("No application image header at 0x10000")
-                if expected and actual.lower() != expected.lower():
+                # Parse REAL ESP-IDF partitions, bootloader/app segment
+                # checksums, ESP32-S3 target IDs, and optional image SHA.
+                # Three isolated magic bytes can never establish integrity.
+                with path.open("rb") as source:
+                    contents=source.read()
+                actual=hashlib.sha256(contents).hexdigest()
+                layout=inspect_merged_image(contents)
+                info["checks"]["sha256_matches_manifest"]=bool(
+                    expected and actual.lower()==expected.lower())
+                info["checks"]["esp32s3_structural_pass"]=layout["structural_pass"]
+                info["checks"]["valid_app_partitions"]=layout["valid_app_partitions"]
+                info["checks"]["erased_app_partitions"]=layout["erased_app_partitions"]
+                info["checks"]["partition_layout"]=layout["partitions"]
+                errors.extend(layout["errors"])
+                if expected and actual.lower()!=expected.lower():
                     errors.append("BIN SHA256 differs from manifest")
-                info["binary_verified"] = bool(
-                    expected and actual.lower() == expected.lower() and
-                    head == bytes([ESP_IMAGE_MAGIC]) and
-                    partition == PARTITION_MAGIC and
-                    app_head == bytes([ESP_IMAGE_MAGIC]))
+                info["binary_verified"]=bool(
+                    expected and actual.lower()==expected.lower() and
+                    layout["structural_pass"])
         except OSError as exc:
             errors.append(f"Cannot access local binary: {exc}")
 
