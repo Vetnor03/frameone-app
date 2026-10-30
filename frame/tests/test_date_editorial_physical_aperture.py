@@ -91,7 +91,7 @@ def test_known_legacy_fallback_and_missing_holiday_info_not_misrepresented(
     for item in [
       dict(name="full with holiday",x=0,y=0,w=800,h=480,
            month0=9,day=21,holiday=1,dark=0),
-      dict(name="calendar too shallow",x=0,y=0,w=800,h=240,
+      dict(name="shallow complete single calendar",x=0,y=0,w=800,h=240,
            month0=11,day=31,holiday=0,dark=1),
     ]:
         target=tmp_path/f"legacy_{item['holiday']}_{item['h']}.pgm"
