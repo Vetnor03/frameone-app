@@ -79,12 +79,17 @@ def test_full_two_calendar_native_js_parity(tmp_path):
         current=tuple(map(int,chunks[0].split(",")))
         nxt=tuple(map(int,chunks[1].split(",")))
         y,m,showYear=tuple(map(int,chunks[2].split(",")))
-        gap,margin=tuple(map(int,chunks[3].split(",")))
+        gap,margin,weeks=tuple(map(int,chunks[3].split(",")))
         assert current==rect(jsplan["current"]["rect"])
         assert nxt==rect(jsplan["next"]["rect"])
         assert (y,m,showYear)==(jsplan["next"]["year"],
             jsplan["next"]["month0"],int(jsplan["next"]["showYear"]))
         assert (gap,margin)==(jsplan["gap"],jsplan["margin"])
+        assert weeks==int(jsplan["current"]["features"]["showWeekNums"])
+        assert weeks==int(jsplan["next"]["features"]["showWeekNums"])
+        expected_weeks=(rec["editorial"]["calendar"]["features"]["showWeekNums"]
+                        and rec["editorial"]["calendar"]["rect"]["w"]>=331)
+        assert bool(weeks)==bool(expected_weeks)
         assert inside(current,rect(jsplan["safe"]))
         assert inside(nxt,rect(jsplan["safe"]))
         assert inside(current,(58,39,680,436))
@@ -123,6 +128,16 @@ def test_4x4_october_requires_both_months_without_template_ids():
     assert (current-66)//5>=26
     assert (next_-66)//6>=21
     assert not item["dual"]["current"]["rect"]==item["dual"]["next"]["rect"]
+    # Original Lab p1 values, 4x4 and narrow 3x4 + 1x4 News neighbors.
+    # Narrow columns drop only secondary week numbers, not calendars.
+    for width,expected in ((800,True),(600,False)):
+        q={**req,"cell":{**req["cell"],"w":width}}
+        out=json.loads(subprocess.run(["node",str(JS)],input=json.dumps(q)+"\n",
+            cwd=ROOT,capture_output=True,text=True,check=True).stdout)
+        assert out["dual"] is not None
+        shown=out["dual"]["current"]["features"]["showWeekNums"]
+        assert shown==expected
+        assert out["dual"]["next"]["month0"]==10
     source=(ROOT/"frame/src/display/DateEditorialDualCalendar.h").read_text()
     assert "colSpan" not in source and "rowSpan" not in source
     assert "ModuleSurf" not in source and "DisplayCore::" not in source
