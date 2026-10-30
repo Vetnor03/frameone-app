@@ -37,6 +37,10 @@ def test_calendar_and_all_text_preflight_before_any_pixels():
                  "candidate.weekday"):
         assert "paintEditorialText("+fact+")" in region
     assert "drawMonthCalendar(" in region
+    assert "editorialGridDayFont(grid,dayNum,true)" in region
+    assert "editorialGridDayFont(nextGrid,dayNum,false)" in region
+    assert "RemindEditorialFonts::dm18(),currentDays" in region
+    assert "RemindEditorialFonts::dm18(),nextDays" in region
     assert "d.drawCircle(cx,cy,radius,Theme::ink())" in region
     assert "if(p.art)paintEditorialSprig(p.botanical)" in region
     assert "cell.colSpan" not in region
@@ -56,6 +60,9 @@ def test_legacy_calendar_and_holiday_data_not_silently_removed():
     assert "drawMonthCalendar(dual.next.x,dual.next.y" in preview
     assert "preflightEditorialHolidays(p,year,month0,dayNum,holidays)" in preview
     assert "titleWithYear" in DATE
+    assert "editorialGridDayFont" in DATE
+    assert "height>grid.cellH-12" in DATE
+    assert "width>2*radius-4" in DATE
     assert "if(titleWithYear)" in DATE
     render=DATE[DATE.index("static void renderDate("):]
     assert "#if REMIND_DATE_EDITORIAL_PREVIEW_ENABLED" in render
