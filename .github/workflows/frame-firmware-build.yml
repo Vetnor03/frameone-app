@@ -48,6 +48,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Generate phase-0 Date physical aperture reference (UNMEASURED V4)
+        run: python3 frame/tools/generate_date_aperture_reference.py --output "$RUNNER_TEMP/date-vnext-aperture-reference.svg"
+      - name: Upload Date physical aperture reference (NOT PANEL PHOTO OR FLASH)
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-vnext-phase0-aperture-reference-unflashed
+          path: ${{ runner.temp }}/date-vnext-aperture-reference.svg
+          if-no-files-found: error
+          retention-days: 7
       - name: Generate actual F1 bitmap Date review (16 sizes + 100 placements)
         run: python3 frame/tools/generate_date_review_gallery.py --output "$RUNNER_TEMP/date-vnext-review.html"
       - name: Upload standalone visual review HTML (NOT frame output)
