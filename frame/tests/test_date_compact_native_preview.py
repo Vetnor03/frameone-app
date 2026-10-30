@@ -65,3 +65,42 @@ def test_compact_feature_disabled_in_normal_firmware_and_prior_preview():
     assert "colSpan" not in compact and "rowSpan" not in compact
     assert "DateRolePolicy::PANEL_WIDTH" in compact
     assert "showYear=year" in compact
+
+
+@pytest.mark.parametrize("cw,rh",[(w,h) for w in range(1,5) for h in range(1,5)])
+def test_all_16_grid_shapes_preserve_native_bounds_and_calendar_fallback(
+        native_compact,tmp_path,cw,rh):
+    # Invoke the actual Date firmware entry point for all 16 *real* shapes.
+    # A calendar-capable shape may be admitted by the full editorial stage;
+    # the four-fact stack itself must never replace a calendar.
+    w,h=cw*200,rh*120
+    file=tmp_path/f"date_{cw}x{rh}.pgm"
+    case=dict(year=2026,month0=9,day=21,x=0,y=0,w=w,h=h,
+              dark=0,holiday=0)
+    result=capture(native_compact,case,file)
+    assert result["packedPixelMismatches"]==0,result
+    assert result["packedBytes"]==48000,result
+    assert result["outOfBounds"]==0,result
+    if result["admitted"]:
+        assert result["inkOutside"]==0,result
+        assert result["inkOutsideMatte"]==0,result
+    # The no-calendar micro/ribbon/stack family always admits four-fact
+    # source ink in these nine physical shapes, including both 1x2/2x2.
+    if (cw,rh) in {(1,1),(2,1),(3,1),(4,1),
+                   (1,2),(2,2),(1,3),(2,3),(1,4)}:
+        assert result["admitted"],(cw,rh,result)
+
+
+@pytest.mark.parametrize("w,h",[(200,240),(400,240)])
+def test_holidays_do_not_remove_or_change_compact_factual_date(
+        native_compact,tmp_path,w,h):
+    # In these two legacy sizes the configured holiday list is not drawn,
+    # so adding one must not change the displayed four factual lines.
+    def rendered(holiday):
+        target=tmp_path/f"stack_{w}_{h}_{holiday}.pgm"
+        return capture(native_compact,dict(
+            year=2026,month0=9,day=21,x=0,y=0,w=w,h=h,
+            dark=0,holiday=holiday),target)
+    plain,with_holiday=rendered(0),rendered(1)
+    assert plain["admitted"] and with_holiday["admitted"]
+    assert plain["hash"]==with_holiday["hash"]
