@@ -84,6 +84,15 @@ jobs:
           path: ${{ runner.temp }}/date-native-cpp-capture.html
           if-no-files-found: error
           retention-days: 7
+      - name: Render actual C++ compact Date 1-bit host gallery (SEPARATE DEFAULT-OFF FLAG)
+        run: python3 frame/tools/generate_date_compact_native_review.py --output "$RUNNER_TEMP/date-native-compact"
+      - name: Upload C++ compact micro/ribbon screenshots (NOT PHYSICAL PANEL)
+        uses: actions/upload-artifact@v4
+        with:
+          name: date-vnext-compact-micro-ribbon-native-unflashed
+          path: ${{ runner.temp }}/date-native-compact/
+          if-no-files-found: error
+          retention-days: 7
       - name: Audit actual native Date admission in all 11 mixed-layout scenarios (NOT full other-module paint)
         run: python3 frame/tools/audit_date_native_mixed_parity.py --output "$RUNNER_TEMP/date-native-mixed-admission.json"
       - name: Upload mixed SVG/native C++ admission comparison (NOT panel capture)
