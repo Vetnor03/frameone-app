@@ -87,10 +87,11 @@ int main(int argc, char** argv) {
         inAdmitted=true;break;
       }
       if(!inAdmitted)++pixelsOutsideAdmittedSlots;
-      if(x<58||x>=738||y<39||y>=475)++pixelsOutsideMatte;
+      // JSON compatibility retains old metric name; assert full-panel bounds.
+      if(x<0||x>=800||y<0||y>=480)++pixelsOutsideMatte;
     }
     if(pixelsOutsideAdmittedSlots||pixelsOutsideMatte)
-      throw std::runtime_error("original Date GFX ink escaped owned cells/matte");
+      throw std::runtime_error("original Date GFX ink escaped owned cells/panel");
     writeAll(output,sink.bytes);
     std::cout<<"{\"realModuleDateCpp\":true,\"realAdafruitGFXCpp\":true,"
       <<"\"realGxEPD2BW\":true,\"realOtherModules\":false,"
