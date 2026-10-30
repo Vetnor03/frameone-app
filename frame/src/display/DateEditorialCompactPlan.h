@@ -96,20 +96,24 @@ inline Plan plan(const Input& in){
     // Editorial four-fact vertical reading order matches legacy content:
     // subtle year, month, Fraunces hero day, weekday. No optional illustration
     // or calendar can displace any factual string. Rule depends on measured ink.
-    const int gap=mx(12,mn(24,safe.h/12));
+    int gap=mx(12,mn(24,safe.h/12));
     const int groupW=mx(mx(in.day.w,in.month.w),
                         mx(in.year.w,in.weekday.w));
-    const int groupH=in.year.h+in.month.h+in.day.h+in.weekday.h+3*gap;
+    const int factsH=in.year.h+in.month.h+in.day.h+in.weekday.h;
+    int groupH=factsH+3*gap;
     if(groupW>safe.w||groupH>safe.h)return out;
-    // The verified Layout Lab flower is an OPTIONAL accent after the
-    // four factual lines, never a reason to reduce or omit source text.
-    // Exactly the original 84:88 linework aspect, integer-pixel geometry.
-    const int artH=mn(56,mx(32,safe.h/6));
+    // Optional illustration from original Layout Lab. First keep the full
+    // comfortable facts spacing; only when that lacks illustration clearance,
+    // try a still-readable minimum 14px fact gap (never shrink original fonts).
+    const int artH=mn(56,mx(36,safe.h/5));
     const int artW=artH*84/88;
     const int artGap=10,outer=8;
     const int extra=artH+artGap;
-    art=artW<=safe.w &&
-        groupH+extra+2*outer<=safe.h;
+    art=artW<=safe.w && groupH+extra+2*outer<=safe.h;
+    if(!art&&artW<=safe.w&&gap>14&&
+       factsH+3*14+extra+2*outer<=safe.h){
+      gap=14;groupH=factsH+3*gap;art=true;
+    }
     const int ensembleH=groupH+(art?extra:0);
     group=r(safe.x+(safe.w-groupW)/2,
             safe.y+(safe.h-ensembleH)/2,
