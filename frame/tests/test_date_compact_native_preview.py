@@ -162,7 +162,7 @@ def test_every_compact_grid_position_keeps_all_paint_inside_visible_bezel(
                 record=capture(native_compact,item,pgm)
                 assert record["admitted"],(item,record)
                 pixels=pgm.read_bytes()
-                header=b"P5\\n800 480\\n255\\n"
+                header=b"P5\n800 480\n255\n"
                 assert pixels.startswith(header)
                 raster=memoryview(pixels)[len(header):]
                 bg=0 if dark else 255
