@@ -25,7 +25,7 @@ export function planDateEditorialCompact(input){
   if(hasMonth&&!validInk(m))return null
   if(hasYear&&!validInk(y))return null
   if(!inside(c,rect(0,0,P.PANEL_WIDTH,P.PANEL_HEIGHT)))return null
-  // Same phase-0 aperture intersection as the original C++ Date planner.
+  // Same full logical viewport intersection as the original C++ planner.
   const aperture=rect(P.MATTE_X,P.MATTE_Y,P.MATTE_WIDTH,P.MATTE_HEIGHT)
   const l=Math.max(c.x,aperture.x),t=Math.max(c.y,aperture.y)
   const right=Math.min(c.x+c.w,aperture.x+aperture.w)
