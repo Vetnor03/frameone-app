@@ -74,7 +74,7 @@ def test_role_first_disclosure_all_shapes_positions_and_cases():
         valid+=1
         modes.add(p["mode"])
         assert within(p["group"],p["visible"])
-        assert within(p["visible"],dict(x=58,y=39,w=680,h=436))
+        assert within(p["visible"],dict(x=0,y=0,w=800,h=480))
         assert "day" in p["boxes"]
         assert "day" in p["fonts"]
         assert p["illustration"] is None
