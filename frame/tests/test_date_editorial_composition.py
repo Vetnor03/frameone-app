@@ -33,9 +33,8 @@ def test_original_fullscreen_date_is_a_complete_editorial_ensemble():
     result=plan([request])[0]
     assert result is not None, "Original PDF 4x4 must not degrade into date-only"
     assert result["kind"]=="editorial-two-column"
-    # The logical frame remains 800x480; only the fully visible Date
-    # ensemble is fitted inside the documented 680x436 aperture.
-    assert result["visible"]==dict(x=58,y=39,w=680,h=436)
+    # An unconfirmed matte cannot shrink the original editorial page.
+    assert result["visible"]==dict(x=0,y=0,w=800,h=480)
     assert inside(result["safe"],result["visible"])
     assert result["calendar"]["year"]==2026
     assert result["calendar"]["month0"]==9
