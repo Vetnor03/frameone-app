@@ -86,12 +86,12 @@ def test_all_100_grid_positions_and_measured_ink_edge_parity(native):
         mode={"micro":1,"ribbon":2,"stack":3}[candidate["mode"]]
         seen.add(candidate["mode"])
         parts=source.split("|")
-        assert len(parts)==8,(source,candidate)
+        assert len(parts)==9,(source,candidate)
         assert int(parts[0])==mode
         assert tuple(map(int,parts[1].split(",")))==(
-          int(candidate["showMonth"]),int(candidate["showYear"]))
+          int(candidate["showMonth"]),int(candidate["showYear"]),int(candidate["art"]))
         for key,rawrect in zip(("safe","group","day","month",
-                                "weekday","year"),parts[2:]):
+                                "weekday","year","botanical"),parts[2:]):
             actual=tuple(map(int,rawrect.split(",")))
             assert actual==rect(candidate[key]),(key,actual,candidate[key])
     assert seen=={"micro","ribbon","stack"}
