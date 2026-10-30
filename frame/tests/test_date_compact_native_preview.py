@@ -121,14 +121,14 @@ def test_original_cpp_native_pixels_contain_actual_botanical_strokes(
         day=dict(w=71,h=53),month=dict(w=95,h=19),
         weekday=dict(w=100,h=17),year=dict(w=43,h=14))
     cli=ROOT/"frame/tests/helpers/date_compact_js_cli.mjs"
-    proc=subprocess.run(["node",str(cli)],input=json.dumps(query)+"\\n",
+    proc=subprocess.run(["node",str(cli)],input=json.dumps(query)+"\n",
         text=True,capture_output=True,cwd=ROOT,timeout=15)
     assert proc.returncode==0,proc.stderr
     layout=json.loads(proc.stdout)
     assert layout and layout["art"]
     art=layout["botanical"]
     buf=p.read_bytes()
-    header=b"P5\\n800 480\\n255\\n"
+    header=b"P5\n800 480\n255\n"
     assert buf.startswith(header)
     pixels=buf[len(header):]
     assert len(pixels)==800*480
