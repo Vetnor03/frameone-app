@@ -1276,8 +1276,9 @@ static const GFXfont* editorialGridDayFont(
     int16_t x1=0,y1=0;
     uint16_t width=0,height=0;
     measureText(label,font,x1,y1,width,height);
-    // 6px vertical inset per row; dots occupy the bottom 5px.
-    if(width>grid.cellW-6||height>grid.cellH-12)return nullptr;
+    // At least 5px above/below: 2px holiday dots begin at bottom-5.
+    // With the centered 14px DM18 ink in a 25px row this leaves a gap.
+    if(width>grid.cellW-6||height>grid.cellH-10)return nullptr;
     if(hasToday&&day==todayDay){
       const int radius=min(16,min(grid.cellW,grid.cellH)/2-2);
       if(radius<11||width>2*radius-4||height>2*radius-4)
