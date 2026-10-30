@@ -1556,9 +1556,15 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
 
   // Calendar typography adapts only after measuring all original glyphs;
   // every failed fit keeps the identical 9pt original calendar numerals.
-  const GFXfont* currentDays=editorialGridDayFont(grid,dayNum,true);
-  const GFXfont* nextDays=needsDual?
+  const GFXfont* candidateCurrentDays=editorialGridDayFont(grid,dayNum,true);
+  const GFXfont* candidateNextDays=needsDual?
     editorialGridDayFont(nextGrid,dayNum,false):nullptr;
+  // Two displayed months are one calendar ensemble: never mix the large and
+  // legacy numeral styles. If either month is tight, use FreeSans9 in both.
+  const bool uniformDays=!needsDual||
+    (candidateCurrentDays&&candidateNextDays);
+  const GFXfont* currentDays=uniformDays?candidateCurrentDays:nullptr;
+  const GFXfont* nextDays=uniformDays?candidateNextDays:nullptr;
 
   // ATOMIC BOUNDARY — text, calendar, optional art are fully placed.
   // Any error above returns to original Date WITHOUT drawing.
