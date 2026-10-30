@@ -121,6 +121,12 @@ def generate(output):
     (output/"index.html").write_text(page)
     if len(rows)!=32 or len(counts)!=16:
         raise AssertionError("Expected all 16 shapes in both themes")
+    # R4.14 acceptance is factual: not an empty screenshot / web rendering.
+    # These two approved source-calendar dates should admit every original
+    # 16-shape Date cell in BOTH native themes; all 100 legal user placements
+    # are independently exercised by the original ModuleDate host QA.
+    if any(n!=2 for n in counts.values()):
+        raise AssertionError(f"Editorial native C++ fallback remains: {counts}")
     return manifest
 
 if __name__=="__main__":
