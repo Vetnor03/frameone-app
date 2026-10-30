@@ -1664,8 +1664,13 @@ static bool tryDrawEditorialCompactDatePreview(const Cell& c,
      dayNum>DateMonthGridPlan::days(year,month0))return false;
   const bool micro=c.w<150||c.h<88||(c.w<230&&c.h<140);
   const bool shallow=!micro&&c.w>c.h&&c.h<170;
-  if(!micro&&!shallow)return false;
-  const bool showYear=shallow&&c.w>=500;
+  // The four-fact stack may only replace Date where the old adaptive
+  // renderer has NO calendar region. Other cells retain exact legacy data.
+  const bool maybeCalendar=(c.w>=430&&c.h>=210)||
+                           (c.w>=330&&c.h>=400);
+  const bool stack=!micro&&!shallow&&!maybeCalendar&&c.h>=170;
+  if(!micro&&!shallow&&!stack)return false;
+  const bool showYear=stack||(shallow&&c.w>=500);
   DateEditorialCompact::Input input={};
   input.cell={c.x,c.y,c.w,c.h};
   if(!measureF2DateLabel(weekday,RemindEditorialFonts::dm18(),
@@ -1681,10 +1686,10 @@ static bool tryDrawEditorialCompactDatePreview(const Cell& c,
     RemindEditorialFonts::dm24(),RemindEditorialFonts::dm18()};
   for(const GFXfont* dayFont:days) {
     if(!measureF2DateLabel(dayText,dayFont,input.day))continue;
-    const int variants=shallow?2:1;
+    const int variants=(shallow||stack)?2:1;
     for(int variant=0;variant<variants;++variant){
       const GFXfont* monthFont=months[variant];
-      if(shallow&&!measureF2DateLabel(month,monthFont,input.month))
+      if((shallow||stack)&&!measureF2DateLabel(month,monthFont,input.month))
         continue;
       const auto layout=DateEditorialCompact::plan(input);
       if(!layout.valid)continue;
