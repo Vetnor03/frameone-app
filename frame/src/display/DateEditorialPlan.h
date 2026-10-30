@@ -51,7 +51,7 @@ inline Plan alternateCalendar(const Input& input,Rect visible,Rect safe){
   Plan best={};
   // Legacy expanded dates must keep TWO months; never let this single-month
   // alternative silently replace the expanded experience.
-  if(input.cell.w>=520&&input.cell.h>=400||
+  if((input.cell.w>=520&&input.cell.h>=400)||
      safe.w<254||safe.h<175)return best;
   const int sep=ma(14,mi(22,safe.w/24));
   for(int di=0;di<2;++di){
