@@ -55,11 +55,9 @@ inline Plan plan(const Input& in){
   const Rect panel=r(0,0,DateRolePolicy::PANEL_WIDTH,
                      DateRolePolicy::PANEL_HEIGHT);
   if(!inside(c,panel))return out;
-  // Device layout still uses ALL 800x480 logical pixels, but the phase-0
-  // mechanical opening hides the outer panel edges. For each Date-owned
-  // cell, center all factual ink within its intersection with the opening,
-  // never spill content into a neighbor or across a hidden bezel edge.
-  // Physical bezel positioning has NOT been approved on the actual frame.
+  // Use the full logical panel until V4 physical visibility is measured.
+  // Generated MATTE is the design viewport, currently 800x480. Historic
+  // 680x436 is diagnostic only; each Date still owns its original cell.
   const Rect aperture=r(DateRolePolicy::MATTE_X,DateRolePolicy::MATTE_Y,
                          DateRolePolicy::MATTE_WIDTH,
                          DateRolePolicy::MATTE_HEIGHT);
