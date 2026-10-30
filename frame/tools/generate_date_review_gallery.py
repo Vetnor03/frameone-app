@@ -161,7 +161,7 @@ def render_calendar(entry,today,holiday_set,fonts):
     if entry.get("editorialTitle") and cw>=30 and ch>=25:
         larger=fonts["DM18"]
         fits=all(metrics(str(n),larger)[2]<=cw-6 and
-                 metrics(str(n),larger)[3]<=ch-12 for n in range(1,32))
+                 metrics(str(n),larger)[3]<=ch-10 for n in range(1,32))
         if (year,month)==today[:2]:
             radius=min(16,min(cw,ch)//2-2)
             _,_,inkw,inkh=metrics(str(today[2]),larger)
