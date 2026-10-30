@@ -19,7 +19,8 @@ def test_800x480_panel_is_only_default_date_design_viewport():
         x=58,y=39,width=680,height=436)
     assert history["verification"]=="unverified_for_current_V4"
     assert history["use"]=="diagnostic_scenario_only"
-    assert panel["layoutViewportAuthority"]=="logical_800x480_until_real_V4_measurement"
+    assert panel["layoutViewportAuthority"]=="owner_confirmed_current_V4_full_800x480"
+    assert panel["ownerConfirmation"]["type"]=="owner_statement_not_independent_pixel_measurement"
     assert "Actual matte viewport and ink bounds" not in policy["evidence"]["approved"]
     assert "DateCellIntersectedWithFullLogicalPanel" in (
         policy["expressionPolicy"]["selectionInputs"])
