@@ -36,6 +36,68 @@ const safeSpace=cell=>{
   return safe.w>0&&safe.h>0?{vis,safe}:null
 }
 
+// Measured single-calendar alternative, used only after the original
+// two-column candidate fails. This is NOT a per-grid-size visual template.
+function planSingleCalendarAlternative(cell,source,vis,safe,year,weekday,days,months){
+  // Legacy expanded Date owns both months; no one-month degradation there.
+  if((cell.w>=520&&cell.h>=400)||safe.w<254||safe.h<175)return null
+  const sep=Math.max(14,Math.min(22,Math.floor(safe.w/24)))
+  const proposed=[]
+  for(const day of days)for(const month of months){
+    const roles={year,month,day,weekday}
+    const longest=Math.max(...Object.values(roles).map(v=>v.ink.w))
+    const factsH=Object.values(roles).reduce((t,v)=>t+v.ink.h,0)
+    const minHeroW=longest+Math.max(24,Math.floor(longest/5))
+    const side=safe.w>=minHeroW+sep+254
+    let hero,calendar
+    if(side){
+      const calendarW=Math.max(254,Math.floor((safe.w-sep)*58/100))
+      const heroW=safe.w-sep-calendarW
+      if(heroW<minHeroW)continue
+      hero=rect(safe.x,safe.y,heroW,safe.h)
+      calendar=rect(hero.x+hero.w+sep,safe.y,calendarW,safe.h)
+    }else{
+      const heroH=Math.max(factsH+3*12+24,150,Math.floor(safe.h*36/100))
+      const calH=safe.h-heroH-sep
+      if(calH<175)continue
+      hero=rect(safe.x,safe.y,safe.w,heroH)
+      calendar=rect(safe.x,hero.y+hero.h+sep,safe.w,calH)
+    }
+    if(!inside(hero,safe)||!inside(calendar,safe)||overlaps(hero,calendar))continue
+    const availableGap=Math.floor((hero.h-factsH-24)/3)
+    if(availableGap<10)continue
+    const gap=Math.min(18,availableGap)
+    let yy=hero.y+Math.floor((hero.h-factsH-3*gap)/2)
+    const yearBox=centerX(hero,roles.year.ink,yy)
+    yy+=roles.year.ink.h+gap
+    const monthBox=centerX(hero,roles.month.ink,yy)
+    yy+=roles.month.ink.h+gap
+    const dayBox=centerX(hero,roles.day.ink,yy)
+    yy+=roles.day.ink.h+gap
+    const weekdayBox=centerX(hero,roles.weekday.ink,yy)
+    const facts=[yearBox,monthBox,dayBox,weekdayBox]
+    if(!facts.every(v=>inside(v,hero))||
+      facts.some((v,i)=>facts.slice(i+1).some(w=>overlaps(v,w))))continue
+    const weeks=calendar.w>=24+27+7*30
+    const features={showDowHeader:true,showMonthTitle:true,showWeekNums:weeks}
+    const score=(day.font==='Fraunces72'?10000:0)+
+      (month.font==='DM24'?1000:0)+calendar.w+
+      Math.floor(calendar.h/2)+(side?12:0)
+    proposed.push({
+      kind:'editorial-measured-single-calendar',mode:'editorial',score,
+      visible:vis,safe,regions:{hero,calendar},
+      roles,fonts:Object.fromEntries(Object.entries(roles).map(([k,v])=>[k,v.font])),
+      text:Object.fromEntries(Object.entries(roles).map(([k,v])=>[k,v.text])),
+      boxes:{year:yearBox,month:monthBox,day:dayBox,weekday:weekdayBox},
+      calendar:{rect:calendar,year:source.year,month0:source.month0,features},
+      ornaments:{monthRule:null,botanical:null},illustration:null,
+      monthRollover:'original legacy single month; never discard two-month legacy'
+    })
+  }
+  proposed.sort((a,b)=>b.score-a.score)
+  return proposed[0]??null
+}
+
 /** Try a true two-column *factual ensemble* before proposing ornament/art. */
 export function planDateEditorial(cell,source){
   if(!source||typeof source!=='object')return null
@@ -64,7 +126,9 @@ export function planDateEditorial(cell,source){
   const available=safe.w-sep
   const calMin=Math.max(P.CALENDAR_WEEK_WIDTH+58,254)
   // This is candidate eligibility, not a grid-span-to-appearance rule.
-  if(safe.h<230)return null
+  // Short, but readable cells get the same measured single-month alternative.
+  if(safe.h<230)return planSingleCalendarAlternative(
+    cell,source,vis,safe,year,weekday,days,months)
   const candidates=[]
   for(const day of days)for(const month of months){
     const roles={year,month,day,weekday}
@@ -140,5 +204,6 @@ export function planDateEditorial(cell,source){
     }
   }
   candidates.sort((a,b)=>b.score-a.score)
-  return candidates[0]??null
+  return candidates[0]??planSingleCalendarAlternative(
+    cell,source,vis,safe,year,weekday,days,months)
 }
