@@ -133,7 +133,7 @@ def test_botanical_admits_only_if_four_facts_and_separate_margins_fit(native):
     for w,h,expected_art in examples:
         source={**base,"cell":dict(x=0,y=0,w=w,h=h)}
         js=subprocess.run(["node",str(JS)],
-            input=json.dumps(source)+"\\n",text=True,capture_output=True,
+            input=json.dumps(source)+"\n",text=True,capture_output=True,
             cwd=ROOT,timeout=15)
         assert js.returncode==0,js.stderr
         result=json.loads(js.stdout)
@@ -151,7 +151,7 @@ def test_botanical_admits_only_if_four_facts_and_separate_margins_fit(native):
     # native font and remains fully visible.
     narrow={**base,"cell":dict(x=0,y=0,w=400,h=240),
             "day":dict(w=71,h=100)}
-    js=subprocess.run(["node",str(JS)],input=json.dumps(narrow)+"\\n",
+    js=subprocess.run(["node",str(JS)],input=json.dumps(narrow)+"\n",
                       text=True,capture_output=True,cwd=ROOT,timeout=15)
     assert js.returncode==0,js.stderr
     result=json.loads(js.stdout)
