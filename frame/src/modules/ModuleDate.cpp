@@ -1506,7 +1506,7 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   const bool showWeekNums=needsDual?dual.showWeekNums:p.showWeeks;
   const DateRolePlanner::Rect calendarArea=needsDual?dual.current:p.calendar;
   const auto grid=DateMonthGridPlan::plan(calendarArea,year,month0,
-                 p.showTitle,showWeekNums,p.showDow,true);
+                 p.showTitle,showWeekNums,p.showDow,true,true);
   if(!grid.valid||
      !gridFontFits(grid,false,RemindEditorialFonts::dm18())||
      !p.showTitle||!p.showDow)
@@ -1514,7 +1514,7 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   DateMonthGridPlan::Grid nextGrid={};
   if(needsDual){
     nextGrid=DateMonthGridPlan::plan(dual.next,dual.nextYear,dual.nextMonth0,
-                                    true,showWeekNums,true,true);
+                                    true,showWeekNums,true,true,true);
     if(!nextGrid.valid||
        !gridFontFits(nextGrid,dual.showNextYear,
                      RemindEditorialFonts::dm18()))return false;

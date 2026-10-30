@@ -33,6 +33,7 @@ def test_original_fullscreen_date_is_a_complete_editorial_ensemble():
     result=plan([request])[0]
     assert result is not None, "Original PDF 4x4 must not degrade into date-only"
     assert result["kind"]=="editorial-two-column"
+    assert result["visible"]==dict(x=0,y=0,w=800,h=480)
     assert result["calendar"]["year"]==2026
     assert result["calendar"]["month0"]==9
     assert result["calendar"]["features"]["showMonthTitle"]
@@ -65,8 +66,8 @@ def test_full_date_and_real_calendar_never_overlap_over_100_cell_placements():
             assert item is None  # fail closed until holiday roles integrated
         if item is None:continue
         accepted+=1
-        matte=dict(x=58,y=39,w=680,h=436)
-        assert inside(item["visible"],matte)
+        panel=dict(x=0,y=0,w=800,h=480)
+        assert inside(item["visible"],panel)
         assert inside(item["safe"],item["visible"])
         rects=list(item["boxes"].values())+[item["calendar"]["rect"]]
         assert all(inside(x,item["safe"]) for x in rects)

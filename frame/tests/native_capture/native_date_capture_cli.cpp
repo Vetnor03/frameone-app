@@ -119,7 +119,7 @@ int main(int argc,char** argv){
        wantsDual?dual.current:p.calendar;
     const auto grid=DateMonthGridPlan::plan(calendarArea,
        NativeCapture::year,NativeCapture::month0,
-       p.showTitle,p.showWeeks,p.showDow,true);
+       p.showTitle,(wantsDual?dual.showWeekNums:p.showWeeks),p.showDow,true,true);
     gridValid=grid.valid;
     if(gridValid){
       fontValid=gridFontFits(grid,false,RemindEditorialFonts::dm18());
@@ -128,7 +128,7 @@ int main(int argc,char** argv){
     }
     if(wantsDual&&dual.valid){
       const auto next=DateMonthGridPlan::plan(
-         dual.next,dual.nextYear,dual.nextMonth0,true,p.showWeeks,true,true);
+         dual.next,dual.nextYear,dual.nextMonth0,true,dual.showWeekNums,true,true,true);
       nextGridValid=next.valid;
       nextFontValid=next.valid&&
         gridFontFits(next,dual.showNextYear,RemindEditorialFonts::dm18());
@@ -153,10 +153,11 @@ int main(int argc,char** argv){
   const uint8_t background=dark?1:0;
   const int inkInside=changed(frame,background,x,y,w,h,true);
   const int inkOutside=changed(frame,background,x,y,w,h,false);
+  // Retain the existing JSON metric key, now measuring actual full panel.
   const int inkOutsideMatte=changed(
-    frame,background,58,39,680,436,false);
+    frame,background,0,0,800,480,false);
   if(admitted&&(inkInside<300||inkOutside!=0||inkOutsideMatte!=0||firstOob)){
-    std::cerr<<"Native Date ink exceeded own cell/matte or missing, "
+    std::cerr<<"Native Date ink exceeded own cell/panel or missing, "
              <<inkInside<<","<<inkOutside<<","<<inkOutsideMatte<<","<<firstOob;
     return 6;
   }

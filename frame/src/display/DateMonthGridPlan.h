@@ -31,16 +31,20 @@ inline int firstMonday(int year,int month0) {
   return sun==0?6:sun-1;
 }
 inline Grid plan(Rect area,int year,int month0,bool title,bool weeks,bool dow,
-                 bool editorialWeekWidth=false) {
+                 bool editorialWeekWidth=false,bool editorialFullPanel=false) {
   Grid out={};
   if(year<DateRolePolicy::CONTEXT_YEAR_MIN ||
      year>DateRolePolicy::CONTEXT_YEAR_MAX ||
      month0<0||month0>11||area.w<=0||area.h<=0)return out;
-  const Rect matte={DateRolePolicy::MATTE_X,DateRolePolicy::MATTE_Y,
-    DateRolePolicy::MATTE_WIDTH,DateRolePolicy::MATTE_HEIGHT};
-  if(area.x<matte.x||area.y<matte.y||
-     area.x+area.w>matte.x+matte.w||
-     area.y+area.h>matte.y+matte.h)return out;
+  // Preserve the legacy guard by default. Only explicit experimental
+  // editorial requests can use the current 800x480 physical framebuffer.
+  const Rect viewport=editorialFullPanel?
+    Rect{0,0,DateRolePolicy::PANEL_WIDTH,DateRolePolicy::PANEL_HEIGHT}:
+    Rect{DateRolePolicy::MATTE_X,DateRolePolicy::MATTE_Y,
+         DateRolePolicy::MATTE_WIDTH,DateRolePolicy::MATTE_HEIGHT};
+  if(area.x<viewport.x||area.y<viewport.y||
+     area.x+area.w>viewport.x+viewport.w||
+     area.y+area.h>viewport.y+viewport.h)return out;
 
   const int titleH=title?22:0;
   const int titleGap=title?10:0;

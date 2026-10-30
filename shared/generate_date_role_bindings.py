@@ -13,6 +13,10 @@ policy = json.loads((ROOT / "shared/date-element-policy.json").read_text(encodin
 m = policy["panel"]["matte"]
 g = policy["candidateGeometry"]
 vals = {
+    # Shared physical panel coordinates for editorial Date; legacy diagnostic
+    # matte remains untouched for the older role-only experiments.
+    "PANEL_WIDTH": policy["panel"]["width"],
+    "PANEL_HEIGHT": policy["panel"]["height"],
     "MATTE_X": m["x"], "MATTE_Y": m["y"],
     "MATTE_WIDTH": m["width"], "MATTE_HEIGHT": m["height"],
     "INSET_TIGHT": g["inset"]["tight"], "INSET_REGULAR": g["inset"]["regular"],
