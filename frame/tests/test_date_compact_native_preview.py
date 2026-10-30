@@ -66,6 +66,7 @@ def test_compact_feature_disabled_in_normal_firmware_and_prior_preview():
     compact=(ROOT/"frame/src/display/DateEditorialCompactPlan.h").read_text()
     assert "colSpan" not in compact and "rowSpan" not in compact
     assert "DateRolePolicy::PANEL_WIDTH" in compact
+    assert "DateRolePolicy::MATTE_X" in compact
     assert "showYear=year" in compact
 
 
@@ -108,16 +109,17 @@ def test_holidays_do_not_remove_or_change_compact_factual_date(
     assert plain["hash"]==with_holiday["hash"]
 
 
-@pytest.mark.parametrize("w,h",[(200,240),(400,240),(200,360)])
+@pytest.mark.parametrize("x,y,w,h",[
+    (200,120,200,240),(200,120,400,240),(200,0,200,360)])
 def test_original_cpp_native_pixels_contain_actual_botanical_strokes(
-        native_compact,tmp_path,w,h):
+        native_compact,tmp_path,x,y,w,h):
     # Not just a proposed JS composition: prove original ModuleDate.cpp draws
     # the shared 1-bit stroke source in exactly the measured reserved box.
     p=tmp_path/f"date_flower_{w}_{h}.pgm"
     result=capture(native_compact,dict(year=2026,month0=9,day=21,
-        x=0,y=0,w=w,h=h,dark=0,holiday=0),p)
+        x=x,y=y,w=w,h=h,dark=0,holiday=0),p)
     assert result["admitted"],result
-    query=dict(cell=dict(x=0,y=0,w=w,h=h),
+    query=dict(cell=dict(x=x,y=y,w=w,h=h),
         day=dict(w=71,h=53),month=dict(w=95,h=19),
         weekday=dict(w=100,h=17),year=dict(w=43,h=14))
     cli=ROOT/"frame/tests/helpers/date_compact_js_cli.mjs"
@@ -137,3 +139,38 @@ def test_original_cpp_native_pixels_contain_actual_botanical_strokes(
       for xx in range(art["x"],art["x"]+art["w"]))
     assert ink>=25,(w,h,ink,art)
     assert result["inkOutside"]==0
+
+
+@pytest.mark.parametrize("dark",[0,1])
+def test_every_compact_grid_position_keeps_all_paint_inside_visible_bezel(
+        native_compact,tmp_path,dark):
+    # 79 legal positions in 9 compact geometries, each in both themes:
+    # pixels outside the documented opening belong to the *hidden* panel.
+    # We assert real original C++ framebuffer ink, not only planned boxes.
+    shapes={(1,1),(2,1),(3,1),(4,1),(1,2),
+            (2,2),(1,3),(2,3),(1,4)}
+    matte=(58,39,680,436) # frozen generated DateRolePolicy reference
+    mx,my,mw,mh=matte
+    for cw,rh in shapes:
+        for col in range(5-cw):
+            for row in range(5-rh):
+                x,y,w,h=col*200,row*120,cw*200,rh*120
+                item=dict(name=f"{cw}x{rh}_{col}_{row}",
+                    year=2026,month0=9,day=21,x=x,y=y,w=w,h=h,
+                    dark=dark,holiday=0)
+                pgm=tmp_path/f"bezel_{cw}_{rh}_{col}_{row}_{dark}.pgm"
+                record=capture(native_compact,item,pgm)
+                assert record["admitted"],(item,record)
+                pixels=pgm.read_bytes()
+                header=b"P5\\n800 480\\n255\\n"
+                assert pixels.startswith(header)
+                raster=memoryview(pixels)[len(header):]
+                bg=0 if dark else 255
+                hidden=0
+                for yy in range(480):
+                    for xx in range(800):
+                        if mx<=xx<mx+mw and my<=yy<my+mh:continue
+                        if raster[yy*800+xx]!=bg:hidden+=1
+                assert hidden==0,(item,hidden,record)
+                assert record["inkOutside"]==0,(item,record)
+                assert record["packedPixelMismatches"]==0,(item,record)
