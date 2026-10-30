@@ -12,8 +12,11 @@ struct Result {
 };
 inline Result plan(const DateEditorialPlan::Plan& editorial,int year,int month0){
   Result out={};
-  if(!editorial.valid||editorial.safe.h<320||editorial.calendar.w<254)
-    return out;
+  // Only the legacy expanded experience owns TWO months. Compact/tall
+  // one-calendar candidates must never be mistaken for dual planners.
+  if(!editorial.valid||editorial.visible.w<520||
+     editorial.visible.h<400||editorial.safe.h<320||
+     editorial.calendar.w<254)return out;
   int nextYear=0,nextMonth0=0;
   if(!DateMonthGridPlan::nextMonth(year,month0,nextYear,nextMonth0))
     return out;

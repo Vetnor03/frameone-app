@@ -27,12 +27,12 @@ def test_calendar_and_all_text_preflight_before_any_pixels():
     assert "DateEditorialF2::plan(" in region
     assert "DateMonthGridPlan::plan(" in region
     assert "gridFontFits(grid,false,RemindEditorialFonts::dm18())" in region
-    assert "radius<11" in region
+    assert "radius<9" in region
     first_draw=region.index("auto& d=DisplayCore::get();")
     assert region.index("DateEditorialF2::plan(")<first_draw
     assert region.index("DateMonthGridPlan::plan(")<first_draw
     assert region.index("gridFontFits(grid,false,RemindEditorialFonts::dm18())")<first_draw
-    assert region.index("radius<11")<first_draw
+    assert region.index("radius<9")<first_draw
     for fact in ("candidate.year","candidate.month","candidate.day",
                  "candidate.weekday"):
         assert "paintEditorialText("+fact+")" in region
@@ -51,7 +51,8 @@ def test_calendar_and_all_text_preflight_before_any_pixels():
 def test_legacy_calendar_and_holiday_data_not_silently_removed():
     preview=DATE[DATE.index("static bool tryDrawEditorialDatePreview("):
                  DATE.index("#endif // REMIND_DATE_EDITORIAL_PREVIEW_ENABLED")]
-    assert "cell.w>=700&&cell.h>=330" in preview
+    # Full two months only where source adaptive Date is actually expanded;
+    # a short but wide cell keeps its original single calendar.
     assert "cell.w>=520&&cell.h>=400" in preview
     assert "preflightEditorialHolidays(p,year,month0,dayNum,holidays)" in preview
     assert "const bool needsDual=" in preview

@@ -1546,8 +1546,11 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
     const char* month,int year,int month0,int dayNum) {
   if(cell.size!=CELL_ADAPTIVE||!weekday||!month)return false;
   // Only replace a legacy expanded Date if both months can fit.
-  const bool needsDual=(cell.w>=700&&cell.h>=330)||
-                       (cell.w>=520&&cell.h>=400);
+  // Legacy expanded Date shows two months only where the full height
+  // actually supports the expanded layout. A broad-but-short Date (4x3)
+  // has ONE complete calendar in legacy and must keep that functionality.
+  // This is a measured size threshold, not a nominal 4x3 visual template.
+  const bool needsDual=cell.w>=520&&cell.h>=400;
   // Configured entries are handled after the full Date/calendar plan.
   // Unknown or nonfitting rows must fall back without dropping data.
   DateEditorialF2::Result candidate={};
@@ -1577,7 +1580,10 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   }
   // The outlined today marker must not collide with the calendar text.
   const int radius=min(16,min(grid.cellW,grid.cellH)/2-2);
-  if(radius<11)return false;
+  // Shallow single-calendar cells may use a proportionally smaller,
+  // still legible today ring. A minimum 9px radius fits the actual
+  // 23px+ week row without covering neighboring date ink.
+  if(radius<9)return false;
   EditorialHolidayDraw holidays={};
   if(!preflightEditorialHolidays(p,year,month0,dayNum,holidays))
     return false;

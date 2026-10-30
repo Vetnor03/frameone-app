@@ -91,7 +91,7 @@ def test_known_legacy_fallback_and_missing_holiday_info_not_misrepresented(
     for item in [
       dict(name="full with holiday",x=0,y=0,w=800,h=480,
            month0=9,day=21,holiday=1,dark=0),
-      dict(name="calendar too shallow",x=0,y=0,w=800,h=240,
+      dict(name="shallow complete single calendar",x=0,y=0,w=800,h=240,
            month0=11,day=31,holiday=0,dark=1),
     ]:
         target=tmp_path/f"legacy_{item['holiday']}_{item['h']}.pgm"
@@ -101,7 +101,13 @@ def test_known_legacy_fallback_and_missing_holiday_info_not_misrepresented(
             # otherwise it must refuse the new painter before drawing.
             assert state["admitted"]==state["preflight"]["holiday"] or not state["admitted"]
         else:
-            assert not state["admitted"]
+            # Full source month grid + title + weekday header must be admitted
+            # in a sufficiently wide 800x240 single-month Date; never force
+            # an unrelated two-month requirement on this short legacy cell.
+            assert state["admitted"],state
+            assert not state["preflight"]["needsDual"],state
+            assert state["preflight"]["grid"] and state["preflight"]["gridFont"]
+            assert state["inkOutside"]==0 and state["outOfBounds"]==0
         assert state["packedPixelMismatches"]==0
 
 def test_historical_crop_is_unverified_diagnostic_not_layout_gate(

@@ -43,6 +43,78 @@ inline bool factFits(const Rect* facts){
     if(overlap(facts[i],facts[j]))return false;
   return true;
 }
+// Second measured composition for complete SINGLE-month legacy Dates.
+// Use only when the existing editorial two-column candidate cannot fit.
+// This is driven by source glyphs, full calendar requirements and free space,
+// not by a 2x4 / 3x2 / 4x2 layout identifier.
+inline Plan alternateCalendar(const Input& input,Rect visible,Rect safe){
+  Plan best={};
+  // Legacy expanded dates must keep TWO months; never let this single-month
+  // alternative silently replace the expanded experience.
+  if((input.cell.w>=520&&input.cell.h>=400)||
+     safe.w<254||safe.h<175)return best;
+  const int sep=ma(14,mi(22,safe.w/24));
+  for(int di=0;di<2;++di){
+    if(!measured(input.days[di]))continue;
+    for(int mo=0;mo<2;++mo){
+      if(!measured(input.months[mo]))continue;
+      const Ink d=input.days[di].ink,m=input.months[mo].ink,
+        wd=input.weekdays.ink,yr=input.years.ink;
+      const int widest=ma(ma(d.w,m.w),ma(wd.w,yr.w));
+      const int factsH=d.h+m.h+wd.h+yr.h;
+      const int minHeroW=widest+ma(24,widest/5);
+      const int minCalendarW=254;
+      const bool side=safe.w>=minHeroW+sep+minCalendarW;
+      Rect hero={},calendar={};
+      if(side){
+        const int calendarW=ma(minCalendarW,(safe.w-sep)*58/100);
+        const int heroW=safe.w-sep-calendarW;
+        if(heroW<minHeroW)continue;
+        hero=rect(safe.x,safe.y,heroW,safe.h);
+        // Use the original calendar's own 8px top/bottom padding, so
+        // five/six real week rows can occupy the *whole* available height.
+        calendar=rect(hero.x+hero.w+sep,safe.y,calendarW,safe.h);
+      }else{
+        const int heroH=ma(factsH+3*12+24,ma(150,safe.h*36/100));
+        const int calH=safe.h-heroH-sep;
+        if(calH<175)continue;
+        hero=rect(safe.x,safe.y,safe.w,heroH);
+        calendar=rect(safe.x,hero.y+hero.h+sep,safe.w,calH);
+      }
+      if(!inside(hero,safe)||!inside(calendar,safe)||
+         overlap(hero,calendar))continue;
+      const int availableGap=(hero.h-factsH-24)/3;
+      if(availableGap<10)continue;
+      const int gap=mi(18,availableGap);
+      int yy=hero.y+(hero.h-factsH-3*gap)/2;
+      const Rect year=centered(hero,yr,yy);yy+=yr.h+gap;
+      const Rect month=centered(hero,m,yy);yy+=m.h+gap;
+      const Rect day=centered(hero,d,yy);yy+=d.h+gap;
+      const Rect weekday=centered(hero,wd,yy);
+      const Rect facts[4]={year,month,day,weekday};
+      bool good=factFits(facts);
+      for(int i=0;i<4;++i)
+        if(!inside(facts[i],hero))good=false;
+      if(!good)continue;
+      // Original calendar still paints full title, day headings, every
+      // Gregorian date and ISO week labels when measured room permits.
+      const bool weeks=calendar.w>=24+27+7*30;
+      const int score=(di==0?10000:0)+(mo==0?1000:0)+
+                       calendar.w+calendar.h/2+(side?12:0);
+      if(!best.valid||score>best.score){
+        best.valid=true;best.score=score;
+        best.visible=visible;best.safe=safe;
+        best.hero=hero;best.calendar=calendar;
+        best.year=year;best.month=month;best.day=day;
+        best.weekday=weekday;
+        best.dayVariant=di;best.monthVariant=mo;
+        best.showTitle=true;best.showDow=true;best.showWeeks=weeks;
+        best.art=false;best.rule=false;
+      }
+    }
+  }
+  return best;
+}
 inline Plan plan(const Input& input){
   Plan result={};
   if(input.cell.w<=0||input.cell.h<=0||
@@ -74,7 +146,8 @@ inline Plan plan(const Input& input){
   const int inset=tight?DateRolePolicy::INSET_TIGHT:
     spacious?DateRolePolicy::INSET_SPACIOUS:DateRolePolicy::INSET_REGULAR;
   const Rect safe=rect(x+inset,y+inset,visible.w-2*inset,visible.h-2*inset);
-  if(safe.w<=0||safe.h<230)return result;
+  if(safe.w<=0||safe.h<175)return result;
+  if(safe.h<230)return alternateCalendar(input,visible,safe);
   const int sep=ma(18,mi(30,safe.w*4/100));
   const int available=safe.w-sep;
   const int calMin=ma(DateRolePolicy::CALENDAR_WEEK_WIDTH+58,254);
@@ -165,6 +238,6 @@ inline Plan plan(const Input& input){
       }
     }
   }
-  return result;
+  return result.valid?result:alternateCalendar(input,visible,safe);
 }
 } // namespace DateEditorialPlan

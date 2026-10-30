@@ -32,9 +32,9 @@ def native_compact(tmp_path_factory):
     (0,0,200,360,9,21,0,True),   # 1x3 no calendar
     (0,0,400,360,9,21,0,True),   # 2x3 no calendar
     (0,0,200,480,9,21,0,True),   # 1x4 no calendar
-    (0,0,400,480,9,21,0,False),  # 2x4 legacy calendar retained
-    (0,0,600,240,9,21,0,False),  # 3x2 legacy calendar retained
-    (0,0,800,360,9,21,0,False),  # 4x3 legacy calendar retained
+    (0,0,400,480,9,21,0,True),   # complete single-month below facts
+    (0,0,600,240,9,21,0,True),   # complete single-month beside facts
+    (0,0,800,360,9,21,0,True),   # single-month + optional botanical
 ])
 def test_original_cpp_compact_admission_and_ink_bounds(
         native_compact,tmp_path,x,y,w,h,month0,day,dark,expected):
@@ -51,8 +51,18 @@ def test_original_cpp_compact_admission_and_ink_bounds(
     assert pgm.is_file()
     if expected:
         assert result["inkInside"]>=300,result
-        # Original editorial two-calendar planner is not faking compact success.
-        assert result["preflight"]["f2"] is False,result
+        # Small micro/ribbon/stack is genuinely a compact painter, not
+        # a calendar layout masquerading as the earlier compact stage.
+        if (w,h) in {(200,120),(400,120),(600,120),(800,120),
+                     (200,240),(400,240),(200,360),(400,360),
+                     (200,480)}:
+            assert result["preflight"]["f2"] is False,result
+        else:
+            # Larger newly admitted cells are real measured ORIGINAL
+            # calendar geometry with complete grid preflight.
+            assert result["preflight"]["f2"],result
+            assert result["preflight"]["grid"],result
+            assert not result["preflight"]["needsDual"],result
 
 def test_compact_feature_disabled_in_normal_firmware_and_prior_preview():
     source=(ROOT/"frame/src/modules/ModuleDate.cpp").read_text()
