@@ -51,7 +51,7 @@ inline Result plan(const DateEditorialPlan::Plan& editorial,int year,int month0)
   // two-digit ISO weeks and >=40px per day column before displaying them.
   // When narrow, removing week labels restores breathing room to all 7 days;
   // full calendar dates, headings, dual months and year rollover stay intact.
-  out.showWeekNums=editorial.showWeeks && region.w>=24+27+7*40;
+  out.showWeekNums=region.w>=24+27+7*40;
   out.showNextYear=nextYear!=year;
   return out;
 }
