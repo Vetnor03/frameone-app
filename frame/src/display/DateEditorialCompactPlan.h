@@ -55,8 +55,24 @@ inline Plan plan(const Input& in){
   const Rect panel=r(0,0,DateRolePolicy::PANEL_WIDTH,
                      DateRolePolicy::PANEL_HEIGHT);
   if(!inside(c,panel))return out;
-  const int inset=micro?8:12;
-  const Rect safe=r(c.x+inset,c.y+inset,c.w-2*inset,c.h-2*inset);
+  // Device layout still uses ALL 800x480 logical pixels, but the phase-0
+  // mechanical opening hides the outer panel edges. For each Date-owned
+  // cell, center all factual ink within its intersection with the opening,
+  // never spill content into a neighbor or across a hidden bezel edge.
+  // Physical bezel positioning has NOT been approved on the actual frame.
+  const Rect aperture=r(DateRolePolicy::MATTE_X,DateRolePolicy::MATTE_Y,
+                         DateRolePolicy::MATTE_WIDTH,
+                         DateRolePolicy::MATTE_HEIGHT);
+  const int l=mx(c.x,aperture.x),t=mx(c.y,aperture.y);
+  const int right=mn(c.x+c.w,aperture.x+aperture.w);
+  const int bottom=mn(c.y+c.h,aperture.y+aperture.h);
+  if(right<=l||bottom<=t)return out;
+  const Rect visible=r(l,t,right-l,bottom-t);
+  // A narrow top-row opening can still show 48px Fraunces + DM Sans18
+  // with 4px border clearance; all larger visible cells use more space.
+  const int inset=micro?(visible.h<95?4:8):(visible.h<220?6:12);
+  const Rect safe=r(visible.x+inset,visible.y+inset,
+                    visible.w-2*inset,visible.h-2*inset);
   if(safe.w<=0||safe.h<=0)return out;
   Rect day={},month={},weekday={},yearBox={},group={},botanical={};
   bool art=false;
