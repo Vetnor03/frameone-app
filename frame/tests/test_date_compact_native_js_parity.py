@@ -120,3 +120,40 @@ def test_functional_disclosure_matches_legacy_micro_and_shallow(native):
         if obj:
             assert obj["showMonth"]==(mode in ("ribbon","stack"))
             assert obj["showYear"]==year
+
+def test_botanical_admits_only_if_four_facts_and_separate_margins_fit(native):
+    # Representative original GFX ink from Fraunces72 / DM Sans24 / DM Sans18.
+    base=dict(day=dict(w=71,h=53),month=dict(w=95,h=19),
+              weekday=dict(w=100,h=17),year=dict(w=43,h=14))
+    examples=[
+      (200,240,True),(400,240,True), (200,360,True),
+      (400,360,True),(200,480,True),(400,120,False),
+      (400,480,False), # legacy calendar must be preserved
+    ]
+    for w,h,expected_art in examples:
+        source={**base,"cell":dict(x=0,y=0,w=w,h=h)}
+        js=subprocess.run(["node",str(JS)],
+            input=json.dumps(source)+"\\n",text=True,capture_output=True,
+            cwd=ROOT,timeout=15)
+        assert js.returncode==0,js.stderr
+        result=json.loads(js.stdout)
+        if w==400 and h==480:
+            assert result is None
+            continue
+        assert result is not None,(w,h)
+        assert result["art"] is expected_art,(w,h,result)
+        if expected_art:
+            flower=result["botanical"]
+            assert flower["w"]>=30 and flower["h"]>=36
+            assert flower["y"]>=result["weekday"]["y"]+result["weekday"]["h"]+10
+            assert flower["y"]+flower["h"]<=result["safe"]["y"]+result["safe"]["h"]-8
+    # Without ample room the figure vanishes; text stays at the approved
+    # native font and remains fully visible.
+    narrow={**base,"cell":dict(x=0,y=0,w=400,h=240),
+            "day":dict(w=71,h=100)}
+    js=subprocess.run(["node",str(JS)],input=json.dumps(narrow)+"\\n",
+                      text=True,capture_output=True,cwd=ROOT,timeout=15)
+    assert js.returncode==0,js.stderr
+    result=json.loads(js.stdout)
+    assert result and result["mode"]=="stack" and not result["art"]
+    assert result["day"]["h"]==100
