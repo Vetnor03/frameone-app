@@ -8,7 +8,10 @@ export function planDateDualCalendar(editorial,source){
   const nextYear=year+(month0===11?1:0),nextMonth0=(month0+1)%12
   if(nextYear>9999)return null
   const safe=editorial.safe,region=editorial.calendar.rect
-  if(!safe||safe.h<320||region.w<254)return null
+  // Dual-month is mandatory only for the original expanded layout.
+  // Never infer dual months because a stacked one-calendar region is tall.
+  if(!safe||editorial.visible.w<520||editorial.visible.h<400||
+     safe.h<320||region.w<254)return null
   // Week counts, not a fixed 56/44 split, determine the vertical rhythm.
   // Keep all 1-bit calendar ink and the main month's outlined today ring
   // separated. A row needs 26px for the outlined marker; the secondary
