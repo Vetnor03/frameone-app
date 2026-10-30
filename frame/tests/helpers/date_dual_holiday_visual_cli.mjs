@@ -6,7 +6,7 @@ import {planEditorialHolidays} from '../../../app/lib/dateEditorialHolidays.mjs'
 import {measureDateGfxInk} from '../../../app/lib/dateGfxInk.mjs'
 const src=readFileSync(0,'utf8').trim()
 if(src)for(const row of src.split(/\r?\n/)){
-  const {cell,facts}=JSON.parse(row)
+  const {cell,facts,allowSingle=false}=JSON.parse(row)
   const editorial=planDateEditorial(cell,{...facts,holidays:[]})
   const expanded=cell.w>=520&&cell.h>=400
   const completeDual=planDateDualCalendar(editorial,facts)
