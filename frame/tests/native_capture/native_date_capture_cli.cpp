@@ -94,7 +94,13 @@ int main(int argc,char** argv){
   g_captureDisplay.clear(Theme::paper());
   struct tm local={};
   if(!getLocalTime(&local,10))return 4;
-  const bool admitted=tryDrawEditorialDatePreview(
+  bool admitted=false;
+#if REMIND_DATE_COMPACT_PREVIEW_ENABLED
+  admitted=tryDrawEditorialCompactDatePreview(
+      cell,safeWday(local.tm_wday),safeMonth(local.tm_mon),
+      NativeCapture::year,NativeCapture::month0,NativeCapture::day);
+#endif
+  if(!admitted)admitted=tryDrawEditorialDatePreview(
       cell,safeWday(local.tm_wday),safeMonth(local.tm_mon),
       NativeCapture::year,NativeCapture::month0,NativeCapture::day);
   const auto editorial=g_captureDisplay.pixels;

@@ -1,0 +1,65 @@
+// R4.6 experimental Date compact geometry — exact mirror of the C++11
+// DateEditorialCompactPlan.h, NOT imported by the current app/frame.
+// All glyph rectangles supplied as measured original-GFX integer INK.
+import {DateRolePolicy as P} from './dateRolePolicy.generated.mjs'
+const rect=(x,y,w,h)=>({x,y,w,h})
+const inside=(a,b)=>a.w>0&&a.h>0&&a.x>=b.x&&a.y>=b.y&&
+  a.x+a.w<=b.x+b.w&&a.y+a.h<=b.y+b.h
+const overlap=(a,b)=>Math.min(a.x+a.w,b.x+b.w)>Math.max(a.x,b.x)&&
+  Math.min(a.y+a.h,b.y+b.h)>Math.max(a.y,b.y)
+const validInk=i=>i&&Number.isInteger(i.w)&&Number.isInteger(i.h)&&
+  i.w>0&&i.h>0
+export function planDateEditorialCompact(input){
+  if(!input||typeof input!=='object')return null
+  const {cell:c,day:d,month:m,weekday:w,year:y}=input
+  if(!c||!['x','y','w','h'].every(k=>Number.isInteger(c[k]))||
+     c.w<=0||c.h<=0||!validInk(d)||!validInk(w))return null
+  const micro=c.w<150||c.h<88||(c.w<230&&c.h<140)
+  const shallow=!micro&&c.w>c.h&&c.h<170
+  if(!micro&&!shallow)return null
+  const hasYear=shallow&&c.w>=500
+  if(shallow&&(!validInk(m)||(hasYear&&!validInk(y))))return null
+  if(!inside(c,rect(0,0,P.PANEL_WIDTH,P.PANEL_HEIGHT)))return null
+  const inset=micro?8:12
+  const safe=rect(c.x+inset,c.y+inset,c.w-2*inset,c.h-2*inset)
+  if(safe.w<=0||safe.h<=0)return null
+  let day,month=null,weekday,year=null,group
+  if(micro){
+    const gap=12
+    const groupW=Math.max(d.w,w.w)
+    const groupH=d.h+gap+w.h
+    if(groupW>safe.w||groupH>safe.h)return null
+    group=rect(safe.x+Math.floor((safe.w-groupW)/2),
+      safe.y+Math.floor((safe.h-groupH)/2),groupW,groupH)
+    day=rect(group.x+Math.floor((group.w-d.w)/2),group.y,d.w,d.h)
+    weekday=rect(group.x+Math.floor((group.w-w.w)/2),
+      day.y+day.h+gap,w.w,w.h)
+  }else{
+    const lineGap=12,colsGap=Math.max(16,Math.min(30,Math.floor(safe.w/20)))
+    const contextW=Math.max(m.w,w.w)
+    const contextH=m.h+lineGap+w.h
+    const groupW=d.w+colsGap+contextW+(hasYear?colsGap+y.w:0)
+    const groupH=Math.max(d.h,contextH,hasYear?y.h:0)
+    if(groupW>safe.w||groupH>safe.h)return null
+    group=rect(safe.x+Math.floor((safe.w-groupW)/2),
+      safe.y+Math.floor((safe.h-groupH)/2),groupW,groupH)
+    day=rect(group.x,group.y+Math.floor((groupH-d.h)/2),d.w,d.h)
+    const contextX=day.x+day.w+colsGap
+    const contextY=group.y+Math.floor((groupH-contextH)/2)
+    month=rect(contextX+Math.floor((contextW-m.w)/2),
+      contextY,m.w,m.h)
+    weekday=rect(contextX+Math.floor((contextW-w.w)/2),
+      month.y+month.h+lineGap,w.w,w.h)
+    if(hasYear)year=rect(contextX+contextW+colsGap,
+      group.y+Math.floor((groupH-y.h)/2),y.w,y.h)
+  }
+  if(!inside(day,safe)||!inside(weekday,safe)||overlap(day,weekday))
+    return null
+  if(shallow&&(!inside(month,safe)||overlap(day,month)||
+     overlap(month,weekday)))return null
+  if(hasYear&&(!inside(year,safe)||overlap(year,day)||
+     overlap(year,month)||overlap(year,weekday)))return null
+  return {kind:'editorial-compact',mode:micro?'micro':'ribbon',
+    valid:true,showMonth:shallow,showYear:hasYear,
+    safe,group,day,month,weekday,year}
+}
