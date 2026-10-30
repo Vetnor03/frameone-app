@@ -60,7 +60,7 @@ def fake_image(boot=False):
     pad=(15-len(source)%16)%16
     checksum=0xef
     for byte in payload:checksum^=byte
-    image=source+b"\\x00"*pad+bytes([checksum])
+    image=source+b"\x00"*pad+bytes([checksum])
     assert len(image)%16==0
     return image+hashlib.sha256(image).digest()
 
@@ -77,25 +77,25 @@ def fake_partition_table(app_index=0):
       ("spiffs",1,0x82,0xc10000,0x3e0000),
       ("coredump",1,3,0xff0000,0x10000),
     ]:
-        label=name.encode("ascii").ljust(16,b"\\x00")
+        label=name.encode("ascii").ljust(16,b"\x00")
         entries.append(struct.pack("<HBBII16sI",0x50aa,typ,sub,off,size,label,0))
     full=b"".join(entries)
-    md5=b"\\xeb\\xeb"+b"\\xff"*14+hashlib.md5(full).digest()
+    md5=b"\xeb\xeb"+b"\xff"*14+hashlib.md5(full).digest()
     assert len(md5)==32
-    return (full+md5).ljust(4096,b"\\xff")
+    return (full+md5).ljust(4096,b"\xff")
 
 
 def make_magic_only_bin(tmp_path):
     image=tmp_path/"FAKE-MAGIC-ONLY-NEVER-FLASH.bin"
     with image.open("wb") as out:
         out.seek(16777216-1)
-        out.write(b"\\0")
+        out.write(b"\0")
         out.seek(0)
-        out.write(b"\\xe9")
+        out.write(b"\xe9")
         out.seek(0x8000)
-        out.write(b"\\xaa\\x50")
+        out.write(b"\xaa\x50")
         out.seek(0x10000)
-        out.write(b"\\xe9")
+        out.write(b"\xe9")
     return image,hashlib.sha256(image.read_bytes()).hexdigest()
 
 
@@ -104,7 +104,7 @@ def make_structural_fixture(tmp_path,app_index=0):
     image=tmp_path/f"FAKE-ESP32-S3-{app_index}-NEVER-FLASH.bin"
     with image.open("wb") as out:
         # Erased (0xFF) flash is more realistic than an all-zero sparse file.
-        out.write(b"\\xff"*(16*1024*1024))
+        out.write(b"\xff"*(16*1024*1024))
         out.seek(0)
         out.write(fake_image(boot=True))
         out.seek(0x8000)
@@ -196,7 +196,7 @@ def test_partition_md5_corruption_and_wrong_firmware_chip_are_rejected(tmp_path)
         out.seek(0x8000)
         out.write(fake_partition_table())
         out.seek(0x10000+12)
-        out.write(b"\\x00\\x00")
+        out.write(b"\x00\x00")
     p.write_text(json.dumps(example_manifest(
         backup,hashlib.sha256(backup.read_bytes()).hexdigest())))
     state=checker.check_manifest(p)
@@ -209,7 +209,7 @@ def test_image_segment_checksum_failure_rejected(tmp_path):
     backup,digest=make_structural_fixture(tmp_path)
     with backup.open("r+b") as out:
         out.seek(0x10000+24+8)
-        out.write(b"\\xAA") # modified payload, checksums now wrong
+        out.write(b"\xAA") # modified payload, checksums now wrong
     p=tmp_path/"manifest.json"
     p.write_text(json.dumps(example_manifest(
         backup,hashlib.sha256(backup.read_bytes()).hexdigest())))
