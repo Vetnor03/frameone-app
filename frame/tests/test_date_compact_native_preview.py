@@ -32,9 +32,9 @@ def native_compact(tmp_path_factory):
     (0,0,200,360,9,21,0,True),   # 1x3 no calendar
     (0,0,400,360,9,21,0,True),   # 2x3 no calendar
     (0,0,200,480,9,21,0,True),   # 1x4 no calendar
-    (0,0,400,480,9,21,0,False),  # 2x4 legacy calendar retained
-    (0,0,600,240,9,21,0,False),  # 3x2 legacy calendar retained
-    (0,0,800,360,9,21,0,False),  # 4x3 legacy calendar retained
+    (0,0,400,480,9,21,0,True),   # complete single-month below facts
+    (0,0,600,240,9,21,0,True),   # complete single-month beside facts
+    (0,0,800,360,9,21,0,True),   # single-month + optional botanical
 ])
 def test_original_cpp_compact_admission_and_ink_bounds(
         native_compact,tmp_path,x,y,w,h,month0,day,dark,expected):
