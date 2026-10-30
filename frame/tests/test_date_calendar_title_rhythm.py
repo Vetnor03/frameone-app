@@ -39,7 +39,8 @@ def test_editorial_only_draw_preflight_and_legacy_title_default():
     assert "gridFontFits(nextGrid,dual.showNextYear," in DATE
     assert "RemindEditorialFonts::dm18());" in DATE
     assert "d.drawLine(midX-halfSpan,ruleY,midX-8,ruleY,ink);" in DATE
-    assert 'true,p.showWeeks,true,true,dual.showNextYear,' in DATE
+    assert 'true,showWeekNums,true,true,dual.showNextYear,' in DATE
+    assert 'const bool showWeekNums=needsDual?dual.showWeekNums:p.showWeeks;' in DATE
     assert '{"editorialTitle":True}' not in GALLERY
     assert '"editorialTitle":True' in DUAL
     assert 'fonts["DM18"] if entry.get("editorialTitle")' in GALLERY
