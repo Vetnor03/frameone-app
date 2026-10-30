@@ -111,7 +111,7 @@ int main(int argc,char** argv){
   const bool f2=DateEditorialF2::plan(bounds,NativeCapture::year,
      NativeCapture::month0,NativeCapture::day,safeMonth(local.tm_mon),
      safeWday(local.tm_wday),0,candidate);
-  const bool wantsDual=(w>=700&&h>=330)||(w>=520&&h>=400);
+  const bool wantsDual=w>=520&&h>=400;
   bool dualValid=false,gridValid=false,fontValid=false,
        nextGridValid=false,nextFontValid=false,radiusValid=false,
        holidayValid=false;
