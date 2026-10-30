@@ -51,8 +51,18 @@ def test_original_cpp_compact_admission_and_ink_bounds(
     assert pgm.is_file()
     if expected:
         assert result["inkInside"]>=300,result
-        # Original editorial two-calendar planner is not faking compact success.
-        assert result["preflight"]["f2"] is False,result
+        # Small micro/ribbon/stack is genuinely a compact painter, not
+        # a calendar layout masquerading as the earlier compact stage.
+        if (w,h) in {(200,120),(400,120),(600,120),(800,120),
+                     (200,240),(400,240),(200,360),(400,360),
+                     (200,480)}:
+            assert result["preflight"]["f2"] is False,result
+        else:
+            # Larger newly admitted cells are real measured ORIGINAL
+            # calendar geometry with complete grid preflight.
+            assert result["preflight"]["f2"],result
+            assert result["preflight"]["grid"],result
+            assert not result["preflight"]["needsDual"],result
 
 def test_compact_feature_disabled_in_normal_firmware_and_prior_preview():
     source=(ROOT/"frame/src/modules/ModuleDate.cpp").read_text()
