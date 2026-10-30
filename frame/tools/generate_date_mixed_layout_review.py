@@ -20,7 +20,7 @@ from date_editorial_svg import draw_editorial
 
 CLI=ROOT/"frame/tests/helpers/date_dual_holiday_visual_cli.mjs"
 PANEL=(800,480)
-MATTE=(58,39,680,436)
+MATTE=(0,0,800,480)
 
 def grid_cell(col,row,columns,rows,module):
     return dict(col=col,row=row,columns=columns,rows=rows,module=module,
@@ -144,9 +144,9 @@ def checked(scenes,decisions):
 
 def card(scene,index,decisions,fonts):
     light=scene["theme"]=="Light"
-    parts=['<defs><clipPath id="matte%d"><rect x="58" y="39" width="680" height="436"/></clipPath></defs>'%index,
+    parts=['<defs><clipPath id="matte%d"><rect x="0" y="0" width="800" height="480"/></clipPath></defs>'%index,
            '<rect width="800" height="480" fill="#c8c8c8"/>',
-           '<rect x="58" y="39" width="680" height="436" fill="#f8f8f5"/>',
+           '<rect x="0" y="0" width="800" height="480" fill="#f8f8f5"/>',
            '<g clip-path="url(#matte%d)">'%index]
     for j,c in enumerate(scene["cells"]):
         box=(c["x"],c["y"],c["w"],c["h"])
@@ -187,7 +187,7 @@ def card(scene,index,decisions,fonts):
             for label,region in zip(pl["labels"],holidays["rows"]):
                 parts.append(glyph_paths(label,fonts["DM18"],
                                          region["x"],region["y"],"#191919"))
-    parts+=['</g>','<rect x="58" y="39" width="680" height="436" fill="none" stroke="#888"/>']
+    parts+=['</g>','<rect x="0" y="0" width="800" height="480" fill="none" stroke="#888"/>']
     invert=" inverted" if not light else ""
     return ('<article><svg viewBox="0 0 800 480" class="panel%s">'%invert+
             "".join(parts)+'</svg><h3>'+html.escape(scene["name"])+
@@ -216,7 +216,7 @@ def generate(output):
        '<p><strong>NOT A NATIVE FRAMEBUFFER OR OTHER MODULE CAPTURE.</strong> '
        'Only experimental Date ink is from original source-GFX bitmaps and '
        'measured JS/C++-parity geometry. All other modules and legacy Date '
-       'are visibly labelled placeholders. The actual matte is 58,39,680,436. '
+       'are visibly labelled placeholders. The full logical Date viewport is 0,0,800,480; physical housing not approved. '
        'Dark case is an inverted contrast study, not a hardware theme capture. '
        'Custom layouts include multiple Dates and empty cells.</p>'
        '<label><input type="checkbox" onchange="document.body.classList.toggle(\'guides\',this.checked)"> Show original-ink measurement guides</label>'
