@@ -3,10 +3,10 @@
 namespace DateRolePolicy {
 static const int PANEL_WIDTH = 800;
 static const int PANEL_HEIGHT = 480;
-static const int MATTE_X = 58;
-static const int MATTE_Y = 39;
-static const int MATTE_WIDTH = 680;
-static const int MATTE_HEIGHT = 436;
+static const int MATTE_X = 0;
+static const int MATTE_Y = 0;
+static const int MATTE_WIDTH = 800;
+static const int MATTE_HEIGHT = 480;
 static const int INSET_TIGHT = 8;
 static const int INSET_REGULAR = 12;
 static const int INSET_SPACIOUS = 16;
