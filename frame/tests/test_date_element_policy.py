@@ -38,7 +38,9 @@ def test_contract_is_explicitly_inactive_and_not_approved():
     assert POLICY["guardrails"]["neverTruncateDate"] is True
     assert POLICY["guardrails"]["noPartialRendering"] is True
     assert POLICY["panel"]["width"] == 800 and POLICY["panel"]["height"] == 480
-    assert POLICY["panel"]["matte"] == {"x": 58, "y": 39, "width": 680, "height": 436}
+    assert POLICY["panel"]["matte"] == {"x": 0, "y": 0, "width": 800, "height": 480}
+    assert POLICY["panel"]["historicalMatte"]["verification"] == "unverified_for_current_V4"
+    assert POLICY["panel"]["historicalMatte"]["use"] == "diagnostic_scenario_only"
 
 
 def test_date_fact_roles_and_priority_never_depend_on_shape():
@@ -72,7 +74,7 @@ def test_visual_expression_is_not_bound_to_grid_size_or_demo_content():
     }
     assert {"factualDateAndCalendarContent", "actualF2GfxGlyphInkBounds",
             "minimumReadableText", "remainingWhitespace",
-            "matteClippedVisibleRect"} <= set(expression["selectionInputs"])
+            "DateCellIntersectedWithFullLogicalPanel"} <= set(expression["selectionInputs"])
     constraints = expression["selectionConstraints"]
     assert all(constraints.values())
     art = expression["art"]
@@ -99,8 +101,8 @@ def test_named_fixtures_use_visible_geometry_only():
         cell = fixture["cell"]
         assert candidate(**cell) == fixture["expectedCandidate"], fixture["id"]
         left, top, w, h = visible(**cell)
-        assert 58 <= left < left + w <= 738
-        assert 39 <= top < top + h <= 475
+        assert 0 <= left < left + w <= 800
+        assert 0 <= top < top + h <= 480
     assert {"1x1_top_left", "1x2_top_left", "2x1_top", "2x2_centre", "4x1_top", "4x3_bottom", "4x4"} <= ids
 
 
@@ -115,7 +117,7 @@ def test_all_16_shapes_all_valid_4x4_placements_light_dark_and_data_presets():
                        w=col_span * 200, h=row_span * 120)
             l, t, w, h = visible(**box)
             assert w > 0 and h > 0
-            assert 58 <= l < l + w <= 738 and 39 <= t < t + h <= 475
+            assert 0 <= l < l + w <= 800 and 0 <= t < t + h <= 480
             shape = candidate(**box)
             assert shape in {"compact", "column", "ribbon", "card", "spread"}
             candidate_shapes.add(shape)
