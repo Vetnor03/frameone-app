@@ -220,9 +220,9 @@ def render_tile(case, result, fonts, serial):
         context=None
     if hero is None:
         context=None
-    arts=[f'<defs><clipPath id="matte{serial}"><rect x="58" y="39" width="680" height="436"/></clipPath></defs>',
+    arts=[f'<defs><clipPath id="matte{serial}"><rect x="0" y="0" width="800" height="480"/></clipPath></defs>',
           '<rect width="800" height="480" fill="#d1d1d1"/>',
-          '<rect x="58" y="39" width="680" height="436" fill="#f9f9f7"/>',
+          '<rect x="0" y="0" width="800" height="480" fill="#f9f9f7"/>',
           f'<g clip-path="url(#matte{serial})">',
           f'<rect x="{cell["x"]}" y="{cell["y"]}" width="{cell["w"]}" height="{cell["h"]}" fill="#fff"/>']
     if editorial:
@@ -253,7 +253,7 @@ def render_tile(case, result, fonts, serial):
                 arts.append(bbox_markup(area["rect"],"#a87a44"))
     arts.append('</g>')
     arts.append(f'<rect x="{cell["x"]}" y="{cell["y"]}" width="{cell["w"]}" height="{cell["h"]}" fill="none" stroke="#a3a3a3" stroke-width="2"/>')
-    arts.append('<rect x="58" y="39" width="680" height="436" stroke="#888" stroke-width="1" fill="none"/>')
+    arts.append('<rect x="0" y="0" width="800" height="480" stroke="#888" stroke-width="1" fill="none"/>')
     status="FULL EDITORIAL DATE + CALENDAR + ART CONCEPT" if editorial else "3-fact candidate" if hero else "No full 3-fact fit — legacy fallback"
     if hero and context and not editorial:
         status+=", contextual reservation candidate"
@@ -329,7 +329,7 @@ def generate(output):
       'that can reject a shown candidate. Use for legibility/layout review, not proof of actual firmware rendering. Editorial botanical SVG is a visual direction only, NOT a firmware asset.</p>'
      +f'<p>16 size fixtures + 100 legal placements = {summary["total"]} views; '
        f'{summary["fullCore"]} can fit full Date glyphs; {summary["contextCandidates"]} show contextual candidates. '
-      'Panel 800×480, visible matte x58 y39 w680 h436. No Surf or other module content is simulated.</p>'
+      'Panel 800×480, logical full-panel viewport; physical opening unverified. No Surf or other module content is simulated.</p>'
      +controls+'</header><main class="gallery">'+''.join(tiles)+'</main>'
      +'<footer>Static report, no requests, no telemetry, no runtime configuration. '
       'Dark mode is an inverted preview, not the e-paper grayscale waveform. '
