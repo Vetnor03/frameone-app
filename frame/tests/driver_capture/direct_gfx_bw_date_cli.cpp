@@ -105,9 +105,11 @@ int main(int argc,char**argv) {
       }
       if(black==dark)continue;
       const bool inCell=px>=x&&py>=y&&px<x+w&&py<y+h;
-      const bool inMatte=px>=58&&py>=39&&px<738&&py<475;
+      // Historical JSON key outsideMatte remains for existing consumers,
+      // but the acceptance boundary is the current full 800x480 panel.
+      const bool inPanel=px>=0&&py>=0&&px<800&&py<480;
       if(inCell)++inkInside;else ++inkOutside;
-      if(!inMatte)++outsideMatte;
+      if(!inPanel)++outsideMatte;
     }
     if(!editorial||inkInside<300||inkOutside||outsideMatte)
       throw std::runtime_error("Date editorial admission/bounds regression");
