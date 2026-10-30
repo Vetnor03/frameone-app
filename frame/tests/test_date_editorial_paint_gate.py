@@ -41,6 +41,8 @@ def test_calendar_and_all_text_preflight_before_any_pixels():
     assert "editorialGridDayFont(nextGrid,dayNum,false)" in region
     assert "RemindEditorialFonts::dm18(),currentDays" in region
     assert "RemindEditorialFonts::dm18(),nextDays" in region
+    assert "editorialGridDowFont(grid)" in region
+    assert "editorialGridDowFont(nextGrid)" in region
     assert "d.drawCircle(cx,cy,radius,Theme::ink())" in region
     assert "if(p.art)paintEditorialSprig(p.botanical)" in region
     assert "cell.colSpan" not in region

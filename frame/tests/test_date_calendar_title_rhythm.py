@@ -1,7 +1,7 @@
 """Editorial calendar title quality checks; source GFX ink, not web typography.
 
 Legacy calendar month/day/week labels and holiday markers remain unchanged.
-Editorial-only day labels may adopt measured original DM Sans 18. This is
+Editorial-only day numerals and weekday headings may adopt measured DM Sans 18. This is
 not a GxEPD2 frame capture or physical 1–2m readability approval.
 """
 import calendar
@@ -38,15 +38,31 @@ def test_editorial_only_draw_preflight_and_legacy_title_default():
     assert "if(editorialTitleFont) {" in DATE
     assert "gridFontFits(grid,false,RemindEditorialFonts::dm18())" in DATE
     assert "gridFontFits(nextGrid,dual.showNextYear," in DATE
-    assert "RemindEditorialFonts::dm18(),currentDays);" in DATE
-    assert "RemindEditorialFonts::dm18(),nextDays);" in DATE
+    assert "RemindEditorialFonts::dm18(),currentDays,currentDow);" in DATE
+    assert "RemindEditorialFonts::dm18(),nextDays,nextDow);" in DATE
     assert "const GFXfont* currentDays=uniformDays?candidateCurrentDays:nullptr" in DATE
+    assert "editorialGridDowFont(grid)" in DATE
+    assert "editorialGridDowFont(nextGrid)" in DATE
+    assert "height>grid.dowH-2" in DATE
+    assert "editorialTitleFont && editorialDowFont" in DATE
     assert "d.drawLine(midX-halfSpan,ruleY,midX-8,ruleY,ink);" in DATE
     assert 'true,showWeekNums,true,true,dual.showNextYear,' in DATE
     assert 'const bool showWeekNums=needsDual?dual.showWeekNums:p.showWeeks;' in DATE
     assert '{"editorialTitle":True}' not in GALLERY
     assert '"editorialTitle":True' in DUAL
     assert 'fonts["DM18"] if entry.get("editorialTitle")' in GALLERY
+
+def test_original_gfx_measured_weekday_labels_fit_only_with_adequate_width():
+    font=load_font(FONT_SOURCE,"RemindDM18")
+    labels=("Mo","Tu","We","Th","Fr","Sa","Su")
+    # Seven original, proportional F1 glyph pairs, not browser CSS font sizes.
+    dims=[metrics(label,font) for label in labels]
+    assert len(dims)==7
+    assert max(w for x,y,w,h in dims)==28
+    assert max(h for x,y,w,h in dims)<=16
+    assert all(w<=34-6 and h<=18-2 for x,y,w,h in dims)
+    assert any(w>30-6 for x,y,w,h in dims)
+
 
 def test_original_gfx_title_renders_without_removing_calendar_facts():
     font_source=load_font(FONT_SOURCE,"RemindDM18")

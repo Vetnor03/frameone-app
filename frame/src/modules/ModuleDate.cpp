@@ -305,7 +305,8 @@ static void drawMonthCalendar(int x, int y, int w, int h,
                               bool hardBounds = false,
                               bool titleWithYear = false,
                               const GFXfont* editorialTitleFont = nullptr,
-                               const GFXfont* editorialDayFont = nullptr) {
+                               const GFXfont* editorialDayFont = nullptr,
+                               const GFXfont* editorialDowFont = nullptr) {
   auto& d = DisplayCore::get();
   d.setTextSize(1);
 
@@ -404,7 +405,9 @@ static void drawMonthCalendar(int x, int y, int w, int h,
 
   if (showDowHeader) {
     static const char* const DOW[] = {"Mo","Tu","We","Th","Fr","Sa","Su"};
-    d.setFont(FONT_9);
+    const GFXfont* dowFont=editorialTitleFont && editorialDowFont ?
+      editorialDowFont : FONT_9;
+    d.setFont(dowFont);
     d.setTextColor(ink);
 
     for (int c = 0; c < cols; c++) {
@@ -412,7 +415,7 @@ static void drawMonthCalendar(int x, int y, int w, int h,
       int cy = curY;
 
       int16_t x1, y1; uint16_t tw, th;
-      measureText(DOW[c], FONT_9, x1, y1, tw, th);
+      measureText(DOW[c], dowFont, x1, y1, tw, th);
 
       int bx = cx + (cellW - (int)tw) / 2;
       int by = cy + (dowH - (int)th) / 2;
@@ -1287,6 +1290,22 @@ static const GFXfont* editorialGridDayFont(
   }
   return font;
 }
+// The seven weekday abbreviations remain factual FreeSans9 on narrow
+// calendars. Only upgrade to original DM Sans18 after measuring ALL labels
+// against the actual 18px-high DOW row and each proportional day column.
+static const GFXfont* editorialGridDowFont(
+    const DateMonthGridPlan::Grid& grid) {
+  if(!grid.valid||!grid.showDow)return nullptr;
+  const GFXfont* font=RemindEditorialFonts::dm18();
+  const char* const labels[]={"Mo","Tu","We","Th","Fr","Sa","Su"};
+  for(const char* label:labels){
+    int16_t x1=0,y1=0;
+    uint16_t width=0,height=0;
+    measureText(label,font,x1,y1,width,height);
+    if(width>grid.cellW-6||height>grid.dowH-2)return nullptr;
+  }
+  return font;
+}
 #endif
 struct RoleDateDraw {
   bool year=false,current=false,next=false;
@@ -1565,6 +1584,15 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
     (candidateCurrentDays&&candidateNextDays);
   const GFXfont* currentDays=uniformDays?candidateCurrentDays:nullptr;
   const GFXfont* nextDays=uniformDays?candidateNextDays:nullptr;
+  const GFXfont* candidateCurrentDow=currentDays?
+    editorialGridDowFont(grid):nullptr;
+  const GFXfont* candidateNextDow=nextDays?
+    editorialGridDowFont(nextGrid):nullptr;
+  // Keep both month headers the same size, exactly like their day numerals.
+  const bool uniformDow=!needsDual||
+    (candidateCurrentDow&&candidateNextDow);
+  const GFXfont* currentDow=uniformDow?candidateCurrentDow:nullptr;
+  const GFXfont* nextDow=uniformDow?candidateNextDow:nullptr;
 
   // ATOMIC BOUNDARY — text, calendar, optional art are fully placed.
   // Any error above returns to original Date WITHOUT drawing.
@@ -1595,12 +1623,12 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   drawMonthCalendar(calendarArea.x,calendarArea.y,
     calendarArea.w,calendarArea.h,year,month0,year,month0,
     dayNum,p.showTitle,showWeekNums,p.showDow,true,false,
-    RemindEditorialFonts::dm18(),currentDays);
+    RemindEditorialFonts::dm18(),currentDays,currentDow);
   if(needsDual){
     drawMonthCalendar(dual.next.x,dual.next.y,dual.next.w,dual.next.h,
       dual.nextYear,dual.nextMonth0,year,month0,dayNum,
       true,showWeekNums,true,true,dual.showNextYear,
-      RemindEditorialFonts::dm18(),nextDays);
+      RemindEditorialFonts::dm18(),nextDays,nextDow);
   }
   // Legacy calendar paints today white, which can be invisible on e-paper.
   // Overlay a proper 1-bit ring after all calendar text has been drawn.
