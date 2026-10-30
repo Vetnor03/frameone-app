@@ -96,7 +96,8 @@ def test_no_shape_specific_expression_or_runtime_wiring():
     assert "grid4x4" not in s and "fourByThree" not in s
     assert "measureDateGfxInk as measure" in s
     assert "dateCalendarFeatures" in s
-    assert "return candidates[0]??null" in s
+    assert "planSingleCalendarAlternative" in s
+    assert "return candidates[0]??planSingleCalendarAlternative" in s
     assert "holiday" in s
     mod=(ROOT/"frame/src/modules/ModuleDate.cpp").read_text()
     assert "dateEditorialComposition" not in mod
