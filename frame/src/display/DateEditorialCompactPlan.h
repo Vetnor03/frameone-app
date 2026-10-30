@@ -13,9 +13,9 @@ struct Input {
   Ink day, month, weekday, year;
 };
 struct Plan {
-  bool valid,showMonth,showYear;
+  bool valid,showMonth,showYear,art;
   Mode mode;
-  Rect safe,group,day,month,weekday,year;
+  Rect safe,group,day,month,weekday,year,botanical;
 };
 inline int mn(int a,int b){return a<b?a:b;}
 inline int mx(int a,int b){return a>b?a:b;}
@@ -58,7 +58,8 @@ inline Plan plan(const Input& in){
   const int inset=micro?8:12;
   const Rect safe=r(c.x+inset,c.y+inset,c.w-2*inset,c.h-2*inset);
   if(safe.w<=0||safe.h<=0)return out;
-  Rect day={},month={},weekday={},yearBox={},group={};
+  Rect day={},month={},weekday={},yearBox={},group={},botanical={};
+  bool art=false;
   if(micro){
     const int gap=12;
     const int groupW=mx(in.day.w,in.weekday.w);
@@ -100,8 +101,21 @@ inline Plan plan(const Input& in){
                         mx(in.year.w,in.weekday.w));
     const int groupH=in.year.h+in.month.h+in.day.h+in.weekday.h+3*gap;
     if(groupW>safe.w||groupH>safe.h)return out;
-    group=r(safe.x+(safe.w-groupW)/2,safe.y+(safe.h-groupH)/2,
+    // The verified Layout Lab flower is an OPTIONAL accent after the
+    // four factual lines, never a reason to reduce or omit source text.
+    // Exactly the original 84:88 linework aspect, integer-pixel geometry.
+    const int artH=mn(56,mx(32,safe.h/6));
+    const int artW=artH*84/88;
+    const int artGap=10,outer=8;
+    const int extra=artH+artGap;
+    art=artW<=safe.w &&
+        groupH+extra+2*outer<=safe.h;
+    const int ensembleH=groupH+(art?extra:0);
+    group=r(safe.x+(safe.w-groupW)/2,
+            safe.y+(safe.h-ensembleH)/2,
             groupW,groupH);
+    if(art)botanical=r(safe.x+(safe.w-artW)/2,
+                       group.y+groupH+artGap,artW,artH);
     yearBox=r(group.x+(groupW-in.year.w)/2,group.y,
               in.year.w,in.year.h);
     month=r(group.x+(groupW-in.month.w)/2,yearBox.y+yearBox.h+gap,
@@ -117,9 +131,13 @@ inline Plan plan(const Input& in){
        overlap(month,weekday)))return out;
   if(year&&(!inside(yearBox,safe)||overlap(yearBox,day)||
             overlap(yearBox,month)||overlap(yearBox,weekday)))return out;
+  if(art&&(!inside(botanical,safe)||overlap(botanical,day)||
+       overlap(botanical,month)||overlap(botanical,weekday)||
+       overlap(botanical,yearBox)))return out;
   out.valid=true;out.mode=micro?MICRO:(shallow?RIBBON:STACK);out.safe=safe;
   out.group=group;out.day=day;out.month=month;out.weekday=weekday;
   out.year=yearBox;out.showMonth=showMonth;out.showYear=year;
+  out.art=art;out.botanical=botanical;
   return out;
 }
 } // namespace DateEditorialCompact
