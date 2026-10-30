@@ -304,7 +304,8 @@ static void drawMonthCalendar(int x, int y, int w, int h,
                               bool showDowHeader,
                               bool hardBounds = false,
                               bool titleWithYear = false,
-                              const GFXfont* editorialTitleFont = nullptr) {
+                              const GFXfont* editorialTitleFont = nullptr,
+                               const GFXfont* editorialDayFont = nullptr) {
   auto& d = DisplayCore::get();
   d.setTextSize(1);
 
@@ -468,7 +469,7 @@ static void drawMonthCalendar(int x, int y, int w, int h,
     }
   }
 
-  d.setFont(FONT_9);
+  d.setFont(editorialTitleFont && editorialDayFont ? editorialDayFont : FONT_9);
 
   for (int r = 0; r < drawRows; r++) {
     for (int c = 0; c < cols; c++) {
@@ -486,7 +487,8 @@ static void drawMonthCalendar(int x, int y, int w, int h,
       snprintf(buf, sizeof(buf), "%d", day);
 
       int16_t x1, y1; uint16_t tw, th;
-      measureText(buf, FONT_9, x1, y1, tw, th);
+      measureText(buf, editorialTitleFont && editorialDayFont ? editorialDayFont : FONT_9,
+                   x1, y1, tw, th);
 
       bool isToday = (year == todayYear && month0 == todayMonth0 && day == todayDayNum);
       bool isHol   = isHolidayInMonth(year, month0, day);
@@ -1260,6 +1262,31 @@ static bool gridFontFits(const DateMonthGridPlan::Grid& grid,
   }
   return true;
 }
+#if REMIND_DATE_EDITORIAL_PREVIEW_ENABLED
+// Keep original 9pt dates for constrained grids. Roomy calendars can use
+// original DM Sans 18 only after measuring ALL day glyphs for cell clearance.
+// Never steal space needed by dated holiday dots or today's outlined ring.
+static const GFXfont* editorialGridDayFont(
+    const DateMonthGridPlan::Grid& grid,int todayDay,bool hasToday) {
+  if(!grid.valid||grid.cellW<30||grid.cellH<25)return nullptr;
+  const GFXfont* font=RemindEditorialFonts::dm18();
+  for(int day=1;day<=31;++day){
+    char label[4]={};
+    snprintf(label,sizeof label,"%d",day);
+    int16_t x1=0,y1=0;
+    uint16_t width=0,height=0;
+    measureText(label,font,x1,y1,width,height);
+    // 6px vertical inset per row; dots occupy the bottom 5px.
+    if(width>grid.cellW-6||height>grid.cellH-12)return nullptr;
+    if(hasToday&&day==todayDay){
+      const int radius=min(16,min(grid.cellW,grid.cellH)/2-2);
+      if(radius<11||width>2*radius-4||height>2*radius-4)
+        return nullptr;
+    }
+  }
+  return font;
+}
+#endif
 struct RoleDateDraw {
   bool year=false,current=false,next=false;
   int holidayCount=0;
@@ -1526,6 +1553,12 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   if(!preflightEditorialHolidays(p,year,month0,dayNum,holidays))
     return false;
 
+  // Calendar typography adapts only after measuring all original glyphs;
+  // every failed fit keeps the identical 9pt original calendar numerals.
+  const GFXfont* currentDays=editorialGridDayFont(grid,dayNum,true);
+  const GFXfont* nextDays=needsDual?
+    editorialGridDayFont(nextGrid,dayNum,false):nullptr;
+
   // ATOMIC BOUNDARY — text, calendar, optional art are fully placed.
   // Any error above returns to original Date WITHOUT drawing.
   auto& d=DisplayCore::get();
@@ -1555,12 +1588,12 @@ static bool tryDrawEditorialDatePreview(const Cell& cell,const char* weekday,
   drawMonthCalendar(calendarArea.x,calendarArea.y,
     calendarArea.w,calendarArea.h,year,month0,year,month0,
     dayNum,p.showTitle,showWeekNums,p.showDow,true,false,
-    RemindEditorialFonts::dm18());
+    RemindEditorialFonts::dm18(),currentDays);
   if(needsDual){
     drawMonthCalendar(dual.next.x,dual.next.y,dual.next.w,dual.next.h,
       dual.nextYear,dual.nextMonth0,year,month0,dayNum,
       true,showWeekNums,true,true,dual.showNextYear,
-      RemindEditorialFonts::dm18());
+      RemindEditorialFonts::dm18(),nextDays);
   }
   // Legacy calendar paints today white, which can be invisible on e-paper.
   // Overlay a proper 1-bit ring after all calendar text has been drawn.
