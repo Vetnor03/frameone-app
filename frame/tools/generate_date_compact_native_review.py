@@ -38,6 +38,18 @@ def scenarios():
              day=31,x=0,y=0,w=200,h=480,dark=0,holiday=0),
     ]
 
+def hidden_physical_ink(pgm:bytes,dark:int):
+    # Phase-0 mechanical opening; final alignment still requires on-frame QA.
+    header=b"P5\n800 480\n255\n"
+    assert pgm.startswith(header)
+    pixel=memoryview(pgm)[len(header):]
+    bg=0 if dark else 255
+    return sum(pixel[yy*800+xx]!=bg
+        for yy in range(480)
+        for xx in range(800)
+        if not (58<=xx<738 and 39<=yy<475))
+
+
 def generate(output):
     output=Path(output)
     output.mkdir(parents=True,exist_ok=True)
@@ -51,14 +63,20 @@ def generate(output):
             status=capture(exe,item,pgm)
             if not status["admitted"] or status["inkOutside"] or status["outOfBounds"]:
                 raise ValueError(f"Actual Date painter did not safely admit {item['name']}: {status}")
+            content=pgm.read_bytes()
+            behind=hidden_physical_ink(content,item["dark"])
+            if behind:
+                raise ValueError(f"Compact Date ink behind phase-0 aperture: "
+                                 f"{item['name']}, pixels={behind}")
             filename=f"compact_{i}.png"
-            (output/filename).write_bytes(pgm_to_png(pgm.read_bytes()))
+            (output/filename).write_bytes(pgm_to_png(content))
             scenes.append(dict(name=item["name"],png=filename,
                                cell={k:item[k] for k in ("x","y","w","h")},
-                               inkInside=status["inkInside"],
+                               inkInside=status["inkInside"],hiddenBezelInk=behind,
                                hash=status["hash"],admitted=status["admitted"]))
         summary=dict(scenes=scenes,physicalPanel=False,flashed=False,
                      standardFirmwareFlagEnabled=False,
+                     phase0Aperture=dict(x=58,y=39,w=680,h=436),
                      renderer="original ModuleDate.cpp/Fraunces+DM Sans F2 host-pixel")
         (output/"manifest.json").write_text(json.dumps(summary,indent=2))
         cards="".join(
