@@ -141,20 +141,6 @@ def render_calendar(entry,today,holiday_set,fonts):
             out.append(f'<path data-calendar-title-accent="original-1bit" fill="{ink}" d="{ink_path}"/>')
         top+=titleH+titleGap
     dowx=bx+weekW
-    if dow:
-        for i,label in enumerate(("Mo","Tu","We","Th","Fr","Sa","Su")):
-            out.append(text_centered(label,fonts["S9"],dowx+i*cw,top,cw,dowH,ink))
-    gridtop=top+dowH
-    if weeks:
-        out.append(f'<path stroke="#222" stroke-width="1" d="M{bx+weekW-1} {gridtop+2}v{rows*ch-4}"/>')
-        for row in range(rows):
-            firstday=row*7-offset+1
-            lastday=firstday+6
-            if lastday<1 or firstday>dim:
-                continue
-            sample=min(dim,max(1,firstday))
-            iso=__import__("datetime").date(year,month,sample).isocalendar().week
-            out.append(text_centered(str(iso),fonts["S9"],bx+2,gridtop+row*ch,18,ch,ink))
     # Match the exact C++ editorial-only DM Sans 18 measured admission.
     # Keep original FreeSans9 numerals on cramped calendars and all legacy.
     dayfont=fonts["S9"]
@@ -168,6 +154,29 @@ def render_calendar(entry,today,holiday_set,fonts):
             fits=fits and radius>=11 and inkw<=2*radius-4 and inkh<=2*radius-4
         if fits:
             dayfont=larger
+    dowfont=fonts["S9"]
+    # Original DM Sans 18 only if all seven actual headings fit the DOW
+    # row at its measured 18px height, with 3px left/right clearance.
+    if dow and dayfont is fonts["DM18"] and all(
+        metrics(label,fonts["DM18"])[2]<=cw-6 and
+        metrics(label,fonts["DM18"])[3]<=dowH-2
+        for label in ("Mo","Tu","We","Th","Fr","Sa","Su")
+    ):
+        dowfont=fonts["DM18"]
+    if dow:
+        for i,label in enumerate(("Mo","Tu","We","Th","Fr","Sa","Su")):
+            out.append(text_centered(label,dowfont,dowx+i*cw,top,cw,dowH,ink))
+    gridtop=top+dowH
+    if weeks:
+        out.append(f'<path stroke="#222" stroke-width="1" d="M{bx+weekW-1} {gridtop+2}v{rows*ch-4}"/>')
+        for row in range(rows):
+            firstday=row*7-offset+1
+            lastday=firstday+6
+            if lastday<1 or firstday>dim:
+                continue
+            sample=min(dim,max(1,firstday))
+            iso=__import__("datetime").date(year,month,sample).isocalendar().week
+            out.append(text_centered(str(iso),fonts["S9"],bx+2,gridtop+row*ch,18,ch,ink))
     for day in range(1,dim+1):
         index=offset+day-1
         row,col=divmod(index,7)
