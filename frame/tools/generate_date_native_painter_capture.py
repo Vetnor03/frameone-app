@@ -22,7 +22,7 @@ FRAME=ROOT/"frame"
 HOST=FRAME/"tests/native_capture"
 SOURCE=HOST/"native_date_capture_cli.cpp"
 
-def compile_native(executable:Path):
+def compile_native(executable:Path,extra_cpp_defines=()):
     if not shutil.which("g++"):
         raise RuntimeError("GNU++ compiler required")
     cmd=[
@@ -32,6 +32,7 @@ def compile_native(executable:Path):
         "-Wno-error=format-truncation","-Wno-error=unused-function",
         "-DREMIND_DATE_ROLE_PREVIEW_ENABLED=1",
         "-DREMIND_DATE_EDITORIAL_PREVIEW_ENABLED=1",
+        *extra_cpp_defines,
         "-I",str(HOST/"include"),
         "-I",str(HOST),
         "-I",str(FRAME/"src/modules"),
