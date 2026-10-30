@@ -115,7 +115,7 @@ def generate(output:Path):
                 f'<article>{figure}<h3>{label}</h3>'
                 f'<p>{result}; ink in cell: {status["inkInside"]:,}; '
                 f'out-of-cell: {status["inkOutside"]:,}; '
-                f'outside matte: {status["inkOutsideMatte"]:,}; '
+                f'outside logical panel: {status["inkOutsideMatte"]:,}; '
                 f'host pixel hash: <code>{status["hash"]}</code></p></article>')
         doc=('<!doctype html><html lang="en"><meta charset="utf-8">'
              '<meta name="viewport" content="width=device-width,initial-scale=1">'
@@ -134,7 +134,7 @@ def generate(output:Path):
              'raster. Host line/circle pixels may differ from the production '
              'driver. This is not a physical panel capture, not an exact '
              'GxEPD2 paged transfer, and never flashes a frame. '
-             'Background outside the physical 680×436 matte remains in view '
+             'Full logical 800×480 viewport remains in view '
              'for verification. Legacy rejects are labelled, not painted '
              'with incomplete mock legacy fonts.</p></header><main>'+
              "".join(articles)+"</main></html>")
