@@ -5,6 +5,8 @@ the editorial CI build; this test alone enables it in a Linux host raster.
 Original F1/F2 GFX data are compiled, never substituted by browser fonts.
 """
 from pathlib import Path
+import json
+import subprocess
 import pytest
 import sys
 
@@ -104,3 +106,34 @@ def test_holidays_do_not_remove_or_change_compact_factual_date(
     plain,with_holiday=rendered(0),rendered(1)
     assert plain["admitted"] and with_holiday["admitted"]
     assert plain["hash"]==with_holiday["hash"]
+
+
+@pytest.mark.parametrize("w,h",[(200,240),(400,240),(200,360)])
+def test_original_cpp_native_pixels_contain_actual_botanical_strokes(
+        native_compact,tmp_path,w,h):
+    # Not just a proposed JS composition: prove original ModuleDate.cpp draws
+    # the shared 1-bit stroke source in exactly the measured reserved box.
+    p=tmp_path/f"date_flower_{w}_{h}.pgm"
+    result=capture(native_compact,dict(year=2026,month0=9,day=21,
+        x=0,y=0,w=w,h=h,dark=0,holiday=0),p)
+    assert result["admitted"],result
+    query=dict(cell=dict(x=0,y=0,w=w,h=h),
+        day=dict(w=71,h=53),month=dict(w=95,h=19),
+        weekday=dict(w=100,h=17),year=dict(w=43,h=14))
+    cli=ROOT/"frame/tests/helpers/date_compact_js_cli.mjs"
+    proc=subprocess.run(["node",str(cli)],input=json.dumps(query)+"\n",
+        text=True,capture_output=True,cwd=ROOT,timeout=15)
+    assert proc.returncode==0,proc.stderr
+    layout=json.loads(proc.stdout)
+    assert layout and layout["art"]
+    art=layout["botanical"]
+    buf=p.read_bytes()
+    header=b"P5\n800 480\n255\n"
+    assert buf.startswith(header)
+    pixels=buf[len(header):]
+    assert len(pixels)==800*480
+    ink=sum(pixels[yy*800+xx]==0
+      for yy in range(art["y"],art["y"]+art["h"])
+      for xx in range(art["x"],art["x"]+art["w"]))
+    assert ink>=25,(w,h,ink,art)
+    assert result["inkOutside"]==0

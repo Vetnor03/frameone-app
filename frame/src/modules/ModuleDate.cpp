@@ -1711,6 +1711,9 @@ static bool tryDrawEditorialCompactDatePreview(const Cell& c,
       if(layout.showMonth)paintRoleLine(monthDraw);
       paintRoleLine(weekdayDraw);
       if(layout.showYear)paintRoleLine(yearDraw);
+      // Same authored 1-bit motif already used in the full editorial Date.
+      // The compact planner admits this only AFTER all four facts are safe.
+      if(layout.art)paintEditorialSprig(layout.botanical);
       d.setFont(nullptr);
       d.setTextSize(1);
       d.setTextWrap(true);
