@@ -52,7 +52,10 @@ def check_image(data,offset,limit,kind):
         for byte in data[pos:pos+size]:
             checksum^=byte
         pos+=size
-    footer=((pos-offset+15)//16)*16+offset-1
+    # Footer is the LAST byte of a 16-byte-aligned image chunk.
+    # Even when segment data itself ends on an alignment boundary, the
+    # checksum needs its own next byte (15 pad bytes + checksum).
+    footer=((pos-offset+16)//16)*16+offset-1
     if footer>=limit:
         return [f"{kind}: missing aligned checksum"]
     if any(byte!=0 for byte in data[pos:footer]):
