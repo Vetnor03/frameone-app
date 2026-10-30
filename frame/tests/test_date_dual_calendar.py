@@ -87,8 +87,7 @@ def test_full_two_calendar_native_js_parity(tmp_path):
         assert (gap,margin)==(jsplan["gap"],jsplan["margin"])
         assert weeks==int(jsplan["current"]["features"]["showWeekNums"])
         assert weeks==int(jsplan["next"]["features"]["showWeekNums"])
-        expected_weeks=(rec["editorial"]["calendar"]["features"]["showWeekNums"]
-                        and rec["editorial"]["calendar"]["rect"]["w"]>=331)
+        expected_weeks=(rec["requestedWeekNums"] and rec["calendarWidth"]>=331)
         assert bool(weeks)==bool(expected_weeks)
         assert inside(current,rect(jsplan["safe"]))
         assert inside(nxt,rect(jsplan["safe"]))
