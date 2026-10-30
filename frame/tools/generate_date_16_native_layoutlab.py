@@ -11,6 +11,8 @@ import argparse
 import html
 import json
 import tempfile
+import struct
+import zlib
 from pathlib import Path
 from generate_date_native_painter_capture import compile_native,capture,pgm_to_png
 
@@ -28,11 +30,17 @@ def old_crop_impact(pgm,dark):
     return sum(p[y*800+x]!=bg for y in range(480) for x in range(800)
                if not (mx<=x<mx+mw and my<=y<my+mh))
 
-def crop_cell_pgm(pgm,x,y,w,h):
+def crop_cell_png(pgm,x,y,w,h):
     p=raster(pgm)
-    rows=b"".join(p[yy*800+x:yy*800+x+w].tobytes()
+    scan=b"".join(b"\\x00"+p[yy*800+x:yy*800+x+w].tobytes()
                   for yy in range(y,y+h))
-    return f"P5\n{w} {h}\n255\n".encode()+rows
+    def chunk(name,data):
+        body=name+data
+        return struct.pack("!I",len(data))+body+struct.pack(
+            "!I",zlib.crc32(body)&0xffffffff)
+    return (b"\\x89PNG\\r\\n\\x1a\\n"+
+      chunk(b"IHDR",struct.pack("!IIBBBBB",w,h,8,0,0,0,0))+
+      chunk(b"IDAT",zlib.compress(scan,9))+chunk(b"IEND",b""))
 
 def cases():
     scenes=[]
@@ -63,8 +71,8 @@ def generate(output):
             full_name=f"date_{i:02d}_full.png"
             crop_name=f"date_{i:02d}_cell.png"
             (output/full_name).write_bytes(pgm_to_png(content))
-            (output/crop_name).write_bytes(pgm_to_png(crop_cell_pgm(
-                content,case["x"],case["y"],case["w"],case["h"])))
+            (output/crop_name).write_bytes(crop_cell_png(
+                content,case["x"],case["y"],case["w"],case["h"]))
             rows.append(dict(
                 shape=case["shape"],theme="Dark" if case["dark"] else "Light",
                 case=case,editorialAdmitted=status["admitted"],
