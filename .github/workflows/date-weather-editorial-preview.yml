@@ -68,8 +68,9 @@ jobs:
         run: |
           python frame/tools/prepare_arduino_sketch.py --output "$RUNNER_TEMP/frame_v2.5.1"
           python - <<'PY'
+          import os
           from pathlib import Path
-          p = Path("$RUNNER_TEMP/frame_v2.5.1/frame_v2.5.1.ino")
+          p = Path(os.environ["RUNNER_TEMP"]) / "frame_v2.5.1" / "frame_v2.5.1.ino"
           flags = (
               "#define REMIND_DATE_ROLE_PREVIEW_ENABLED 1\n"
               "#define REMIND_DATE_EDITORIAL_PREVIEW_ENABLED 1\n"
