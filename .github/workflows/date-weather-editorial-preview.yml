@@ -1,0 +1,25 @@
+name: Date + Weather editorial preview build
+
+on:
+  pull_request:
+    paths:
+      - 'frame/src/modules/ModuleDate.cpp'
+      - 'frame/src/modules/ModuleWeather.cpp'
+      - 'frame/platformio.ini'
+      - '.github/workflows/date-weather-editorial-preview.yml'
+  workflow_dispatch:
+
+jobs:
+  combined-editorial-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pinned PlatformIO
+        run: python -m pip install platformio==6.1.19
+      - name: Compile isolated Date + Weather editorial preview
+        run: pio run -d frame -e alfred_v1_2_date_weather_editorial_preview
+      - name: No flashing or OTA
+        run: echo "Compile-only preview. Do not flash until explicit V4 approval and rollback verification."
