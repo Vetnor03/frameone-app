@@ -1234,6 +1234,7 @@ export default function HomePage() {
   const [appTheme, setAppTheme] = useState<AppTheme>(initialTheme)
   const [appThemePickerOpen, setAppThemePickerOpen] = useState(false)
   const [frameTheme, setFrameTheme] = useState<AppTheme>('dark')
+  const [frameLanguageDraft, setFrameLanguageDraft] = useState<AppLanguage>('en')
   const [powerSaver, setPowerSaver] = useState(DEFAULT_POWER_SAVER)
   const [powerSaverSaving, setPowerSaverSaving] = useState(false)
   const [language, setLanguage] = useState<AppLanguage>('en')
@@ -2173,6 +2174,7 @@ export default function HomePage() {
       : []
 
     setFrameTheme(nextFrameTheme)
+    setFrameLanguageDraft(nextLanguage)
     setPowerSaver(nextPowerSaver)
     setLanguage(nextLanguage)
     setFontSize(nextFontSize)
@@ -2988,6 +2990,8 @@ async function handleSelectTab(k: TabKey) {
                     setFrameTheme(next)
                     markDirty({ frameTheme: next })
                   }}
+                  frameLanguage={frameLanguageDraft}
+                  onFrameLanguageToggle={() => setFrameLanguageDraft((current) => current === 'no' ? 'en' : 'no')}
                   layoutKey={layoutKey}
                   cells={cellsByLayout[layoutKey]}
                   onPrev={prevLayout}
@@ -4345,6 +4349,8 @@ function FrameTab(props: {
   frameTheme: AppTheme
   canChangeFrameTheme: boolean
   onFrameThemeToggle: () => void
+  frameLanguage: AppLanguage
+  onFrameLanguageToggle: () => void
   layoutKey: LayoutKey
   cells: Record<number, ModuleKey | null>
   onPrev: () => void
@@ -4364,7 +4370,7 @@ function FrameTab(props: {
   onAdd:()=>void
   onEdit:(layout:CustomLayout)=>void
 }) {
-  const { title, subtitle, frameTheme, canChangeFrameTheme, onFrameThemeToggle, layoutKey, cells, onPrev, onNext, onCellTap, language,editorMode,editorName,editorCells,editorUnsupportedSlots,onEditorNameChange,onEditorCellsChange,onCancelEditor,customLayout,customAssignments,isAddCard,onAdd,onEdit } = props
+  const { title, subtitle, frameTheme, canChangeFrameTheme, onFrameThemeToggle, frameLanguage, onFrameLanguageToggle, layoutKey, cells, onPrev, onNext, onCellTap, language,editorMode,editorName,editorCells,editorUnsupportedSlots,onEditorNameChange,onEditorCellsChange,onCancelEditor,customLayout,customAssignments,isAddCard,onAdd,onEdit } = props
 
   return (
     <div id="frame-layout-controls" tabIndex={-1} className="h-full flex flex-col outline-none">
@@ -4377,21 +4383,37 @@ function FrameTab(props: {
           {editorMode?<input aria-label="Layout name" maxLength={40} value={editorName} onChange={event=>onEditorNameChange(event.target.value)} placeholder="Layout name" className="w-full bg-transparent text-center text-2xl font-semibold uppercase tracking-widest outline-none placeholder:text-[color:var(--fg-35)]"/>:<div className="flex items-center justify-center gap-1"><span className="text-2xl font-semibold tracking-widest">{title}</span>{customLayout&&<button type="button" aria-label="Edit custom layout" title="Edit layout" onClick={()=>onEdit(customLayout)} className="inline-flex h-8 w-8 items-center justify-center text-[color:var(--fg-45)] transition-colors hover:text-[color:var(--fg-75)]"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.5"><path d="m4 20 4.1-1 10.8-10.8a2.1 2.1 0 0 0-3-3L5.1 16 4 20Z"/><path d="m14.5 6.5 3 3"/></svg></button>}</div>}
           <div className="mt-1 text-xs tracking-widest text-[color:var(--fg-60)]">{editorMode?'Draw to split · trace to erase':subtitle}</div>
           {!editorMode && (
-            <button
-              type="button"
-              role="switch"
-              aria-checked={frameTheme === 'light'}
-              aria-label={language === 'no' ? 'Lys eller mørk ramme' : 'Light or dark frame'}
-              title={language === 'no' ? `Ramme: ${frameTheme === 'dark' ? 'Mørk' : 'Lys'}` : `Frame: ${frameTheme === 'dark' ? 'Dark' : 'Light'}`}
-              disabled={!canChangeFrameTheme}
-              onClick={onFrameThemeToggle}
-              className="mt-2 inline-flex min-h-6 items-center justify-center gap-2 rounded-full px-2 text-[10px] tracking-[0.08em] text-[color:var(--fg-45)] disabled:opacity-40"
-            >
-              <span>{frameTheme === 'light' ? 'LIGHT' : 'DARK'}</span>
-              <span aria-hidden="true" className={`relative h-[14px] w-[26px] rounded-full border transition-colors ${frameTheme === 'dark' ? 'border-[#354653] bg-[#263440]' : 'border-[#cbd5dc] bg-[#f4f6f8]'}`}>
-                <span className={`absolute left-[2px] top-[2px] h-2 w-2 rounded-full transition-[transform,background-color] ${frameTheme === 'dark' ? 'bg-[#f5f6f8]' : 'bg-[#586773] translate-x-3'}`} />
-              </span>
-            </button>
+            <div className="flex flex-col items-center">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={frameTheme === 'light'}
+                aria-label={language === 'no' ? 'Lys eller mørk ramme' : 'Light or dark frame'}
+                title={language === 'no' ? `Ramme: ${frameTheme === 'dark' ? 'Mørk' : 'Lys'}` : `Frame: ${frameTheme === 'dark' ? 'Dark' : 'Light'}`}
+                disabled={!canChangeFrameTheme}
+                onClick={onFrameThemeToggle}
+                className="mt-2 inline-flex min-h-6 items-center justify-center gap-2 rounded-full px-2 text-[10px] tracking-[0.08em] text-[color:var(--fg-45)] disabled:opacity-40"
+              >
+                <span>{frameTheme === 'light' ? 'LIGHT' : 'DARK'}</span>
+                <span aria-hidden="true" className={`relative h-[14px] w-[26px] rounded-full border transition-colors ${frameTheme === 'dark' ? 'border-[#354653] bg-[#263440]' : 'border-[#cbd5dc] bg-[#f4f6f8]'}`}>
+                  <span className={`absolute left-[2px] top-[2px] h-2 w-2 rounded-full transition-[transform,background-color] ${frameTheme === 'dark' ? 'bg-[#f5f6f8]' : 'bg-[#586773] translate-x-3'}`} />
+                </span>
+              </button>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={frameLanguage === 'en'}
+                aria-label={language === 'no' ? 'Rammens språk: norsk eller engelsk' : 'Frame language: Norwegian or English'}
+                title={frameLanguage === 'no' ? 'Norsk' : 'English'}
+                onClick={onFrameLanguageToggle}
+                className="mt-1 inline-flex min-h-6 items-center justify-center gap-2 rounded-full px-2 text-[10px] tracking-[0.08em] text-[color:var(--fg-45)]"
+              >
+                <span>{frameLanguage === 'no' ? 'NORSK' : 'ENGLISH'}</span>
+                <span aria-hidden="true" className={`relative h-[14px] w-[26px] rounded-full border transition-colors ${frameLanguage === 'no' ? 'border-[#354653] bg-[#263440]' : 'border-[#cbd5dc] bg-[#f4f6f8]'}`}>
+                  <span className={`absolute left-[2px] top-[2px] h-2 w-2 rounded-full transition-[transform,background-color] ${frameLanguage === 'no' ? 'bg-[#f5f6f8]' : 'bg-[#586773] translate-x-3'}`} />
+                </span>
+              </button>
+            </div>
           )}
         </div>
 
