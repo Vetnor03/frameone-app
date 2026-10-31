@@ -4383,7 +4383,7 @@ function FrameTab(props: {
           {editorMode?<input aria-label="Layout name" maxLength={40} value={editorName} onChange={event=>onEditorNameChange(event.target.value)} placeholder="Layout name" className="w-full bg-transparent text-center text-2xl font-semibold uppercase tracking-widest outline-none placeholder:text-[color:var(--fg-35)]"/>:<div className="flex items-center justify-center gap-1"><span className="text-2xl font-semibold tracking-widest">{title}</span>{customLayout&&<button type="button" aria-label="Edit custom layout" title="Edit layout" onClick={()=>onEdit(customLayout)} className="inline-flex h-8 w-8 items-center justify-center text-[color:var(--fg-45)] transition-colors hover:text-[color:var(--fg-75)]"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.5"><path d="m4 20 4.1-1 10.8-10.8a2.1 2.1 0 0 0-3-3L5.1 16 4 20Z"/><path d="m14.5 6.5 3 3"/></svg></button>}</div>}
           <div className="mt-1 text-xs tracking-widest text-[color:var(--fg-60)]">{editorMode?'Draw to split · trace to erase':subtitle}</div>
           {!editorMode && (
-            <div className="mt-2 flex flex-col items-center">
+            <div className="flex flex-col items-center">
               <button
                 type="button"
                 role="switch"
@@ -4392,7 +4392,7 @@ function FrameTab(props: {
                 title={language === 'no' ? `Ramme: ${frameTheme === 'dark' ? 'Mørk' : 'Lys'}` : `Frame: ${frameTheme === 'dark' ? 'Dark' : 'Light'}`}
                 disabled={!canChangeFrameTheme}
                 onClick={onFrameThemeToggle}
-                className="inline-flex min-h-6 items-center justify-center gap-2 rounded-full px-2 text-[10px] tracking-[0.08em] text-[color:var(--fg-45)] disabled:opacity-40"
+                className="mt-2 inline-flex min-h-6 items-center justify-center gap-2 rounded-full px-2 text-[10px] tracking-[0.08em] text-[color:var(--fg-45)] disabled:opacity-40"
               >
                 <span>{frameTheme === 'light' ? 'LIGHT' : 'DARK'}</span>
                 <span aria-hidden="true" className={`relative h-[14px] w-[26px] rounded-full border transition-colors ${frameTheme === 'dark' ? 'border-[#354653] bg-[#263440]' : 'border-[#cbd5dc] bg-[#f4f6f8]'}`}>
