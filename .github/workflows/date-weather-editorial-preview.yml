@@ -43,3 +43,77 @@ jobs:
           if-no-files-found: error
       - name: No flashing or OTA
         run: echo "Compile-only preview. Do not flash until explicit V4 approval and rollback verification."
+
+  arduino-preview-sketch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+        with:
+          version: '1.5.1'
+      - name: Install same Arduino ESP32 core used on the V4 test frame
+        run: |
+          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@3.3.11 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli lib install "ArduinoJson@6.21.5"
+          arduino-cli lib install "Adafruit BusIO@1.17.4"
+          arduino-cli lib install "Adafruit GFX Library@1.12.6"
+          arduino-cli lib install "GxEPD2@1.6.4"
+          arduino-cli lib install "PubSubClient@2.8"
+      - name: Prepare flat Arduino IDE preview sketch
+        run: |
+          python frame/tools/prepare_arduino_sketch.py --output "$RUNNER_TEMP/frame_v2.5.1"
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("$RUNNER_TEMP/frame_v2.5.1/frame_v2.5.1.ino")
+          flags = (
+              "#define REMIND_DATE_ROLE_PREVIEW_ENABLED 1\n"
+              "#define REMIND_DATE_EDITORIAL_PREVIEW_ENABLED 1\n"
+              "#define REMIND_WEATHER_EDITORIAL_PREVIEW_ENABLED 1\n"
+          )
+          p.write_text(flags + p.read_text(encoding="utf-8"), encoding="utf-8")
+          PY
+          cat > "$RUNNER_TEMP/frame_v2.5.1/README_FLASH.txt" <<'EOF'
+          RE:MIND V4 Date + Weather editorial physical-test sketch
+          Branch: design/weather-r51-editorial-adaptive-20261031
+
+          Arduino IDE:
+          Board: ESP32S3 Dev Module
+          ESP32 core: 3.3.11
+          CPU Frequency: 240MHz
+          Flash Size: 16MB (128Mb)
+          Flash Mode: QIO 80MHz
+          Partition Scheme: Minimal SPIFFS (1.9MB APP with OTA)
+          PSRAM: OPI PSRAM
+          USB Mode: Hardware CDC and JTAG
+          USB CDC On Boot: Enabled
+          Upload Mode: UART0 / Hardware CDC
+          Erase All Flash Before Sketch Upload: Disabled
+          Monitor speed: 115200
+
+          Libraries:
+          ArduinoJson 6.21.5
+          Adafruit BusIO 1.17.4
+          Adafruit GFX Library 1.12.6
+          GxEPD2 1.6.4
+          PubSubClient 2.8
+
+          TEST ONLY. Date + Weather editorial flags are already enabled.
+          Do not add or remove flags before this physical test.
+          EOF
+      - name: Compile exact Arduino IDE preview sketch
+        run: |
+          arduino-cli compile --verbose --warnings default --export-binaries \
+            --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" \
+            "$RUNNER_TEMP/frame_v2.5.1"
+      - name: Upload Arduino-ready Date + Weather physical-test sketch
+        uses: actions/upload-artifact@v4
+        with:
+          name: remind-v4-date-weather-editorial-arduino-READY
+          path: ${{ runner.temp }}/frame_v2.5.1/
+          if-no-files-found: error
+          retention-days: 7
