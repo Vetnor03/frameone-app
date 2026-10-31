@@ -2330,7 +2330,9 @@ static void renderAdaptiveWeather(const Cell& c,
   const bool showWind = area >= 3 &&
       (!isnan(data.currentWindMs) || !isnan(data.currentWindDirection));
   const bool showProbability = area >= 4 && !isnan(data.currentPrecipProbability);
-  const bool showLocation = area >= 3;
+  // The editorial Weather cell prioritizes conditions over repeated location labels.
+  // Location still selects the forecast; only its redundant visual heading is hidden.
+  const bool showLocation = false;
   const bool large = area >= 8 && c.h >= 300;
   int forecastRows = large ? (c.w >= 500 ? 4 : 3) : 0;
   const int availableForecast = data.dayCount > 1 ? data.dayCount - 1 : 0;
