@@ -19,6 +19,14 @@
 #include "FreeSansBold12ptNO.h"
 #include "FreeSansBold18ptNO.h"
 
+// Weather editorial typography is isolated from production firmware.
+#ifndef REMIND_WEATHER_EDITORIAL_PREVIEW_ENABLED
+#define REMIND_WEATHER_EDITORIAL_PREVIEW_ENABLED 0
+#endif
+#if REMIND_WEATHER_EDITORIAL_PREVIEW_ENABLED
+#include "RemindEditorialFonts.h"
+#endif
+
 #define FONT_B9  (&FreeSans9pt8b)
 #define FONT_B12 (&FreeSansBold12pt8b)
 #define FONT_B18 (&FreeSansBold18pt8b)
@@ -2310,6 +2318,26 @@ static const char* compassDirection(float degrees) {
   return labels[index];
 }
 
+#if REMIND_WEATHER_EDITORIAL_PREVIEW_ENABLED
+// Select the approved original GFX bitmap using actual ink bounds, not
+// geometry-specific font substitutions or scaling.
+static const GFXfont* weatherHeroFont(const char* label, int width, int height) {
+  const GFXfont* candidates[] = {
+    RemindEditorialFonts::fraunces72(),
+    RemindEditorialFonts::fraunces48(),
+    RemindEditorialFonts::dm24(),
+    RemindEditorialFonts::dm18()
+  };
+  for (const GFXfont* font : candidates) {
+    int16_t x1 = 0, y1 = 0;
+    uint16_t w = 0, h = 0;
+    measureText(label, font, x1, y1, w, h);
+    if ((int)w <= width - 8 && (int)h <= height - 8) return font;
+  }
+  return FONT_B18;
+}
+#endif
+
 static void renderAdaptiveWeather(const Cell& c,
                                   const WeatherInstanceConfig& cfg,
                                   const WeatherCache& data) {
@@ -2330,7 +2358,9 @@ static void renderAdaptiveWeather(const Cell& c,
   const bool showWind = area >= 3 &&
       (!isnan(data.currentWindMs) || !isnan(data.currentWindDirection));
   const bool showProbability = area >= 4 && !isnan(data.currentPrecipProbability);
-  const bool showLocation = area >= 3;
+  // The editorial Weather cell prioritizes conditions over repeated location labels.
+  // Location still selects the forecast; only its redundant visual heading is hidden.
+  const bool showLocation = false;
   const bool large = area >= 8 && c.h >= 300;
   int forecastRows = large ? (c.w >= 500 ? 4 : 3) : 0;
   const int availableForecast = data.dayCount > 1 ? data.dayCount - 1 : 0;
@@ -2380,17 +2410,27 @@ static void renderAdaptiveWeather(const Cell& c,
   char temperature[16] = {0};
   formatTemp(temperature, sizeof(temperature), data.tempC, cfg.units);
   const int iconSize = primary.h > 120 ? 56 : 38;
+  // Only experimental Weather previews use the approved editorial hero.
+  // The normal ALFRED renderer remains byte-for-byte visually unchanged.
+  const GFXfont* heroFont = FONT_B18;
+#if REMIND_WEATHER_EDITORIAL_PREVIEW_ENABLED
+  const int heroW = landscape ? primary.w / 2 : primary.w;
+  const int heroH = landscape
+      ? (showCondition ? primary.h * 2 / 3 : primary.h)
+      : primary.h / 3;
+  heroFont = weatherHeroFont(temperature, heroW, heroH);
+#endif
   if (landscape) {
     ModuleIcons::drawWeatherIcon(primary.x + primary.w / 4, primary.y + primary.h / 2,
                                  iconSize, data.wmo);
     drawCenteredBox(primary.x + primary.w / 2, primary.y, primary.w / 2,
-                    showCondition ? primary.h * 2 / 3 : primary.h, temperature, FONT_B18, ink);
+                    showCondition ? primary.h * 2 / 3 : primary.h, temperature, heroFont, ink);
     if (showCondition) drawWrappedTextBox(primary.x + primary.w / 2,
       primary.y + primary.h * 2 / 3, primary.w / 2, primary.h / 3,
       data.condition, FONT_B9, ink, 2);
   } else {
     const int tempH = primary.h / 3;
-    drawCenteredBox(primary.x, primary.y, primary.w, tempH, temperature, FONT_B18, ink);
+    drawCenteredBox(primary.x, primary.y, primary.w, tempH, temperature, heroFont, ink);
     ModuleIcons::drawWeatherIcon(primary.x + primary.w / 2,
       primary.y + tempH + (primary.h - tempH) / 3, iconSize, data.wmo);
     if (showCondition) drawWrappedTextBox(primary.x, primary.y + primary.h * 2 / 3,
