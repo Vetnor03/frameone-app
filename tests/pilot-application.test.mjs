@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { isPilotApplicationClosed, PILOT_APPLICATIONS_MANUALLY_CLOSED } from '../app/lib/pilotApplicationDeadline.ts'
 
 const page = readFileSync(new URL('../app/pilot/PilotApplication.tsx', import.meta.url), 'utf8')
 const route = readFileSync(new URL('../app/api/pilot/applications/route.ts', import.meta.url), 'utf8')
@@ -87,6 +88,16 @@ test('pilot deadline is the end of 1 November in Oslo and is server-enforced', (
   assert.ok(page.includes('PILOT_DEADLINE_LABEL'))
   assert.ok(route.includes('status: 410'))
   assert.equal(route.split('isPilotApplicationClosed()').length - 1, 2)
+})
+
+test('manually closed pilot rejects applications even before the old deadline', () => {
+  assert.equal(PILOT_APPLICATIONS_MANUALLY_CLOSED, true)
+  assert.equal(isPilotApplicationClosed(Date.parse('2026-11-01T08:00:00Z')), true)
+  assert.equal(isPilotApplicationClosed(Date.parse('2026-11-02T00:00:00Z')), true)
+  assert.match(publicPage, /Alle påmeldte får en oppdatering/)
+  // The direct API path and already-open forms must still receive 410.
+  assert.equal(route.split('isPilotApplicationClosed()').length - 1, 2)
+  assert.match(page, /response.status === 410/)
 })
 
 test('confirmation mail is sent only after a successful database insert and tracked privately', () => {
