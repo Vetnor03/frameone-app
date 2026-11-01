@@ -11,6 +11,7 @@ import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type 
 import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
 import { reminderClockBoundaryReached } from '@/app/lib/device/reminderClockBoundary'
 import { buildReminderComingUp } from '@/app/lib/reminderComingUp.mjs'
+import { firstReminderOccurrenceDate, nextReminderOccurrenceDate as nextReminderOccurrenceDateShared, normalizeRepeatWeekdays } from '@/app/lib/reminders/recurrence'
 
 export const runtime = 'nodejs'
 
@@ -18,6 +19,7 @@ type ReminderRepeatKey =
   | 'none'
   | 'daily'
   | 'weekly'
+  | 'weekdays'
   | '2weeks'
   | '4weeks'
   | 'monthly'
@@ -36,6 +38,7 @@ type ReminderRow = {
   end_time: string | null
   repeat_type: ReminderRepeatKey | null
   custom_repeat_days: number | null
+  repeat_weekdays: number[] | null
   is_done: boolean | null
   starter_key?: string | null
   source_event_group_key?: string | null
@@ -67,6 +70,7 @@ function isReminderRepeatKey(v: unknown): v is ReminderRepeatKey {
     v === 'none' ||
     v === 'daily' ||
     v === 'weekly' ||
+    v === 'weekdays' ||
     v === '2weeks' ||
     v === '4weeks' ||
     v === 'monthly' ||
@@ -118,25 +122,10 @@ function addYearsLocal(d: Date, years: number) {
 function nextReminderOccurrenceDate(
   base: Date,
   repeat: ReminderRepeatKey,
-  customRepeatDays?: number | null
+  customRepeatDays?: number | null,
+  repeatWeekdays?: number[] | null
 ): Date | null {
-  if (repeat === 'none') return null
-  if (repeat === 'daily') return addDaysLocal(base, 1)
-  if (repeat === 'weekly') return addDaysLocal(base, 7)
-  if (repeat === '2weeks') return addDaysLocal(base, 14)
-  if (repeat === '4weeks') return addDaysLocal(base, 28)
-  if (repeat === 'monthly') return addMonthsLocal(base, 1)
-  if (repeat === 'halfyear') return addMonthsLocal(base, 6)
-  if (repeat === 'yearly') return addYearsLocal(base, 1)
-  if (repeat === '2years') return addYearsLocal(base, 2)
-
-  if (repeat === 'custom') {
-    const n = Number(customRepeatDays)
-    if (Number.isFinite(n) && n > 0) return addDaysLocal(base, n)
-    return null
-  }
-
-  return null
+  return nextReminderOccurrenceDateShared(base, repeat, customRepeatDays, repeatWeekdays)
 }
 
 function getDatePartsInTimeZone(date: Date, timeZone: string) {
@@ -409,8 +398,11 @@ function recurringOccurrencesExpiringNow(
   if (!today) return []
   const yesterdayYmd = toLocalYmd(addDaysLocal(today, -1))
   const customRepeatDays = Number(row.custom_repeat_days)
+  const repeatWeekdays = normalizeRepeatWeekdays(row.repeat_weekdays)
   const expired: string[] = []
-  let current = new Date(base.getFullYear(), base.getMonth(), base.getDate())
+  const first = firstReminderOccurrenceDate(base, repeat, repeatWeekdays)
+  if (!first) return []
+  let current = new Date(first.getFullYear(), first.getMonth(), first.getDate())
   let guard = 0
 
   while (guard < 1000) {
@@ -428,7 +420,8 @@ function recurringOccurrencesExpiringNow(
     const next = nextReminderOccurrenceDate(
       current,
       repeat,
-      Number.isFinite(customRepeatDays) && customRepeatDays > 0 ? customRepeatDays : null
+      Number.isFinite(customRepeatDays) && customRepeatDays > 0 ? customRepeatDays : null,
+      repeatWeekdays
     )
     if (!next) break
 
@@ -456,6 +449,7 @@ function buildOccurrencesForRow(
   const effectiveTime = dueTime || endTime
   const repeat: ReminderRepeatKey = isReminderRepeatKey(row.repeat_type) ? row.repeat_type : 'none'
   const customRepeatDays = Number(row.custom_repeat_days)
+  const repeatWeekdays = normalizeRepeatWeekdays(row.repeat_weekdays)
 
   if (!title || !dueDate) return []
 
@@ -503,7 +497,9 @@ function buildOccurrencesForRow(
     return items
   }
 
-  let current = new Date(base.getFullYear(), base.getMonth(), base.getDate())
+  const first = firstReminderOccurrenceDate(base, repeat, repeatWeekdays)
+  if (!first) return items
+  let current = new Date(first.getFullYear(), first.getMonth(), first.getDate())
   let guard = 0
 
   while (guard < 1000) {
@@ -516,7 +512,8 @@ function buildOccurrencesForRow(
     const next = nextReminderOccurrenceDate(
       current,
       repeat,
-      Number.isFinite(customRepeatDays) && customRepeatDays > 0 ? customRepeatDays : null
+      Number.isFinite(customRepeatDays) && customRepeatDays > 0 ? customRepeatDays : null,
+      repeatWeekdays
     )
 
     if (!next) break
@@ -559,7 +556,7 @@ export async function GET(req: Request) {
     const coreReadsStartedAt = Date.now()
     const [remindersResult, completionsResult, membersResult, deviceSettingsResult] = await Promise.all([supabase
       .from('reminders')
-      .select('id, device_id, title, due_date, due_time, end_date, end_time, repeat_type, custom_repeat_days, is_done, starter_key, source_event_group_key')
+      .select('id, device_id, title, due_date, due_time, end_date, end_time, repeat_type, custom_repeat_days, repeat_weekdays, is_done, starter_key, source_event_group_key')
       .in('device_id', sharedDeviceIds)
       .order('due_date', { ascending: true })
       .order('due_time', { ascending: true, nullsFirst: false })
