@@ -29,6 +29,7 @@ import WasteSetupModal from './components/WasteSetupModal'
 import NewsModuleSettingsTab from './components/NewsModuleSettingsTab'
 import { wasteCollectionDisplayTitle } from './lib/integrations/waste/display'
 import { hasChosenWeatherLocation, norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders, OSLO_WEATHER } from './lib/onboardingDefaults'
+import { firstReminderOccurrenceDate, nextReminderOccurrenceDate as nextReminderOccurrenceDateShared, normalizeRepeatWeekdays } from './lib/reminders/recurrence'
 import { CUSTOM_SETUP_MODULES, starterCustomCells, validateCustomSetup } from './lib/onboardingCustomSetup.mjs'
 import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
 import { deriveDynamicModuleKeys } from './lib/dynamicModuleTabs.mjs'
@@ -10673,6 +10674,7 @@ type ReminderRepeatKey =
   | 'none'
   | 'daily'
   | 'weekly'
+  | 'weekdays'
   | '2weeks'
   | '4weeks'
   | 'monthly'
@@ -10695,6 +10697,7 @@ type ReminderUiItem = {
   tag: ReminderTag | null
   repeat: ReminderRepeatKey
   customRepeatDays?: number | null
+  repeatWeekdays?: number[] | null
   source?: ReminderSource
   editable?: boolean
   sourceUrl?: string | null
@@ -10725,6 +10728,7 @@ const REMINDER_REPEAT_OPTIONS: Array<{ key: ReminderRepeatKey; label: string; la
   { key: 'none', label: 'None', labelNo: 'Ingen' },
   { key: 'daily', label: 'Daily', labelNo: 'Daglig' },
   { key: 'weekly', label: 'Weekly', labelNo: 'Ukentlig' },
+  { key: 'weekdays', label: 'Selected weekdays', labelNo: 'Valgte ukedager' },
   { key: '2weeks', label: 'Every 2 weeks', labelNo: 'Hver 2. uke' },
   { key: '4weeks', label: 'Every 4 weeks', labelNo: 'Hver 4. uke' },
   { key: 'monthly', label: 'Monthly', labelNo: 'Månedlig' },
@@ -10765,6 +10769,7 @@ function isReminderRepeatKey(v: any): v is ReminderRepeatKey {
     v === 'none' ||
     v === 'daily' ||
     v === 'weekly' ||
+    v === 'weekdays' ||
     v === '2weeks' ||
     v === '4weeks' ||
     v === 'monthly' ||
@@ -10839,6 +10844,7 @@ function normalizeReminderItems(raw: any): ReminderUiItem[] {
       const tag = isReminderTag(x.tag) ? x.tag : null
       const repeat = isReminderRepeatKey(x.repeat) ? x.repeat : 'none'
       const customRepeatDaysRaw = Number(x.customRepeatDays)
+      const repeatWeekdays = normalizeRepeatWeekdays(x.repeatWeekdays)
 
       return {
         id,
@@ -10851,6 +10857,7 @@ function normalizeReminderItems(raw: any): ReminderUiItem[] {
           Number.isFinite(customRepeatDaysRaw) && customRepeatDaysRaw > 0
             ? customRepeatDaysRaw
             : null,
+        repeatWeekdays,
         source: 'remind' as const,
         editable: true,
       }
@@ -10907,7 +10914,16 @@ function formatReminderDateLabel(language: AppLanguage, ymd: string) {
   return formatAppNumericDate(ymd)
 }
 
-function reminderRepeatLabel(language: AppLanguage, key: ReminderRepeatKey, customRepeatDays?: number | null) {
+function reminderRepeatLabel(language: AppLanguage, key: ReminderRepeatKey, customRepeatDays?: number | null, repeatWeekdays?: number[] | null) {
+  if (key === 'weekdays') {
+    const days = normalizeRepeatWeekdays(repeatWeekdays)
+    if (days) {
+      const labelsNo = ['Ma', 'Ti', 'On', 'To', 'Fr', 'Lø', 'Sø']
+      const labelsEn = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+      const labels = language === 'no' ? labelsNo : labelsEn
+      return days.map((day) => labels[day - 1]).join(', ')
+    }
+  }
   if (key === 'custom' && Number.isFinite(Number(customRepeatDays)) && Number(customRepeatDays) > 0) {
     const n = Number(customRepeatDays)
     return language === 'no'
@@ -11002,25 +11018,10 @@ function addYearsLocal(d: Date, years: number) {
 function nextReminderOccurrenceDate(
   base: Date,
   repeat: ReminderRepeatKey,
-  customRepeatDays?: number | null
+  customRepeatDays?: number | null,
+  repeatWeekdays?: number[] | null
 ): Date | null {
-  if (repeat === 'none') return null
-  if (repeat === 'daily') return addDaysLocal(base, 1)
-  if (repeat === 'weekly') return addDaysLocal(base, 7)
-  if (repeat === '2weeks') return addDaysLocal(base, 14)
-  if (repeat === '4weeks') return addDaysLocal(base, 28)
-  if (repeat === 'monthly') return addMonthsLocal(base, 1)
-  if (repeat === 'halfyear') return addMonthsLocal(base, 6)
-  if (repeat === 'yearly') return addYearsLocal(base, 1)
-  if (repeat === '2years') return addYearsLocal(base, 2)
-
-  if (repeat === 'custom') {
-    const n = Number(customRepeatDays)
-    if (Number.isFinite(n) && n > 0) return addDaysLocal(base, n)
-    return null
-  }
-
-  return null
+  return nextReminderOccurrenceDateShared(base, repeat, customRepeatDays, repeatWeekdays)
 }
 
 function expandReminderOccurrences(
@@ -11051,7 +11052,9 @@ function expandReminderOccurrences(
     const base = parseYmdToLocalDate(item.date)
     if (!base) continue
 
-    let current = new Date(base.getFullYear(), base.getMonth(), base.getDate())
+    const first = firstReminderOccurrenceDate(base, item.repeat, item.repeatWeekdays)
+    if (!first) continue
+    let current = new Date(first.getFullYear(), first.getMonth(), first.getDate())
     let count = 0
 
     while (current <= safeRangeEnd && count < maxPerReminder) {
@@ -11066,7 +11069,7 @@ function expandReminderOccurrences(
         })
       }
 
-      const next = nextReminderOccurrenceDate(current, item.repeat, item.customRepeatDays)
+      const next = nextReminderOccurrenceDate(current, item.repeat, item.customRepeatDays, item.repeatWeekdays)
       if (!next) break
       if (toLocalYmd(next) <= toLocalYmd(current)) break
 
@@ -14968,7 +14971,7 @@ function RemindersModuleSettingsTab({
 
       const { data, error } = await supabase
         .from('reminders')
-        .select('id, title, due_date, due_time, end_date, end_time, tag, repeat_type, custom_repeat_days, is_done, starter_key, source_event_group_key, source_event_url')
+        .select('id, title, due_date, due_time, end_date, end_time, tag, repeat_type, custom_repeat_days, repeat_weekdays, is_done, starter_key, source_event_group_key, source_event_url')
         .eq('device_id', activeDeviceId)
         .eq('is_done', false)
         .order('due_date', { ascending: true })
@@ -15016,6 +15019,7 @@ const manualItems: ReminderUiItem[] = (data || [])
       Number.isFinite(Number(row.custom_repeat_days)) && Number(row.custom_repeat_days) > 0
         ? Number(row.custom_repeat_days)
         : null,
+    repeatWeekdays: normalizeRepeatWeekdays(row.repeat_weekdays),
     source: 'remind' as const,
     editable: true,
     starterKey: row.starter_key ? String(row.starter_key) : null,
@@ -15704,7 +15708,7 @@ const ungroupedSortedReminders = useMemo(() => {
                         <div className="mt-0.5 text-[11px] text-[color:var(--fg-35)] opacity-60">
                           {`${formatReminderFullDateLabel(language, item.displayDate)}${
                             normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
-                          } • ${item.editable === false ? integrationReminderSourceLabel(language, item.source) : reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
+                          } • ${item.editable === false ? integrationReminderSourceLabel(language, item.source) : reminderRepeatLabel(language, item.repeat, item.customRepeatDays, item.repeatWeekdays)}`}
                         </div>
                         {item.source === 'local-events' && (item.alternativeCount || 0) > 0 && (
                           <div className="mt-0.5 text-[10px] text-[#2aa3ff]">+ {item.alternativeCount} {language === 'no' ? 'andre tidspunkter · trykk for å velge' : 'other performances · tap to choose'}</div>
@@ -15906,15 +15910,17 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, selec
     return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}T${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}${sign}${pad2(Math.floor(Math.abs(offset) / 60))}:${pad2(Math.abs(offset) % 60)}`
   }
 
-  const draftFromText = (): ReminderUiItem => ({ id: '', title: text.trim(), date: fallbackDate, time: null, endDate: null, endTime: null, tag: null, repeat: 'none', customRepeatDays: null })
+  const draftFromText = (): ReminderUiItem => ({ id: '', title: text.trim(), date: fallbackDate, time: null, endDate: null, endTime: null, tag: null, repeat: 'none', customRepeatDays: null, repeatWeekdays: null })
   const initialPartial = (): any => selectedDate ? {
     title: text.trim(), due_date: selectedDate, due_time: null, end_date: null, end_time: null,
-    repeat_type: 'none', custom_repeat_days: null, tag: null, ambiguities: [],
+    repeat_type: 'none', custom_repeat_days: null, repeat_weekdays: null, tag: null, ambiguities: [],
   } : undefined
   const parsedDraft = (): ReminderUiItem => ({
     id: '', title: parsed.title, date: parsed.due_date || fallbackDate, time: parsed.due_time,
     endDate: parsed.end_date, endTime: parsed.end_time, tag: isReminderTag(parsed.tag) ? parsed.tag : null,
-    repeat: isReminderRepeatKey(parsed.repeat_type) ? parsed.repeat_type : 'none', customRepeatDays: parsed.custom_repeat_days,
+    repeat: isReminderRepeatKey(parsed.repeat_type) ? parsed.repeat_type : 'none',
+    customRepeatDays: parsed.custom_repeat_days,
+    repeatWeekdays: normalizeRepeatWeekdays(parsed.repeat_weekdays),
   })
 
   async function interpret(completing = false) {
@@ -15958,7 +15964,7 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, selec
         device_id: activeDeviceId, created_by_user_id: userId, updated_by_user_id: userId,
         title: parsed.title, due_date: parsed.due_date, due_time: parsed.due_time,
         end_date: parsed.end_date, end_time: parsed.end_time, tag: parsed.tag,
-        repeat_type: parsed.repeat_type, custom_repeat_days: parsed.custom_repeat_days, is_done: false,
+        repeat_type: parsed.repeat_type, custom_repeat_days: parsed.custom_repeat_days, repeat_weekdays: parsed.repeat_weekdays, is_done: false,
       })
       if (error) throw error
       trackProductEvent({ event: 'reminder_created', surface: 'reminders', source: 'manual', metadata: { recurring: parsed.repeat_type !== 'none' } })
@@ -15989,12 +15995,12 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, selec
           {failed && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{language === 'no' ? 'Noe gikk galt. Prøv igjen eller rediger detaljene manuelt.' : 'Something went wrong. Try again or edit the details manually.'}</p>}
         </div>
         {clarificationRounds < 2 && (parsing ? <ReminderThinkingState language={language} completing /> : <button onClick={() => interpret(true)} disabled={!clarificationAnswer.trim()} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{language === 'no' ? 'FORTSETT' : 'CONTINUE'}</button>)}
-        <button onClick={() => onEditDetails({ id: '', title: clarification.partial.title, date: clarification.partial.due_date || fallbackDate, time: clarification.partial.due_time, endDate: clarification.partial.end_date, endTime: clarification.partial.end_time, tag: isReminderTag(clarification.partial.tag) ? clarification.partial.tag : null, repeat: isReminderRepeatKey(clarification.partial.repeat_type) ? clarification.partial.repeat_type : 'none', customRepeatDays: clarification.partial.custom_repeat_days })} className="mt-3 h-10 w-full text-xs tracking-widest text-[color:var(--fg-60)]">{language === 'no' ? 'REDIGER DETALJER' : 'EDIT DETAILS'}</button>
+        <button onClick={() => onEditDetails({ id: '', title: clarification.partial.title, date: clarification.partial.due_date || fallbackDate, time: clarification.partial.due_time, endDate: clarification.partial.end_date, endTime: clarification.partial.end_time, tag: isReminderTag(clarification.partial.tag) ? clarification.partial.tag : null, repeat: isReminderRepeatKey(clarification.partial.repeat_type) ? clarification.partial.repeat_type : 'none', customRepeatDays: clarification.partial.custom_repeat_days, repeatWeekdays: normalizeRepeatWeekdays(clarification.partial.repeat_weekdays) })} className="mt-3 h-10 w-full text-xs tracking-widest text-[color:var(--fg-60)]">{language === 'no' ? 'REDIGER DETALJER' : 'EDIT DETAILS'}</button>
         <button onClick={() => { setClarification(null); setClarificationAnswer('') }} className="mt-1 h-10 w-full text-xs tracking-widest text-[color:var(--fg-50)]">{language === 'no' ? 'ENDRE TEKST' : 'CHANGE TEXT'}</button>
       </> : <>
         <div className="mt-7 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
           <div className="text-lg font-medium text-[color:var(--fg-95)]">{parsed.title}</div>
-          <div className="mt-2 text-sm text-[color:var(--fg-60)]">{[previewDate, parsed.due_time, parsed.end_date && parsed.end_date !== parsed.due_date ? `– ${parsed.end_date}` : parsed.end_time ? `– ${parsed.end_time}` : null, parsed.repeat_type !== 'none' ? reminderRepeatOptionLabel(language, parsed.repeat_type) : null].filter(Boolean).join(' · ') || (language === 'no' ? 'Tidspunkt ikke angitt' : 'When not specified')}</div>
+          <div className="mt-2 text-sm text-[color:var(--fg-60)]">{[previewDate, parsed.due_time, parsed.end_date && parsed.end_date !== parsed.due_date ? `– ${parsed.end_date}` : parsed.end_time ? `– ${parsed.end_time}` : null, parsed.repeat_type !== 'none' ? reminderRepeatLabel(language, parsed.repeat_type, parsed.custom_repeat_days, parsed.repeat_weekdays) : null].filter(Boolean).join(' · ') || (language === 'no' ? 'Tidspunkt ikke angitt' : 'When not specified')}</div>
           {parsed.ambiguities?.length > 0 && <div className="mt-3 text-sm text-[color:var(--fg-60)]"><div>{language === 'no' ? 'Klarte ikke å tolke alt:' : "Couldn't understand that completely:"}</div><ul className="mt-1 list-disc pl-5">{parsed.ambiguities.map((x: string) => <li key={x}>{x}</li>)}</ul></div>}
         </div>
         <button onClick={addReminder} disabled={!parsed.due_date || saving} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{saving ? (language === 'no' ? 'LEGGER TIL…' : 'ADDING…') : (language === 'no' ? 'LEGG TIL PÅMINNELSE' : 'ADD REMINDER')}</button>
@@ -16050,6 +16056,9 @@ const [customRepeatDays, setCustomRepeatDays] = useState<number | ''>(
     ? Number(editingReminder?.customRepeatDays ?? initialDraft?.customRepeatDays)
     : ''
 )
+const [repeatWeekdays, setRepeatWeekdays] = useState<number[]>(
+  normalizeRepeatWeekdays(editingReminder?.repeatWeekdays ?? initialDraft?.repeatWeekdays) ?? []
+)
 
 const [saving, setSaving] = useState(false)
 const [deleting, setDeleting] = useState(false)
@@ -16085,6 +16094,7 @@ const normalizedTime = normalizeReminderTime(time)
       ? Number(editingReminder?.customRepeatDays ?? initialDraft?.customRepeatDays)
       : ''
   )
+  setRepeatWeekdays(normalizeRepeatWeekdays(editingReminder?.repeatWeekdays ?? initialDraft?.repeatWeekdays) ?? [])
   setStatus(null)
 }, [editingReminder, initialDraft, initialDate])
 
@@ -16093,7 +16103,8 @@ const normalizedTime = normalizeReminderTime(time)
     date.trim().length > 0 &&
     !saving &&
     !deleting &&
-    (repeat !== 'custom' || !!normalizedCustomRepeatDays)
+    (repeat !== 'custom' || !!normalizedCustomRepeatDays) &&
+    (repeat !== 'weekdays' || repeatWeekdays.length > 0)
 
   async function saveReminder() {
     const cleanTitle = title.trim()
@@ -16114,6 +16125,11 @@ const normalizedTime = normalizeReminderTime(time)
     if (repeat === 'custom' && !normalizedCustomRepeatDays) {
       setStatusKind('error')
       setStatus(language === 'no' ? 'Skriv inn antall dager' : 'Enter custom repeat days')
+      return
+    }
+    if (repeat === 'weekdays' && repeatWeekdays.length === 0) {
+      setStatusKind('error')
+      setStatus(language === 'no' ? 'Velg minst én ukedag' : 'Choose at least one weekday')
       return
     }
     const effectiveEndDate = endDate || cleanDate
@@ -16144,6 +16160,7 @@ const normalizedTime = normalizeReminderTime(time)
     tag,
     repeat_type: repeat,
     custom_repeat_days: repeat === 'custom' ? normalizedCustomRepeatDays : null,
+    repeat_weekdays: repeat === 'weekdays' ? normalizeRepeatWeekdays(repeatWeekdays) : null,
     updated_by_user_id: userId,
     updated_at: new Date().toISOString(),
   })
@@ -16166,6 +16183,7 @@ const normalizedTime = normalizeReminderTime(time)
     tag,
     repeat_type: repeat,
     custom_repeat_days: repeat === 'custom' ? normalizedCustomRepeatDays : null,
+    repeat_weekdays: repeat === 'weekdays' ? normalizeRepeatWeekdays(repeatWeekdays) : null,
     is_done: false,
   })
         if (error) throw error
@@ -16394,6 +16412,7 @@ async function completeReminderFromEditor() {
                     onClick={() => {
                       setRepeat(opt.key)
                       if (opt.key !== 'custom') setCustomRepeatDays('')
+                      if (opt.key !== 'weekdays') setRepeatWeekdays([])
                       setStatus(null)
                     }}
                     className={`h-11 rounded-2xl border text-sm transition ${
@@ -16425,6 +16444,39 @@ async function completeReminderFromEditor() {
                 placeholder={language === 'no' ? 'Antall dager' : 'Number of days'}
                 className="mt-2 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
               />
+            </div>
+          )}
+
+          {repeat === 'weekdays' && (
+            <div className="mt-4">
+              <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'UKEDAGER' : 'WEEKDAYS'}</div>
+              <div className="mt-2 grid grid-cols-7 gap-1.5">
+                {(language === 'no'
+                  ? ['Ma', 'Ti', 'On', 'To', 'Fr', 'Lø', 'Sø']
+                  : ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
+                ).map((label, index) => {
+                  const day = index + 1
+                  const active = repeatWeekdays.includes(day)
+                  return (
+                    <button
+                      type="button"
+                      key={day}
+                      aria-pressed={active}
+                      onClick={() => {
+                        setRepeatWeekdays((current) =>
+                          current.includes(day)
+                            ? current.filter((value) => value !== day)
+                            : [...current, day].sort((a, b) => a - b)
+                        )
+                        setStatus(null)
+                      }}
+                      className={`h-10 rounded-xl border text-xs ${active ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-10)] text-[color:var(--fg-70)]'}`}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           )}
 
