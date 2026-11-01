@@ -97,28 +97,6 @@ function addDaysLocal(d: Date, days: number) {
   return x
 }
 
-function addMonthsLocal(d: Date, months: number) {
-  const x = new Date(d)
-  const day = x.getDate()
-  x.setDate(1)
-  x.setMonth(x.getMonth() + months)
-  const daysInTargetMonth = new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate()
-  x.setDate(Math.min(day, daysInTargetMonth))
-  return x
-}
-
-function addYearsLocal(d: Date, years: number) {
-  const x = new Date(d)
-  const month = x.getMonth()
-  const day = x.getDate()
-  x.setDate(1)
-  x.setFullYear(x.getFullYear() + years)
-  const daysInTargetMonth = new Date(x.getFullYear(), month + 1, 0).getDate()
-  x.setMonth(month)
-  x.setDate(Math.min(day, daysInTargetMonth))
-  return x
-}
-
 function nextReminderOccurrenceDate(
   base: Date,
   repeat: ReminderRepeatKey,
