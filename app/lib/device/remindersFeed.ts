@@ -6,6 +6,7 @@ export type ReminderRepeatKey =
   | 'none'
   | 'daily'
   | 'weekly'
+  | 'weekdays'
   | '2weeks'
   | '4weeks'
   | 'monthly'

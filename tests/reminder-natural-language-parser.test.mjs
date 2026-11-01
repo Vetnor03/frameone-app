@@ -6,7 +6,7 @@ import { inferBirthdayRecurrence, inferRecurringReminderStartDate, parseReminder
 const originalKey = process.env.OPENAI_API_KEY
 process.env.OPENAI_API_KEY = 'test-key'
 
-const base = { title: 'Dentist', due_date: '2026-08-25', due_time: '14:30', end_date: null, end_time: null, repeat_type: 'none', custom_repeat_days: null, tag: null, ambiguities: [] }
+const base = { title: 'Dentist', due_date: '2026-08-25', due_time: '14:30', end_date: null, end_time: null, repeat_type: 'none', custom_repeat_days: null, repeat_weekdays: null, tag: null, ambiguities: [] }
 const ready = (reminder) => ({ status: 'ready', reminder, partial: null, missing_fields: [], question: null })
 const clarify = (partial, missing_fields = ['due_date', 'due_time'], question = 'Når skal jeg minne deg på det?') => ({ status: 'needs_clarification', reminder: null, partial, missing_fields, question })
 const candidate = (reminder, missing_fields = [], question = null) => ({ reminder, missing_fields, question })
@@ -311,8 +311,55 @@ test('end values round-trip while device output remains unchanged', () => {
   assert.match(device, /nextReminderOccurrenceDate/)
 })
 
+test('Norwegian every-weekday time range becomes Monday through Friday', async () => {
+  const ctx = { text: 'Middag 16:00 til 17:00 hver ukedag', language: 'no', localNow: '2026-11-01T17:09:00+01:00', timezone: 'Europe/Oslo' }
+  const modelReminder = {
+    ...base,
+    title: 'Middag',
+    due_date: '2026-11-02',
+    due_time: '16:00',
+    end_date: '2026-11-02',
+    end_time: '17:00',
+    repeat_type: 'daily',
+  }
+  const expected = {
+    ...modelReminder,
+    repeat_type: 'weekdays',
+    repeat_weekdays: [1, 2, 3, 4, 5],
+  }
+  assert.deepEqual(await parseReminder(ctx, responseFor(candidate(modelReminder))), ready(expected))
+})
+
+test('Norwegian named weekday list becomes a selected-weekday schedule', async () => {
+  const ctx = { text: 'Trening 06:00 til 07:00 mandag, onsdag og fredag', language: 'no', localNow: '2026-11-01T17:09:00+01:00', timezone: 'Europe/Oslo' }
+  const modelReminder = {
+    ...base,
+    title: 'Trening',
+    due_date: '2026-11-02',
+    due_time: '06:00',
+    end_date: '2026-11-02',
+    end_time: '07:00',
+    repeat_type: 'none',
+  }
+  const expected = {
+    ...modelReminder,
+    repeat_type: 'weekdays',
+    repeat_weekdays: [1, 3, 5],
+  }
+  assert.deepEqual(await parseReminder(ctx, responseFor(candidate(modelReminder))), ready(expected))
+})
+
+test('weekday recurrence schema rejects missing or invalid weekday sets', () => {
+  assert.equal(validateParsedReminder({ ...base, repeat_type: 'weekdays' }), null)
+  assert.equal(validateParsedReminder({ ...base, repeat_type: 'weekdays', repeat_weekdays: [1, 8] }), null)
+  assert.deepEqual(
+    validateParsedReminder({ ...base, repeat_type: 'weekdays', repeat_weekdays: [1, 3, 5] }),
+    { ...base, repeat_type: 'weekdays', repeat_weekdays: [1, 3, 5] },
+  )
+})
+
 test('parser version and occurrence end semantics are explicit', () => {
-  assert.equal(REMINDER_PARSE_VERSION, 'reminder-parse-v4')
+  assert.equal(REMINDER_PARSE_VERSION, 'reminder-parse-v5')
   const source = readFileSync(new URL('../app/lib/reminders/parser.ts', import.meta.url), 'utf8')
   assert.match(source, /birthday or bursdag\/fødselsdag is inherently an annual anniversary/)
   assert.match(source, /end_date\/end_time describe this occurrence, never recurrence termination/)

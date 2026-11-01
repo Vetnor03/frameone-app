@@ -84,7 +84,7 @@ test('MQTT subscribe requires one authenticated resync plus bounded safety fallb
   const mqtt = readFileSync(new URL('../frame/src/network/MqttPushPilot.cpp', import.meta.url), 'utf8')
   const ack = readFileSync(new URL('../frame/src/network/LiveUpdate.cpp', import.meta.url), 'utf8')
   const backend = readFileSync(new URL('../app/api/device/update-state/route.ts', import.meta.url), 'utf8')
-  assert.match(firmware, /static const char\* FW_VER = "v2\.7\.2";/)
+  assert.match(firmware, /static const char\* FW_VER = "v2\.7\.3";/)
   assert.match(firmware, /MQTT_MISSED_HINT_RECOVERY_MS = 120000UL/)
   assert.match(firmware, /MANUAL_UPDATE_POLL_MS = 10000/)
   assert.match(mqtt, /if \(subscribed\) \{[\s\S]*?g_subscriptionResyncPending = true/)

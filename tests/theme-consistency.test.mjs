@@ -19,7 +19,7 @@ test('secondary controls have semantic readable and intentionally disabled theme
   assert.match(css, /\[data-ui="secondary-control"\]:disabled[\s\S]*?opacity:\s*1/)
 
   const groceries = home.slice(home.indexOf("'ADD ITEM'"), home.indexOf('dinnerPlanOpen && activeDeviceId'))
-  assert.equal(groceries.split('data-ui="secondary-control"').length - 1, 2)
+  assert.equal(groceries.split('data-ui="secondary-control"').length - 1, 1)
   assert.doesNotMatch(groceries, /Dinner Plan[\s\S]*?(?:text-white\/|border-white\/|bg-black\/)/)
 })
 

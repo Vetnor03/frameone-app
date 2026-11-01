@@ -1,9 +1,9 @@
 import { costControlledModel, recordOpenAIUsage } from '../server/openaiUsage.mjs'
 
-export const REMINDER_PARSE_VERSION = 'reminder-parse-v4'
+export const REMINDER_PARSE_VERSION = 'reminder-parse-v5'
 export const REMINDER_PARSE_TIMEOUT_MS = 15_000
 
-export const REMINDER_REPEAT_TYPES = ['none', 'daily', 'weekly', '2weeks', '4weeks', 'monthly', 'halfyear', 'yearly', '2years', 'custom'] as const
+export const REMINDER_REPEAT_TYPES = ['none', 'daily', 'weekly', 'weekdays', '2weeks', '4weeks', 'monthly', 'halfyear', 'yearly', '2years', 'custom'] as const
 export const REMINDER_TAGS = ['work', 'personal', 'sports', 'chores', 'event'] as const
 export const REMINDER_MISSING_FIELDS = ['due_date', 'due_time'] as const
 
@@ -15,6 +15,7 @@ export type ParsedReminder = {
   end_time: string | null
   repeat_type: typeof REMINDER_REPEAT_TYPES[number]
   custom_repeat_days: number | null
+  repeat_weekdays: number[] | null
   tag: typeof REMINDER_TAGS[number] | null
   ambiguities: string[]
 }
@@ -60,7 +61,7 @@ function mergeExistingReminder(existing: ParsedReminder | undefined, candidate: 
 
 const YMD = /^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/
 const HM = /^([01]\d|2[0-3]):[0-5]\d$/
-const reminderKeys = new Set(['title', 'due_date', 'due_time', 'end_date', 'end_time', 'repeat_type', 'custom_repeat_days', 'tag', 'ambiguities'])
+const reminderKeys = new Set(['title', 'due_date', 'due_time', 'end_date', 'end_time', 'repeat_type', 'custom_repeat_days', 'repeat_weekdays', 'tag', 'ambiguities'])
 const resultKeys = new Set(['reminder', 'missing_fields', 'question'])
 
 function isRealYmd(value: unknown): value is string {
@@ -101,6 +102,95 @@ export function inferBirthdayRecurrence(reminder: ParsedReminder, text: string):
   return { ...reminder, repeat_type: 'yearly' }
 }
 
+const WEEKDAY_PATTERNS: Array<{ day: number; pattern: RegExp }> = [
+  { day: 1, pattern: /\b(?:mandag(?:er)?|monday(?:s)?)\b/gi },
+  { day: 2, pattern: /\b(?:tirsdag(?:er)?|tuesday(?:s)?)\b/gi },
+  { day: 3, pattern: /\b(?:onsdag(?:er)?|wednesday(?:s)?)\b/gi },
+  { day: 4, pattern: /\b(?:torsdag(?:er)?|thursday(?:s)?)\b/gi },
+  { day: 5, pattern: /\b(?:fredag(?:er)?|friday(?:s)?)\b/gi },
+  { day: 6, pattern: /\b(?:lørdag(?:er)?|lordag(?:er)?|saturday(?:s)?)\b/gi },
+  { day: 7, pattern: /\b(?:søndag(?:er)?|sondag(?:er)?|sunday(?:s)?)\b/gi },
+]
+
+function extractRecurringWeekdays(text: string): number[] | null {
+  if (/\b(?:hver\s+ukedag|alle\s+ukedager|på\s+hverdager|hverdager)\b|\b(?:every\s+weekday|weekdays)\b/i.test(text)) {
+    return [1, 2, 3, 4, 5]
+  }
+  if (/\b(?:annenhver|every\s+other|hver\s+\d+\.?\s*(?:dag|uke)|every\s+\d+\s+(?:day|week))\b/i.test(text)) return null
+  const found = WEEKDAY_PATTERNS.filter(({ pattern }) => {
+    pattern.lastIndex = 0
+    return pattern.test(text)
+  }).map(({ day }) => day)
+  if (found.length >= 2) return found
+  if (found.length === 1 && /\b(?:hver|every)\b/i.test(text)) return found
+  return null
+}
+
+function localReminderDateTime(localNow: string, timezone: string | null | undefined) {
+  const now = new Date(localNow)
+  if (Number.isNaN(now.getTime())) return null
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone || 'UTC',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(now)
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value
+    const year = Number(part('year')), month = Number(part('month')), day = Number(part('day'))
+    const time = `${part('hour')}:${part('minute')}`
+    if (!year || !month || !day || !HM.test(time)) return null
+    return { year, month, day, time, ymd: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}` }
+  } catch {
+    return null
+  }
+}
+
+function isoWeekdayFromYmd(ymd: string) {
+  const [year, month, day] = ymd.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  const weekday = date.getUTCDay()
+  return weekday === 0 ? 7 : weekday
+}
+
+function nextSelectedWeekdayYmd(days: number[], reminder: ParsedReminder, localNow: string, timezone: string | null | undefined) {
+  const local = localReminderDateTime(localNow, timezone)
+  if (!local) return reminder.due_date
+  const existing = reminder.due_date
+  if (existing && existing >= local.ymd && days.includes(isoWeekdayFromYmd(existing))) {
+    if (existing > local.ymd || !reminder.due_time || local.time <= reminder.due_time) return existing
+  }
+  for (let offset = 0; offset <= 7; offset += 1) {
+    const date = new Date(Date.UTC(local.year, local.month - 1, local.day + offset))
+    const weekday = date.getUTCDay() || 7
+    if (!days.includes(weekday)) continue
+    if (offset === 0 && reminder.due_time && local.time > reminder.due_time) continue
+    return date.toISOString().slice(0, 10)
+  }
+  return reminder.due_date
+}
+
+export function inferWeekdayRecurrence(
+  reminder: ParsedReminder,
+  text: string,
+  localNow: string,
+  timezone: string | null | undefined,
+): ParsedReminder {
+  const repeatWeekdays = extractRecurringWeekdays(text)
+  if (!repeatWeekdays) return reminder
+  const dueDate = nextSelectedWeekdayYmd(repeatWeekdays, reminder, localNow, timezone)
+  const movedSameDayEnd = reminder.end_date && reminder.end_date === reminder.due_date && dueDate
+    ? dueDate
+    : reminder.end_date
+  return {
+    ...reminder,
+    due_date: dueDate,
+    end_date: movedSameDayEnd,
+    repeat_type: 'weekdays',
+    custom_repeat_days: null,
+    repeat_weekdays: repeatWeekdays,
+  }
+}
+
 export function validateParsedReminder(value: unknown): ParsedReminder | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const v = value as Record<string, unknown>
@@ -113,6 +203,16 @@ export function validateParsedReminder(value: unknown): ParsedReminder | null {
   if (v.custom_repeat_days !== null && (!Number.isInteger(v.custom_repeat_days) || Number(v.custom_repeat_days) < 1)) return null
   if (v.repeat_type === 'custom' && v.custom_repeat_days === null) return null
   if (v.repeat_type !== 'custom' && v.custom_repeat_days !== null) return null
+  const repeatWeekdaysValid =
+    v.repeat_weekdays === null ||
+    (Array.isArray(v.repeat_weekdays) &&
+      v.repeat_weekdays.length >= 1 &&
+      v.repeat_weekdays.length <= 7 &&
+      v.repeat_weekdays.every((day) => Number.isInteger(day) && Number(day) >= 1 && Number(day) <= 7) &&
+      new Set(v.repeat_weekdays).size === v.repeat_weekdays.length)
+  if (!repeatWeekdaysValid) return null
+  if (v.repeat_type === 'weekdays' && v.repeat_weekdays === null) return null
+  if (v.repeat_type !== 'weekdays' && v.repeat_weekdays !== null) return null
   if (v.tag !== null && !(REMINDER_TAGS as readonly unknown[]).includes(v.tag)) return null
   if (!Array.isArray(v.ambiguities) || !v.ambiguities.every((x) => typeof x === 'string' && x.length <= 240)) return null
   if (v.end_date && !v.due_date) return null
@@ -173,10 +273,11 @@ const reminderSchema = {
     end_time: nullable({ type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }),
     repeat_type: { type: 'string', enum: [...REMINDER_REPEAT_TYPES] },
     custom_repeat_days: nullable({ type: 'integer', minimum: 1 }),
+    repeat_weekdays: nullable({ type: 'array', minItems: 1, maxItems: 7, uniqueItems: true, items: { type: 'integer', minimum: 1, maximum: 7 } }),
     tag: nullable({ type: 'string', enum: [...REMINDER_TAGS] }),
     ambiguities: { type: 'array', items: { type: 'string', maxLength: 240 } },
   },
-  required: ['title', 'due_date', 'due_time', 'end_date', 'end_time', 'repeat_type', 'custom_repeat_days', 'tag', 'ambiguities'],
+  required: ['title', 'due_date', 'due_time', 'end_date', 'end_time', 'repeat_type', 'custom_repeat_days', 'repeat_weekdays', 'tag', 'ambiguities'],
 }
 export const reminderParseJsonSchema = {
   type: 'object', additionalProperties: false,
@@ -215,7 +316,7 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
         model, store: false,
         reasoning: { effort: 'none' },
         input: [
-          { role: 'developer', content: [{ type: 'input_text', text: `Parse or complete a reminder in the existing RE:MIND schema. Version: ${REMINDER_PARSE_VERSION}. Always return exactly one reminder candidate plus missing_fields and question; never decide a status. Resolve relative dates only from localNow and timezone. Never invent a date, clock time, end, tag, person, place, or repeat rule. Treat every non-null field in existing_partial as already supplied structured context. Preserve it unless the user's current text or clarification answer explicitly changes that field. A clarification answer is additive: fill or modify what the question asks without clearing unrelated fields. due_date is required; due_time is generally optional. Put due_date in missing_fields whenever it is unknown. If wording clearly implies a time that is too vague to represent safely (for example later, after work, or an undefined evening), also put due_time in missing_fields. When missing_fields is non-empty, provide one calm, concise question written naturally in the requested language; otherwise question must be null. A birthday or bursdag/fødselsdag is inherently an annual anniversary: use repeat_type yearly even when the user does not explicitly say every year, unless they explicitly request a one-time reminder.\n\nCanonical title normalization: the title is the semantic reminder content, not a frame-optimized short label. Remove date, start-time, end-time, and recurrence wording only when that exact information was successfully represented in the corresponding structured field. Keep all unrepresented or meaningful content. Thus Norwegian equivalents of “Ring mamma på torsdag” and “Ring mamma torsdag kl. 18” become “Ring mamma” when their date/time fields are resolved, while “Ring mamma om bursdagen hennes på torsdag” keeps “om bursdagen hennes” and “Møte på kontoret torsdag” keeps “på kontoret”. Do not rewrite manually created reminders; this parser only normalizes the current natural-language request. Any meaningful information unsupported by structured fields remains in title. end_date/end_time describe this occurrence, never recurrence termination. Sunday recurrence is weekly with a Sunday due_date. custom_repeat_days is only for an explicit every-N-days rule. ambiguities may describe non-blocking unsupported intent.` }] },
+          { role: 'developer', content: [{ type: 'input_text', text: `Parse or complete a reminder in the existing RE:MIND schema. Version: ${REMINDER_PARSE_VERSION}. Always return exactly one reminder candidate plus missing_fields and question; never decide a status. Resolve relative dates only from localNow and timezone. Never invent a date, clock time, end, tag, person, place, or repeat rule. Treat every non-null field in existing_partial as already supplied structured context. Preserve it unless the user's current text or clarification answer explicitly changes that field. A clarification answer is additive: fill or modify what the question asks without clearing unrelated fields. due_date is required; due_time is generally optional. Put due_date in missing_fields whenever it is unknown. If wording clearly implies a time that is too vague to represent safely (for example later, after work, or an undefined evening), also put due_time in missing_fields. When missing_fields is non-empty, provide one calm, concise question written naturally in the requested language; otherwise question must be null. A birthday or bursdag/fødselsdag is inherently an annual anniversary: use repeat_type yearly even when the user does not explicitly say every year, unless they explicitly request a one-time reminder.\n\nCanonical title normalization: the title is the semantic reminder content, not a frame-optimized short label. Remove date, start-time, end-time, and recurrence wording only when that exact information was successfully represented in the corresponding structured field. Keep all unrepresented or meaningful content. Thus Norwegian equivalents of “Ring mamma på torsdag” and “Ring mamma torsdag kl. 18” become “Ring mamma” when their date/time fields are resolved, while “Ring mamma om bursdagen hennes på torsdag” keeps “om bursdagen hennes” and “Møte på kontoret torsdag” keeps “på kontoret”. Do not rewrite manually created reminders; this parser only normalizes the current natural-language request. Any meaningful information unsupported by structured fields remains in title. end_date/end_time describe this occurrence, never recurrence termination. Sunday recurrence is weekly with a Sunday due_date. For recurring schedules on selected weekdays, use repeat_type weekdays and repeat_weekdays with ISO weekday numbers Monday=1 through Sunday=7. “hver ukedag” / “every weekday” means [1,2,3,4,5]; a list such as “mandag, onsdag og fredag” / “Monday, Wednesday and Friday” means [1,3,5]. due_date must be the first upcoming selected weekday that can still occur at the requested due_time. Do not use daily for weekday-only schedules. custom_repeat_days is only for an explicit every-N-days rule. repeat_weekdays must be null for all repeat types except weekdays. ambiguities may describe non-blocking unsupported intent.` }] },
           { role: 'user', content: [{ type: 'input_text', text: JSON.stringify({ original_reminder_text: context.text.trim(), existing_partial: context.partial, clarification_question: context.clarificationQuestion, clarification_answer: context.clarificationAnswer, localNow: context.localNow, timezone: context.timezone || null, language: context.language }) }] },
         ],
         text: { format: { type: 'json_schema', name: 'reminder_parse', strict: true, schema: reminderParseJsonSchema } }, max_output_tokens: 450,
@@ -239,7 +340,13 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
         const validatedReminder = validateParsedReminder(output.reminder)
         if (validatedReminder) {
           const birthdayAwareReminder = inferBirthdayRecurrence(validatedReminder, context.text)
-          output.reminder = inferRecurringReminderStartDate(birthdayAwareReminder, context.localNow, context.timezone)
+          const weekdayAwareReminder = inferWeekdayRecurrence(
+            birthdayAwareReminder,
+            [context.text, context.clarificationAnswer].filter(Boolean).join(' '),
+            context.localNow,
+            context.timezone,
+          )
+          output.reminder = inferRecurringReminderStartDate(weekdayAwareReminder, context.localNow, context.timezone)
         }
         const reminder = output.reminder as Record<string, unknown>
         if (reminder.due_date != null && Array.isArray(output.missing_fields)) {
