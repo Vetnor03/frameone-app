@@ -10948,16 +10948,6 @@ function addDaysLocal(d: Date, days: number) {
   return x
 }
 
-function addMonthsLocal(d: Date, months: number) {
-  const x = new Date(d)
-  const day = x.getDate()
-  x.setDate(1)
-  x.setMonth(x.getMonth() + months)
-  const daysInTargetMonth = new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate()
-  x.setDate(Math.min(day, daysInTargetMonth))
-  return x
-}
-
 function getWeekdayOccurrenceInMonth(d: Date) {
   const dayOfMonth = d.getDate()
   return Math.ceil(dayOfMonth / 7)
