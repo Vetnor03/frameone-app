@@ -136,16 +136,14 @@ test('the existing quick ADD ITEM action remains primary and opens its original 
   assert.ok(quickAdd > -1 && addItemLabel > quickAdd && recipeAction > addItemLabel)
 })
 
-test('Dinner Plan and Recipes are equal side-by-side secondary actions below primary ADD ITEM', async () => {
+test('Recipes remains the single secondary action below primary ADD ITEM', async () => {
   const ui = await readFile(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   const primary = ui.indexOf("language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'")
-  const secondaryGrid = ui.indexOf('grid w-[260px] grid-cols-2 gap-2', primary)
-  const dinner = ui.indexOf("language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'", secondaryGrid)
-  const recipes = ui.indexOf("language === 'no' ? 'OPPSKRIFTER' : 'RECIPES'", dinner)
-  const sharedStyle = 'h-[44px] rounded-2xl border text-[10px] tracking-widest transition'
-  assert.ok(primary > -1 && secondaryGrid > primary && dinner > secondaryGrid && recipes > dinner)
-  assert.equal(ui.slice(secondaryGrid, recipes + 500).split(sharedStyle).length - 1, 2)
-  assert.equal(ui.slice(secondaryGrid, recipes + 500).split('data-ui="secondary-control"').length - 1, 2)
+  const recipes = ui.indexOf("language === 'no' ? 'OPPSKRIFTER' : 'RECIPES'", primary)
+  const section = ui.slice(primary, ui.indexOf('dinnerPlanOpen && activeDeviceId', primary))
+  assert.ok(primary > -1 && recipes > primary)
+  assert.doesNotMatch(section, /'MIDDAGSPLAN'\s*:\s*'DINNER PLAN'/)
+  assert.equal(section.split('data-ui="secondary-control"').length - 1, 1)
 })
 
 test('recipe library loads alphabetically and supports live name search', async () => {
