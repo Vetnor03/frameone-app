@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
   const { data: applicant, error: applicantError } = await db
     .from('pilot_applications')
-    .select('full_name,email')
+    .select('id,full_name,email')
     .eq('id', invite)
     .eq('status', 'selected')
     .maybeSingle()
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
   // only explicitly selected applicants can submit or edit their own selection.
   const { data: applicant, error: applicantError } = await db
     .from('pilot_applications')
-    .select('full_name,email')
+    .select('id,full_name,email')
     .eq('id', invite)
     .eq('status', 'selected')
     .maybeSingle()
