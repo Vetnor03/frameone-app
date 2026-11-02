@@ -30,9 +30,6 @@ const mattes: MatteOption[] = [
   { id: 'silver-birch', name: 'Silver Birch', swatch: '#b9b4aa', limited: true },
 ]
 
-const inputClass =
-  'h-11 w-full rounded-[10px] border border-black/15 bg-white px-3.5 text-[16px] text-[#1d1d1b] outline-none transition placeholder:text-black/35 focus:border-black/45 focus:ring-2 focus:ring-black/5'
-
 // Material imagery is generated for the pilot selector; the colours are illustrative,
  // not colour-calibrated photographs of the HFS Rammer product samples.
 function materialTexture(id: string) {
@@ -138,7 +135,6 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
   const [invitation, setInvitation] = useState<PilotInvitation | null>(null)
   const [inviteError, setInviteError] = useState('')
   const [loadingInvite, setLoadingInvite] = useState(true)
-  const [savedAddress, setSavedAddress] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (demoMode) {
@@ -191,18 +187,7 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
     setSubmitting(true)
     setError('')
 
-    const form = new FormData(event.currentTarget)
-    const payload = {
-      invite: inviteId,
-      addressLine1: String(form.get('addressLine1') || ''),
-      addressLine2: String(form.get('addressLine2') || ''),
-      postalCode: String(form.get('postalCode') || ''),
-      city: String(form.get('city') || ''),
-      country: String(form.get('country') || ''),
-      website: String(form.get('website') || ''),
-      frameId,
-      matteId,
-    }
+    const payload = { invite: inviteId, frameId, matteId }
 
     try {
       const response = await fetch('/api/pilot/orders', {
@@ -216,13 +201,6 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
         throw new Error(typeof result?.error === 'string' ? result.error : 'Could not save your pilot order.')
       }
 
-      setSavedAddress({
-        addressLine1: payload.addressLine1,
-        addressLine2: payload.addressLine2,
-        postalCode: payload.postalCode,
-        city: payload.city,
-        country: payload.country,
-      })
       setSubmittedEmail(invitation.email)
       setSubmitted(true)
     } catch (submissionError) {
@@ -337,60 +315,22 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
               <form onSubmit={submitOrder}>
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">Step 2 of 2</p>
-                    <h2 className="mt-1 text-[24px] font-medium tracking-[-0.03em]">Delivery details</h2>
-                    <p className="mt-1.5 text-[13px] leading-5 text-black/50">Please confirm your details and enter the delivery address for your pilot frame.</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">Steg 2 av 2</p>
+                    <h2 className="mt-1 text-[24px] font-medium tracking-[-0.03em]">Bekreft rammevalget</h2>
+                    <p className="mt-1.5 text-[13px] leading-5 text-black/50">Leveringsinformasjonen er allerede registrert. Nå velger du bare uttrykket for din låneramme.</p>
                   </div>
-                  <button type="button" onClick={() => setStep(1)} className="shrink-0 text-[12px] font-medium text-black/45 underline decoration-black/20 underline-offset-4 hover:text-black/70">Back</button>
+                  <button type="button" onClick={() => setStep(1)} className="shrink-0 text-[12px] font-medium text-black/45 underline decoration-black/20 underline-offset-4 hover:text-black/70">Tilbake</button>
                 </div>
-
-                <div className="mt-5 grid gap-3">
-                  <label className="grid gap-1.5">
-                    <span className="text-[11px] font-medium text-black/60">Full name</span>
-                    <input className={inputClass} name="fullName" autoComplete="name" readOnly value={invitation.fullName} />
-                  </label>
-                  <label className="grid gap-1.5">
-                    <span className="text-[11px] font-medium text-black/60">Email</span>
-                    <input className={inputClass} name="email" type="email" autoComplete="email" readOnly value={invitation.email} />
-                  </label>
-                  <label className="grid gap-1.5">
-                    <span className="text-[11px] font-medium text-black/60">Address</span>
-                    <input className={inputClass} name="addressLine1" autoComplete="address-line1" required maxLength={160} defaultValue={savedAddress.addressLine1 || ''} />
-                  </label>
-                  <label className="grid gap-1.5">
-                    <span className="text-[11px] font-medium text-black/60">Apartment, floor, etc. <span className="font-normal text-black/35">(optional)</span></span>
-                    <input className={inputClass} name="addressLine2" autoComplete="address-line2" maxLength={160} defaultValue={savedAddress.addressLine2 || ''} />
-                  </label>
-                  <div className="grid grid-cols-[minmax(105px,.72fr)_minmax(0,1.28fr)] gap-3">
-                    <label className="grid gap-1.5">
-                      <span className="text-[11px] font-medium text-black/60">Postal code</span>
-                      <input className={inputClass} name="postalCode" autoComplete="postal-code" required maxLength={16} defaultValue={savedAddress.postalCode || ''} />
-                    </label>
-                    <label className="grid gap-1.5">
-                      <span className="text-[11px] font-medium text-black/60">City</span>
-                      <input className={inputClass} name="city" autoComplete="address-level2" required maxLength={100} defaultValue={savedAddress.city || ''} />
-                    </label>
-                  </div>
-                  <label className="grid gap-1.5">
-                    <span className="text-[11px] font-medium text-black/60">Country</span>
-                    <input className={inputClass} name="country" autoComplete="country-name" required defaultValue={savedAddress.country || 'Norway'} maxLength={80} />
-                  </label>
-                  <label className="absolute -left-[10000px] top-auto h-px w-px overflow-hidden" aria-hidden="true">
-                    Website
-                    <input name="website" tabIndex={-1} autoComplete="off" />
-                  </label>
-                </div>
-
+                <dl className="mt-6 divide-y divide-black/10 border-y border-black/10 text-[13px]">
+                  <div className="flex items-start justify-between gap-4 py-3"><dt className="text-black/50">Ramme</dt><dd className="text-right font-medium">{frame.name}</dd></div>
+                  <div className="flex items-start justify-between gap-4 py-3"><dt className="text-black/50">Passepartout</dt><dd className="text-right font-medium">{matte.name}</dd></div>
+                  <div className="flex items-start justify-between gap-4 py-3"><dt className="text-black/50">E-post</dt><dd className="min-w-0 truncate text-right font-medium">{invitation.email}</dd></div>
+                </dl>
+                <p className="mt-5 text-[12px] leading-5 text-black/50">Dette er et kostnadsfritt lån i pilottesten, ikke et kjøp. Enheten og rammen skal returneres ved forespørsel eller når testen avsluttes.</p>
                 {error ? <p role="alert" className="mt-3 rounded-[9px] bg-red-950/5 px-3 py-2 text-[12px] text-red-950/75">{error}</p> : null}
-
-                <div className="mt-5 flex items-center justify-between gap-3 border-t border-black/10 pt-4">
-                  <p className="min-w-0 text-[11px] leading-4 text-black/45">{frame.name}<br />{matte.name}</p>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="h-11 shrink-0 rounded-[11px] bg-[#1d1d1b] px-5 text-[12px] font-semibold text-white transition hover:bg-black disabled:cursor-wait disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-black/30 focus:ring-offset-2"
-                  >
-                    {submitting ? 'Saving…' : 'Confirm my selection'}
+                <div className="mt-5 flex justify-end border-t border-black/10 pt-4">
+                  <button type="submit" disabled={submitting} className="h-11 shrink-0 rounded-[11px] bg-[#1d1d1b] px-5 text-[12px] font-semibold text-white transition hover:bg-black disabled:cursor-wait disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-black/30 focus:ring-offset-2">
+                    {submitting ? 'Lagrer…' : 'Bekreft rammevalget'}
                   </button>
                 </div>
               </form>
