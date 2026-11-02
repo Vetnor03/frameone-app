@@ -50,6 +50,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'This invitation is not active.' }, { status: 404, headers: noStore })
   }
 
+  const { data: confirmation, error: confirmationError } = await db
+    .from('pilot_confirmations')
+    .select('full_name')
+    .eq('application_id', invite)
+    .maybeSingle()
+  if (confirmationError) {
+    console.error('[pilot-orders] Unable to verify loan confirmation.', { code: confirmationError.code })
+    return NextResponse.json({ error: 'Could not check your participation.' }, { status: 503, headers: noStore })
+  }
+  if (!confirmation) {
+    return NextResponse.json({ error: 'Bekreft deltakelsen før du velger ramme.' }, { status: 403, headers: noStore })
+  }
+
   const { data: order, error: orderError } = await db
     .from('pilot_orders')
     .select('frame_id,matte_id,status')
@@ -61,7 +74,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    fullName: applicant.full_name,
+    fullName: confirmation.full_name,
     email: applicant.email,
     frameId: validPilotFrame(order?.frame_id) ? order.frame_id : null,
     matteId: validPilotMatte(order?.matte_id) ? order.matte_id : null,
@@ -100,16 +113,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Please use your personal invitation link.' }, { status: 403, headers: noStore })
   }
 
-  const addressLine1 = readField(body.addressLine1, 160)
-  const addressLine2 = readField(body.addressLine2, 160) || null
-  const postalCode = readField(body.postalCode, 16)
-  const city = readField(body.city, 100)
-  const country = readField(body.country, 80)
   const frameId = body.frameId
   const matteId = body.matteId
 
-  if (!addressLine1 || !postalCode || !city || !country || !validPilotFrame(frameId) || !validPilotMatte(matteId)) {
-    return NextResponse.json({ error: 'Please complete the address and select one frame and one matte.' }, { status: 400, headers: noStore })
+  if (!validPilotFrame(frameId) || !validPilotMatte(matteId)) {
+    return NextResponse.json({ error: 'Please select one frame and one matte.' }, { status: 400, headers: noStore })
   }
 
   const db = pilotDatabase()
@@ -133,6 +141,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'This invitation is not active.' }, { status: 403, headers: noStore })
   }
 
+  // The loan terms and delivery address are confirmed in the previous step.
+  // Read them only from the private, immutable server-side confirmation.
+  const { data: confirmation, error: confirmationError } = await db
+    .from('pilot_confirmations')
+    .select('full_name,shipping_address_line1,shipping_address_line2,shipping_postal_code,shipping_city,shipping_country')
+    .eq('application_id', applicant.id)
+    .maybeSingle()
+  if (confirmationError) {
+    console.error('[pilot-orders] Unable to verify loan confirmation.', { code: confirmationError.code })
+    return NextResponse.json({ error: 'Could not verify your participation.' }, { status: 503, headers: noStore })
+  }
+  if (!confirmation) {
+    return NextResponse.json({ error: 'Bekreft deltakelsen før du velger ramme.' }, { status: 403, headers: noStore })
+  }
+
   // A fulfilled or confirmed loan must never be silently reset to 'submitted'.
   const { data: existingOrder, error: lookupError } = await db
     .from('pilot_orders')
@@ -150,13 +173,13 @@ export async function POST(request: Request) {
   const { error } = await db
     .from('pilot_orders')
     .upsert({
-      full_name: applicant.full_name,
+      full_name: confirmation.full_name,
       email: applicant.email,
-      shipping_address_line1: addressLine1,
-      shipping_address_line2: addressLine2,
-      shipping_postal_code: postalCode,
-      shipping_city: city,
-      shipping_country: country,
+      shipping_address_line1: confirmation.shipping_address_line1,
+      shipping_address_line2: confirmation.shipping_address_line2,
+      shipping_postal_code: confirmation.shipping_postal_code,
+      shipping_city: confirmation.shipping_city,
+      shipping_country: confirmation.shipping_country,
       frame_id: frameId,
       frame_name: pilotFrameNames[frameId],
       matte_id: matteId,
