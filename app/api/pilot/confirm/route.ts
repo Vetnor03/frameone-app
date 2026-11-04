@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 
 const noStore = { 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer' }
 const PHONE_MIN_DIGITS = 8
-const TERMS_VERSION = '2026-11-04-pilot-loan-v2'
+const TERMS_VERSION = '2026-11-04-pilot-loan-v3'
 
 function pilotDb() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
@@ -117,6 +117,7 @@ export async function POST(request: Request) {
     shipping_postal_code: postalCode,
     shipping_city: city,
     shipping_country: 'Norge',
+    participation_acknowledged_at: timestamp,
     loan_acknowledged_at: timestamp,
     prototype_acknowledged_at: timestamp,
     feedback_acknowledged_at: timestamp,
