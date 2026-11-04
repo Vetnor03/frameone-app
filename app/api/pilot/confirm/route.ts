@@ -23,7 +23,7 @@ function stringField(value: unknown, maxLength: number): string | null {
 export async function GET(request: Request) {
   const invite = new URL(request.url).searchParams.get('invite')
   if (!validPilotInvitation(invite)) {
-    return NextResponse.json({ error: 'Bruk den personlige lenken i invitasjonen din.' }, { status: 404, headers: noStore })
+    return NextResponse.json({ error: 'Bruk lenken du fikk på e-post fra RE:MIND.' }, { status: 404, headers: noStore })
   }
   const db = pilotDb()
   if (!db) return NextResponse.json({ error: 'Siden er midlertidig utilgjengelig.' }, { status: 503, headers: noStore })
@@ -32,9 +32,9 @@ export async function GET(request: Request) {
     .select('id,full_name,email').eq('id', invite).eq('status', 'selected').maybeSingle()
   if (error) {
     console.error('[pilot-confirm] Failed to verify invitation.', { code: error.code })
-    return NextResponse.json({ error: 'Kunne ikke bekrefte invitasjonen.' }, { status: 503, headers: noStore })
+    return NextResponse.json({ error: 'Kunne ikke bekrefte lenken.' }, { status: 503, headers: noStore })
   }
-  if (!applicant) return NextResponse.json({ error: 'Invitasjonen er ikke aktiv.' }, { status: 404, headers: noStore })
+  if (!applicant) return NextResponse.json({ error: 'Lenken er ikke aktiv.' }, { status: 404, headers: noStore })
 
   const { data: existing, error: confirmationError } = await db.from('pilot_confirmations')
     .select('confirmed_at').eq('application_id', applicant.id).maybeSingle()
@@ -103,9 +103,9 @@ export async function POST(request: Request) {
     .select('id,full_name,email').eq('id', invite).eq('status', 'selected').maybeSingle()
   if (applicantError) {
     console.error('[pilot-confirm] Failed to verify invitation.', { code: applicantError.code })
-    return NextResponse.json({ error: 'Kunne ikke bekrefte invitasjonen.' }, { status: 503, headers: noStore })
+    return NextResponse.json({ error: 'Kunne ikke bekrefte lenken.' }, { status: 503, headers: noStore })
   }
-  if (!applicant) return NextResponse.json({ error: 'Invitasjonen er ikke aktiv.' }, { status: 403, headers: noStore })
+  if (!applicant) return NextResponse.json({ error: 'Lenken er ikke aktiv.' }, { status: 403, headers: noStore })
 
   const timestamp = new Date().toISOString()
   const { error } = await db.from('pilot_confirmations').insert({
