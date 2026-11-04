@@ -174,13 +174,13 @@ export default function PilotConfirmation({ inviteId }: { inviteId: string }) {
 
               <div className="grid gap-4">
                 <h2 className="text-[16px] font-semibold">Kontakt og adresse</h2>
-                <Field label="Fullt navn" name="fullName" autoComplete="name" maxLength={100} placeholder="Fornavn og etternavn" />
-                <Field label="Telefonnummer" name="phone" type="tel" autoComplete="tel" inputMode="tel" maxLength={25} pattern="[+0-9 ()-]{8,25}" placeholder="123 45 678" />
-                <Field label="Adresse" name="addressLine1" autoComplete="address-line1" maxLength={160} placeholder="Gateadresse og husnummer" />
+                <Field label="Fullt navn" name="fullName" autoComplete="name" minLength={2} maxLength={100} placeholder="Fornavn og etternavn" />
+                <Field label="Telefonnummer" name="phone" type="tel" autoComplete="tel" inputMode="tel" maxLength={25} pattern="(?=(?:\\D*\\d){8,15}\\D*$)[+0-9 ()-]+" placeholder="123 45 678" />
+                <Field label="Adresse" name="addressLine1" autoComplete="address-line1" minLength={3} maxLength={160} placeholder="Gateadresse og husnummer" />
                 <Field label="Leilighet, etasje eller c/o" name="addressLine2" autoComplete="address-line2" maxLength={160} required={false} placeholder="Tilleggsinformasjon" />
                 <div className="grid grid-cols-[minmax(115px,.7fr)_minmax(0,1.3fr)] gap-4">
                   <Field label="Postnummer" name="postalCode" autoComplete="postal-code" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} placeholder="0000" />
-                  <Field label="Poststed" name="city" autoComplete="address-level2" maxLength={100} placeholder="Poststed" />
+                  <Field label="Poststed" name="city" autoComplete="address-level2" minLength={2} maxLength={100} placeholder="Poststed" />
                 </div>
               </div>
 
