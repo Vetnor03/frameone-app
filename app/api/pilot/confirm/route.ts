@@ -1,12 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { validPilotInvitation } from '@/app/lib/pilotSelection'
+import { sendPilotParticipationConfirmation } from '@/app/lib/pilotApplicationEmail'
 
 export const dynamic = 'force-dynamic'
 
 const noStore = { 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer' }
 const PHONE_MIN_DIGITS = 8
-const TERMS_VERSION = '2026-11-02-pilot-loan-v1'
+const TERMS_VERSION = '2026-11-04-pilot-loan-v2'
 
 function pilotDb() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
@@ -22,7 +23,7 @@ function stringField(value: unknown, maxLength: number): string | null {
 export async function GET(request: Request) {
   const invite = new URL(request.url).searchParams.get('invite')
   if (!validPilotInvitation(invite)) {
-    return NextResponse.json({ error: 'Bruk den personlige lenken i invitasjonen din.' }, { status: 404, headers: noStore })
+    return NextResponse.json({ error: 'Bruk lenken du fikk på e-post fra RE:MIND.' }, { status: 404, headers: noStore })
   }
   const db = pilotDb()
   if (!db) return NextResponse.json({ error: 'Siden er midlertidig utilgjengelig.' }, { status: 503, headers: noStore })
@@ -31,9 +32,9 @@ export async function GET(request: Request) {
     .select('id,full_name,email').eq('id', invite).eq('status', 'selected').maybeSingle()
   if (error) {
     console.error('[pilot-confirm] Failed to verify invitation.', { code: error.code })
-    return NextResponse.json({ error: 'Kunne ikke bekrefte invitasjonen.' }, { status: 503, headers: noStore })
+    return NextResponse.json({ error: 'Kunne ikke bekrefte lenken.' }, { status: 503, headers: noStore })
   }
-  if (!applicant) return NextResponse.json({ error: 'Invitasjonen er ikke aktiv.' }, { status: 404, headers: noStore })
+  if (!applicant) return NextResponse.json({ error: 'Lenken er ikke aktiv.' }, { status: 404, headers: noStore })
 
   const { data: existing, error: confirmationError } = await db.from('pilot_confirmations')
     .select('confirmed_at').eq('application_id', applicant.id).maybeSingle()
@@ -86,6 +87,7 @@ export async function POST(request: Request) {
       !addressLine1 || addressLine1.length < 3 ||
       addressLine2 === null || !postalCode || !/^\d{4}$/.test(postalCode) ||
       !city || city.length < 2 ||
+      body.participationAcknowledged !== true ||
       body.loanAcknowledged !== true ||
       body.prototypeAcknowledged !== true ||
       body.feedbackAcknowledged !== true) {
@@ -98,12 +100,12 @@ export async function POST(request: Request) {
   // Never accept an email from the browser as authorization: verify the UUID
   // against the selected applicant record on every write.
   const { data: applicant, error: applicantError } = await db.from('pilot_applications')
-    .select('id').eq('id', invite).eq('status', 'selected').maybeSingle()
+    .select('id,full_name,email').eq('id', invite).eq('status', 'selected').maybeSingle()
   if (applicantError) {
     console.error('[pilot-confirm] Failed to verify invitation.', { code: applicantError.code })
-    return NextResponse.json({ error: 'Kunne ikke bekrefte invitasjonen.' }, { status: 503, headers: noStore })
+    return NextResponse.json({ error: 'Kunne ikke bekrefte lenken.' }, { status: 503, headers: noStore })
   }
-  if (!applicant) return NextResponse.json({ error: 'Invitasjonen er ikke aktiv.' }, { status: 403, headers: noStore })
+  if (!applicant) return NextResponse.json({ error: 'Lenken er ikke aktiv.' }, { status: 403, headers: noStore })
 
   const timestamp = new Date().toISOString()
   const { error } = await db.from('pilot_confirmations').insert({
@@ -126,5 +128,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Kunne ikke lagre bekreftelsen. Prøv igjen.' }, { status: 500, headers: noStore })
   }
   // An already submitted confirmation is immutable from this public endpoint.
-  return NextResponse.json({ ok: true, alreadyConfirmed: error?.code === '23505' }, { headers: noStore })
+  const alreadyConfirmed = error?.code === '23505'
+  let confirmationEmailSent = false
+  if (!alreadyConfirmed) {
+    const emailResult = await sendPilotParticipationConfirmation({
+      fullName: applicant.full_name,
+      email: applicant.email,
+    })
+    confirmationEmailSent = emailResult.sent
+  }
+
+  return NextResponse.json({ ok: true, alreadyConfirmed, confirmationEmailSent }, { headers: noStore })
 }

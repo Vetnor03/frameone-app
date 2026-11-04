@@ -81,3 +81,72 @@ export async function sendPilotApplicationConfirmation({
     return { sent: false, resendId: null }
   }
 }
+
+
+const PILOT_PARTICIPATION_EMAIL_SUBJECT = 'Bekreftet – du er med i RE:MIND-piloten'
+
+export async function sendPilotParticipationConfirmation({
+  fullName, email,
+}: { fullName: string; email: string }): Promise<{ sent: boolean; resendId: string | null }> {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) {
+    console.error('[pilot-confirm] Confirmation email unavailable: RESEND_API_KEY is missing.')
+    return { sent: false, resendId: null }
+  }
+
+  const firstName = fullName.trim().split(/\s+/)[0] || ''
+  const greeting = firstName ? 'Hei ' + firstName + '!' : 'Hei!'
+  const text = [
+    greeting,
+    '',
+    'Vi har mottatt bekreftelsen din og leveringsinformasjonen.',
+    '',
+    'Du er nå registrert som testbruker i RE:MIND-piloten. Du trenger ikke gjøre noe mer akkurat nå.',
+    '',
+    'Du får snart en ny e-post med mer informasjon om neste steg, blant annet hvordan du velger utseendet på din RE:MIND.',
+    '',
+    'Takk for at du vil være med!',
+    '',
+    'Hilsen',
+    'Vetle',
+    'RE:MIND',
+  ].join('\n')
+
+  const html = [
+    '<div style="font-family:Arial,Helvetica,sans-serif;background:#f3f1ec;padding:32px 12px;color:#242522">',
+    '<div style="margin:0 auto;max-width:540px;background:#fcfbf8;border:1px solid #e2e0d9;border-radius:16px;padding:30px">',
+    '<p style="font-size:18px;font-weight:600;letter-spacing:.15em;margin:0 0 28px">RE:MIND</p>',
+    '<p>' + escapeHtml(greeting) + '</p>',
+    '<h1 style="font-size:25px;line-height:1.2;font-weight:500;letter-spacing:-.03em;margin:16px 0">Bekreftelsen er mottatt</h1>',
+    '<p style="line-height:1.65">Vi har mottatt bekreftelsen din og leveringsinformasjonen.</p>',
+    '<p style="line-height:1.65"><strong>Du er nå registrert som testbruker i RE:MIND-piloten.</strong> Du trenger ikke gjøre noe mer akkurat nå.</p>',
+    '<p style="line-height:1.65">Du får snart en ny e-post med mer informasjon om neste steg, blant annet hvordan du velger utseendet på din RE:MIND.</p>',
+    '<p style="line-height:1.65;margin-top:26px">Takk for at du vil være med!<br><br>Hilsen<br>Vetle<br>RE:MIND</p>',
+    '</div></div>',
+  ].join('')
+
+  try {
+    const { data, error } = await new Resend(apiKey).emails.send({
+      from: PILOT_EMAIL_FROM,
+      to: [email],
+      replyTo: PILOT_REPLY_TO,
+      subject: PILOT_PARTICIPATION_EMAIL_SUBJECT,
+      text,
+      html,
+    })
+    if (error || !data?.id) {
+      console.error('[pilot-confirm] Failed to send participant confirmation email.', {
+        emailDomain: email.split('@')[1] || 'unknown',
+        error,
+      })
+      return { sent: false, resendId: null }
+    }
+    return { sent: true, resendId: data.id }
+  } catch (error) {
+    console.error('[pilot-confirm] Failed to send participant confirmation email.', {
+      emailDomain: email.split('@')[1] || 'unknown',
+      error,
+    })
+    return { sent: false, resendId: null }
+  }
+}
