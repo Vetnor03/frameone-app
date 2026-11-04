@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react'
 
-type Invitation = { fullName: string; email: string; confirmed: boolean }
+type Invitation = { confirmed: boolean }
 type ViewState = 'loading' | 'form' | 'done' | 'invalid'
 
 const inputClass = 'h-12 w-full rounded-xl border border-[#dcdad4] bg-white px-4 text-[16px] text-[#252621] outline-none transition placeholder:text-[#a3a39d] focus:border-[#4c5045] focus:ring-2 focus:ring-[#4c5045]/10'
@@ -47,7 +47,7 @@ export default function PilotConfirmation({ inviteId }: { inviteId: string }) {
     })
       .then(async (response) => {
         const data: unknown = await response.json().catch(() => null)
-        if (!response.ok || !data || typeof data !== 'object' || !('fullName' in data) || !('email' in data)) {
+        if (!response.ok || !data || typeof data !== 'object' || !('confirmed' in data) || typeof data.confirmed !== 'boolean') {
           const message = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
             ? data.error : 'Lenken kunne ikke bekreftes.'
           throw new Error(message)
@@ -106,10 +106,9 @@ export default function PilotConfirmation({ inviteId }: { inviteId: string }) {
     }
   }
 
-  const confirmedName = invitation?.fullName.split(/\s+/)[0] || ''
 
   return (
-    <main className="min-h-screen bg-[#f3f1ec] text-[#292b26]">
+    <main className="pilot-page min-h-screen bg-[#f3f1ec] text-[#292b26]">
       <div className="mx-auto max-w-[720px] px-5 pb-16 pt-8 sm:px-8 sm:pt-12">
         <header className="flex items-center justify-between border-b border-black/10 pb-5">
           <a href="https://re-mind.no" className="text-[18px] font-semibold tracking-[.16em]">RE:MIND</a>
@@ -133,7 +132,7 @@ export default function PilotConfirmation({ inviteId }: { inviteId: string }) {
           ) : view === 'done' ? (
             <div className="flex min-h-[330px] flex-col justify-center">
               <span className="grid h-11 w-11 place-items-center rounded-full bg-[#343b2e] text-[23px] text-white" aria-hidden="true">✓</span>
-              <h1 className="mt-6 text-[34px] font-medium leading-tight tracking-[-.045em]">Alt er i orden{confirmedName ? ', ' + confirmedName : ''}.</h1>
+              <h1 className="mt-6 text-[34px] font-medium leading-tight tracking-[-.045em]">Alt er i orden.</h1>
               <p className="mt-4 text-[15px] leading-7 text-black/65">
                 Vi har registrert at du vil være testbruker og mottatt leveringsinformasjonen din. Du får også en kort bekreftelse på e-post.
               </p>
@@ -153,11 +152,8 @@ export default function PilotConfirmation({ inviteId }: { inviteId: string }) {
 
               <div className="grid gap-4">
                 <h2 className="text-[16px] font-semibold">Kontakt og adresse</h2>
-                <Field label="Fullt navn" name="fullName" autoComplete="name" defaultValue={invitation?.fullName} maxLength={100} placeholder="Fornavn og etternavn" />
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="E-post" name="email" type="email" autoComplete="email" value={invitation?.email || ''} readOnly />
-                  <Field label="Telefonnummer" name="phone" type="tel" autoComplete="tel" inputMode="tel" maxLength={25} placeholder="123 45 678" />
-                </div>
+                <Field label="Fullt navn" name="fullName" autoComplete="name" maxLength={100} placeholder="Fornavn og etternavn" />
+                <Field label="Telefonnummer" name="phone" type="tel" autoComplete="tel" inputMode="tel" maxLength={25} placeholder="123 45 678" />
                 <Field label="Adresse" name="addressLine1" autoComplete="address-line1" maxLength={160} placeholder="Gateadresse og husnummer" />
                 <Field label="Leilighet, etasje eller c/o" name="addressLine2" autoComplete="address-line2" maxLength={160} required={false} placeholder="Tilleggsinformasjon" />
                 <div className="grid grid-cols-[minmax(115px,.7fr)_minmax(0,1.3fr)] gap-4">
