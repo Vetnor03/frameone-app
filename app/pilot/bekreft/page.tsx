@@ -13,13 +13,8 @@ export const metadata: Metadata = {
 export default async function PilotConfirmationPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ invite?: string; demo?: string }>
+  searchParams?: Promise<{ invite?: string }>
 }) {
   const params = await searchParams
-  return (
-    <PilotConfirmation
-      inviteId={typeof params?.invite === 'string' ? params.invite : ''}
-      demoMode={params?.demo === '1'}
-    />
-  )
+  return <PilotConfirmation inviteId={typeof params?.invite === 'string' ? params.invite : ''} />
 }
