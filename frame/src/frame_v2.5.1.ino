@@ -44,7 +44,7 @@
 #include <utility>
 
 // Change this string whenever you want to force one redraw after flashing/OTA
-static const char* FW_VER = "v2.7.3";
+static const char* FW_VER = "v2.7.4";
 
 // Public app page shown during pairing
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
@@ -62,6 +62,16 @@ static const uint32_t MANUAL_RENDER_RETRY_START_MS = 1000;
 static const uint32_t MQTT_MISSED_HINT_RECOVERY_MS = 120000UL;
 static const uint32_t REALTIME_FAILURE_BACKOFF_MS = 5000;
 
+// Battery Wi-Fi guard: a paired frame must never burn the battery by
+// associating forever after the AP/router disappears. Battery operation gets
+// two short attempts per wake. After three consecutive failed wake cycles,
+// preserve the current e-paper image and sleep with the timer disabled until
+// USB power is inserted or the frame is manually reset.
+static const uint32_t WIFI_CONNECT_ATTEMPT_TIMEOUT_MS = 8000;
+static const uint32_t WIFI_RETRY_GAP_MS = 500;
+static const uint8_t WIFI_CONNECT_ATTEMPTS_PER_WAKE = 2;
+static const uint8_t WIFI_FAILED_WAKE_CYCLES_BEFORE_OFFLINE = 3;
+
 // Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
 RTC_DATA_ATTR static time_t g_nextScheduledWake = 0;
 RTC_DATA_ATTR static time_t g_revisionRetryNotBefore = 0;
@@ -71,6 +81,11 @@ RTC_DATA_ATTR static bool g_powerSaverMode = false;
 // Retained across dynamically scheduled deep-sleep wake cycles. A cold boot may redraw
 // once, but ordinary setup-pending probes never refresh unchanged e-paper.
 RTC_DATA_ATTR static bool setupPendingScreenDisplayed = false;
+// Retained only across deep-sleep wakes. A cold boot/reset deliberately clears
+// the guard so a user always has a local recovery path without needing cloud
+// connectivity.
+RTC_DATA_ATTR static uint8_t g_wifiFailedWakeCycles = 0;
+RTC_DATA_ATTR static bool g_wifiOfflineLock = false;
 
 // Hardware-specific USB source indication.
 #if defined(FRAME_IS_ALFRED_V1_2)
@@ -412,6 +427,67 @@ static void goToRechargeSleep(bool usbPresent) {
   enablePowerSenseWakeForNextSleep(usbPresent);
 
   esp_deep_sleep_start();
+}
+
+
+static void resetWifiFailureGuard(const char* reason) {
+  if (g_wifiFailedWakeCycles == 0 && !g_wifiOfflineLock) return;
+
+  Serial.print("WiFi battery guard: reset (");
+  Serial.print(reason);
+  Serial.println(")");
+  g_wifiFailedWakeCycles = 0;
+  g_wifiOfflineLock = false;
+}
+
+static bool connectSavedBatteryBounded() {
+  for (uint8_t attempt = 1; attempt <= WIFI_CONNECT_ATTEMPTS_PER_WAKE; ++attempt) {
+    Serial.printf(
+      "WiFi battery guard: connect attempt %u/%u\n",
+      (unsigned int)attempt,
+      (unsigned int)WIFI_CONNECT_ATTEMPTS_PER_WAKE
+    );
+
+    if (WiFiManagerV2::connectSaved(WIFI_CONNECT_ATTEMPT_TIMEOUT_MS)) {
+      return true;
+    }
+
+    if (attempt < WIFI_CONNECT_ATTEMPTS_PER_WAKE) {
+      // Stop the failed association before the one permitted retry. This also
+      // prevents the Arduino Wi-Fi stack from continuing to roam in the gap.
+      WiFi.disconnect(false, false);
+      delay(WIFI_RETRY_GAP_MS);
+    }
+  }
+  return false;
+}
+
+static void sleepAfterBatteryWifiFailure() {
+  if (g_wifiFailedWakeCycles < 255) ++g_wifiFailedWakeCycles;
+
+  Serial.printf(
+    "WiFi battery guard: failed wake cycle %u/%u\n",
+    (unsigned int)g_wifiFailedWakeCycles,
+    (unsigned int)WIFI_FAILED_WAKE_CYCLES_BEFORE_OFFLINE
+  );
+
+  // Do not leave the station scanning while display power is being shut down.
+  WiFi.disconnect(true, false);
+  WiFi.mode(WIFI_OFF);
+
+  if (g_wifiFailedWakeCycles >= WIFI_FAILED_WAKE_CYCLES_BEFORE_OFFLINE) {
+    g_wifiOfflineLock = true;
+    Serial.println(
+      "WiFi battery guard: offline shelf lock armed; preserving current screen "
+      "until USB insertion or manual reset"
+    );
+    goToShelfSleep(false);
+    return;
+  }
+
+  // Normal mode will make the next bounded probe on its usual deep-sleep
+  // cadence. Power Saver will wait for its normal scheduled deadline.
+  goToSleep(false);
 }
 
 static void resetTextStateForDashboard() {
@@ -1232,11 +1308,22 @@ static InteractiveModeResult runInteractiveMode(
       }
     }
     if (WiFi.status() != WL_CONNECTED) {
-      Serial.println("LiveUpdate: Wi-Fi disconnected; reconnecting");
-      if (!WiFiManagerV2::connectSaved(12000)) {
-        delay(REALTIME_FAILURE_BACKOFF_MS);
-        continue;
+      if (!pwr.usbPresent) {
+        Serial.println("LiveUpdate: Wi-Fi disconnected on battery; starting bounded reconnect");
+        if (!connectSavedBatteryBounded()) {
+          Serial.println("WiFi battery guard: live reconnect attempts exhausted");
+          sleepAfterBatteryWifiFailure();
+          return INTERACTIVE_FINISHED;
+        }
+        resetWifiFailureGuard("live Wi-Fi reconnected");
+      } else {
+        Serial.println("LiveUpdate: Wi-Fi disconnected on USB; reconnecting");
+        if (!WiFiManagerV2::connectSaved(12000)) {
+          delay(REALTIME_FAILURE_BACKOFF_MS);
+          continue;
+        }
       }
+
       // connectSaved() re-enters STA mode and begins a new connection, so
       // restore the source-aware operational power policy after every reconnect.
       if (!WiFiManagerV2::applyOperationalPowerPolicy(pwr.usbPresent, true) && !pwr.usbPresent) {
@@ -1456,6 +1543,27 @@ void setup() {
   }
 
   const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
+
+  // USB insertion and a local reset are explicit recovery gestures. An
+  // offline-locked paired frame otherwise remains completely passive on
+  // battery: no timer wake, no Wi-Fi scan, no e-paper refresh.
+  if (pwrEarly.usbPresent) {
+    resetWifiFailureGuard("USB present");
+  } else if (wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED) {
+    resetWifiFailureGuard("cold boot/reset");
+  }
+
+  if (g_wifiOfflineLock &&
+      !pwrEarly.usbPresent &&
+      WiFiManagerV2::hasCreds() &&
+      DeviceIdentity::hasToken()) {
+    Serial.println("WiFi battery guard: offline shelf lock active; staying passive");
+    WiFi.disconnect(true, false);
+    WiFi.mode(WIFI_OFF);
+    goToShelfSleep(false);
+    return;
+  }
+
   // Cold boot initializes content; thereafter only module deadlines trigger
   // automatic source work. Manual probes and charger edges do not.
   bool normalSyncDue =
@@ -1545,20 +1653,33 @@ void setup() {
   SetupStep activeSetupStep = SETUP_STEP_NONE;
   const bool isCompletingWifiSetup =
     WiFiManagerV2::hasCreds() && !DeviceIdentity::hasToken();
-  if (!WiFiManagerV2::connectSaved(12000)) {
-    // A normally paired test frame is a continuously running appliance. A
-    // transient disconnect must neither launch provisioning nor deep sleep.
-    while (pwrEarly.usbPresent && WiFiManagerV2::hasCreds() && DeviceIdentity::hasToken()) {
-      Serial.println("LiveUpdate: startup reconnect failed; retrying while awake");
+  const bool pairedOperationalFrame =
+    WiFiManagerV2::hasCreds() && DeviceIdentity::hasToken();
+
+  // Setup/pairing keeps the established connection behavior. A paired frame on
+  // battery uses the strict two-attempt guard instead.
+  const bool startupWifiConnected =
+    pairedOperationalFrame && !pwrEarly.usbPresent
+      ? connectSavedBatteryBounded()
+      : WiFiManagerV2::connectSaved(12000);
+
+  if (!startupWifiConnected) {
+    // USB power is allowed to remain persistent/realtime: it cannot drain the
+    // battery, and charger insertion is the recovery gesture for an offline
+    // frame. Battery operation never enters this retry loop.
+    while (pwrEarly.usbPresent && pairedOperationalFrame) {
+      Serial.println("LiveUpdate: startup reconnect failed on USB; retrying while powered");
       delay(REALTIME_FAILURE_BACKOFF_MS);
       if (WiFiManagerV2::connectSaved(12000)) break;
     }
+
     if (WiFi.status() != WL_CONNECTED) {
-      if (!normalSyncDue && WiFiManagerV2::hasCreds() && DeviceIdentity::hasToken()) {
-        Serial.println("LiveUpdate: Wi-Fi unavailable on probe wake");
-        goToSleep(pwrEarly.usbPresent);
+      if (pairedOperationalFrame && !pwrEarly.usbPresent) {
+        Serial.println("WiFi battery guard: startup attempts exhausted; leaving screen unchanged");
+        sleepAfterBatteryWifiFailure();
         return;
       }
+
       activeSetupStep = SETUP_STEP_WIFI;
       if (chargerStateChanged) {
         Serial.println("🔄 Charger change on Wi-Fi setup screen -> restart Wi-Fi setup flow and redraw");
@@ -1569,6 +1690,8 @@ void setup() {
       g_displayReady = false;
       reconnectedViaProvisioning = true;
     }
+  } else if (pairedOperationalFrame) {
+    resetWifiFailureGuard("startup Wi-Fi connected");
   }
 
   if (isCompletingWifiSetup) {
