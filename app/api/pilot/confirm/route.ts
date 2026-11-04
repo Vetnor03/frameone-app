@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   if (!db) return NextResponse.json({ error: 'Siden er midlertidig utilgjengelig.' }, { status: 503, headers: noStore })
 
   const { data: applicant, error } = await db.from('pilot_applications')
-    .select('id,full_name,email').eq('id', invite).eq('status', 'selected').maybeSingle()
+    .select('id').eq('id', invite).eq('status', 'selected').maybeSingle()
   if (error) {
     console.error('[pilot-confirm] Failed to verify invitation.', { code: error.code })
     return NextResponse.json({ error: 'Kunne ikke bekrefte lenken.' }, { status: 503, headers: noStore })
@@ -42,11 +42,7 @@ export async function GET(request: Request) {
     console.error('[pilot-confirm] Failed to read confirmation.', { code: confirmationError.code })
     return NextResponse.json({ error: 'Kunne ikke sjekke bekreftelsen.' }, { status: 503, headers: noStore })
   }
-  return NextResponse.json({
-    fullName: applicant.full_name,
-    email: applicant.email,
-    confirmed: Boolean(existing),
-  }, { headers: noStore })
+  return NextResponse.json({ confirmed: Boolean(existing) }, { headers: noStore })
 }
 
 export async function POST(request: Request) {
