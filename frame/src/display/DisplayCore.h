@@ -24,6 +24,7 @@ namespace DisplayCore {
   // New: boxed / shelf screen
   void drawShelfScreen();
   void drawRechargeScreen();
+  void drawChargingRecoveryScreen();
   // Temporary acknowledgement shown only after an explicit app Update is detected.
   void drawUpdatingScreen();
 

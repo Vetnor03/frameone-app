@@ -8,6 +8,8 @@ struct BatteryState {
   bool usbPresent;
   bool isCharging;
   bool requiresRecharge;
+  // USB is present, but the depleted cell has not yet reached the safe recovery threshold.
+  bool recoveryCharging;
 };
 
 namespace BatteryManager {

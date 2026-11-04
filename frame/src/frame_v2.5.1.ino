@@ -86,6 +86,9 @@ RTC_DATA_ATTR static bool setupPendingScreenDisplayed = false;
 // connectivity.
 RTC_DATA_ATTR static uint8_t g_wifiFailedWakeCycles = 0;
 RTC_DATA_ATTR static bool g_wifiOfflineLock = false;
+// Recovery-charging UI is painted once, then retained while the frame sleeps
+// and periodically checks whether the depleted cell is safe to run again.
+RTC_DATA_ATTR static bool g_recoveryChargingScreenDisplayed = false;
 
 // Hardware-specific USB source indication.
 #if defined(FRAME_IS_ALFRED_V1_2)
@@ -429,6 +432,19 @@ static void goToRechargeSleep(bool usbPresent) {
   esp_deep_sleep_start();
 }
 
+static void goToRecoveryChargingSleep(bool usbPresent) {
+  static const uint64_t RECOVERY_RECHECK_US = 60ULL * 1000000ULL;
+  Serial.println("Recovery charging: sleeping 60 seconds before battery recheck...");
+
+  prepareDisplayForSleep();
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+  esp_sleep_enable_timer_wakeup(RECOVERY_RECHECK_US);
+  // While USB is present, also wake immediately if the cable is removed.
+  enablePowerSenseWakeForNextSleep(usbPresent);
+
+  esp_deep_sleep_start();
+}
+
 
 static void resetWifiFailureGuard(const char* reason) {
   if (g_wifiFailedWakeCycles == 0 && !g_wifiOfflineLock) return;
@@ -602,12 +618,35 @@ static void showRechargeAndSleep(const BatteryState& batt, const PowerSenseDebug
   Serial.println("🔋 Battery empty -> show recharge screen and skip Wi-Fi/backend work");
   logPowerSenseDebug(batt, pwr);
 
+  g_recoveryChargingScreenDisplayed = false;
   Theme::set(THEME_DARK);
   ensureDisplay();
   DisplayCore::drawRechargeScreen();
   shutdownDisplay();
 
   goToRechargeSleep(pwr.usbPresent);
+}
+
+static void showRecoveryChargingAndSleep(
+  const BatteryState& batt,
+  const PowerSenseDebug& pwr
+) {
+  Serial.println("🔌 Deep-discharge recovery -> charge quietly before normal USB mode");
+  logPowerSenseDebug(batt, pwr);
+
+  // E-paper retains the image with zero panel power, so repaint only on entry.
+  // The one-minute timer wakes only to sample the battery.
+  if (!g_recoveryChargingScreenDisplayed) {
+    Theme::set(THEME_DARK);
+    ensureDisplay();
+    DisplayCore::drawChargingRecoveryScreen();
+    shutdownDisplay();
+    g_recoveryChargingScreenDisplayed = true;
+  } else {
+    Serial.println("Recovery charging screen already displayed; skipping e-paper refresh");
+  }
+
+  goToRecoveryChargingSleep(pwr.usbPresent);
 }
 
 // --------------------------------------
@@ -1582,6 +1621,23 @@ void setup() {
   if (battEarly.requiresRecharge) {
     showRechargeAndSleep(battEarly, pwrEarly);
     return;
+  }
+
+  if (battEarly.recoveryCharging) {
+    // Do not start Wi-Fi, MQTT, backend requests or ordinary display work while
+    // a deeply discharged cell is still recovering. Charging continues in
+    // deep sleep and the timer rechecks the gauge once per minute.
+    showRecoveryChargingAndSleep(battEarly, pwrEarly);
+    return;
+  }
+
+  if (g_recoveryChargingScreenDisplayed) {
+    Serial.println("Recovery charging complete -> resume normal plugged-in mode");
+    g_recoveryChargingScreenDisplayed = false;
+    // The screen currently contains the static Charging message. Force the
+    // normal dashboard path to replace it once networking/config are ready.
+    g_powerRefreshPending = true;
+    DisplayCore::forceNextFullRefresh(true);
   }
 
   {
