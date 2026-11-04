@@ -34,6 +34,7 @@ export default function PilotConfirmation({ inviteId }: { inviteId: string }) {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [invalidReason, setInvalidReason] = useState('')
+  const [formComplete, setFormComplete] = useState(false)
 
   useEffect(() => {
     if (!inviteId) {
@@ -67,9 +68,30 @@ export default function PilotConfirmation({ inviteId }: { inviteId: string }) {
     return () => controller.abort()
   }, [inviteId])
 
+  function scrollToFirstInvalid(form: HTMLFormElement) {
+    const firstInvalid = Array.from(form.elements).find(
+      (element): element is HTMLInputElement =>
+        element instanceof HTMLInputElement &&
+        element.willValidate &&
+        !element.checkValidity(),
+    )
+    if (!firstInvalid) return
+    firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    window.setTimeout(() => firstInvalid.focus({ preventScroll: true }), 250)
+  }
+
+  function updateFormComplete(form: HTMLFormElement) {
+    setFormComplete(form.checkValidity())
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (sending || !invitation) return
+    if (!event.currentTarget.checkValidity()) {
+      setFormComplete(false)
+      scrollToFirstInvalid(event.currentTarget)
+      return
+    }
     const form = new FormData(event.currentTarget)
     setSending(true)
     setError('')
@@ -141,7 +163,7 @@ export default function PilotConfirmation({ inviteId }: { inviteId: string }) {
               </div>
             </div>
           ) : (
-            <form onSubmit={onSubmit} className="grid gap-6">
+            <form onSubmit={onSubmit} onInput={(event) => updateFormComplete(event.currentTarget)} onChange={(event) => updateFormComplete(event.currentTarget)} noValidate className="grid gap-6">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[.17em] text-black/40">RE:MIND pilot</p>
                 <h1 className="mt-2 text-[34px] font-medium leading-tight tracking-[-.045em]">Bekreft at du vil være med</h1>
@@ -153,7 +175,7 @@ export default function PilotConfirmation({ inviteId }: { inviteId: string }) {
               <div className="grid gap-4">
                 <h2 className="text-[16px] font-semibold">Kontakt og adresse</h2>
                 <Field label="Fullt navn" name="fullName" autoComplete="name" maxLength={100} placeholder="Fornavn og etternavn" />
-                <Field label="Telefonnummer" name="phone" type="tel" autoComplete="tel" inputMode="tel" maxLength={25} placeholder="123 45 678" />
+                <Field label="Telefonnummer" name="phone" type="tel" autoComplete="tel" inputMode="tel" maxLength={25} pattern="[+0-9 ()-]{8,25}" placeholder="123 45 678" />
                 <Field label="Adresse" name="addressLine1" autoComplete="address-line1" maxLength={160} placeholder="Gateadresse og husnummer" />
                 <Field label="Leilighet, etasje eller c/o" name="addressLine2" autoComplete="address-line2" maxLength={160} required={false} placeholder="Tilleggsinformasjon" />
                 <div className="grid grid-cols-[minmax(115px,.7fr)_minmax(0,1.3fr)] gap-4">
@@ -188,7 +210,17 @@ export default function PilotConfirmation({ inviteId }: { inviteId: string }) {
 
               {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-[12px] text-red-800">{error}</p>}
 
-              <button type="submit" disabled={sending} className="rounded-xl bg-[#292c27] px-5 py-3.5 text-[13px] font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50">
+              <button
+                type="submit"
+                disabled={sending}
+                aria-disabled={!formComplete || sending}
+                className={
+                  'rounded-xl px-5 py-3.5 text-[13px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ' +
+                  (formComplete
+                    ? 'bg-[#292c27] text-white hover:bg-black'
+                    : 'cursor-pointer bg-[#deddd8] text-black/40')
+                }
+              >
                 {sending ? 'Lagrer …' : 'Godta og bekreft'}
               </button>
             </form>
