@@ -44,7 +44,7 @@
 #include <utility>
 
 // Change this string whenever you want to force one redraw after flashing/OTA
-static const char* FW_VER = "v2.7.4";
+static const char* FW_VER = "v2.7.3";
 
 // Public app page shown during pairing
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
@@ -455,7 +455,7 @@ static bool connectSavedBatteryBounded() {
     if (attempt < WIFI_CONNECT_ATTEMPTS_PER_WAKE) {
       // Stop the failed association before the one permitted retry. This also
       // prevents the Arduino Wi-Fi stack from continuing to roam in the gap.
-      WiFi.disconnect(false, false);
+      WiFi.disconnect(false);
       delay(WIFI_RETRY_GAP_MS);
     }
   }
