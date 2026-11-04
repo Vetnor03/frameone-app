@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image'
 import { useEffect, useState, type FormEvent } from 'react'
 
 type Invitation = { fullName: string; email: string; confirmed: boolean }
@@ -20,6 +19,15 @@ function Field({ name, label, required = true, ...props }: {
   )
 }
 
+function Agreement({ name, children }: { name: string; children: React.ReactNode }) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-black/8 bg-white px-4 py-3.5 text-[13px] leading-6 text-[#454842]">
+      <input type="checkbox" name={name} required className="mt-1 h-4 w-4 shrink-0 accent-[#2f372c]" />
+      <span>{children}</span>
+    </label>
+  )
+}
+
 export default function PilotConfirmation({ inviteId, demoMode = false }: { inviteId: string; demoMode?: boolean }) {
   const [view, setView] = useState<ViewState>('loading')
   const [invitation, setInvitation] = useState<Invitation | null>(null)
@@ -34,7 +42,7 @@ export default function PilotConfirmation({ inviteId, demoMode = false }: { invi
       return
     }
     if (!inviteId) {
-      setInvalidReason('Åpne den personlige lenken du har fått på e-post.')
+      setInvalidReason('Bruk lenken du fikk på e-post fra RE:MIND.')
       setView('invalid')
       return
     }
@@ -46,7 +54,7 @@ export default function PilotConfirmation({ inviteId, demoMode = false }: { invi
         const data: unknown = await response.json().catch(() => null)
         if (!response.ok || !data || typeof data !== 'object' || !('fullName' in data) || !('email' in data)) {
           const message = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
-            ? data.error : 'Invitasjonen kunne ikke bekreftes.'
+            ? data.error : 'Lenken kunne ikke bekreftes.'
           throw new Error(message)
         }
         return data as Invitation
@@ -58,7 +66,7 @@ export default function PilotConfirmation({ inviteId, demoMode = false }: { invi
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return
-        setInvalidReason(reason instanceof Error ? reason.message : 'Kunne ikke åpne invitasjonen.')
+        setInvalidReason(reason instanceof Error ? reason.message : 'Kunne ikke åpne siden.')
         setView('invalid')
       })
     return () => controller.abort()
@@ -82,6 +90,7 @@ export default function PilotConfirmation({ inviteId, demoMode = false }: { invi
           addressLine2: String(form.get('addressLine2') || ''),
           postalCode: String(form.get('postalCode') || ''),
           city: String(form.get('city') || ''),
+          participationAcknowledged: form.get('participationAcknowledged') === 'on',
           loanAcknowledged: form.get('loanAcknowledged') === 'on',
           prototypeAcknowledged: form.get('prototypeAcknowledged') === 'on',
           feedbackAcknowledged: form.get('feedbackAcknowledged') === 'on',
@@ -105,67 +114,50 @@ export default function PilotConfirmation({ inviteId, demoMode = false }: { invi
   const confirmedName = invitation?.fullName.split(/\s+/)[0] || ''
 
   return (
-    <main className="pilot-page min-h-screen bg-[#f3f1ec] text-[#292b26]">
-      <header className="mx-auto flex h-[72px] max-w-[1180px] items-center justify-between border-b border-[#262923]/10 px-5 sm:px-8">
-        <a href="https://re-mind.no" className="text-[19px] font-semibold tracking-[.16em]">RE:MIND</a>
-        <span className="text-[10px] font-semibold uppercase tracking-[.19em] text-black/45">Pilotprogram · 2026</span>
-      </header>
+    <main className="min-h-screen bg-[#f3f1ec] text-[#292b26]">
+      <div className="mx-auto max-w-[720px] px-5 pb-16 pt-8 sm:px-8 sm:pt-12">
+        <header className="flex items-center justify-between border-b border-black/10 pb-5">
+          <a href="https://re-mind.no" className="text-[18px] font-semibold tracking-[.16em]">RE:MIND</a>
+          <span className="text-[10px] font-semibold uppercase tracking-[.18em] text-black/40">Pilottest 2026</span>
+        </header>
 
-      <div className="mx-auto max-w-[1180px] px-5 pb-20 pt-10 sm:px-8 sm:pt-16">
-        <nav aria-label="Steg i pilottesten" className="mb-10 flex items-center gap-3 text-[11px] font-medium tracking-[.04em] text-[#6d7067] sm:mb-14">
-          <span className="flex items-center gap-2 text-[#292b26]"><span className="grid h-7 w-7 place-items-center rounded-full bg-[#292b26] text-white">1</span> Bekreft deltakelse</span>
-          <span aria-hidden="true" className="mx-1 h-px w-7 bg-black/20 sm:w-12" />
-          <span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-full border border-black/15 bg-white/60">2</span> Velg ramme senere</span>
-        </nav>
-
-        <div className="grid items-start gap-11 lg:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)] lg:gap-16">
-          <section className="lg:sticky lg:top-12">
-            <p className="text-[11px] font-semibold uppercase tracking-[.19em] text-[#7e806e]">Du er valgt ut</p>
-            <h1 className="mt-4 max-w-[530px] text-[clamp(36px,4.2vw,58px)] font-medium leading-[1.06] tracking-[-.05em]">
-              Velkommen til pilottesten.
-            </h1>
-            <p className="mt-6 max-w-[460px] text-[15px] leading-7 text-[#62655d]">
-              Du er en av fem som får teste RE:MIND hjemme. Før vi sender ut låneenheten trenger vi noen leveringsopplysninger og en bekreftelse på lånevilkårene.
-            </p>
-            <div className="mt-8 overflow-hidden rounded-2xl border border-black/8 bg-[#eae7df]">
-              <Image src="/shop/remind-device-v2.png" alt="RE:MIND e-ink-ramme" width={840} height={580} className="mx-auto h-auto w-full object-contain" />
+        <section className="mt-8 rounded-[22px] border border-black/10 bg-[#fcfbf8] p-5 shadow-[0_18px_50px_rgba(40,38,33,.04)] sm:p-8">
+          {view === 'loading' ? (
+            <div role="status" className="flex min-h-[260px] items-center justify-center text-[14px] text-black/50">
+              Åpner bekreftelsen …
             </div>
-            <div className="mt-7 space-y-4 text-[13px] leading-6 text-[#60635c]">
-              <p><strong className="text-[#30332c]">Omtrent tre ukers test.</strong> Du låner en utviklingsprototype og gir tilbakemeldinger fra hverdagen.</p>
-              <p><strong className="text-[#30332c]">Din ramme, ditt uttrykk.</strong> Når du har bekreftet deltakelsen, får du en ny e-post med lenke hvor du kan sette sammen din egen låneramme og velge passepartout fra HFS Rammer.</p>
+          ) : view === 'invalid' ? (
+            <div className="flex min-h-[260px] flex-col justify-center">
+              <p className="text-[11px] font-semibold uppercase tracking-[.17em] text-black/40">RE:MIND pilot</p>
+              <h1 className="mt-3 text-[31px] font-medium leading-tight tracking-[-.04em]">Denne lenken er ikke gyldig.</h1>
+              <p role="alert" className="mt-4 text-[14px] leading-6 text-black/60">{invalidReason}</p>
+              <p className="mt-4 text-[13px] leading-6 text-black/50">
+                Trenger du hjelp? Skriv til <a className="underline underline-offset-2" href="mailto:support@re-mind.no">support@re-mind.no</a>.
+              </p>
             </div>
-          </section>
-
-          <section className="rounded-[24px] border border-black/10 bg-[#fcfbf8] p-5 shadow-[0_20px_55px_rgba(40,38,33,.045)] sm:p-9">
-            {view === 'loading' ? (
-              <div role="status" className="flex min-h-[380px] items-center justify-center text-[14px] text-black/50">Kontrollerer invitasjonen …</div>
-            ) : view === 'invalid' ? (
-              <div className="flex min-h-[380px] flex-col justify-center">
-                <p className="text-[11px] font-semibold uppercase tracking-[.17em] text-black/45">Personlig invitasjon</p>
-                <h2 className="mt-3 text-[31px] font-medium leading-tight tracking-[-.04em]">Lenken er ikke tilgjengelig.</h2>
-                <p role="alert" className="mt-4 text-[14px] leading-6 text-black/60">{invalidReason}</p>
-                <p className="mt-4 text-[13px] leading-6 text-black/50">Trenger du hjelp? Kontakt <a className="underline underline-offset-2" href="mailto:support@re-mind.no">support@re-mind.no</a>.</p>
+          ) : view === 'done' ? (
+            <div className="flex min-h-[330px] flex-col justify-center">
+              <span className="grid h-11 w-11 place-items-center rounded-full bg-[#343b2e] text-[23px] text-white" aria-hidden="true">✓</span>
+              <h1 className="mt-6 text-[34px] font-medium leading-tight tracking-[-.045em]">Alt er i orden{confirmedName ? ', ' + confirmedName : ''}.</h1>
+              <p className="mt-4 text-[15px] leading-7 text-black/65">
+                Vi har registrert at du vil være testbruker og mottatt leveringsinformasjonen din. Du får også en kort bekreftelse på e-post.
+              </p>
+              <div className="mt-6 rounded-xl bg-[#f0f2eb] p-4 text-[13px] leading-6 text-[#46503e]">
+                <strong>Du trenger ikke gjøre noe mer nå.</strong> Mer informasjon kommer i en ny e-post, blant annet om neste steg og hvordan du velger utseendet på din RE:MIND.
               </div>
-            ) : view === 'done' ? (
-              <div className="flex min-h-[430px] flex-col justify-center">
-                <span className="grid h-12 w-12 place-items-center rounded-full bg-[#343b2e] text-[25px] text-white" aria-hidden="true">✓</span>
-                <p className="mt-7 text-[11px] font-semibold uppercase tracking-[.17em] text-[#68735e]">Bekreftelsen er registrert</p>
-                <h2 className="mt-3 text-[34px] font-medium leading-tight tracking-[-.045em]">Takk{confirmedName ? `, ${confirmedName}` : ''}!</h2>
-                <p className="mt-4 text-[15px] leading-7 text-black/65">Vi har mottatt bekreftelsen din og leveringsopplysningene. Du trenger ikke gjøre noe mer akkurat nå.</p>
-                <div className="mt-8 rounded-xl border border-[#dfe2d8] bg-[#f0f2eb] p-5 text-[13px] leading-6 text-[#46503e]">
-                  <p className="font-semibold">Neste steg: Design din egen ramme</p>
-                  <p className="mt-1">Du vil motta en ny e-post fra RE:MIND med en personlig lenke for å velge ramme og passepartout fra HFS Rammer.</p>
-                </div>
-                <p className="mt-5 text-[12px] leading-5 text-black/45">Skal du endre leveringsadresse eller har du spørsmål? Skriv til <a className="underline" href="mailto:support@re-mind.no">support@re-mind.no</a>.</p>
+            </div>
+          ) : (
+            <form onSubmit={onSubmit} className="grid gap-6">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[.17em] text-black/40">RE:MIND pilot</p>
+                <h1 className="mt-2 text-[34px] font-medium leading-tight tracking-[-.045em]">Bekreft at du vil være med</h1>
+                <p className="mt-3 max-w-[580px] text-[14px] leading-6 text-black/58">
+                  Fyll inn hvor vi skal sende RE:MIND, og godta punktene under. Etterpå får du en kort bekreftelse på e-post. Mer informasjon om piloten kommer senere.
+                </p>
               </div>
-            ) : (
-              <form onSubmit={onSubmit} className="grid gap-5">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[.17em] text-black/40">Steg 1 · Bekreft deltakelsen</p>
-                  <h2 className="mt-2 text-[30px] font-medium tracking-[-.04em]">Leveringsinformasjon</h2>
-                  <p className="mt-2 text-[13px] leading-6 text-black/55">Fyll inn adressen som låneenheten skal sendes til. Ingen betaling eller kjøpsforpliktelse.</p>
-                </div>
 
+              <div className="grid gap-4">
+                <h2 className="text-[16px] font-semibold">Kontakt og adresse</h2>
                 <Field label="Fullt navn" name="fullName" autoComplete="name" defaultValue={invitation?.fullName} maxLength={100} placeholder="Fornavn og etternavn" />
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="E-post" name="email" type="email" autoComplete="email" value={invitation?.email || ''} readOnly />
@@ -177,39 +169,41 @@ export default function PilotConfirmation({ inviteId, demoMode = false }: { invi
                   <Field label="Postnummer" name="postalCode" autoComplete="postal-code" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} placeholder="0000" />
                   <Field label="Poststed" name="city" autoComplete="address-level2" maxLength={100} placeholder="Poststed" />
                 </div>
-                <Field label="Land" name="country" autoComplete="country-name" readOnly value="Norge" />
+              </div>
 
-                <div className="mt-1 border-t border-black/10 pt-6">
-                  <h3 className="text-[16px] font-semibold">Vilkår for pilottesten</h3>
-                  <p className="mt-2 text-[12px] leading-5 text-black/55">Les og huk av for å bekrefte at du har forstått dette:</p>
-                  <div className="mt-5 grid gap-4 text-[12px] leading-[1.65] text-[#484b44]">
-                    <label className="flex cursor-pointer items-start gap-3">
-                      <input type="checkbox" name="loanAcknowledged" required className="mt-1 h-4 w-4 shrink-0 accent-[#2f372c]" />
-                      <span><strong>Utlån og retur.</strong> Jeg forstår at RE:MIND-enheten og tilhørende ramme kun er til utlån, fortsatt tilhører RE:MIND og skal returneres når RE:MIND ber om det, senest når pilotperioden avsluttes.</span>
-                    </label>
-                    <label className="flex cursor-pointer items-start gap-3">
-                      <input type="checkbox" name="prototypeAcknowledged" required className="mt-1 h-4 w-4 shrink-0 accent-[#2f372c]" />
-                      <span><strong>Utviklingsprototype.</strong> Jeg forstår at dette er en uferdig, ikke CE-merket utviklingsprototype som kun skal brukes i pilottesten og etter sikkerhetsinstruksene jeg får.</span>
-                    </label>
-                    <label className="flex cursor-pointer items-start gap-3">
-                      <input type="checkbox" name="feedbackAcknowledged" required className="mt-1 h-4 w-4 shrink-0 accent-[#2f372c]" />
-                      <span><strong>Tilbakemeldinger.</strong> Jeg vil bruke produktet aktivt og gi ærlige tilbakemeldinger. RE:MIND kan kontakte meg om pilottesten og om praktiske forhold rundt levering og retur.</span>
-                    </label>
-                  </div>
-                </div>
+              <div className="grid gap-3 border-t border-black/10 pt-6">
+                <h2 className="text-[16px] font-semibold">Bekreftelser</h2>
+                <Agreement name="participationAcknowledged">
+                  Jeg ønsker å delta som testbruker i RE:MIND-piloten.
+                </Agreement>
+                <Agreement name="loanAcknowledged">
+                  Jeg forstår at enheten kun er til låns, fortsatt tilhører RE:MIND og må returneres når RE:MIND ber om det eller når piloten avsluttes.
+                </Agreement>
+                <Agreement name="prototypeAcknowledged">
+                  Jeg forstår at dette er en utviklingsprototype og at jeg skal følge informasjonen og sikkerhetsinstruksene jeg får under testen.
+                </Agreement>
+                <Agreement name="feedbackAcknowledged">
+                  Jeg godtar å bruke produktet i testperioden, gi ærlige tilbakemeldinger og bli kontaktet om praktiske forhold rundt piloten.
+                </Agreement>
+              </div>
 
-                <p className="rounded-xl bg-[#f1f0e9] p-4 text-[11px] leading-5 text-[#66695f]">Opplysningene brukes til å organisere pilottesten, sende og hente tilbake låneenheten og kontakte deg om testen. Ingen markedsføringspåmelding. Se <a href="/privacy?lang=no" className="underline underline-offset-2">personvernerklæringen</a>.</p>
-                <label className="absolute -left-[10000px] h-px w-px overflow-hidden" aria-hidden="true">Website <input name="website" tabIndex={-1} autoComplete="off" /></label>
-                {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-[12px] text-red-800">{error}</p>}
-                {demoMode ? <p className="text-[12px] text-[#866e36]">Forhåndsvisning. Innsending er deaktivert.</p> : null}
-                <button type="submit" disabled={sending || demoMode} className="h-13 rounded-xl bg-[#292c27] px-5 py-3.5 text-[13px] font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50">
-                  {sending ? 'Lagrer bekreftelsen …' : 'Bekreft deltakelse →'}
-                </button>
-                <p className="text-center text-[11px] text-black/40">Ingen betaling · Kun utlån · Rammevalg kommer i en ny e-post</p>
-              </form>
-            )}
-          </section>
-        </div>
+              <p className="text-[11px] leading-5 text-black/45">
+                Opplysningene brukes kun til å gjennomføre pilottesten, sende og hente tilbake låneenheten og kontakte deg om testen. Se <a href="/privacy?lang=no" className="underline underline-offset-2">personvernerklæringen</a>.
+              </p>
+
+              <label className="absolute -left-[10000px] h-px w-px overflow-hidden" aria-hidden="true">
+                Website <input name="website" tabIndex={-1} autoComplete="off" />
+              </label>
+
+              {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-[12px] text-red-800">{error}</p>}
+              {demoMode ? <p className="text-[12px] text-[#866e36]">Forhåndsvisning. Innsending er deaktivert.</p> : null}
+
+              <button type="submit" disabled={sending || demoMode} className="rounded-xl bg-[#292c27] px-5 py-3.5 text-[13px] font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50">
+                {sending ? 'Lagrer …' : 'Godta og bekreft'}
+              </button>
+            </form>
+          )}
+        </section>
       </div>
     </main>
   )
