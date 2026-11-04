@@ -28,7 +28,7 @@ function Agreement({ name, children }: { name: string; children: React.ReactNode
   )
 }
 
-export default function PilotConfirmation({ inviteId, demoMode = false }: { inviteId: string; demoMode?: boolean }) {
+export default function PilotConfirmation({ inviteId }: { inviteId: string }) {
   const [view, setView] = useState<ViewState>('loading')
   const [invitation, setInvitation] = useState<Invitation | null>(null)
   const [sending, setSending] = useState(false)
@@ -36,11 +36,6 @@ export default function PilotConfirmation({ inviteId, demoMode = false }: { invi
   const [invalidReason, setInvalidReason] = useState('')
 
   useEffect(() => {
-    if (demoMode) {
-      setInvitation({ fullName: 'Ola Nordmann', email: 'ola@eksempel.no', confirmed: false })
-      setView('form')
-      return
-    }
     if (!inviteId) {
       setInvalidReason('Bruk lenken du fikk på e-post fra RE:MIND.')
       setView('invalid')
@@ -70,11 +65,11 @@ export default function PilotConfirmation({ inviteId, demoMode = false }: { invi
         setView('invalid')
       })
     return () => controller.abort()
-  }, [inviteId, demoMode])
+  }, [inviteId])
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (sending || demoMode || !invitation) return
+    if (sending || !invitation) return
     const form = new FormData(event.currentTarget)
     setSending(true)
     setError('')
@@ -196,9 +191,8 @@ export default function PilotConfirmation({ inviteId, demoMode = false }: { invi
               </label>
 
               {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-[12px] text-red-800">{error}</p>}
-              {demoMode ? <p className="text-[12px] text-[#866e36]">Forhåndsvisning. Innsending er deaktivert.</p> : null}
 
-              <button type="submit" disabled={sending || demoMode} className="rounded-xl bg-[#292c27] px-5 py-3.5 text-[13px] font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="submit" disabled={sending} className="rounded-xl bg-[#292c27] px-5 py-3.5 text-[13px] font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50">
                 {sending ? 'Lagrer …' : 'Godta og bekreft'}
               </button>
             </form>
