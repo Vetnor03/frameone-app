@@ -309,7 +309,12 @@ static void resetRtcState(float initialVoltage
   g_batteryRtc.usbWakeCount = 0;
   g_batteryRtc.usbSessionPeakVoltage = initialVoltage;
 #if defined(FRAME_IS_ALFRED_V1_2)
-  g_batteryRtc.rechargeRequired = false;
+  // Reconstruct deep-discharge state after a true power loss. A cell at/below
+  // the empty-voltage point or a fuel gauge at/below 5% must recover on USB
+  // before normal system load resumes.
+  g_batteryRtc.rechargeRequired =
+    initialVoltage <= RECHARGE_SHUTDOWN_V ||
+    initialPercent <= (int)ALFRED_RECOVERY_SOC_PERCENT;
 #else
   g_batteryRtc.rechargeRequired = initialVoltage <= RECHARGE_SHUTDOWN_V;
 #endif
@@ -471,7 +476,8 @@ static void updateRechargeRequired(bool usbPresent, float rawVoltage, float smoo
     return;
   }
   g_batteryRtc.lowVoltageCount = 0;
-  if (smoothedVoltage >= RECHARGE_RECOVERY_V) {
+  if (smoothedVoltage >= RECHARGE_RECOVERY_V &&
+      g_max17048Soc >= ALFRED_RECOVERY_SOC_PERCENT) {
     g_batteryRtc.rechargeRequired = false;
   }
 #else
@@ -588,6 +594,7 @@ BatteryState BatteryManager::readAndUpdate(bool usbPresent) {
     retained.usbPresent = usbPresent;
     retained.isCharging = usbPresent && digitalRead(HardwareProfile::kChargeN) == LOW;
     retained.requiresRecharge = rtcStateValid() && !usbPresent && g_batteryRtc.rechargeRequired;
+    retained.recoveryCharging = rtcStateValid() && usbPresent && g_batteryRtc.rechargeRequired;
     return retained;
   }
   const float rawVoltage = sample.voltage;
@@ -640,6 +647,7 @@ BatteryState BatteryManager::readAndUpdate(bool usbPresent) {
   out.usbPresent = usbPresent;
   out.isCharging = g_batteryRtc.isCharging;
   out.requiresRecharge = (!usbPresent && g_batteryRtc.rechargeRequired);
+  out.recoveryCharging = (usbPresent && g_batteryRtc.rechargeRequired);
   return out;
 }
 
