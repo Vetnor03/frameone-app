@@ -29,6 +29,10 @@ static const int ALFRED_CORRECTION_SAMPLES = 3;
 static const int ALFRED_LARGE_CORRECTION_PERCENT = 8;
 static const int ALFRED_LOW_VOLTAGE_SAMPLES = 3;
 static const float ALFRED_EMERGENCY_V = 3.10f;
+// After a true deep discharge, do not immediately load the system simply
+// because USB has appeared. Let the MAX17048 report a small recovered reserve
+// as well as a healthy cell voltage before leaving recovery charging.
+static const float ALFRED_RECOVERY_SOC_PERCENT = 5.0f;
 
 static bool readMax17048Register(uint8_t reg, uint16_t& value) {
   constexpr int kMax17048ReadAttempts = 3;
