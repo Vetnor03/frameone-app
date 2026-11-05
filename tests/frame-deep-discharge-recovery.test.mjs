@@ -22,11 +22,16 @@ test('Alfred reconstructs deep-discharge state after RTC loss', () => {
   )
 })
 
-test('Alfred only exits recovery after both voltage and fuel-gauge reserve recover', () => {
-  assert.match(
-    battery,
-    /smoothedVoltage >= RECHARGE_RECOVERY_V &&[\s\S]*g_max17048Soc >= ALFRED_RECOVERY_SOC_PERCENT/,
+test('Alfred exits recovery from real battery voltage even if fuel-gauge SOC is stale', () => {
+  const fn = battery.slice(
+    battery.indexOf('static void updateRechargeRequired'),
+    battery.indexOf('#else', battery.indexOf('static void updateRechargeRequired')),
   )
+  assert.match(
+    fn,
+    /rawVoltage >= RECHARGE_RECOVERY_V &&[\s\S]*smoothedVoltage >= RECHARGE_RECOVERY_V/,
+  )
+  assert.doesNotMatch(fn, /g_max17048Soc >= ALFRED_RECOVERY_SOC_PERCENT/)
 })
 
 test('recovery charging performs no Wi-Fi work and rechecks once per minute', () => {
