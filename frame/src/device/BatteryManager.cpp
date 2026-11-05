@@ -457,12 +457,16 @@ static void learnFullCandidate(float candidateV) {
 
 static void updateRechargeRequired(bool usbPresent, float rawVoltage, float smoothedVoltage) {
 #if defined(FRAME_IS_ALFRED_V1_2)
+  // Voltage is the safety authority. A frame can arrive here with a valid RTC
+  // state from older firmware where the recharge latch was false even though
+  // the cell is deeply discharged. USB presence must never hide that.
+  if (rawVoltage <= ALFRED_EMERGENCY_V) {
+    g_batteryRtc.rechargeRequired = true;
+    g_batteryRtc.lowVoltageCount = ALFRED_LOW_VOLTAGE_SAMPLES;
+    return;
+  }
+
   if (!usbPresent) {
-    if (rawVoltage <= ALFRED_EMERGENCY_V) {
-      g_batteryRtc.rechargeRequired = true;
-      g_batteryRtc.lowVoltageCount = ALFRED_LOW_VOLTAGE_SAMPLES;
-      return;
-    }
     if (smoothedVoltage <= RECHARGE_SHUTDOWN_V) {
       if (g_batteryRtc.lowVoltageCount < ALFRED_LOW_VOLTAGE_SAMPLES) {
         g_batteryRtc.lowVoltageCount++;
@@ -475,9 +479,24 @@ static void updateRechargeRequired(bool usbPresent, float rawVoltage, float smoo
     }
     return;
   }
+
   g_batteryRtc.lowVoltageCount = 0;
-  if (smoothedVoltage >= RECHARGE_RECOVERY_V &&
-      g_max17048Soc >= ALFRED_RECOVERY_SOC_PERCENT) {
+
+  // While plugged in, immediately enter recovery if the cell is still at or
+  // below the user-facing empty voltage. This prevents Wi-Fi/backend/display
+  // load from competing with pre-charge on a depleted battery.
+  if (rawVoltage <= RECHARGE_SHUTDOWN_V ||
+      smoothedVoltage <= RECHARGE_SHUTDOWN_V) {
+    g_batteryRtc.rechargeRequired = true;
+    return;
+  }
+
+  // Leave recovery based on battery voltage, not MAX17048 SOC. The fuel gauge
+  // can legitimately remain at 0% after a deep discharge until it relearns;
+  // using SOC as an exit gate can trap a healthy, recovered cell forever.
+  if (g_batteryRtc.rechargeRequired &&
+      rawVoltage >= RECHARGE_RECOVERY_V &&
+      smoothedVoltage >= RECHARGE_RECOVERY_V) {
     g_batteryRtc.rechargeRequired = false;
   }
 #else
