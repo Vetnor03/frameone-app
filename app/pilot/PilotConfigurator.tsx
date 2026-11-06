@@ -199,6 +199,7 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
   const [submittedEmail, setSubmittedEmail] = useState('')
   const [invitation, setInvitation] = useState<PilotInvitation | null>(null)
   const [inviteError, setInviteError] = useState('')
+  const [inviteUsed, setInviteUsed] = useState(false)
   const [loadingInvite, setLoadingInvite] = useState(true)
 
   useEffect(() => {
@@ -219,6 +220,10 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
     })
       .then(async (response) => {
         const data = await response.json().catch(() => null)
+        if (response.status === 410) {
+          setInviteUsed(true)
+          throw new Error('Valget ditt er allerede registrert. Denne lenken kan ikke brukes igjen.')
+        }
         if (!response.ok || !data || typeof data.email !== 'string') {
           throw new Error(typeof data?.error === 'string' ? data.error : 'Unable to verify your invitation.')
         }
@@ -229,7 +234,6 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
         setInvitation(data)
         if (frames.some((item) => item.id === data.frameId)) setFrameId(data.frameId as PilotFrameId)
         if ([...mattes, ...legacyMattes].some((item) => item.id === data.matteId)) setMatteId(data.matteId as PilotMatteId)
-        setSubmitted(Boolean(data.orderStatus))
         setSubmittedEmail(data.email)
         setLoadingInvite(false)
       })
@@ -241,14 +245,12 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
     return () => controller.abort()
   }, [inviteId, demoMode])
 
-  const isLocked = Boolean(invitation?.orderStatus && invitation.orderStatus !== 'submitted')
-
   const frame = useMemo(() => frames.find((item) => item.id === frameId) ?? frames[0], [frameId])
   const matte = useMemo(() => [...mattes, ...legacyMattes].find((item) => item.id === matteId) ?? mattes[0], [matteId])
 
   async function submitOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!invitation || isLocked || submitting) return
+    if (!invitation || inviteUsed || submitted || submitting) return
     setError('')
 
     // The founder's demo exercises every screen without contacting the API.
@@ -270,6 +272,11 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
       })
       const result = await response.json().catch(() => null)
 
+      if (response.status === 409 && result?.used === true) {
+        setInviteUsed(true)
+        setInvitation(null)
+        throw new Error('Valget ditt er allerede registrert. Denne lenken kan ikke brukes igjen.')
+      }
       if (!response.ok) {
         throw new Error(typeof result?.error === 'string' ? result.error : 'Could not save your pilot order.')
       }
@@ -289,9 +296,9 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
         <header className="mx-auto flex h-16 max-w-[1080px] items-center border-b border-black/10 text-[17px] font-semibold tracking-[.16em]">RE:MIND</header>
         <section className="mx-auto flex min-h-[65vh] max-w-[520px] flex-col justify-center">
           <p className="text-[11px] font-semibold uppercase tracking-[.16em] text-black/45">Your pilot frame</p>
-          <h1 className="mt-3 text-[clamp(30px,5vw,44px)] font-medium tracking-[-.045em]">{loadingInvite ? 'Checking your invitation…' : 'Invitation unavailable'}</h1>
+          <h1 className="mt-3 text-[clamp(30px,5vw,44px)] font-medium tracking-[-.045em]">{loadingInvite ? 'Checking your invitation…' : inviteUsed ? 'Valget ditt er registrert' : 'Invitation unavailable'}</h1>
           {!loadingInvite ? <p role="alert" className="mt-3 text-[14px] leading-6 text-black/60">{inviteError}</p> : null}
-          {!loadingInvite ? <p className="mt-4 text-[13px] text-black/50">If you were selected for the pilot, please open the personal link in your invitation email.</p> : null}
+          {!loadingInvite && !inviteUsed ? <p className="mt-4 text-[13px] text-black/50">If you were selected for the pilot, please open the personal link in your invitation email.</p> : null}
         </section>
       </main>
     )
@@ -411,7 +418,7 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1d1d1b] text-[18px] font-semibold text-white">✓</div>
                 <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">{demoMode ? 'Demo complete · Nothing saved' : 'Selection saved'}</p>
                 <h2 className="mt-1 text-[28px] font-medium tracking-[-0.035em]">{demoMode ? 'This is the confirmation screen.' : 'Your frame is selected.'}</h2>
-                <p className="mt-3 max-w-[32rem] text-[14px] leading-6 text-black/55">{demoMode ? 'This is a preview of the final step. No pilot order has been created or changed. You can try another combination below.' : 'We saved your choice of frame and passepartout for your three-week pilot loan. Your RE:MIND prototype will be returned after the test. We will contact you with the next steps.'}</p>
+                <p className="mt-3 max-w-[32rem] text-[14px] leading-6 text-black/55">{demoMode ? 'This is a preview of the final step. No pilot order has been created or changed.' : 'We saved your choice of frame and passepartout for your three-week pilot loan. This invitation link can no longer be used. We will contact you with the next steps.'}</p>
 
                 <dl className="mt-6 divide-y divide-black/10 border-y border-black/10 text-[13px]">
                   <div className="flex justify-between gap-5 py-3"><dt className="text-black/40">Frame</dt><dd className="text-right font-medium">{frame.name}</dd></div>
@@ -419,20 +426,6 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
                   <div className="flex justify-between gap-5 py-3"><dt className="text-black/40">Email</dt><dd className="min-w-0 truncate text-right font-medium">{submittedEmail}</dd></div>
                 </dl>
 
-                {!isLocked ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!mattes.some((option) => option.id === matteId)) setMatteId('beige')
-                      setSubmitted(false)
-                      setStep(1)
-                      setError('')
-                    }}
-                    className="mt-5 self-start text-[12px] font-medium text-black/45 underline decoration-black/20 underline-offset-4 hover:text-black/70"
-                  >
-                    {demoMode ? 'Try another combination' : 'Change my selection'}
-                  </button>
-                ) : null}
               </div>
             ) : null}
           </section>
