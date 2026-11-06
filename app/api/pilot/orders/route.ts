@@ -6,7 +6,7 @@ import {
   pilotMatteNames,
   validPilotFrame,
   validPilotInvitation,
-  validPilotMatte,
+  validSelectablePilotMatte,
 } from '@/app/lib/pilotSelection'
 
 export const dynamic = 'force-dynamic'
@@ -63,22 +63,30 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Bekreft deltakelsen før du velger ramme.' }, { status: 403, headers: noStore })
   }
 
+  // Invitation links are bearer links and must stop working after the first save.
+  // Never send saved order details to someone replaying an invitation URL.
   const { data: order, error: orderError } = await db
     .from('pilot_orders')
-    .select('frame_id,matte_id,status')
+    .select('id')
     .eq('email', applicant.email)
     .maybeSingle()
   if (orderError) {
-    console.error('[pilot-orders] Unable to read existing selection.', { code: orderError.code })
+    console.error('[pilot-orders] Unable to check existing selection.', { code: orderError.code })
     return NextResponse.json({ error: 'Could not check your selection.' }, { status: 503, headers: noStore })
+  }
+  if (order) {
+    return NextResponse.json(
+      { error: 'Valget ditt er allerede registrert. Denne lenken kan ikke brukes igjen.', used: true },
+      { status: 410, headers: noStore },
+    )
   }
 
   return NextResponse.json({
     fullName: confirmation.full_name,
     email: applicant.email,
-    frameId: validPilotFrame(order?.frame_id) ? order.frame_id : null,
-    matteId: validPilotMatte(order?.matte_id) ? order.matte_id : null,
-    orderStatus: order?.status || null,
+    frameId: null,
+    matteId: null,
+    orderStatus: null,
   }, { headers: noStore })
 }
 
@@ -116,7 +124,7 @@ export async function POST(request: Request) {
   const frameId = body.frameId
   const matteId = body.matteId
 
-  if (!validPilotFrame(frameId) || !validPilotMatte(matteId)) {
+  if (!validPilotFrame(frameId) || !validSelectablePilotMatte(matteId)) {
     return NextResponse.json({ error: 'Please select one frame and one matte.' }, { status: 400, headers: noStore })
   }
 
@@ -126,7 +134,7 @@ export async function POST(request: Request) {
   }
 
   // The invitation is the application's random UUID, not an email address:
-  // only explicitly selected applicants can submit or edit their own selection.
+  // only selected applicants can submit a one-time selection.
   const { data: applicant, error: applicantError } = await db
     .from('pilot_applications')
     .select('id,full_name,email')
@@ -156,23 +164,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Bekreft deltakelsen før du velger ramme.' }, { status: 403, headers: noStore })
   }
 
-  // A fulfilled or confirmed loan must never be silently reset to 'submitted'.
+  // Any previously saved order consumes this link, regardless of order status.
   const { data: existingOrder, error: lookupError } = await db
     .from('pilot_orders')
-    .select('status')
+    .select('id')
     .eq('email', applicant.email)
     .maybeSingle()
   if (lookupError) {
     console.error('[pilot-orders] Unable to check existing order.', { code: lookupError.code })
     return NextResponse.json({ error: 'Could not save your selection.' }, { status: 503, headers: noStore })
   }
-  if (existingOrder && existingOrder.status !== 'submitted') {
-    return NextResponse.json({ error: 'This pilot selection has already been confirmed. Contact RE:MIND if you need to change it.' }, { status: 409, headers: noStore })
+  if (existingOrder) {
+    return NextResponse.json(
+      { error: 'Valget ditt er allerede registrert. Lenken kan ikke brukes igjen.', used: true },
+      { status: 409, headers: noStore },
+    )
   }
 
+  // Insert rather than upsert: the existing UNIQUE(email) database constraint
+  // atomically rejects a second submission, even from two concurrent requests.
   const { error } = await db
     .from('pilot_orders')
-    .upsert({
+    .insert({
       full_name: confirmation.full_name,
       email: applicant.email,
       shipping_address_line1: confirmation.shipping_address_line1,
@@ -188,9 +201,15 @@ export async function POST(request: Request) {
       status: 'submitted',
       source: 'selected-pilot-invitation',
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'email' })
+    })
 
   if (error) {
+    if (error.code === '23505') {
+      return NextResponse.json(
+        { error: 'Valget ditt er allerede registrert. Lenken kan ikke brukes igjen.', used: true },
+        { status: 409, headers: noStore },
+      )
+    }
     console.error('[pilot-orders] Unable to save invited order.', { code: error.code, message: error.message })
     return NextResponse.json({ error: 'Could not save your selection. Please try again.' }, { status: 500, headers: noStore })
   }
