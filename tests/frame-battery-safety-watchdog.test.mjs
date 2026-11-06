@@ -20,10 +20,14 @@ test('awake battery cutoff shuts radio down before recharge sleep', () => {
   )
 })
 
-test('pairing loop also enforces the low-battery cutoff', () => {
+test('pairing is charger-only and exits immediately when USB is removed', () => {
   assert.match(
     firmware,
-    /while \(\(millis\(\) - t0\) < maxPollMs\)[\s\S]*enforceBatteryCutoffDuringAwake\("pairing"/,
+    /Pairing requires USB power -> passive pairing shelf[\s\S]*return PAIRING_EXPIRED/,
+  )
+  assert.match(
+    firmware,
+    /while \(\(millis\(\) - t0\) < maxPollMs\)[\s\S]*Pairing: USB removed -> return to passive pairing shelf[\s\S]*return PAIRING_EXPIRED/,
   )
 })
 
