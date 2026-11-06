@@ -48,3 +48,19 @@ test('deeply discharged USB recovery does not power the e-paper panel', () => {
   assert.match(fn, /isnan\(batt\.rawVoltage\) \|\| batt\.rawVoltage < RECOVERY_DISPLAY_MIN_V/)
   assert.match(fn, /preserving existing e-paper image/)
 })
+
+
+test('severe or unknown discharge skips the battery-empty e-paper refresh', () => {
+  assert.match(firmware, /RECHARGE_DISPLAY_MIN_V\s*=\s*3\.20f/)
+  const start = firmware.indexOf('static void showRechargeAndSleep')
+  const end = firmware.indexOf('static void showRecoveryChargingAndSleep', start)
+  const fn = firmware.slice(start, end)
+  assert.match(fn, /!isnan\(batt\.rawVoltage\) && batt\.rawVoltage >= RECHARGE_DISPLAY_MIN_V/)
+  assert.match(fn, /Battery too low\/unknown for recharge-screen refresh/)
+})
+
+test('battery diagnostics distinguish recharge from USB recovery charging', () => {
+  assert.match(battery, /Serial\.print\(" recharge="\)/)
+  assert.match(battery, /Serial\.print\(" recovery="\)/)
+  assert.match(battery, /state\.recoveryCharging \? 1 : 0/)
+})
