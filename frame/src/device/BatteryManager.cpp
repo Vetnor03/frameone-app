@@ -697,6 +697,8 @@ void BatteryManager::logState(const char* label, const BatteryState& state) {
   Serial.print(state.isCharging ? 1 : 0);
   Serial.print(" recharge=");
   Serial.print(state.requiresRecharge ? 1 : 0);
+  Serial.print(" recovery=");
+  Serial.print(state.recoveryCharging ? 1 : 0);
   if (g_batteryRtc.socCandidateCount > 0) {
     Serial.print(" candidate=");
     Serial.print(g_batteryRtc.socCandidatePercent);
