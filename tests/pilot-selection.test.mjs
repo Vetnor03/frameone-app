@@ -25,11 +25,11 @@ test('pilot selector exposes three frames and five photographed mattes', () => {
   assert.equal(pilotMatteNames['silver-birch'], 'Silver Birch')
 })
 
-test('all 15 photographs are mapped to exact case-sensitive PNG names', () => {
+test('all 15 photographs are mapped to exact case-sensitive JPG names', () => {
   const photos = Object.values(pilotCombinationPhotos).flatMap((byMatte) => Object.values(byMatte))
   assert.equal(photos.length, 15)
   assert.equal(new Set(photos).size, 15)
-  assert.ok(photos.every((path) => /^\/pilot-materials\/combinations\/(Oak|Walnut|Char)(Beige|Grey|Red|Green|Black)\.png$/.test(path)))
+  assert.ok(photos.every((path) => /^\/pilot-materials\/combinations\/(Oak|Walnut|Char)(Beige|Grey|Red|Green|Black)\.jpg$/.test(path)))
   for (const frameId of Object.keys(pilotFrameNames)) {
     for (const matteId of selectablePilotMatteIds) {
       assert.equal(pilotCombinationPhoto(frameId, matteId), pilotCombinationPhotos[frameId][matteId])
