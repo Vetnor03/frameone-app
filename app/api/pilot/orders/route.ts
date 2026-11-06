@@ -7,6 +7,7 @@ import {
   validPilotFrame,
   validPilotInvitation,
   validPilotMatte,
+  validSelectablePilotMatte,
 } from '@/app/lib/pilotSelection'
 
 export const dynamic = 'force-dynamic'
@@ -116,7 +117,7 @@ export async function POST(request: Request) {
   const frameId = body.frameId
   const matteId = body.matteId
 
-  if (!validPilotFrame(frameId) || !validPilotMatte(matteId)) {
+  if (!validPilotFrame(frameId) || !validSelectablePilotMatte(matteId)) {
     return NextResponse.json({ error: 'Please select one frame and one matte.' }, { status: 400, headers: noStore })
   }
 
