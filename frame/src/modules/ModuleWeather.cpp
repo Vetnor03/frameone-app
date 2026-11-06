@@ -18,6 +18,7 @@
 #include "FreeSans9ptNO.h"
 #include "FreeSansBold12ptNO.h"
 #include "FreeSansBold18ptNO.h"
+#include "RemindEditorialFonts.h"
 
 #define FONT_B9  (&FreeSans9pt8b)
 #define FONT_B12 (&FreeSansBold12pt8b)
@@ -2310,9 +2311,9 @@ static const char* compassDirection(float degrees) {
   return labels[index];
 }
 
-static void renderAdaptiveWeather(const Cell& c,
-                                  const WeatherInstanceConfig& cfg,
-                                  const WeatherCache& data) {
+static void renderAdaptiveWeatherLegacy(const Cell& c,
+                                        const WeatherInstanceConfig& cfg,
+                                        const WeatherCache& data) {
   const uint16_t ink = Theme::ink();
   if (!data.valid) {
     drawCenteredBox(c.x, c.y, c.w, c.h, "Weather unavailable", FONT_B9, ink);
@@ -2445,6 +2446,453 @@ static void renderAdaptiveWeather(const Cell& c,
                          conditionFromWmo(day.wmo), FONT_B9, ink, 2);
     }
   }
+}
+
+
+// -----------------------------------------------------------------------------
+// Weather Design vNext — physically approved production renderer
+//
+// Locked 2026-11-06 after physical QA of all 16 4x4 geometries on the V4
+// 800x480 e-paper panel. The visual composition mirrors the approved R5.
+// Existing smart forecast behavior is intentionally retained.
+// -----------------------------------------------------------------------------
+
+static const char* weatherConditionNo(int wmo) {
+  switch (wmo) {
+    case 0: return "Sol";
+    case 1: return "Mest klart";
+    case 2: return "Delvis skyet";
+    case 3: return "Skyet";
+    case 45:
+    case 48: return "Tåke";
+    case 51:
+    case 53:
+    case 55: return "Yr";
+    case 56:
+    case 57: return "Underkjølt yr";
+    case 61:
+    case 63:
+    case 65: return "Regn";
+    case 66:
+    case 67: return "Underkjølt regn";
+    case 71:
+    case 73:
+    case 75: return "Snø";
+    case 77: return "Snøkorn";
+    case 80:
+    case 81:
+    case 82: return "Regnbyger";
+    case 85:
+    case 86: return "Snøbyger";
+    case 95: return "Torden";
+    case 96:
+    case 99: return "Torden og hagl";
+    default: return "Vær";
+  }
+}
+
+static const char* weatherWeekdayNo(int idx) {
+  static const char* labels[] = {"Søn","Man","Tir","Ons","Tor","Fre","Lør"};
+  return (idx >= 0 && idx <= 6) ? labels[idx] : "--";
+}
+
+static const char* weatherCompassNo(float degrees) {
+  if (isnan(degrees)) return "";
+  static const char* labels[] = {"N","NØ","Ø","SØ","S","SV","V","NV"};
+  int index = ((int)lroundf(degrees / 45.0f)) & 7;
+  return labels[index];
+}
+
+static void weatherEditorialCentered(int x,int y,int w,int h,
+                                     const char* utf8,const GFXfont* font) {
+  if(!utf8 || !utf8[0] || w<=0 || h<=0) return;
+  char safe[128] = {0};
+  utf8ToLatin1(safe,sizeof(safe),utf8);
+  drawCenteredBox(x,y,w,h,safe,font,Theme::ink());
+}
+
+static int weatherEditorialWrapTwo(const char* text,const GFXfont* font,int maxW,
+                                   char out1[96],char out2[96]) {
+  out1[0]=0; out2[0]=0;
+  if(!text || !text[0] || maxW<=0) return 0;
+  char work[192] = {0};
+  strlcpy(work,text,sizeof(work));
+  char* save=nullptr;
+  char* word=strtok_r(work," ",&save);
+  int line=0;
+  while(word) {
+    char candidate[96] = {0};
+    char* dst=line==0?out1:out2;
+    if(dst[0]) snprintf(candidate,sizeof(candidate),"%s %s",dst,word);
+    else strlcpy(candidate,word,sizeof(candidate));
+    int16_t x1=0,y1=0; uint16_t tw=0,th=0;
+    measureText(candidate,font,x1,y1,tw,th);
+    if((int)tw<=maxW || !dst[0]) strlcpy(dst,candidate,96);
+    else if(line==0){ line=1; strlcpy(out2,word,96); }
+    else break;
+    word=strtok_r(nullptr," ",&save);
+  }
+  return out2[0]?2:(out1[0]?1:0);
+}
+
+static void weatherEditorialWrapped(int x,int y,int w,int h,
+                                    const char* text,const GFXfont* font,int pad=3) {
+  if(!text || !text[0] || w<=pad*2 || h<=0) return;
+  char safe[192] = {0};
+  utf8ToLatin1(safe,sizeof(safe),text);
+  char a[96]={0},b[96]={0};
+  const int n=weatherEditorialWrapTwo(safe,font,w-pad*2,a,b);
+  if(!n) return;
+  int16_t x1=0,y1=0; uint16_t tw=0,th=0;
+  measureText("Ag",font,x1,y1,tw,th);
+  const int gap=4;
+  const int total=(int)th*n+(n-1)*gap;
+  int top=y+(h-total)/2;
+  weatherEditorialCentered(x+pad,top,w-pad*2,th,a,font);
+  if(n==2) weatherEditorialCentered(x+pad,top+th+gap,w-pad*2,th,b,font);
+}
+
+static void weatherEditorialHeroTemp(int x,int y,int w,int h,const char* text) {
+  const GFXfont* candidates[]={
+    RemindEditorialFonts::fraunces72(),
+    RemindEditorialFonts::fraunces48(),
+    RemindEditorialFonts::dm24(),
+    RemindEditorialFonts::dm18()
+  };
+  const GFXfont* use=candidates[3];
+  for(const GFXfont* font:candidates) {
+    int16_t x1=0,y1=0; uint16_t tw=0,th=0;
+    measureText(text,font,x1,y1,tw,th);
+    if((int)tw<=w-4 && (int)th<=h-4){use=font;break;}
+  }
+  weatherEditorialCentered(x,y,w,h,text,use);
+}
+
+static void weatherEditorialRule(int x,int y,int w) {
+  if(w<34)return;
+  auto& d=DisplayCore::get();
+  const uint16_t ink=Theme::ink();
+  const int cx=x+w/2;
+  const int half=min(70,w/2-4);
+  if(half<12)return;
+  d.drawFastHLine(cx-half,y,half-7,ink);
+  d.drawFastHLine(cx+7,y,half-7,ink);
+  d.drawLine(cx,y-3,cx+3,y,ink);
+  d.drawLine(cx+3,y,cx,y+3,ink);
+  d.drawLine(cx,y+3,cx-3,y,ink);
+  d.drawLine(cx-3,y,cx,y-3,ink);
+}
+
+static void weatherShortTemp(char* out,size_t n,float c,const char* units) {
+  if(!out || n==0) return;
+  if(isnan(c)){ strlcpy(out,"--",n); return; }
+  float v=c;
+  if(units && strcmp(units,"imperial")==0) v=(c*9.0f/5.0f)+32.0f;
+  snprintf(out,n,"%d\xB0",(int)lroundf(v));
+}
+
+static void weatherRangeShort(char* out,size_t n,float lo,float hi,const char* units) {
+  char a[14]={0},b[14]={0};
+  weatherShortTemp(a,sizeof(a),lo,units);
+  weatherShortTemp(b,sizeof(b),hi,units);
+  snprintf(out,n,"%s / %s",a,b);
+}
+
+static void weatherWindShort(char* out,size_t n,float speed,float direction,bool includeDirection) {
+  if(!out || n==0)return;
+  if(isnan(speed) || speed<=0.2f){ strlcpy(out,"Rolig",n); return; }
+  if(includeDirection && !isnan(direction)) {
+    snprintf(out,n,"%d m/s %s",(int)lroundf(speed),weatherCompassNo(direction));
+  } else {
+    snprintf(out,n,"%d m/s",(int)lroundf(speed));
+  }
+}
+
+static void weatherRainShort(char* out,size_t n,float probability,float mm,int wmo) {
+  if(!out || n==0)return;
+  if(!isnan(probability) && probability>=0.0f && probability<=100.0f) {
+    snprintf(out,n,"Regn %.0f%%",probability);
+    return;
+  }
+  if(!isnan(mm) && mm>=0.5f) {
+    snprintf(out,n,"%s %d mm",isSnowWmo(wmo)?"Snø":"Regn",(int)lroundf(mm));
+    return;
+  }
+  strlcpy(out,"Mest tørt",n);
+}
+
+static void weatherEditorialFacts(int x,int y,int w,int h,int count,
+                                  const char* range,const char* wind,const char* rain) {
+  if(count<1 || w<=0 || h<=0)return;
+  count=min(count,3);
+  const char* values[]={range,wind,rain};
+  auto& d=DisplayCore::get();
+  const int cw=w/count;
+  for(int i=0;i<count;i++){
+    if(i) {
+      const int inset=max(3,h/6);
+      d.drawFastVLine(x+i*cw,y+inset,max(1,h-2*inset),Theme::ink());
+    }
+    weatherEditorialCentered(x+i*cw,y,cw,h,values[i],RemindEditorialFonts::dm18());
+  }
+}
+
+static int weatherForecastAvailable(const WeatherCache& data,int startIndex) {
+  int count=0;
+  for(int i=startIndex;i<data.dayCount && i<WeatherCache::MAX_DAYS;i++) {
+    if(data.days[i].valid) count++;
+    else break;
+  }
+  return count;
+}
+
+static void weatherEditorialForecastStrip(int x,int y,int w,int h,int count,
+                                          int startIndex,
+                                          const WeatherInstanceConfig& cfg,
+                                          const WeatherCache& data) {
+  count=min(count,4);
+  if(count<1)return;
+  auto& d=DisplayCore::get();
+  const int cw=w/count;
+  const int labelH=max(22,h*24/100);
+  const int tempH=max(22,h*25/100);
+  const int iconH=max(20,h-labelH-tempH);
+  for(int i=0;i<count;i++) {
+    const int dayIndex=startIndex+i;
+    if(dayIndex>=data.dayCount)break;
+    const DayForecast& day=data.days[dayIndex];
+    const int xx=x+i*cw;
+    if(i)d.drawFastVLine(xx,y+5,max(1,h-10),Theme::ink());
+    char label[12]="--";
+    int yy=0,mm=0,dd=0;
+    if(parseYMDFromIso8601(day.dateYMD,yy,mm,dd))
+      strlcpy(label,weatherWeekdayNo(weekdayIndex(yy,mm,dd)),sizeof(label));
+    char range[32]={0};
+    weatherRangeShort(range,sizeof(range),day.loC,day.hiC,cfg.units);
+    weatherEditorialCentered(xx,y,cw,labelH,label,RemindEditorialFonts::dm18());
+    const int sz=min(min(cw-18,iconH-4),50);
+    if(sz>=18)ModuleIcons::drawWeatherIcon(xx+cw/2,y+labelH+iconH/2,sz,day.wmo);
+    weatherEditorialCentered(xx,y+labelH+iconH,cw,tempH,range,RemindEditorialFonts::dm18());
+  }
+}
+
+static void weatherEditorialForecastStack(int x,int y,int w,int h,int startIndex,
+                                          const WeatherInstanceConfig& cfg,
+                                          const WeatherCache& data) {
+  const int count=min(2,weatherForecastAvailable(data,startIndex));
+  if(count<1)return;
+  auto& d=DisplayCore::get();
+  const int rh=h/count;
+  for(int i=0;i<count;i++) {
+    const int dayIndex=startIndex+i;
+    const DayForecast& day=data.days[dayIndex];
+    const int yy0=y+i*rh;
+    if(i)d.drawFastHLine(x+5,yy0,max(1,w-10),Theme::ink());
+    char label[12]="--";
+    int yr=0,mo=0,da=0;
+    if(parseYMDFromIso8601(day.dateYMD,yr,mo,da))
+      strlcpy(label,weatherWeekdayNo(weekdayIndex(yr,mo,da)),sizeof(label));
+    char range[32]={0};
+    weatherRangeShort(range,sizeof(range),day.loC,day.hiC,cfg.units);
+    const int sz=min(38,rh-12);
+    if(sz>=18)ModuleIcons::drawWeatherIcon(x+24,yy0+rh/2,sz,day.wmo);
+    weatherEditorialCentered(x+48,yy0,max(1,w-48),rh/2,label,RemindEditorialFonts::dm18());
+    weatherEditorialCentered(x+48,yy0+rh/2,max(1,w-48),rh/2,range,RemindEditorialFonts::dm18());
+  }
+}
+
+static bool renderEditorialAdaptiveWeather(const Cell& c,
+                                           const WeatherInstanceConfig& cfg,
+                                           const WeatherCache& data) {
+  if(!data.valid || c.w<80 || c.h<70)return false;
+
+  const bool useTomorrow=shouldShowTomorrowForecast(data);
+  const DayForecast* primaryDay=(useTomorrow && data.dayCount>1)?&data.days[1]:nullptr;
+  const int primaryWmo=primaryDay?primaryDay->wmo:data.currentWmo;
+  const float primaryTemp=primaryDay?primaryDay->hiC:data.tempC;
+  const float primaryLo=primaryDay?primaryDay->loC:data.loC;
+  const float primaryHi=primaryDay?primaryDay->hiC:data.hiC;
+  const float primaryWind=primaryDay?primaryDay->windMaxMs:data.currentWindMs;
+  const float primaryWindDirection=primaryDay?NAN:data.currentWindDirection;
+  const float primaryPrecipMm=primaryDay?primaryDay->precipMm:data.precipMm;
+  const float primaryProbability=primaryDay?NAN:data.currentPrecipProbability;
+  const int forecastStart=useTomorrow?2:1;
+
+  char hero[18]={0};
+  formatTemp(hero,sizeof(hero),primaryTemp,cfg.units);
+  char range[32]={0};
+  weatherRangeShort(range,sizeof(range),primaryLo,primaryHi,cfg.units);
+  char wind[32]={0};
+  weatherWindShort(wind,sizeof(wind),primaryWind,primaryWindDirection,!useTomorrow);
+  char rain[32]={0};
+  weatherRainShort(rain,sizeof(rain),primaryProbability,primaryPrecipMm,primaryWmo);
+  const char* condition=weatherConditionNo(primaryWmo);
+
+  char insight[96]={0};
+  if(useTomorrow) strlcpy(insight,data.tomorrowInsight,sizeof(insight));
+  else buildWeatherInsight(insight,sizeof(insight),data);
+
+  const int minDim=min(c.w,c.h);
+  int pad=(int)lroundf(minDim*0.075f);
+  pad=max(10,min(24,pad));
+  const int x=c.x+pad,y=c.y+pad,w=c.w-2*pad,h=c.h-2*pad;
+  if(w<=0 || h<=0)return false;
+
+  if(c.h<=140) {
+    if(c.w<=240) {
+      int markerH=useTomorrow?18:0;
+      if(useTomorrow) weatherEditorialCentered(x,y,w,markerH,"I MORGEN",RemindEditorialFonts::dm18());
+      const int contentY=y+markerH;
+      const int contentH=max(1,h-markerH);
+      const int iconW=min(74,max(58,w*38/100));
+      const int tempX=x+iconW-4;
+      const int tempW=max(1,w-(tempX-x));
+      ModuleIcons::drawWeatherIcon(x+iconW/2,contentY+contentH/2,min(52,contentH-10),primaryWmo);
+      weatherEditorialHeroTemp(tempX,contentY,tempW,contentH,hero);
+      return true;
+    }
+
+    const int iconW=min(78,max(54,w/5));
+    const int tempW=min(128,max(82,w/4));
+    ModuleIcons::drawWeatherIcon(x+iconW/2,y+h/2,min(58,h-14),primaryWmo);
+    weatherEditorialHeroTemp(x+iconW,y,tempW,h,hero);
+    const int tx=x+iconW+tempW;
+    const int remain=max(1,w-iconW-tempW);
+    weatherEditorialCentered(tx,y,remain,h/2,useTomorrow?"I MORGEN":condition,
+                             remain>=170?RemindEditorialFonts::dm24():RemindEditorialFonts::dm18());
+    if(c.w>=560)weatherEditorialFacts(tx,y+h/2,remain,h/2,c.w>=760?3:2,range,wind,rain);
+    else if(remain>=80)weatherEditorialCentered(tx,y+h/2,remain,h/2,range,RemindEditorialFonts::dm18());
+    return true;
+  }
+
+  if(c.w<=240) {
+    if(c.h>=430) {
+      const int tempH=min(90,max(72,h*20/100));
+      const int iconH=min(100,max(76,h*22/100));
+      weatherEditorialHeroTemp(x,y,w,tempH,hero);
+      ModuleIcons::drawWeatherIcon(x+w/2,y+tempH+iconH/2,min(78,iconH-10),primaryWmo);
+      int cy=y+tempH+iconH+2;
+      const int condH=32;
+      weatherEditorialCentered(x,cy,w,condH,useTomorrow?"I MORGEN":condition,RemindEditorialFonts::dm18());
+      cy+=condH+4;
+      const int insightH=52;
+      if(insight[0])weatherEditorialWrapped(x,cy,w,insightH,insight,RemindEditorialFonts::dm18(),4);
+      cy+=insightH+2;
+      const int factH=34;
+      weatherEditorialFacts(x,cy,w,factH,1,range,wind,rain);
+      cy+=factH+4;
+      if(weatherForecastAvailable(data,forecastStart)>0) {
+        weatherEditorialRule(x,cy+5,w);
+        cy+=18;
+        weatherEditorialForecastStack(x,cy,w,max(1,y+h-cy),forecastStart,cfg,data);
+      }
+      return true;
+    }
+
+    if(c.h>=320) {
+      const int tempH=min(92,max(70,h*24/100));
+      const int iconH=min(96,max(72,h*22/100));
+      weatherEditorialHeroTemp(x,y,w,tempH,hero);
+      ModuleIcons::drawWeatherIcon(x+w/2,y+tempH+iconH/2,min(76,iconH-8),primaryWmo);
+      int cy=y+tempH+iconH+6;
+      const int condH=32;
+      weatherEditorialCentered(x,cy,w,condH,useTomorrow?"I MORGEN":condition,RemindEditorialFonts::dm18());
+      cy+=condH+6;
+      const int factH=34;
+      weatherEditorialFacts(x,cy,w,factH,1,range,wind,rain);
+      cy+=factH+6;
+      if(insight[0])weatherEditorialWrapped(x,cy,w,max(1,y+h-cy),insight,RemindEditorialFonts::dm18(),4);
+      return true;
+    }
+
+    const int tempH=min(96,max(60,h*22/100));
+    const int iconH=min(108,max(58,h*23/100));
+    weatherEditorialHeroTemp(x,y,w,tempH,hero);
+    ModuleIcons::drawWeatherIcon(x+w/2,y+tempH+iconH/2,min(84,iconH-8),primaryWmo);
+    int cy=y+tempH+iconH;
+    const int condH=40;
+    weatherEditorialCentered(x,cy,w,condH,useTomorrow?"I MORGEN":condition,RemindEditorialFonts::dm18());
+    cy+=condH;
+    if(y+h-cy>=28)weatherEditorialCentered(x,cy,w,y+h-cy,range,RemindEditorialFonts::dm18());
+    return true;
+  }
+
+  int forecastCount=0,forecastH=0;
+  if(c.h>=330) {
+    forecastCount=c.w>=560?4:3;
+    forecastCount=min(forecastCount,weatherForecastAvailable(data,forecastStart));
+    forecastH=forecastCount?min(112,max(88,h*27/100)):0;
+  }
+  const int gap=forecastCount?18:0;
+  const int bodyH=h-forecastH-gap;
+  if(bodyH<86)return false;
+
+  if(c.w>240 && c.w<520 && c.h>=430 && forecastCount) {
+    const int heroH=min(122,max(108,bodyH*40/100));
+    const int iconW=min(126,max(92,w*33/100));
+    ModuleIcons::drawWeatherIcon(x+iconW/2,y+heroH/2,min(84,heroH-18),primaryWmo);
+    weatherEditorialHeroTemp(x+iconW,y,max(1,w-iconW),heroH*58/100,hero);
+    weatherEditorialCentered(x+iconW,y+heroH*58/100,max(1,w-iconW),heroH*42/100,
+                             useTomorrow?"I MORGEN":condition,RemindEditorialFonts::dm18());
+    int cy=y+heroH+8;
+    const int insightH=46;
+    if(insight[0])weatherEditorialWrapped(x,cy,w,insightH,insight,RemindEditorialFonts::dm18(),4);
+    cy+=insightH+4;
+    weatherEditorialFacts(x,cy,w,30,1,range,wind,rain);
+    const int fy=y+h-forecastH;
+    weatherEditorialRule(x,fy-gap/2,w);
+    weatherEditorialForecastStrip(x,fy,w,forecastH,forecastCount,forecastStart,cfg,data);
+    return true;
+  }
+
+  const bool split=c.w>=520 && bodyH>=116;
+  if(split) {
+    const int heroW=(int)lroundf(w*0.46f);
+    const int infoX=x+heroW+12;
+    const int infoW=w-heroW-12;
+    const int infoBlockW=min(infoW,c.w>=720?290:250);
+    const int infoBlockX=infoX+max(0,(infoW-infoBlockW)/2);
+    const int iconH=max(54,bodyH*48/100);
+    const int tempH=bodyH-iconH;
+    ModuleIcons::drawWeatherIcon(x+heroW/2,y+iconH/2,min(108,iconH-12),primaryWmo);
+    weatherEditorialHeroTemp(x,y+iconH,heroW,tempH,hero);
+    const int condH=min(56,max(36,bodyH*25/100));
+    weatherEditorialCentered(infoBlockX,y,infoBlockW,condH,useTomorrow?"I MORGEN":condition,
+                             infoBlockW>=220?RemindEditorialFonts::dm24():RemindEditorialFonts::dm18());
+    int iy=y+condH;
+    int ir=bodyH-condH;
+    if(ir>=70 && insight[0]) {
+      const int insightH=ir>=116?ir-52:ir/2;
+      weatherEditorialWrapped(infoBlockX,iy,infoBlockW,insightH,insight,RemindEditorialFonts::dm18(),5);
+      iy+=insightH;
+      ir=bodyH-(iy-y);
+    }
+    if(ir>=34)weatherEditorialFacts(infoBlockX,iy,infoBlockW,ir,c.w>=720?3:2,range,wind,rain);
+  } else {
+    const int heroH=min(126,max(88,bodyH*58/100));
+    const int iconW=min(126,max(82,w*34/100));
+    ModuleIcons::drawWeatherIcon(x+iconW/2,y+heroH/2,min(84,heroH-12),primaryWmo);
+    weatherEditorialHeroTemp(x+iconW,y,max(1,w-iconW),heroH*62/100,hero);
+    weatherEditorialCentered(x+iconW,y+heroH*62/100,max(1,w-iconW),heroH*38/100,
+                             useTomorrow?"I MORGEN":condition,RemindEditorialFonts::dm18());
+    const int ly=y+heroH;
+    const int lh=bodyH-heroH;
+    if(lh>=44)weatherEditorialFacts(x,ly,w,lh,c.w>=380?3:2,range,wind,rain);
+  }
+
+  if(forecastCount) {
+    const int fy=y+h-forecastH;
+    weatherEditorialRule(x,fy-gap/2,w);
+    weatherEditorialForecastStrip(x,fy,w,forecastH,forecastCount,forecastStart,cfg,data);
+  }
+  return true;
+}
+
+static void renderAdaptiveWeather(const Cell& c,
+                                  const WeatherInstanceConfig& cfg,
+                                  const WeatherCache& data) {
+  if(renderEditorialAdaptiveWeather(c,cfg,data))return;
+  renderAdaptiveWeatherLegacy(c,cfg,data);
 }
 
 // -----------------------------------------------------------------------------
