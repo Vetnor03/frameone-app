@@ -17,6 +17,16 @@ static WebServer server(80);
 
 static String apSsid;
 
+static bool usbPresentNow() {
+#if defined(FRAME_IS_ALFRED_V1_2)
+  pinMode(HardwareProfile::kPgoodN, INPUT);
+  return digitalRead(HardwareProfile::kPgoodN) == LOW;
+#else
+  pinMode(HardwareProfile::kPowerSense, INPUT);
+  return digitalRead(HardwareProfile::kPowerSense) == HIGH;
+#endif
+}
+
 struct ScannedNetwork {
   String ssid;
   int32_t rssi;
@@ -252,6 +262,17 @@ void runBlocking() {
   server.begin();
 
   while (true) {
+    // Setup is charger-only. If USB is removed, immediately leave the captive
+    // portal so the normal boot path can enter passive shelf/battery sleep.
+    if (!usbPresentNow()) {
+      Serial.println("Provisioning: USB removed -> restart into passive battery state");
+      server.stop();
+      dnsServer.stop();
+      WiFi.softAPdisconnect(true);
+      delay(25);
+      ESP.restart();
+    }
+
     dnsServer.processNextRequest();
     server.handleClient();
     delay(5);
