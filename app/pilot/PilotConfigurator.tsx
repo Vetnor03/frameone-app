@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react'
 import Image from 'next/image'
 import { pilotCombinationPhoto } from '@/app/lib/pilotCombinationPhotos'
+import { defaultPilotPhotoAlignment, getPilotPhotoAlignment, type PilotPhotoAlignment } from '@/app/lib/pilotPhotoAlignment'
 import { pilotFrameNames, pilotMatteNames, type PilotFrameId, type PilotMatteId } from '@/app/lib/pilotSelection'
 
 type FrameOption = {
@@ -81,18 +82,39 @@ function IllustratedProductPreview({ frame, matte }: { frame: FrameOption; matte
   )
 }
 
+// Each image is a 1448×1086 JPG with a white background, but its outer-frame
+// margins vary. Sample a small canvas once on load to align the photographed
+// frame itself, not the full JPG. Source pixels are never edited or cropped.
+function measurePilotPhoto(image: HTMLImageElement): PilotPhotoAlignment {
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = 256
+    canvas.height = 192
+    const context = canvas.getContext('2d', { willReadFrequently: true })
+    if (!context) return defaultPilotPhotoAlignment
+    context.drawImage(image, 0, 0, canvas.width, canvas.height)
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height)
+    return getPilotPhotoAlignment(data, canvas.width, canvas.height)
+  } catch {
+    // A failed canvas read must never prevent the real photo from displaying.
+    return defaultPilotPhotoAlignment
+  }
+}
+
 function ProductPreview({ frame, matte }: { frame: FrameOption; matte: MatteOption }) {
   const photoSrc = pilotCombinationPhoto(frame.id, matte.id)
-  const [loadedPhotoSrc, setLoadedPhotoSrc] = useState<string | null>(null)
+  const [readyPhoto, setReadyPhoto] = useState<{ src: string; alignment: PilotPhotoAlignment } | null>(null)
   const [failedPhotoSrc, setFailedPhotoSrc] = useState<string | null>(null)
-  const photoReady = Boolean(photoSrc && photoSrc === loadedPhotoSrc && photoSrc !== failedPhotoSrc)
+  const photoReady = Boolean(photoSrc && readyPhoto?.src === photoSrc && failedPhotoSrc !== photoSrc)
+  const alignment = photoReady ? readyPhoto!.alignment : defaultPilotPhotoAlignment
 
   return (
     <div
-      className="relative mx-auto aspect-[4/3] w-full max-w-[340px] select-none sm:max-w-[560px] lg:max-w-[700px]"
+      className="relative mx-auto aspect-[4/3] w-full max-w-[340px] overflow-hidden bg-white select-none sm:max-w-[560px] lg:max-w-[700px]"
       aria-label={`${frame.name} frame with ${matte.name} matte`}
     >
-      {!photoReady ? <IllustratedProductPreview frame={frame} matte={matte} /> : null}
+      {/* Historical mattes have no photographs. Never flash this mock while a real JPG loads. */}
+      {!photoSrc ? <IllustratedProductPreview frame={frame} matte={matte} /> : null}
       {photoSrc && photoSrc !== failedPhotoSrc ? (
         <Image
           key={photoSrc}
@@ -100,11 +122,21 @@ function ProductPreview({ frame, matte }: { frame: FrameOption; matte: MatteOpti
           alt={`${frame.name} frame with ${matte.name} passepartout`}
           fill
           unoptimized
+          loading="eager"
           sizes="(min-width: 1024px) 700px, (min-width: 640px) 560px, 340px"
-          className={`object-contain ${photoReady ? 'opacity-100' : 'opacity-0'}`}
-          onLoad={() => setLoadedPhotoSrc(photoSrc)}
+          className={`object-contain transition-opacity duration-200 ${photoReady ? 'opacity-100' : 'opacity-0'}`}
+          style={{
+            transformOrigin: 'center',
+            transform: `translate(${alignment.offsetX}%, ${alignment.offsetY}%) scale(${alignment.scale})`,
+          }}
+          onLoad={(event) => setReadyPhoto({ src: photoSrc, alignment: measurePilotPhoto(event.currentTarget) })}
           onError={() => setFailedPhotoSrc(photoSrc)}
         />
+      ) : null}
+      {photoSrc && failedPhotoSrc === photoSrc ? (
+        <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-[12px] text-black/45" role="status">
+          Photograph temporarily unavailable
+        </div>
       ) : null}
     </div>
   )
