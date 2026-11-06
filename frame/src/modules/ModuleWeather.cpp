@@ -19,6 +19,7 @@
 #include "FreeSansBold12ptNO.h"
 #include "FreeSansBold18ptNO.h"
 #include "RemindEditorialFonts.h"
+#include "WeatherEditorialIllustrations.h"
 
 #define FONT_B9  (&FreeSans9pt8b)
 #define FONT_B12 (&FreeSansBold12pt8b)
@@ -2868,6 +2869,15 @@ static bool renderEditorialAdaptiveWeather(const Cell& c,
       ir=bodyH-(iy-y);
     }
     if(ir>=34)weatherEditorialFacts(infoBlockX,iy,infoBlockW,ir,c.w>=720?3:2,range,wind,rain);
+    if(WeatherEditorialIllustrations::allowedForCell(c)) {
+      const int artW=min(84,max(62,heroW*24/100));
+      const int artH=min(92,max(66,bodyH*38/100));
+      WeatherEditorialIllustrations::draw(
+        {x+5,y+bodyH-artH-2,artW,artH},
+        primaryWmo,
+        primaryWind
+      );
+    }
   } else {
     const int heroH=min(126,max(88,bodyH*58/100));
     const int iconW=min(126,max(82,w*34/100));
