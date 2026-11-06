@@ -242,10 +242,18 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
 
   async function submitOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!invitation || isLocked || submitting || demoMode) return
-    setSubmitting(true)
+    if (!invitation || isLocked || submitting) return
     setError('')
 
+    // The founder's demo exercises every screen without contacting the API.
+    // Production submissions always go through the invitation-validated POST below.
+    if (demoMode) {
+      setSubmittedEmail(invitation.email)
+      setSubmitted(true)
+      return
+    }
+
+    setSubmitting(true)
     const payload = { invite: inviteId, frameId, matteId }
 
     try {
@@ -352,16 +360,15 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
                   </div>
                 </div>
 
-                {demoMode ? <p className="mt-3 text-[11px] leading-4 text-black/50">Preview mode · Choose any combination. Only invited pilot testers can submit their selection.</p> : null}
+                {demoMode ? <p className="mt-3 text-[11px] leading-4 text-black/50">Demo mode · Try the full selection flow. No pilot order will be saved.</p> : null}
                 <div className="mt-3 flex items-center justify-between gap-2 border-t border-black/10 pt-3 sm:mt-4 sm:gap-3 sm:pt-4">
                   <p className="min-w-0 truncate text-[10px] text-black/50 sm:text-[12px]"><span className="font-medium text-black/75">Selected:</span> {frame.name} + {matte.name}</p>
                   <button
                     type="button"
                     onClick={() => setStep(2)}
-                    disabled={demoMode}
                     className="h-10 shrink-0 rounded-[10px] bg-[#1d1d1b] px-4 text-[11px] font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-45 focus:outline-none focus:ring-2 focus:ring-black/30 focus:ring-offset-2 sm:h-11 sm:rounded-[11px] sm:px-5 sm:text-[12px]"
                   >
-                    {demoMode ? 'Preview only' : 'Continue'}
+                    Continue
                   </button>
                 </div>
               </>
@@ -383,10 +390,11 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
                   <div className="flex items-start justify-between gap-4 py-3"><dt className="text-black/50">E-post</dt><dd className="min-w-0 truncate text-right font-medium">{invitation.email}</dd></div>
                 </dl>
                 <p className="mt-5 text-[12px] leading-5 text-black/50">Dette er et kostnadsfritt lån i pilottesten, ikke et kjøp. Enheten og rammen skal returneres ved forespørsel eller når testen avsluttes.</p>
+                {demoMode ? <p className="mt-3 rounded-[9px] border border-black/10 bg-white/60 px-3 py-2 text-[12px] leading-5 text-black/65">Testmodus: Du kan bekrefte for å se siste steg, men ingenting lagres.</p> : null}
                 {error ? <p role="alert" className="mt-3 rounded-[9px] bg-red-950/5 px-3 py-2 text-[12px] text-red-950/75">{error}</p> : null}
                 <div className="mt-5 flex justify-end border-t border-black/10 pt-4">
                   <button type="submit" disabled={submitting} className="h-11 shrink-0 rounded-[11px] bg-[#1d1d1b] px-5 text-[12px] font-semibold text-white transition hover:bg-black disabled:cursor-wait disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-black/30 focus:ring-offset-2">
-                    {submitting ? 'Lagrer…' : 'Bekreft rammevalget'}
+                    {demoMode ? 'Test bekreftelse' : submitting ? 'Lagrer…' : 'Bekreft rammevalget'}
                   </button>
                 </div>
               </form>
@@ -395,9 +403,9 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
             {submitted ? (
               <div className="flex min-h-[430px] flex-col justify-center py-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1d1d1b] text-[18px] font-semibold text-white">✓</div>
-                <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">Selection saved</p>
-                <h2 className="mt-1 text-[28px] font-medium tracking-[-0.035em]">Your frame is selected.</h2>
-                <p className="mt-3 max-w-[32rem] text-[14px] leading-6 text-black/55">We saved your choice of frame and passepartout for your three-week pilot loan. Your RE:MIND prototype will be returned after the test. We will contact you with the next steps.</p>
+                <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">{demoMode ? 'Demo complete · Nothing saved' : 'Selection saved'}</p>
+                <h2 className="mt-1 text-[28px] font-medium tracking-[-0.035em]">{demoMode ? 'This is the confirmation screen.' : 'Your frame is selected.'}</h2>
+                <p className="mt-3 max-w-[32rem] text-[14px] leading-6 text-black/55">{demoMode ? 'This is a preview of the final step. No pilot order has been created or changed. You can try another combination below.' : 'We saved your choice of frame and passepartout for your three-week pilot loan. Your RE:MIND prototype will be returned after the test. We will contact you with the next steps.'}</p>
 
                 <dl className="mt-6 divide-y divide-black/10 border-y border-black/10 text-[13px]">
                   <div className="flex justify-between gap-5 py-3"><dt className="text-black/40">Frame</dt><dd className="text-right font-medium">{frame.name}</dd></div>
@@ -416,7 +424,7 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
                     }}
                     className="mt-5 self-start text-[12px] font-medium text-black/45 underline decoration-black/20 underline-offset-4 hover:text-black/70"
                   >
-                    Change my selection
+                    {demoMode ? 'Try another combination' : 'Change my selection'}
                   </button>
                 ) : null}
               </div>
