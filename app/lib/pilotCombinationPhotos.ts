@@ -1,5 +1,4 @@
 import {
-  validSelectablePilotMatte,
   type PilotFrameId,
   type PilotMatteId,
   type SelectablePilotMatteId,
@@ -32,5 +31,6 @@ export const pilotCombinationPhotos = {
 } satisfies Record<PilotFrameId, Record<SelectablePilotMatteId, string>>
 
 export function pilotCombinationPhoto(frameId: PilotFrameId, matteId: PilotMatteId): string | null {
-  return validSelectablePilotMatte(matteId) ? pilotCombinationPhotos[frameId][matteId] : null
+  const photos = pilotCombinationPhotos[frameId] as Partial<Record<PilotMatteId, string>>
+  return photos[matteId] ?? null
 }
