@@ -78,6 +78,10 @@ static const uint8_t WIFI_FAILED_WAKE_CYCLES_BEFORE_OFFLINE = 3;
 static const uint32_t BATTERY_AWAKE_SAFETY_INTERVAL_MS = 30000;
 static const int OTA_MIN_BATTERY_PERCENT = 30;
 static const float OTA_MIN_BATTERY_V = 3.65f;
+// Do not ask the e-paper rail for a full refresh while the charger is still
+// rescuing a cell below the normal empty point. Preserve the existing image
+// until the cell has at least reached this level.
+static const float RECOVERY_DISPLAY_MIN_V = 3.35f;
 
 // Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
 RTC_DATA_ATTR static time_t g_nextScheduledWake = 0;
@@ -283,10 +287,25 @@ static void shutdownDisplay() {
 }
 static void prepareDisplayForSleep() {
   shutdownDisplay();
-  if (!DisplayCore::prepareForDeepSleep()) {
-    Serial.println("EPD_PWR is not safely held LOW; deep sleep cancelled");
-    while (true) delay(1000);
+
+  // Never convert an e-paper hold fault into an infinite awake battery drain.
+  // Retry the pin/hold sequence a few times; if it still cannot be verified,
+  // shut the radio down and continue into deep sleep as the safer failure mode.
+  for (uint8_t attempt = 1; attempt <= 3; ++attempt) {
+    if (DisplayCore::prepareForDeepSleep()) return;
+    Serial.printf(
+      "EPD sleep preparation failed (%u/3); retrying safe LOW hold\n",
+      (unsigned int)attempt
+    );
+    delay(25);
   }
+
+  Serial.println(
+    "CRITICAL: EPD LOW hold could not be verified; forcing radio off and "
+    "continuing to deep sleep instead of remaining awake"
+  );
+  WiFi.disconnect(true, false);
+  WiFi.mode(WIFI_OFF);
 }
 
 static const uint64_t PWR_SENSE_WAKE_MASK = (1ULL << POWER_SENSE_PIN);
@@ -644,11 +663,17 @@ static void showRecoveryChargingAndSleep(
   // E-paper retains the image with zero panel power, so repaint only on entry.
   // The one-minute timer wakes only to sample the battery.
   if (!g_recoveryChargingScreenDisplayed) {
-    Theme::set(THEME_DARK);
-    ensureDisplay();
-    DisplayCore::drawChargingRecoveryScreen();
-    shutdownDisplay();
-    g_recoveryChargingScreenDisplayed = true;
+    if (isnan(batt.rawVoltage) || batt.rawVoltage < RECOVERY_DISPLAY_MIN_V) {
+      Serial.println(
+        "Recovery cell still below display-safe voltage; preserving existing e-paper image"
+      );
+    } else {
+      Theme::set(THEME_DARK);
+      ensureDisplay();
+      DisplayCore::drawChargingRecoveryScreen();
+      shutdownDisplay();
+      g_recoveryChargingScreenDisplayed = true;
+    }
   } else {
     Serial.println("Recovery charging screen already displayed; skipping e-paper refresh");
   }
@@ -779,6 +804,14 @@ static PairingResult ensurePairedNoReboot(bool forceFreshPairCode = false) {
     return PAIRING_PAIRED;
   }
 
+  // Initial setup/pairing is charger-only. This prevents any backend timeout
+  // or abandoned pairing window from becoming a battery-powered awake state.
+  const PowerSenseDebug initialPairingPower = readPowerSenseDebug();
+  if (!initialPairingPower.usbPresent) {
+    Serial.println("Pairing requires USB power -> passive pairing shelf");
+    return PAIRING_EXPIRED;
+  }
+
   Serial.print("device_id: ");
   Serial.println(DeviceIdentity::getDeviceId());
 
@@ -797,6 +830,11 @@ static PairingResult ensurePairedNoReboot(bool forceFreshPairCode = false) {
     }
 
     delay(500);
+    const PowerSenseDebug retryPairingPower = readPowerSenseDebug();
+    if (!retryPairingPower.usbPresent) {
+      Serial.println("Pairing: USB removed during initial status checks");
+      return PAIRING_EXPIRED;
+    }
   }
 
   if (forceFreshPairCode) {
@@ -830,10 +868,8 @@ static PairingResult ensurePairedNoReboot(bool forceFreshPairCode = false) {
     // even though the normal scheduler is not running during this loop.
     const PowerSenseDebug pairingPwr = readPowerSenseDebug();
     if (!pairingPwr.usbPresent) {
-      BatteryState pairingBatt{};
-      if (!enforceBatteryCutoffDuringAwake("pairing", pairingBatt, pairingPwr)) {
-        return PAIRING_FAILED;
-      }
+      Serial.println("Pairing: USB removed -> return to passive pairing shelf");
+      return PAIRING_EXPIRED;
     }
 
     PairStatusResponse poll;
