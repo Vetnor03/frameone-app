@@ -78,6 +78,11 @@ static const uint8_t WIFI_FAILED_WAKE_CYCLES_BEFORE_OFFLINE = 3;
 static const uint32_t BATTERY_AWAKE_SAFETY_INTERVAL_MS = 30000;
 static const int OTA_MIN_BATTERY_PERCENT = 30;
 static const float OTA_MIN_BATTERY_V = 3.65f;
+// Do not ask the e-paper rail for a full refresh while the charger is still
+// rescuing a cell below the normal empty point. Preserve the existing image
+// until the cell has at least reached this level.
+static const float RECOVERY_DISPLAY_MIN_V = 3.35f;
+static const float RECHARGE_DISPLAY_MIN_V = 3.20f;
 
 // Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
 RTC_DATA_ATTR static time_t g_nextScheduledWake = 0;
@@ -283,10 +288,25 @@ static void shutdownDisplay() {
 }
 static void prepareDisplayForSleep() {
   shutdownDisplay();
-  if (!DisplayCore::prepareForDeepSleep()) {
-    Serial.println("EPD_PWR is not safely held LOW; deep sleep cancelled");
-    while (true) delay(1000);
+
+  // Never convert an e-paper hold fault into an infinite awake battery drain.
+  // Retry the pin/hold sequence a few times; if it still cannot be verified,
+  // shut the radio down and continue into deep sleep as the safer failure mode.
+  for (uint8_t attempt = 1; attempt <= 3; ++attempt) {
+    if (DisplayCore::prepareForDeepSleep()) return;
+    Serial.printf(
+      "EPD sleep preparation failed (%u/3); retrying safe LOW hold\n",
+      (unsigned int)attempt
+    );
+    delay(25);
   }
+
+  Serial.println(
+    "CRITICAL: EPD LOW hold could not be verified; forcing radio off and "
+    "continuing to deep sleep instead of remaining awake"
+  );
+  WiFi.disconnect(true, false);
+  WiFi.mode(WIFI_OFF);
 }
 
 static const uint64_t PWR_SENSE_WAKE_MASK = (1ULL << POWER_SENSE_PIN);
@@ -626,10 +646,20 @@ static void showRechargeAndSleep(const BatteryState& batt, const PowerSenseDebug
   logPowerSenseDebug(batt, pwr);
 
   g_recoveryChargingScreenDisplayed = false;
-  Theme::set(THEME_DARK);
-  ensureDisplay();
-  DisplayCore::drawRechargeScreen();
-  shutdownDisplay();
+
+  // A cosmetic "Battery empty" refresh is useful near the normal cutoff, but
+  // must never deepen an already severe/unknown discharge. E-paper keeps the
+  // previous image without power, so below this floor we preserve it and sleep.
+  if (!isnan(batt.rawVoltage) && batt.rawVoltage >= RECHARGE_DISPLAY_MIN_V) {
+    Theme::set(THEME_DARK);
+    ensureDisplay();
+    DisplayCore::drawRechargeScreen();
+    shutdownDisplay();
+  } else {
+    Serial.println(
+      "Battery too low/unknown for recharge-screen refresh; preserving existing e-paper image"
+    );
+  }
 
   goToRechargeSleep(pwr.usbPresent);
 }
@@ -644,11 +674,17 @@ static void showRecoveryChargingAndSleep(
   // E-paper retains the image with zero panel power, so repaint only on entry.
   // The one-minute timer wakes only to sample the battery.
   if (!g_recoveryChargingScreenDisplayed) {
-    Theme::set(THEME_DARK);
-    ensureDisplay();
-    DisplayCore::drawChargingRecoveryScreen();
-    shutdownDisplay();
-    g_recoveryChargingScreenDisplayed = true;
+    if (isnan(batt.rawVoltage) || batt.rawVoltage < RECOVERY_DISPLAY_MIN_V) {
+      Serial.println(
+        "Recovery cell still below display-safe voltage; preserving existing e-paper image"
+      );
+    } else {
+      Theme::set(THEME_DARK);
+      ensureDisplay();
+      DisplayCore::drawChargingRecoveryScreen();
+      shutdownDisplay();
+      g_recoveryChargingScreenDisplayed = true;
+    }
   } else {
     Serial.println("Recovery charging screen already displayed; skipping e-paper refresh");
   }
@@ -661,20 +697,25 @@ static bool enforceBatteryCutoffDuringAwake(
   BatteryState& batt,
   const PowerSenseDebug& pwr
 ) {
-  if (pwr.usbPresent) return true;
+  // Sample on BOTH battery and USB. A weak/failed charger can leave PGOOD_N
+  // asserted while the cell is actually discharging, and a gauge failure must
+  // never be hidden just because USB is believed present.
+  batt = BatteryManager::readAndUpdate(pwr.usbPresent);
+  if (!batt.requiresRecharge && !batt.recoveryCharging) return true;
 
-  batt = BatteryManager::readAndUpdate(false);
-  if (!batt.requiresRecharge) return true;
-
-  Serial.print("🔋 Battery safety watchdog: cutoff reached during ");
+  Serial.print("🔋 Battery safety watchdog: protection reached during ");
   Serial.println(context ? context : "awake operation");
   BatteryManager::logState("safety-cutoff", batt);
 
   // Stop the radio before the display/sleep transition so no background scan
-  // or association can continue below the cutoff.
+  // or association can compete with recovery.
   WiFi.disconnect(true, false);
   WiFi.mode(WIFI_OFF);
-  showRechargeAndSleep(batt, pwr);
+  if (batt.recoveryCharging) {
+    showRecoveryChargingAndSleep(batt, pwr);
+  } else {
+    showRechargeAndSleep(batt, pwr);
+  }
   return false;
 }
 
@@ -779,6 +820,14 @@ static PairingResult ensurePairedNoReboot(bool forceFreshPairCode = false) {
     return PAIRING_PAIRED;
   }
 
+  // Initial setup/pairing is charger-only. This prevents any backend timeout
+  // or abandoned pairing window from becoming a battery-powered awake state.
+  const PowerSenseDebug initialPairingPower = readPowerSenseDebug();
+  if (!initialPairingPower.usbPresent) {
+    Serial.println("Pairing requires USB power -> passive pairing shelf");
+    return PAIRING_EXPIRED;
+  }
+
   Serial.print("device_id: ");
   Serial.println(DeviceIdentity::getDeviceId());
 
@@ -797,6 +846,11 @@ static PairingResult ensurePairedNoReboot(bool forceFreshPairCode = false) {
     }
 
     delay(500);
+    const PowerSenseDebug retryPairingPower = readPowerSenseDebug();
+    if (!retryPairingPower.usbPresent) {
+      Serial.println("Pairing: USB removed during initial status checks");
+      return PAIRING_EXPIRED;
+    }
   }
 
   if (forceFreshPairCode) {
@@ -830,10 +884,8 @@ static PairingResult ensurePairedNoReboot(bool forceFreshPairCode = false) {
     // even though the normal scheduler is not running during this loop.
     const PowerSenseDebug pairingPwr = readPowerSenseDebug();
     if (!pairingPwr.usbPresent) {
-      BatteryState pairingBatt{};
-      if (!enforceBatteryCutoffDuringAwake("pairing", pairingBatt, pairingPwr)) {
-        return PAIRING_FAILED;
-      }
+      Serial.println("Pairing: USB removed -> return to passive pairing shelf");
+      return PAIRING_EXPIRED;
     }
 
     PairStatusResponse poll;
@@ -1350,13 +1402,14 @@ static InteractiveModeResult runInteractiveMode(
   while (true) {
     // Independent safety watchdog: even if Wi-Fi is healthy and the connected
     // idle loop runs for hours, the battery cutoff is still enforced.
-    if (!pwr.usbPresent &&
-        (uint32_t)(millis() - lastBatterySafetyCheckAtMs) >= BATTERY_AWAKE_SAFETY_INTERVAL_MS) {
+    if ((uint32_t)(millis() - lastBatterySafetyCheckAtMs) >= BATTERY_AWAKE_SAFETY_INTERVAL_MS) {
       const PowerSenseDebug safetyPwr = readPowerSenseDebug();
-      if (!safetyPwr.usbPresent &&
-          !enforceBatteryCutoffDuringAwake("interactive mode", batt, safetyPwr)) {
+      if (!enforceBatteryCutoffDuringAwake("interactive mode", batt, safetyPwr)) {
         return INTERACTIVE_FINISHED;
       }
+      // Keep the loop's power-source state synchronized with the watchdog
+      // sample so a missed/unstable edge cannot leave stale USB assumptions.
+      if (safetyPwr.stable) pwr = safetyPwr;
       lastBatterySafetyCheckAtMs = millis();
     }
 
@@ -1791,6 +1844,31 @@ void setup() {
       Serial.println("LiveUpdate: startup reconnect failed on USB; retrying while powered");
       delay(REALTIME_FAILURE_BACKOFF_MS);
       if (WiFiManagerV2::connectSaved(12000)) break;
+
+      // Never trust the boot-time USB sample forever. If the cable is removed
+      // during this persistent USB retry path, immediately switch to the
+      // bounded battery reconnect policy. Also catch a weak/failed charger
+      // whose PGOOD_N remains asserted while the cell falls into recovery.
+      const PowerSenseDebug retryPower = readPowerSenseDebug();
+      pwrEarly = retryPower;
+      battEarly = BatteryManager::readAndUpdate(pwrEarly.usbPresent);
+
+      if (battEarly.requiresRecharge) {
+        showRechargeAndSleep(battEarly, pwrEarly);
+        return;
+      }
+      if (battEarly.recoveryCharging) {
+        showRecoveryChargingAndSleep(battEarly, pwrEarly);
+        return;
+      }
+      if (!pwrEarly.usbPresent) {
+        Serial.println("Startup reconnect: USB removed -> switch to bounded battery Wi-Fi policy");
+        if (!connectSavedBatteryBounded()) {
+          sleepAfterBatteryWifiFailure();
+          return;
+        }
+        break;
+      }
     }
 
     if (WiFi.status() != WL_CONNECTED) {
