@@ -13,4 +13,7 @@ void invalidateScheduled(const String& modulesCsv);
 // multi-instance: "surf" or "surf:2"
 void render(const Cell& c, const String& moduleName);
 
+// Standalone physical-QA helper. This QA branch is never merged.
+void seedPhysicalQa();
+
 }
