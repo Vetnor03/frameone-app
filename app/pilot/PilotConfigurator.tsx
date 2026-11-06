@@ -128,6 +128,12 @@ function ProductPreview({ frame, matte }: { frame: FrameOption; matte: MatteOpti
           style={{
             transformOrigin: 'center',
             transform: `translate(${alignment.offsetX}%, ${alignment.offsetY}%) scale(${alignment.scale})`,
+            // Subtle browser-only colour lift. Keep neutrals and the screen white
+            // natural, while giving the red and green passepartouts extra depth.
+            // The original JPGs and geometry remain completely unchanged.
+            filter: matte.id === 'green' || matte.id === 'sanguine'
+              ? 'saturate(1.18) contrast(1.04)'
+              : 'saturate(1.07) contrast(1.04)',
           }}
           onLoad={(event) => setReadyPhoto({ src: photoSrc, alignment: measurePilotPhoto(event.currentTarget) })}
           onError={() => setFailedPhotoSrc(photoSrc)}
