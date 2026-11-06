@@ -1,4 +1,3 @@
-import { Resend } from 'resend'
 import { pilotCombinationPhoto } from '@/app/lib/pilotCombinationPhotos'
 import {
   pilotFrameNames,
@@ -96,15 +95,24 @@ export async function sendPilotSelectionConfirmationEmail({
   if (!apiKey) return { sent: false, resendId: null }
   const { subject, html, text } = buildPilotSelectionConfirmationEmail({ fullName, frameId, matteId, testMode })
   try {
-    const { data, error } = await new Resend(apiKey).emails.send(
-      { from: SENDER, to: [email], replyTo: REPLY_TO, subject, text, html },
-      { idempotencyKey },
-    )
-    if (error || !data?.id) {
-      console.error('[pilot-selection-email] Provider failed to send.', { code: error?.name })
+    // Resend API's native Idempotency-Key header avoids duplicate test emails.
+    // This project's pinned resend SDK typing does not expose the second send option.
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + apiKey,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify({ from: SENDER, to: [email], reply_to: REPLY_TO, subject, text, html }),
+      cache: 'no-store',
+    })
+    const result = await response.json().catch(() => null) as { id?: string; name?: string } | null
+    if (!response.ok || !result?.id) {
+      console.error('[pilot-selection-email] Provider failed to send.', { status: response.status, code: result?.name })
       return { sent: false, resendId: null }
     }
-    return { sent: true, resendId: data.id }
+    return { sent: true, resendId: result.id }
   } catch (error) {
     console.error('[pilot-selection-email] Unexpected send failure.', { error })
     return { sent: false, resendId: null }
