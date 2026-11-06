@@ -13,8 +13,8 @@ export const metadata: Metadata = {
 export default async function SelectedPilotPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ invite?: string; demo?: string }>
+  searchParams?: Promise<{ invite?: string; demo?: string; test_key?: string }>
 }) {
   const params = await searchParams
-  return <PilotConfigurator inviteId={typeof params?.invite === 'string' ? params.invite : ''} demoMode={params?.demo === '1'} />
+  return <PilotConfigurator inviteId={typeof params?.invite === 'string' ? params.invite : ''} demoMode={params?.demo === '1'} testKey={params?.demo === '1' && typeof params?.test_key === 'string' ? params.test_key : ''} />
 }
