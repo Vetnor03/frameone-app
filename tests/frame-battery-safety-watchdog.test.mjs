@@ -5,12 +5,19 @@ import test from 'node:test'
 const firmware = await readFile('frame/src/frame_v2.5.1.ino', 'utf8')
 const provisioning = await readFile('frame/src/device/ProvisioningPortal.cpp', 'utf8')
 
-test('long-running interactive mode independently rechecks battery every 30 seconds', () => {
+test('long-running interactive mode independently rechecks battery every 30 seconds on either power source', () => {
   assert.match(firmware, /BATTERY_AWAKE_SAFETY_INTERVAL_MS\s*=\s*30000/)
   assert.match(
     firmware,
     /while \(true\) \{[\s\S]*millis\(\) - lastBatterySafetyCheckAtMs[\s\S]*enforceBatteryCutoffDuringAwake\("interactive mode"/,
   )
+  const watchdog = firmware.slice(
+    firmware.indexOf('static bool enforceBatteryCutoffDuringAwake'),
+    firmware.indexOf('// --------------------------------------\n// Device status post', firmware.indexOf('static bool enforceBatteryCutoffDuringAwake')),
+  )
+  assert.match(watchdog, /BatteryManager::readAndUpdate\(pwr\.usbPresent\)/)
+  assert.match(watchdog, /batt\.recoveryCharging/)
+  assert.doesNotMatch(watchdog, /if \(pwr\.usbPresent\) return true/)
 })
 
 test('awake battery cutoff shuts radio down before recharge sleep', () => {
@@ -48,4 +55,17 @@ test('OTA is deferred on battery without a healthy reserve', () => {
     /!pwr\.usbPresent[\s\S]*batt\.percent < OTA_MIN_BATTERY_PERCENT[\s\S]*batt\.rawVoltage < OTA_MIN_BATTERY_V[\s\S]*OTA deferred/,
   )
   assert.match(firmware, /runOtaCheckIfDue\(batt, pwr\)/)
+})
+
+
+test('startup USB reconnect loop re-samples power and switches to bounded battery policy after unplug', () => {
+  const start = firmware.indexOf('while (pwrEarly.usbPresent && pairedOperationalFrame)')
+  const end = firmware.indexOf('if (WiFi.status() != WL_CONNECTED)', start)
+  const loop = firmware.slice(start, end)
+  assert.match(loop, /readPowerSenseDebug\(\)/)
+  assert.match(loop, /BatteryManager::readAndUpdate\(pwrEarly\.usbPresent\)/)
+  assert.match(loop, /battEarly\.recoveryCharging/)
+  assert.match(loop, /Startup reconnect: USB removed -> switch to bounded battery Wi-Fi policy/)
+  assert.match(loop, /connectSavedBatteryBounded\(\)/)
+  assert.match(loop, /sleepAfterBatteryWifiFailure\(\)/)
 })
