@@ -1,7 +1,7 @@
-import {
-  type PilotFrameId,
-  type PilotMatteId,
-  type SelectablePilotMatteId,
+import type {
+  PilotFrameId,
+  PilotMatteId,
+  SelectablePilotMatteId,
 } from './pilotSelection'
 
 // Exact case-sensitive filenames under public/pilot-materials/combinations/.
