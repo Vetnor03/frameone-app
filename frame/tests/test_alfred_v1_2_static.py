@@ -21,7 +21,7 @@ def test_hardware_profile_exact_mapping_and_s3_autoselection():
         assert value in alfred_branch(profile, "#if defined(FRAME_IS_ALFRED_V1_2)")
     assert "19" not in profile and "20" not in profile
 
-def test_gauge_is_transactional_retried_and_non_destructive():
+def test_gauge_is_transactional_retried_and_fails_safe():
     source = text("src/device/BatteryManager.cpp")
     assert "rawVCell * 78.125e-6f" in source
     assert "rawSoc / 256.0f" in source
@@ -29,7 +29,9 @@ def test_gauge_is_transactional_retried_and_non_destructive():
     assert "static bool readMax17048Register" in source
     assert "if (!readMax17048Sample(sample))" in source
     assert "retaining previous valid battery state" in source
-    assert "retained.requiresRecharge = rtcStateValid()" in source
+    assert "MAX17048 unavailable -> entering fail-safe battery protection" in source
+    assert "retained.requiresRecharge = !usbPresent" in source
+    assert "retained.recoveryCharging = usbPresent" in source
     assert "retained.percent = rtcStateValid() ? g_batteryRtc.displayedPercent : -1" in source
     assert "const int stablePercent = stabilizeAlfredSoc(g_max17048Soc)" in source
     assert "ALFRED_SOC_HYSTERESIS = 0.75f" in source
@@ -136,7 +138,8 @@ def test_alfred_calibration_and_low_voltage_logic_are_isolated():
         endif_at = source.find("#endif", call_at)
         assert guard_at < call_at < endif_at
     assert "smoothedVoltage <= RECHARGE_SHUTDOWN_V" in source
-    assert "lowVoltageCount >= ALFRED_LOW_VOLTAGE_SAMPLES" in source
+    assert "rawVoltage <= RECHARGE_SHUTDOWN_V" in source
+    assert "g_batteryRtc.lowVoltageCount = ALFRED_LOW_VOLTAGE_SAMPLES" in source
     assert "rawVoltage <= ALFRED_EMERGENCY_V" in source
     assert "smoothedVoltage >= RECHARGE_RECOVERY_V" in source
 
