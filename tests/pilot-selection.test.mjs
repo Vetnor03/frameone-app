@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
   limitedPilotMattes,
   pilotFrameNames,
@@ -56,4 +57,27 @@ test('only unguessable UUID application IDs are structurally valid invites', () 
   for (const input of [null, undefined, '', 'example@domain.no', 'selected', '123', '1c616c24-1937-4880-8192-629540b6576x']) {
     assert.equal(validPilotInvitation(input), false)
   }
+})
+
+test('pilot invitation becomes unusable immediately after first saved order', () => {
+  const api = readFileSync(new URL('../app/api/pilot/orders/route.ts', import.meta.url), 'utf8')
+  // GET must close used invitations before returning private order details.
+  assert.match(api, /if \(order\) \{[\s\S]*?status: 410/)
+  // POST must also reject any existing order, regardless of fulfilment status.
+  assert.match(api, /if \(existingOrder\) \{[\s\S]*?status: 409/)
+  // UNIQUE(email) guarantees that concurrent submissions cannot replace each other.
+  assert.match(api, /\.insert\(\{/)
+  assert.doesNotMatch(api, /\.upsert\(\{/)
+  assert.match(api, /error\.code === '23505'/)
+  assert.match(api, /\.eq\('status', 'selected'\)/)
+  assert.match(api, /\.from\('pilot_confirmations'\)/)
+})
+
+test('saved pilot choices cannot be changed from the confirmation UI', () => {
+  const ui = readFileSync(new URL('../app/pilot/PilotConfigurator.tsx', import.meta.url), 'utf8')
+  assert.doesNotMatch(ui, /Try another combination/)
+  assert.doesNotMatch(ui, /Change my selection/)
+  assert.match(ui, /response\.status === 410/)
+  assert.match(ui, /response\.status === 409/)
+  assert.match(ui, /setSubmitted\(true\)/)
 })
