@@ -1,3 +1,4 @@
+#define REMIND_USB_SURF_ADAPTIVE_TEST 1
 #include "Config.h"
 #include "Types.h"
 #include "BackendApi.h"
@@ -1646,6 +1647,108 @@ static InteractiveModeResult runInteractiveMode(
   }
 }
 
+
+#if REMIND_USB_SURF_ADAPTIVE_TEST
+static int g_surfQaSelection = 1;
+static bool g_surfQaDark = false;
+static String g_surfQaSerialLine;
+
+static const char* surfQaSizeName(CellSize size) {
+  switch (size) {
+    case CELL_SMALL: return "LOCKED SMALL";
+    case CELL_MEDIUM: return "LOCKED MEDIUM";
+    case CELL_LARGE: return "LOCKED LARGE";
+    case CELL_XL: return "LOCKED XL";
+    case CELL_ADAPTIVE: return "ADAPTIVE";
+    default: return "?";
+  }
+}
+
+static Cell surfQaCellForSelection(int selection) {
+  if (selection < 1) selection = 1;
+  if (selection > 16) selection = 16;
+  const int zero = selection - 1;
+  const uint8_t colSpan = (uint8_t)(zero / 4 + 1);
+  const uint8_t rowSpan = (uint8_t)(zero % 4 + 1);
+  const CellSize size = Layout::cellSizeForGeometry(colSpan, rowSpan);
+  return Cell{0, 0, (int)colSpan * 200, (int)rowSpan * 120, 0,
+              0, 0, colSpan, rowSpan, size};
+}
+
+static void surfQaDrawGuideOutside(const Cell& active) {
+  auto& d = DisplayCore::get();
+  const uint16_t ink = Theme::ink();
+  const uint16_t paper = Theme::paper();
+  for (int x = 200; x < 800; x += 200) d.drawFastVLine(x, 0, 480, ink);
+  for (int y = 120; y < 480; y += 120) d.drawFastHLine(0, y, 800, ink);
+  d.fillRect(active.x, active.y, active.w, active.h, paper);
+}
+
+static void surfQaRenderSelection() {
+  const Cell cell = surfQaCellForSelection(g_surfQaSelection);
+  Theme::set(g_surfQaDark ? THEME_DARK : THEME_LIGHT);
+  ModuleSurf::seedPhysicalQa();
+
+  DisplayCore::begin();
+  DisplayCore::beginFrameUpdate();
+  do {
+    DisplayCore::fillThemeBackground();
+    surfQaDrawGuideOutside(cell);
+    ModuleSurf::render(cell, "surf:1");
+  } while (DisplayCore::nextFrameUpdate());
+  DisplayCore::end();
+
+  Serial.printf("SURF QA %d/16 -> %ux%u (%dx%d px) | %s | %s\n",
+                g_surfQaSelection,
+                (unsigned)cell.colSpan, (unsigned)cell.rowSpan,
+                cell.w, cell.h,
+                g_surfQaDark ? "DARK" : "LIGHT",
+                surfQaSizeName(cell.size));
+  if (cell.size == CELL_ADAPTIVE)
+    Serial.println("ADAPTIVE: judge this in-between geometry.");
+  else
+    Serial.println("LOCKED ANCHOR: existing renderer, unchanged.");
+  Serial.println("Commands: 1-16 | L | D | T | N | P");
+}
+
+static void surfQaApplyCommand(String command) {
+  command.trim();
+  if (!command.length()) return;
+  command.toUpperCase();
+  if (command == "L") { g_surfQaDark = false; surfQaRenderSelection(); return; }
+  if (command == "D") { g_surfQaDark = true; surfQaRenderSelection(); return; }
+  if (command == "T") { g_surfQaDark = !g_surfQaDark; surfQaRenderSelection(); return; }
+  if (command == "N") { g_surfQaSelection = g_surfQaSelection >= 16 ? 1 : g_surfQaSelection + 1; surfQaRenderSelection(); return; }
+  if (command == "P") { g_surfQaSelection = g_surfQaSelection <= 1 ? 16 : g_surfQaSelection - 1; surfQaRenderSelection(); return; }
+  bool allDigits = true;
+  for (size_t i = 0; i < command.length(); ++i)
+    if (command[i] < '0' || command[i] > '9') { allDigits = false; break; }
+  if (allDigits) {
+    const int selection = command.toInt();
+    if (selection >= 1 && selection <= 16) {
+      g_surfQaSelection = selection;
+      surfQaRenderSelection();
+    }
+  }
+}
+
+static void surfQaSerialLoop() {
+  while (Serial.available() > 0) {
+    const char ch = (char)Serial.read();
+    if (ch == '\r' || ch == '\n') {
+      if (g_surfQaSerialLine.length()) {
+        const String command = g_surfQaSerialLine;
+        g_surfQaSerialLine = "";
+        surfQaApplyCommand(command);
+      }
+      continue;
+    }
+    if (g_surfQaSerialLine.length() < 16) g_surfQaSerialLine += ch;
+  }
+  delay(5);
+}
+#endif
+
 // --------------------------------------
 // Setup
 // --------------------------------------
@@ -1670,6 +1773,19 @@ void setup() {
 #if defined(FRAME_IS_ALFRED_V1_2)
   Serial.printf("ALFRED V4 PSRAM configured/detected: %u bytes\n", ESP.getPsramSize());
 #endif
+
+#if REMIND_USB_SURF_ADAPTIVE_TEST
+  Serial.println();
+  Serial.println("========================================");
+  Serial.println("RE:MIND SURF 16-SIZE ADAPTIVE QA");
+  Serial.println("Locked anchors: #6 Medium, #13 Small, #14 Large, #16 XL");
+  Serial.println("Fixed data: Hellesto / Good / 1.0-1.4 m / 11 s / 5 m/s");
+  Serial.println("Commands: 1-16, L, D, T, N, P");
+  Serial.println("========================================");
+  surfQaRenderSelection();
+  return;
+#endif
+
 
   logWakeReason();
 
@@ -2195,4 +2311,9 @@ run_normal_sync:
 
 }
 
-void loop() {}
+void loop() {
+#if REMIND_USB_SURF_ADAPTIVE_TEST
+  surfQaSerialLoop();
+  return;
+#endif
+}
