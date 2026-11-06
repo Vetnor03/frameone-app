@@ -697,20 +697,25 @@ static bool enforceBatteryCutoffDuringAwake(
   BatteryState& batt,
   const PowerSenseDebug& pwr
 ) {
-  if (pwr.usbPresent) return true;
+  // Sample on BOTH battery and USB. A weak/failed charger can leave PGOOD_N
+  // asserted while the cell is actually discharging, and a gauge failure must
+  // never be hidden just because USB is believed present.
+  batt = BatteryManager::readAndUpdate(pwr.usbPresent);
+  if (!batt.requiresRecharge && !batt.recoveryCharging) return true;
 
-  batt = BatteryManager::readAndUpdate(false);
-  if (!batt.requiresRecharge) return true;
-
-  Serial.print("🔋 Battery safety watchdog: cutoff reached during ");
+  Serial.print("🔋 Battery safety watchdog: protection reached during ");
   Serial.println(context ? context : "awake operation");
   BatteryManager::logState("safety-cutoff", batt);
 
   // Stop the radio before the display/sleep transition so no background scan
-  // or association can continue below the cutoff.
+  // or association can compete with recovery.
   WiFi.disconnect(true, false);
   WiFi.mode(WIFI_OFF);
-  showRechargeAndSleep(batt, pwr);
+  if (batt.recoveryCharging) {
+    showRecoveryChargingAndSleep(batt, pwr);
+  } else {
+    showRechargeAndSleep(batt, pwr);
+  }
   return false;
 }
 
@@ -1397,13 +1402,14 @@ static InteractiveModeResult runInteractiveMode(
   while (true) {
     // Independent safety watchdog: even if Wi-Fi is healthy and the connected
     // idle loop runs for hours, the battery cutoff is still enforced.
-    if (!pwr.usbPresent &&
-        (uint32_t)(millis() - lastBatterySafetyCheckAtMs) >= BATTERY_AWAKE_SAFETY_INTERVAL_MS) {
+    if ((uint32_t)(millis() - lastBatterySafetyCheckAtMs) >= BATTERY_AWAKE_SAFETY_INTERVAL_MS) {
       const PowerSenseDebug safetyPwr = readPowerSenseDebug();
-      if (!safetyPwr.usbPresent &&
-          !enforceBatteryCutoffDuringAwake("interactive mode", batt, safetyPwr)) {
+      if (!enforceBatteryCutoffDuringAwake("interactive mode", batt, safetyPwr)) {
         return INTERACTIVE_FINISHED;
       }
+      // Keep the loop's power-source state synchronized with the watchdog
+      // sample so a missed/unstable edge cannot leave stale USB assumptions.
+      if (safetyPwr.stable) pwr = safetyPwr;
       lastBatterySafetyCheckAtMs = millis();
     }
 
@@ -1838,6 +1844,31 @@ void setup() {
       Serial.println("LiveUpdate: startup reconnect failed on USB; retrying while powered");
       delay(REALTIME_FAILURE_BACKOFF_MS);
       if (WiFiManagerV2::connectSaved(12000)) break;
+
+      // Never trust the boot-time USB sample forever. If the cable is removed
+      // during this persistent USB retry path, immediately switch to the
+      // bounded battery reconnect policy. Also catch a weak/failed charger
+      // whose PGOOD_N remains asserted while the cell falls into recovery.
+      const PowerSenseDebug retryPower = readPowerSenseDebug();
+      pwrEarly = retryPower;
+      battEarly = BatteryManager::readAndUpdate(pwrEarly.usbPresent);
+
+      if (battEarly.requiresRecharge) {
+        showRechargeAndSleep(battEarly, pwrEarly);
+        return;
+      }
+      if (battEarly.recoveryCharging) {
+        showRecoveryChargingAndSleep(battEarly, pwrEarly);
+        return;
+      }
+      if (!pwrEarly.usbPresent) {
+        Serial.println("Startup reconnect: USB removed -> switch to bounded battery Wi-Fi policy");
+        if (!connectSavedBatteryBounded()) {
+          sleepAfterBatteryWifiFailure();
+          return;
+        }
+        break;
+      }
     }
 
     if (WiFi.status() != WL_CONNECTED) {
