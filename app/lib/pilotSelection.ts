@@ -6,14 +6,23 @@ export const pilotFrameNames = {
 
 export const pilotMatteNames = {
   beige: 'Beige',
-  'solid-black': 'Solid Black',
-  'new-castle': 'New Castle',
-  sanguine: 'Sanguine',
+  'solid-black': 'Black',
+  'new-castle': 'Grey',
+  sanguine: 'Red',
+  green: 'Green',
+  // Retain historical selections for pilots who have already submitted.
   'midnight-blue-velour': 'Midnight Blue Velour',
   'silver-birch': 'Silver Birch',
 } as const
 
-export const limitedPilotMattes = new Set<keyof typeof pilotMatteNames>([
+export type PilotFrameId = keyof typeof pilotFrameNames
+export type PilotMatteId = keyof typeof pilotMatteNames
+
+// These are the five mattes currently offered for new pilot selections.
+export const selectablePilotMatteIds = ['beige', 'new-castle', 'sanguine', 'green', 'solid-black'] as const
+export type SelectablePilotMatteId = (typeof selectablePilotMatteIds)[number]
+
+export const limitedPilotMattes = new Set<PilotMatteId>([
   'midnight-blue-velour',
   'silver-birch',
 ])
@@ -25,10 +34,14 @@ export function validPilotInvitation(value: unknown): value is string {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
 
-export function validPilotFrame(value: unknown): value is keyof typeof pilotFrameNames {
+export function validPilotFrame(value: unknown): value is PilotFrameId {
   return typeof value === 'string' && Object.hasOwn(pilotFrameNames, value)
 }
 
-export function validPilotMatte(value: unknown): value is keyof typeof pilotMatteNames {
+export function validPilotMatte(value: unknown): value is PilotMatteId {
   return typeof value === 'string' && Object.hasOwn(pilotMatteNames, value)
+}
+
+export function validSelectablePilotMatte(value: unknown): value is SelectablePilotMatteId {
+  return typeof value === 'string' && (selectablePilotMatteIds as readonly string[]).includes(value)
 }
