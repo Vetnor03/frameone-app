@@ -467,13 +467,14 @@ static void updateRechargeRequired(bool usbPresent, float rawVoltage, float smoo
   }
 
   if (!usbPresent) {
-    if (smoothedVoltage <= RECHARGE_SHUTDOWN_V) {
-      if (g_batteryRtc.lowVoltageCount < ALFRED_LOW_VOLTAGE_SAMPLES) {
-        g_batteryRtc.lowVoltageCount++;
-      }
-      if (g_batteryRtc.lowVoltageCount >= ALFRED_LOW_VOLTAGE_SAMPLES) {
-        g_batteryRtc.rechargeRequired = true;
-      }
+    // MAX17048 VCELL is already a filtered fuel-gauge measurement. Do not wait
+    // for multiple firmware wakes once either the live or smoothed voltage has
+    // reached the user-facing empty point: battery protection must win over a
+    // transient extra minute of runtime.
+    if (rawVoltage <= RECHARGE_SHUTDOWN_V ||
+        smoothedVoltage <= RECHARGE_SHUTDOWN_V) {
+      g_batteryRtc.rechargeRequired = true;
+      g_batteryRtc.lowVoltageCount = ALFRED_LOW_VOLTAGE_SAMPLES;
     } else {
       g_batteryRtc.lowVoltageCount = 0;
     }
@@ -606,14 +607,24 @@ BatteryState BatteryManager::readAndUpdate(bool usbPresent) {
 #if defined(FRAME_IS_ALFRED_V1_2)
   Max17048Sample sample{};
   if (!readMax17048Sample(sample)) {
+    // A missing gauge must fail SAFE, not fail open. readMax17048Sample()
+    // already made three I2C attempts, so battery operation cannot continue
+    // indefinitely on a stale "last known good" voltage. USB recovery remains
+    // available and rechecks the gauge on the normal recovery cadence.
+    Serial.println("MAX17048 unavailable -> entering fail-safe battery protection");
+    if (rtcStateValid()) {
+      g_batteryRtc.rechargeRequired = true;
+      g_batteryRtc.lowVoltageCount = ALFRED_LOW_VOLTAGE_SAMPLES;
+    }
+
     BatteryState retained{};
     retained.rawVoltage = rtcStateValid() ? g_batteryRtc.smoothedVoltage : NAN;
     retained.smoothedVoltage = retained.rawVoltage;
     retained.percent = rtcStateValid() ? g_batteryRtc.displayedPercent : -1;
     retained.usbPresent = usbPresent;
     retained.isCharging = usbPresent && digitalRead(HardwareProfile::kChargeN) == LOW;
-    retained.requiresRecharge = rtcStateValid() && !usbPresent && g_batteryRtc.rechargeRequired;
-    retained.recoveryCharging = rtcStateValid() && usbPresent && g_batteryRtc.rechargeRequired;
+    retained.requiresRecharge = !usbPresent;
+    retained.recoveryCharging = usbPresent;
     return retained;
   }
   const float rawVoltage = sample.voltage;
