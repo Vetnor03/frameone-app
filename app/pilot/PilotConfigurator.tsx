@@ -1,33 +1,40 @@
 'use client'
 
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react'
+import Image from 'next/image'
+import { pilotCombinationPhoto } from '@/app/lib/pilotCombinationPhotos'
+import { pilotFrameNames, pilotMatteNames, type PilotFrameId, type PilotMatteId } from '@/app/lib/pilotSelection'
 
 type FrameOption = {
-  id: 'american-walnut' | 'dark-charcoal' | 'light-oak'
+  id: PilotFrameId
   name: string
   swatch: string
 }
 
 type MatteOption = {
-  id: 'beige' | 'solid-black' | 'new-castle' | 'sanguine' | 'midnight-blue-velour' | 'silver-birch'
+  id: PilotMatteId
   name: string
   swatch: string
-  limited?: boolean
 }
 
 const frames: FrameOption[] = [
-  { id: 'american-walnut', name: 'American Walnut', swatch: '#6f4a35' },
-  { id: 'dark-charcoal', name: 'Dark Charcoal', swatch: '#30302d' },
-  { id: 'light-oak', name: 'Light Oak', swatch: '#c6a277' },
+  { id: 'american-walnut', name: pilotFrameNames['american-walnut'], swatch: '#6f4a35' },
+  { id: 'dark-charcoal', name: pilotFrameNames['dark-charcoal'], swatch: '#30302d' },
+  { id: 'light-oak', name: pilotFrameNames['light-oak'], swatch: '#c6a277' },
 ]
 
 const mattes: MatteOption[] = [
-  { id: 'beige', name: 'Beige', swatch: '#d6c8b5' },
-  { id: 'solid-black', name: 'Solid Black', swatch: '#242423' },
-  { id: 'new-castle', name: 'New Castle', swatch: '#555553' },
-  { id: 'sanguine', name: 'Sanguine', swatch: '#835154' },
-  { id: 'midnight-blue-velour', name: 'Midnight Blue Velour', swatch: '#24364c', limited: true },
-  { id: 'silver-birch', name: 'Silver Birch', swatch: '#b9b4aa', limited: true },
+  { id: 'beige', name: pilotMatteNames.beige, swatch: '#d6c8b5' },
+  { id: 'new-castle', name: pilotMatteNames['new-castle'], swatch: '#555553' },
+  { id: 'sanguine', name: pilotMatteNames.sanguine, swatch: '#835154' },
+  { id: 'green', name: pilotMatteNames.green, swatch: '#344b3d' },
+  { id: 'solid-black', name: pilotMatteNames['solid-black'], swatch: '#242423' },
+]
+
+// Keep previously submitted choices readable, while showing five new options.
+const legacyMattes: MatteOption[] = [
+  { id: 'midnight-blue-velour', name: pilotMatteNames['midnight-blue-velour'], swatch: '#24364c' },
+  { id: 'silver-birch', name: pilotMatteNames['silver-birch'], swatch: '#b9b4aa' },
 ]
 
 // Material imagery is generated for the pilot selector; the colours are illustrative,
@@ -55,25 +62,50 @@ function matteMaterial(matte: MatteOption): CSSProperties {
   }
 }
 
-function ProductPreview({ frame, matte }: { frame: FrameOption; matte: MatteOption }) {
+// Fallback for missing image files and older, discontinued matte choices.
+function IllustratedProductPreview({ frame, matte }: { frame: FrameOption; matte: MatteOption }) {
   return (
-    <div className="relative mx-auto aspect-[4/3] w-full max-w-[340px] select-none sm:max-w-[560px] lg:max-w-[700px]" aria-label={`${frame.name} frame with ${matte.name} matte`}>
-      <div className="absolute inset-[4.4%] rounded-[5px] p-[6.7%]" style={frameMaterial(frame)}>
-        <div
-          className="h-full w-full p-[10.8%] shadow-[inset_0_0_0_1px_rgba(0,0,0,.14),inset_0_0_18px_rgba(0,0,0,.06)]"
-          style={matteMaterial(matte)}
-        >
-          <div className="relative flex h-full w-full overflow-hidden rounded-[2px] border border-black/20 shadow-[0_1px_5px_rgba(0,0,0,.18)]">
-            <div className="flex w-1/2 items-center justify-end bg-[#e9e8e2] pr-[2%] text-[#222220]">
-              <span className="text-[clamp(11px,2vw,23px)] font-semibold leading-none tracking-[0.18em]">RE:</span>
-            </div>
-            <div className="flex w-1/2 items-center justify-start bg-[#222220] pl-[2%] text-[#eceae3]">
-              <span className="text-[clamp(11px,2vw,23px)] font-semibold leading-none tracking-[0.18em]">MIND</span>
-            </div>
-            <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(#000_0.55px,transparent_0.7px)] [background-size:3px_3px]" />
+    <div className="absolute inset-[4.4%] rounded-[5px] p-[6.7%]" style={frameMaterial(frame)}>
+      <div className="h-full w-full p-[10.8%] shadow-[inset_0_0_0_1px_rgba(0,0,0,.14),inset_0_0_18px_rgba(0,0,0,.06)]" style={matteMaterial(matte)}>
+        <div className="relative flex h-full w-full overflow-hidden rounded-[2px] border border-black/20 shadow-[0_1px_5px_rgba(0,0,0,.18)]">
+          <div className="flex w-1/2 items-center justify-end bg-[#e9e8e2] pr-[2%] text-[#222220]">
+            <span className="text-[clamp(11px,2vw,23px)] font-semibold leading-none tracking-[0.18em]">RE:</span>
           </div>
+          <div className="flex w-1/2 items-center justify-start bg-[#222220] pl-[2%] text-[#eceae3]">
+            <span className="text-[clamp(11px,2vw,23px)] font-semibold leading-none tracking-[0.18em]">MIND</span>
+          </div>
+          <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(#000_0.55px,transparent_0.7px)] [background-size:3px_3px]" />
         </div>
       </div>
+    </div>
+  )
+}
+
+function ProductPreview({ frame, matte }: { frame: FrameOption; matte: MatteOption }) {
+  const photoSrc = pilotCombinationPhoto(frame.id, matte.id)
+  const [loadedPhotoSrc, setLoadedPhotoSrc] = useState<string | null>(null)
+  const [failedPhotoSrc, setFailedPhotoSrc] = useState<string | null>(null)
+  const photoReady = Boolean(photoSrc && photoSrc === loadedPhotoSrc && photoSrc !== failedPhotoSrc)
+
+  return (
+    <div
+      className="relative mx-auto aspect-[4/3] w-full max-w-[340px] select-none sm:max-w-[560px] lg:max-w-[700px]"
+      aria-label={`${frame.name} frame with ${matte.name} matte`}
+    >
+      {!photoReady ? <IllustratedProductPreview frame={frame} matte={matte} /> : null}
+      {photoSrc && photoSrc !== failedPhotoSrc ? (
+        <Image
+          key={photoSrc}
+          src={photoSrc}
+          alt={`${frame.name} frame with ${matte.name} passepartout`}
+          fill
+          unoptimized
+          sizes="(min-width: 1024px) 700px, (min-width: 640px) 560px, 340px"
+          className={`object-contain ${photoReady ? 'opacity-100' : 'opacity-0'}`}
+          onLoad={() => setLoadedPhotoSrc(photoSrc)}
+          onError={() => setFailedPhotoSrc(photoSrc)}
+        />
+      ) : null}
     </div>
   )
 }
@@ -82,15 +114,11 @@ function SelectionButton({
   selected,
   label,
   swatch,
-  textureId,
-  limited,
   onClick,
 }: {
   selected: boolean
   label: string
   swatch: string
-  textureId: string
-  limited?: boolean
   onClick: () => void
 }) {
   return (
@@ -104,14 +132,13 @@ function SelectionButton({
     >
       <span
         className="mb-1.5 block h-9 w-full rounded-[5px] border border-black/10 sm:h-12"
-        style={{ backgroundColor: swatch, backgroundImage: materialTexture(textureId), backgroundPosition: 'center', backgroundSize: 'cover' }}
+        style={{ backgroundColor: swatch }}
         aria-hidden="true"
       />
       <span className="flex min-w-0 items-start justify-between gap-1">
         <span className="min-w-0 text-[10px] font-medium leading-[1.15] text-[#1d1d1b] sm:text-[11px]">{label}</span>
         {selected ? <span className="shrink-0 text-[10px] font-semibold sm:text-[11px]">✓</span> : null}
       </span>
-      {limited ? <span className="mt-0.5 block text-[8px] font-semibold uppercase tracking-[0.08em] text-black/45">Limited</span> : null}
     </button>
   )
 }
@@ -119,14 +146,14 @@ function SelectionButton({
 type PilotInvitation = {
   fullName: string
   email: string
-  frameId: FrameOption['id'] | null
-  matteId: MatteOption['id'] | null
+  frameId: PilotFrameId | null
+  matteId: PilotMatteId | null
   orderStatus: string | null
 }
 
 export default function PilotConfigurator({ inviteId, demoMode = false }: { inviteId: string; demoMode?: boolean }) {
-  const [frameId, setFrameId] = useState<FrameOption['id']>('american-walnut')
-  const [matteId, setMatteId] = useState<MatteOption['id']>('beige')
+  const [frameId, setFrameId] = useState<PilotFrameId>('american-walnut')
+  const [matteId, setMatteId] = useState<PilotMatteId>('beige')
   const [step, setStep] = useState<1 | 2>(1)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -162,8 +189,8 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
       .then((data) => {
         if (controller.signal.aborted) return
         setInvitation(data)
-        if (frames.some((item) => item.id === data.frameId)) setFrameId(data.frameId as FrameOption['id'])
-        if (mattes.some((item) => item.id === data.matteId)) setMatteId(data.matteId as MatteOption['id'])
+        if (frames.some((item) => item.id === data.frameId)) setFrameId(data.frameId as PilotFrameId)
+        if ([...mattes, ...legacyMattes].some((item) => item.id === data.matteId)) setMatteId(data.matteId as PilotMatteId)
         setSubmitted(Boolean(data.orderStatus))
         setSubmittedEmail(data.email)
         setLoadingInvite(false)
@@ -179,7 +206,7 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
   const isLocked = Boolean(invitation?.orderStatus && invitation.orderStatus !== 'submitted')
 
   const frame = useMemo(() => frames.find((item) => item.id === frameId) ?? frames[0], [frameId])
-  const matte = useMemo(() => mattes.find((item) => item.id === matteId) ?? mattes[0], [matteId])
+  const matte = useMemo(() => [...mattes, ...legacyMattes].find((item) => item.id === matteId) ?? mattes[0], [matteId])
 
   async function submitOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -245,7 +272,7 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
             <div className="rounded-[16px] border border-black/8 bg-[#e8e5de] p-2 sm:rounded-[20px] sm:p-3 lg:p-5">
               <ProductPreview frame={frame} matte={matte} />
             </div>
-            <p className="mt-1 px-1 text-center text-[9px] leading-3 text-black/35 sm:mt-1.5 sm:text-[10px] sm:leading-4">AI-generated material previews · colours and textures may differ from the actual HFS samples.</p>
+            <p className="mt-1 px-1 text-center text-[9px] leading-3 text-black/35 sm:mt-1.5 sm:text-[10px] sm:leading-4">Preview of your selected frame and passepartout · screen content is illustrative.</p>
           </section>
 
           <section className="min-w-0 rounded-[16px] border border-black/10 bg-[#faf9f6] p-3 sm:rounded-[20px] sm:p-4 lg:p-5">
@@ -269,7 +296,6 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
                         selected={frameId === option.id}
                         label={option.name}
                         swatch={option.swatch}
-                        textureId={option.id}
                         onClick={() => setFrameId(option.id)}
                       />
                     ))}
@@ -288,8 +314,6 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
                         selected={matteId === option.id}
                         label={option.name}
                         swatch={option.swatch}
-                        textureId={option.id}
-                        limited={option.limited}
                         onClick={() => setMatteId(option.id)}
                       />
                     ))}
@@ -352,7 +376,12 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
                 {!isLocked ? (
                   <button
                     type="button"
-                    onClick={() => { setSubmitted(false); setStep(1); setError('') }}
+                    onClick={() => {
+                      if (!mattes.some((option) => option.id === matteId)) setMatteId('beige')
+                      setSubmitted(false)
+                      setStep(1)
+                      setError('')
+                    }}
                     className="mt-5 self-start text-[12px] font-medium text-black/45 underline decoration-black/20 underline-offset-4 hover:text-black/70"
                   >
                     Change my selection
