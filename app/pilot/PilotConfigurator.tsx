@@ -274,6 +274,7 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
 
       if (response.status === 409 && result?.used === true) {
         setInviteUsed(true)
+        setInviteError('Valget ditt er allerede registrert. Denne lenken kan ikke brukes igjen.')
         setInvitation(null)
         throw new Error('Valget ditt er allerede registrert. Denne lenken kan ikke brukes igjen.')
       }
