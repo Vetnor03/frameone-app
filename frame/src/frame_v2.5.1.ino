@@ -82,6 +82,7 @@ static const float OTA_MIN_BATTERY_V = 3.65f;
 // rescuing a cell below the normal empty point. Preserve the existing image
 // until the cell has at least reached this level.
 static const float RECOVERY_DISPLAY_MIN_V = 3.35f;
+static const float RECHARGE_DISPLAY_MIN_V = 3.20f;
 
 // Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
 RTC_DATA_ATTR static time_t g_nextScheduledWake = 0;
@@ -645,10 +646,20 @@ static void showRechargeAndSleep(const BatteryState& batt, const PowerSenseDebug
   logPowerSenseDebug(batt, pwr);
 
   g_recoveryChargingScreenDisplayed = false;
-  Theme::set(THEME_DARK);
-  ensureDisplay();
-  DisplayCore::drawRechargeScreen();
-  shutdownDisplay();
+
+  // A cosmetic "Battery empty" refresh is useful near the normal cutoff, but
+  // must never deepen an already severe/unknown discharge. E-paper keeps the
+  // previous image without power, so below this floor we preserve it and sleep.
+  if (!isnan(batt.rawVoltage) && batt.rawVoltage >= RECHARGE_DISPLAY_MIN_V) {
+    Theme::set(THEME_DARK);
+    ensureDisplay();
+    DisplayCore::drawRechargeScreen();
+    shutdownDisplay();
+  } else {
+    Serial.println(
+      "Battery too low/unknown for recharge-screen refresh; preserving existing e-paper image"
+    );
+  }
 
   goToRechargeSleep(pwr.usbPresent);
 }
