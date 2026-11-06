@@ -23,7 +23,7 @@ test('long-running interactive mode independently rechecks battery every 30 seco
 test('awake battery cutoff shuts radio down before recharge sleep', () => {
   assert.match(
     firmware,
-    /Battery safety watchdog: cutoff reached[\s\S]*WiFi\.disconnect\(true, false\);[\s\S]*WiFi\.mode\(WIFI_OFF\);[\s\S]*showRechargeAndSleep/,
+    /Battery safety watchdog: protection reached[\s\S]*WiFi\.disconnect\(true, false\);[\s\S]*WiFi\.mode\(WIFI_OFF\);[\s\S]*showRecoveryChargingAndSleep[\s\S]*showRechargeAndSleep/,
   )
 })
 
