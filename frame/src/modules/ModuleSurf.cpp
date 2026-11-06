@@ -2805,6 +2805,73 @@ void setConfig(const FrameConfig* cfg) {
   applyConfigFromFrameConfig();
 }
 
+void seedPhysicalQa() {
+  ensureDefaultsOnce();
+  g_cfg = nullptr;
+
+  SurfInstanceConfig& cfg = g_inst[0];
+  cfg = SurfInstanceConfig();
+  cfg.id = 1;
+  strlcpy(cfg.spotId, "hellesto-qa", sizeof(cfg.spotId));
+  utf8ToLatin1(cfg.spot, sizeof(cfg.spot), "Hellestø");
+  cfg.lat = 58.82f;
+  cfg.lon = 5.56f;
+  cfg.refreshMs = SURF_SOURCE_REFRESH_FLOOR_MS;
+
+  SurfCache& data = g_cache[0];
+  data = SurfCache();
+  data.valid = true;
+  data.rating = 5;
+  data.score = 82;
+  strlcpy(data.line1, "1.0 - 1.4 m", sizeof(data.line1));
+  strlcpy(data.line2, "Clean conditions", sizeof(data.line2));
+  strlcpy(data.waveRangeNext, "1.0 - 1.4 m", sizeof(data.waveRangeNext));
+  utf8ToLatin1(data.spotLabel, sizeof(data.spotLabel), "Hellestø");
+  strlcpy(data.spotIdResolved, "hellesto-qa", sizeof(data.spotIdResolved));
+  data.swellHeightM = 1.2f;
+  data.swellPeriodS = 11.0f;
+  data.swellDirDegFrom = 280.0f;
+  data.windSpeedMs = 5.0f;
+  data.windDirDegFrom = 135.0f;
+  data.hasDayparts = true;
+  data.hasDaily = true;
+  strlcpy(data.sunrise, "08:14", sizeof(data.sunrise));
+  strlcpy(data.sunset, "16:21", sizeof(data.sunset));
+  data.airTempC = 8.0f;
+  data.airMinC = 5.0f;
+  data.airMaxC = 9.0f;
+  data.waterMinC = 10.0f;
+  data.waterMaxC = 11.0f;
+  data.weatherWmo = 2;
+  strlcpy(data.weatherLabel, "Partly cloudy", sizeof(data.weatherLabel));
+
+  static const int ratings[4] = {4, 5, 6, 4};
+  static const char* ranges[4] = {"0.8 - 1.1 m", "1.0 - 1.3 m", "1.2 - 1.5 m", "1.0 - 1.3 m"};
+  static const float periods[4] = {10.0f, 11.0f, 12.0f, 11.0f};
+  static const float winds[4] = {4.0f, 4.0f, 5.0f, 6.0f};
+  for (int i = 0; i < 4; ++i) {
+    data.day[i] = SurfDayPart();
+    data.day[i].valid = true;
+    data.day[i].rating = ratings[i];
+    strlcpy(data.day[i].waveRange, ranges[i], sizeof(data.day[i].waveRange));
+    data.day[i].periodS = periods[i];
+    data.day[i].windSpeedMs = winds[i];
+  }
+
+  static const char* labels[5] = {"Today", "Friday", "Saturday", "Sunday", "Monday"};
+  static const int dailyRatings[5] = {5, 5, 6, 4, 3};
+  static const char* dailyRanges[5] = {"1.0 - 1.4 m", "1.1 - 1.5 m", "1.3 - 1.7 m", "0.9 - 1.2 m", "0.7 - 1.0 m"};
+  for (int i = 0; i < 5; ++i) {
+    data.daily[i] = SurfDaily();
+    data.daily[i].valid = true;
+    strlcpy(data.daily[i].label, labels[i], sizeof(data.daily[i].label));
+    data.daily[i].rating = dailyRatings[i];
+    strlcpy(data.daily[i].waveRange, dailyRanges[i], sizeof(data.daily[i].waveRange));
+    data.daily[i].periodS = 10.0f + i;
+    data.daily[i].windSpeedMs = 4.0f + i;
+  }
+}
+
 void render(const Cell& c, const String& moduleName) {
   ensureDefaultsOnce();
   if (g_cfg) applyConfigFromFrameConfig();
