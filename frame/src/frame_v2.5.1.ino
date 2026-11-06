@@ -72,6 +72,13 @@ static const uint32_t WIFI_RETRY_GAP_MS = 500;
 static const uint8_t WIFI_CONNECT_ATTEMPTS_PER_WAKE = 2;
 static const uint8_t WIFI_FAILED_WAKE_CYCLES_BEFORE_OFFLINE = 3;
 
+// Battery safety must not depend on whichever network/content loop happens to
+// be running. Any long-lived battery-powered awake state re-samples the gauge
+// at this cadence and immediately enters recharge sleep at the cutoff.
+static const uint32_t BATTERY_AWAKE_SAFETY_INTERVAL_MS = 30000;
+static const int OTA_MIN_BATTERY_PERCENT = 30;
+static const float OTA_MIN_BATTERY_V = 3.65f;
+
 // Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
 RTC_DATA_ATTR static time_t g_nextScheduledWake = 0;
 RTC_DATA_ATTR static time_t g_revisionRetryNotBefore = 0;
@@ -649,6 +656,28 @@ static void showRecoveryChargingAndSleep(
   goToRecoveryChargingSleep(pwr.usbPresent);
 }
 
+static bool enforceBatteryCutoffDuringAwake(
+  const char* context,
+  BatteryState& batt,
+  const PowerSenseDebug& pwr
+) {
+  if (pwr.usbPresent) return true;
+
+  batt = BatteryManager::readAndUpdate(false);
+  if (!batt.requiresRecharge) return true;
+
+  Serial.print("🔋 Battery safety watchdog: cutoff reached during ");
+  Serial.println(context ? context : "awake operation");
+  BatteryManager::logState("safety-cutoff", batt);
+
+  // Stop the radio before the display/sleep transition so no background scan
+  // or association can continue below the cutoff.
+  WiFi.disconnect(true, false);
+  WiFi.mode(WIFI_OFF);
+  showRechargeAndSleep(batt, pwr);
+  return false;
+}
+
 // --------------------------------------
 // Device status post (wake heartbeat)
 // --------------------------------------
@@ -797,6 +826,16 @@ static PairingResult ensurePairedNoReboot(bool forceFreshPairCode = false) {
   while ((millis() - t0) < maxPollMs) {
     delay(3000);
 
+    // Pairing can remain open for minutes. Keep the low-battery cutoff alive
+    // even though the normal scheduler is not running during this loop.
+    const PowerSenseDebug pairingPwr = readPowerSenseDebug();
+    if (!pairingPwr.usbPresent) {
+      BatteryState pairingBatt{};
+      if (!enforceBatteryCutoffDuringAwake("pairing", pairingBatt, pairingPwr)) {
+        return PAIRING_FAILED;
+      }
+    }
+
     PairStatusResponse poll;
     bool pollOk = BackendApi::pairStatus(poll);
 
@@ -853,8 +892,20 @@ static bool recoverPairingIfTokenLost(const char* reason, bool usbPresent) {
   return true;
 }
 
-static void runOtaCheckIfDue() {
+static void runOtaCheckIfDue(const BatteryState& batt, const PowerSenseDebug& pwr) {
   if (!shouldRunOtaCheckNow()) return;
+
+  // Do not begin a flash write on a marginal battery. USB may always update;
+  // battery-only OTA waits for a healthy reserve and will be retried later.
+  if (!pwr.usbPresent &&
+      (batt.percent < OTA_MIN_BATTERY_PERCENT || batt.rawVoltage < OTA_MIN_BATTERY_V)) {
+    Serial.printf(
+      "⏭️ OTA deferred: battery reserve too low (%d%%, %.3fV)\n",
+      batt.percent,
+      batt.rawVoltage
+    );
+    return;
+  }
 
   markOtaCheckedToday();
 
@@ -1287,6 +1338,7 @@ static InteractiveModeResult runInteractiveMode(
   uint64_t lastRequested = state.requestedRevision;
   uint64_t lastDisplayed = state.displayedRevision;
   uint32_t configRetryMs = MANUAL_RENDER_RETRY_START_MS;
+  uint32_t lastBatterySafetyCheckAtMs = millis();
 #if FRAME_MQTT_PILOT_ENABLED
   // MQTT service is local socket processing, NOT an HTTPS revision request.
   // Track it independently so a stale 10-second HTTP probe clock cannot
@@ -1296,6 +1348,18 @@ static InteractiveModeResult runInteractiveMode(
 #endif
 
   while (true) {
+    // Independent safety watchdog: even if Wi-Fi is healthy and the connected
+    // idle loop runs for hours, the battery cutoff is still enforced.
+    if (!pwr.usbPresent &&
+        (uint32_t)(millis() - lastBatterySafetyCheckAtMs) >= BATTERY_AWAKE_SAFETY_INTERVAL_MS) {
+      const PowerSenseDebug safetyPwr = readPowerSenseDebug();
+      if (!safetyPwr.usbPresent &&
+          !enforceBatteryCutoffDuringAwake("interactive mode", batt, safetyPwr)) {
+        return INTERACTIVE_FINISHED;
+      }
+      lastBatterySafetyCheckAtMs = millis();
+    }
+
 #if FRAME_MQTT_PILOT_ENABLED
     // The old loop's 100ms USB debounce on every 1-second MQTT service
     // would waste CPU and defeat automatic light sleep. Sample cheaply and
@@ -1737,6 +1801,18 @@ void setup() {
       }
 
       activeSetupStep = SETUP_STEP_WIFI;
+
+      // Captive-portal setup is deliberately charger-only. Otherwise a frame
+      // with missing/invalid credentials can sit in an AP loop indefinitely on
+      // battery. Reconnecting USB is the explicit gesture to resume setup.
+      if (!pwrEarly.usbPresent) {
+        Serial.println("Setup Wi-Fi required but USB is absent -> passive shelf sleep");
+        WiFi.disconnect(true, false);
+        WiFi.mode(WIFI_OFF);
+        goToShelfSleep(false);
+        return;
+      }
+
       if (chargerStateChanged) {
         Serial.println("🔄 Charger change on Wi-Fi setup screen -> restart Wi-Fi setup flow and redraw");
         setupFlowRefreshByCharger = true;
@@ -1941,7 +2017,7 @@ run_normal_sync:
     return;
   }
 
-  runOtaCheckIfDue();
+  runOtaCheckIfDue(batt, pwr);
   ContentRevisionState revisionState;
   const uint64_t knownRevision = SmartRefresh::displayedRevision();
   String scheduledModules = SmartRefresh::dueModuleCsv(g_smartState, time(nullptr));
