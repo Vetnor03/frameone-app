@@ -1943,6 +1943,20 @@ static void renderAdaptiveSmallFamily(const Cell& c,const SurfCache& data,
   const int pad=max(8,min(14,min(c.w,c.h)*5/100));
   const int x=c.x+pad,y=c.y+pad,w=c.w-2*pad,h=c.h-2*pad;
 
+  // 1x1: ultra-compact. Do not show the spot name; the rating hierarchy wins.
+  if(c.colSpan==1 && c.rowSpan==1) {
+    const int centerY=y+h/2;
+    drawTextCenteredAt(x+w/2,centerY-28,ratingToWord(data.rating),FONT_B12,ink);
+    const int boxW=clampi((w-34)/6,11,18);
+    const int visualW=ratingVisualWidthPxSized(data.ratingFromExperience,boxW,4,13);
+    const int visualH=ratingVisualHeightPxSized(data.ratingFromExperience,13,13);
+    drawRatingVisualSized(x+(w-visualW)/2,centerY-visualH/2,
+                          data.rating,data.ratingFromExperience,data.experienceDiceValue,
+                          ink,boxW,13,4,2,13);
+    drawTextCenteredAt(x+w/2,centerY+32,wave,FONT_B12,ink);
+    return;
+  }
+
   // 2x1 / 3x1 behave like a compressed version of the locked 4x1 Small.
   if(c.h<=140 && c.w>=340) {
     const bool canShowSpot=c.w>=540;
@@ -2043,7 +2057,8 @@ static void renderAdaptiveMediumFamily(const Cell& c,const SurfCache& data,
       shown++;
     }
   } else {
-    const int count=min(4,validDaypartCount(data));
+    const int maxDayparts = (w < 500) ? 2 : 4;
+    const int count=min(maxDayparts,validDaypartCount(data));
     if(count<=0)return;
     const int cw=w/count;
     int shown=0;
