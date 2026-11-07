@@ -1890,155 +1890,212 @@ static SurfAdaptivePolicy::Input adaptiveSurfInput(const Cell& c,
   };
 }
 
+static void renderAdaptiveRatingStrip(int x,int y,int w,int h,
+                                      const SurfCache& data,const char* wave,uint16_t ink,
+                                      bool showSpot,const char* spot,bool showDetails) {
+  const int pad=max(8,min(16,min(w,h)*6/100));
+  const int ix=x+pad, iy=y+pad, iw=w-2*pad, ih=h-2*pad;
+  int cy=iy;
+
+  if(showSpot && spot && spot[0] && ih>=100) {
+    const int titleH=28;
+    drawTextCenteredInRect(ix,cy,iw,titleH,spot,FONT_B12,ink);
+    int16_t x1,y1; uint16_t tw,th; measureText(spot,FONT_B12,x1,y1,tw,th);
+    const int lw=min(iw-8,(int)tw);
+    DisplayCore::get().fillRect(ix+(iw-lw)/2,cy+titleH-3,lw,2,ink);
+    cy+=titleH+6;
+  }
+
+  const int remain=max(1,iy+ih-cy);
+  int detailsH=0;
+  if(showDetails && remain>=150) detailsH=min(72,max(54,remain*28/100));
+  const int heroH=remain-(detailsH?detailsH+8:0);
+  const int centerY=cy+heroH/2;
+
+  drawTextCenteredAt(ix+iw/2,centerY-38,ratingToWord(data.rating),
+                     (heroH>=125 && iw>=150)?FONT_B18:FONT_B12,ink);
+
+  const int boxW=clampi((iw-45)/6,12,22);
+  const int visualW=ratingVisualWidthPxSized(data.ratingFromExperience,boxW,5,15);
+  const int visualH=ratingVisualHeightPxSized(data.ratingFromExperience,15,15);
+  drawRatingVisualSized(ix+(iw-visualW)/2,centerY-visualH/2,
+                        data.rating,data.ratingFromExperience,data.experienceDiceValue,
+                        ink,boxW,15,5,2,15);
+
+  drawTextCenteredAt(ix+iw/2,centerY+42,wave,FONT_B12,ink);
+
+  if(detailsH) {
+    const int dy=cy+heroH+8;
+    DisplayCore::get().drawFastHLine(ix+8,dy-4,iw-16,ink);
+    char per[14]={0},wind[14]={0};
+    if(isfinite(data.swellPeriodS)) snprintf(per,sizeof(per),"%.0f s",data.swellPeriodS);
+    else strlcpy(per,"--",sizeof(per));
+    if(isfinite(data.windSpeedMs)) snprintf(wind,sizeof(wind),"%.0f m/s",data.windSpeedMs);
+    else strlcpy(wind,"--",sizeof(wind));
+    drawTextCenteredInRect(ix,dy,iw/2,detailsH,per,FONT_B9,ink);
+    drawDividerAtXShort(ix+iw/2,dy+detailsH/2+5,FONT_B9,ink);
+    drawTextCenteredInRect(ix+iw/2,dy,iw-iw/2,detailsH,wind,FONT_B9,ink);
+  }
+}
+
+static void renderAdaptiveSmallFamily(const Cell& c,const SurfCache& data,
+                                      const char* spot,const char* wave,uint16_t ink) {
+  const int pad=max(8,min(14,min(c.w,c.h)*5/100));
+  const int x=c.x+pad,y=c.y+pad,w=c.w-2*pad,h=c.h-2*pad;
+
+  // 2x1 / 3x1 behave like a compressed version of the locked 4x1 Small.
+  if(c.h<=140 && c.w>=340) {
+    const bool canShowSpot=c.w>=540;
+    int topH=canShowSpot?28:0;
+    if(canShowSpot){
+      drawTextCenteredInRect(x,y,w,topH,spot,FONT_B12,ink);
+      int16_t x1,y1;uint16_t tw,th;measureText(spot,FONT_B12,x1,y1,tw,th);
+      const int lw=min(w-8,(int)tw);
+      DisplayCore::get().fillRect(x+(w-lw)/2,y+topH-3,lw,2,ink);
+    }
+    const int rowY=y+topH;
+    const int rowH=h-topH;
+    const int third=w/3;
+    drawTextCenteredInRect(x,rowY,third,rowH,ratingToWord(data.rating),FONT_B12,ink);
+    const int boxW=clampi((third-24)/6,12,20);
+    const int visualW=ratingVisualWidthPxSized(data.ratingFromExperience,boxW,4,14);
+    const int visualH=ratingVisualHeightPxSized(data.ratingFromExperience,14,14);
+    drawRatingVisualSized(x+third+(third-visualW)/2,rowY+(rowH-visualH)/2,
+                          data.rating,data.ratingFromExperience,data.experienceDiceValue,
+                          ink,boxW,14,4,2,14);
+    drawDividerAtXShort(x+third,rowY+rowH/2+5,FONT_B12,ink);
+    drawDividerAtXShort(x+third*2,rowY+rowH/2+5,FONT_B12,ink);
+    drawTextCenteredInRect(x+third*2,rowY,w-third*2,rowH,wave,FONT_B12,ink);
+    return;
+  }
+
+  // Narrow portrait family: preserve one strong vertical hierarchy.
+  renderAdaptiveRatingStrip(c.x,c.y,c.w,c.h,data,wave,ink,true,spot,c.h>=300);
+}
+
+static void renderAdaptiveMediumFamily(const Cell& c,const SurfCache& data,
+                                       const char* spot,const char* wave,uint16_t ink,
+                                       bool addDayparts,bool addDaily) {
+  const int pad=10;
+  const int x=c.x+pad,y=c.y+pad,w=c.w-2*pad,h=c.h-2*pad;
+  int extraH=0;
+  if(addDaily) extraH=min(132,max(104,h*30/100));
+  else if(addDayparts) extraH=min(112,max(88,h*26/100));
+
+  const int topH=h-(extraH?extraH+10:0);
+  const int leftW=w/2;
+  const int rightX=x+leftW;
+  const int rightW=w-leftW;
+
+  // Copy the locked Medium composition language.
+  const int titleH=32;
+  drawTextCenteredInRect(x,y,w,titleH,spot,FONT_B12,ink);
+  int16_t sx1,sy1;uint16_t sw,sh;measureText(spot,FONT_B12,sx1,sy1,sw,sh);
+  const int lineW=min(w-8,(int)sw);
+  DisplayCore::get().fillRect(x+(w-lineW)/2,y+titleH-3,lineW,2,ink);
+
+  const int bodyY=y+titleH+4;
+  const int bodyH=max(1,topH-titleH-4);
+  DisplayCore::get().drawFastVLine(x+leftW,bodyY+6,max(1,bodyH-12),ink);
+
+  const int centerY=bodyY+bodyH/2;
+  drawTextCenteredAt(x+leftW/2,centerY-42,ratingToWord(data.rating),FONT_B18,ink);
+  const int boxW=clampi((leftW-40)/6,12,20);
+  const int visualW=ratingVisualWidthPxSized(data.ratingFromExperience,boxW,5,15);
+  const int visualH=ratingVisualHeightPxSized(data.ratingFromExperience,15,15);
+  drawRatingVisualSized(x+(leftW-visualW)/2,centerY-visualH/2,
+                        data.rating,data.ratingFromExperience,data.experienceDiceValue,
+                        ink,boxW,15,5,2,15);
+  drawTextCenteredAt(x+leftW/2,centerY+42,wave,FONT_B12,ink);
+
+  drawTextCenteredAt(rightX+rightW/2,bodyY+22,"Details:",FONT_B12,ink);
+  char per[14]={0},wind[14]={0};
+  if(isfinite(data.swellPeriodS)) snprintf(per,sizeof(per),"%.0f s",data.swellPeriodS);
+  else strlcpy(per,"--",sizeof(per));
+  if(isfinite(data.windSpeedMs)) snprintf(wind,sizeof(wind),"%.0f m/s",data.windSpeedMs);
+  else strlcpy(wind,"--",sizeof(wind));
+  const int dcy=bodyY+bodyH/2+12;
+  drawSurfDirectionArrow(rightX+rightW/4,dcy-18,28,data.swellDirDegFrom,ink);
+  drawSurfDirectionArrow(rightX+rightW*3/4,dcy-18,28,data.windDirDegFrom,ink);
+  drawTextCenteredAt(rightX+rightW/4,dcy+20,per,FONT_B9,ink);
+  drawTextCenteredAt(rightX+rightW*3/4,dcy+20,wind,FONT_B9,ink);
+
+  if(!extraH) return;
+
+  const int ey=y+h-extraH;
+  DisplayCore::get().drawFastHLine(x+8,ey-5,w-16,ink);
+
+  if(addDaily) {
+    const int count=min(4,validDailyCount(data)-1);
+    if(count<=0)return;
+    const int cw=w/count;
+    int shown=0;
+    for(int i=1;i<5 && shown<count;i++){
+      if(!data.daily[i].valid)continue;
+      const int xx=x+shown*cw;
+      if(shown) DisplayCore::get().drawFastVLine(xx,ey+8,max(1,extraH-16),ink);
+      const int cx=xx+cw/2;
+      drawTextCenteredAt(cx,ey+22,data.daily[i].label,FONT_B12,ink);
+      drawTextCenteredAt(cx,ey+52,ratingToWord(data.daily[i].rating),FONT_B9,ink);
+      drawTextCenteredAt(cx,ey+extraH-12,
+                         data.daily[i].waveRange[0]?data.daily[i].waveRange:wave,
+                         FONT_B9,ink);
+      shown++;
+    }
+  } else {
+    const int count=min(4,validDaypartCount(data));
+    if(count<=0)return;
+    const int cw=w/count;
+    int shown=0;
+    for(int i=0;i<4 && shown<count;i++){
+      if(!data.day[i].valid)continue;
+      const int xx=x+shown*cw;
+      if(shown) DisplayCore::get().drawFastVLine(xx,ey+8,max(1,extraH-16),ink);
+      const int cx=xx+cw/2;
+      const char* label=i==0?"Morning":i==1?"Noon":i==2?"Afternoon":"Evening";
+      drawTextCenteredAt(cx,ey+22,label,FONT_B12,ink);
+      drawTextCenteredAt(cx,ey+52,ratingToWord(data.day[i].rating),FONT_B9,ink);
+      drawTextCenteredAt(cx,ey+extraH-12,
+                         data.day[i].waveRange[0]?data.day[i].waveRange:wave,
+                         FONT_B9,ink);
+      shown++;
+    }
+  }
+}
+
 static void renderAdaptiveSurf(const Cell& c,
                                const SurfCache& data,
                                const SurfAdaptivePolicy::Result& comp,
                                const char* spot,
                                const char* wave) {
-  const uint16_t ink = Theme::ink();
+  (void)comp;
+  const uint16_t ink=Theme::ink();
 
-  // BEGIN ADAPTIVE SURF GEOMETRY
-  const int pad = clampi((c.w < c.h ? c.w : c.h) * 6 / 100, 8, 18);
-  const int gap = 10;
-  const int innerX = c.x + pad;
-  const int innerY = c.y + pad;
-  const int innerW = c.w - pad * 2;
-  const int innerH = c.h - pad * 2;
-  const int labelH = comp.showTodaysBestLabel ? 20 : 0;
-  const int spotH = comp.showSpot ? 25 : 0;
-  const int topH = labelH + spotH;
-  const int dailyH = comp.dailyCount > 0 ? clampi(innerH * 32 / 100, 104, 145) : 0;
-  const int contentY = innerY + topH;
-  const int contentH = innerH - topH - (dailyH > 0 ? dailyH + gap : 0);
-  AdaptiveSurfRect label = {innerX, innerY, innerW, labelH};
-  AdaptiveSurfRect title = {innerX, innerY + labelH, innerW, spotH};
-  AdaptiveSurfRect hero = {innerX, contentY, innerW, contentH};
-  AdaptiveSurfRect details = {0, 0, 0, 0};
-  AdaptiveSurfRect dayparts = {0, 0, 0, 0};
-  AdaptiveSurfRect daily = {innerX, innerY + innerH - dailyH, innerW, dailyH};
-  if (comp.family == SurfAdaptivePolicy::SHALLOW_WIDE && comp.showDetails) {
-    const int detailW = clampi(innerW * 18 / 100, 62, 130);
-    details = AdaptiveSurfRect{innerX + innerW - detailW, contentY, detailW, contentH};
-    hero.w -= detailW + gap;
-  } else if (comp.family == SurfAdaptivePolicy::STACKED && comp.showDetails) {
-    const int detailH = clampi(contentH * 28 / 100, 54, 84);
-    details = AdaptiveSurfRect{innerX, contentY + contentH - detailH, innerW, detailH};
-    hero.h -= detailH + gap;
-  } else if (comp.family == SurfAdaptivePolicy::SPLIT ||
-             comp.family == SurfAdaptivePolicy::DAYPART_ENHANCED ||
-             comp.family == SurfAdaptivePolicy::EXPANDED_DAILY) {
-    hero.w = (innerW - gap) * comp.splitPercent / 100;
-    const int sideX = innerX + hero.w + gap;
-    const int sideW = innerX + innerW - sideX;
-    if (comp.daypartCount > 0) dayparts = AdaptiveSurfRect{sideX, contentY, sideW, contentH};
-    else if (comp.showDetails) details = AdaptiveSurfRect{sideX, contentY, sideW, contentH};
-    if (comp.daypartCount > 0 && comp.showDetails) {
-      const int detailH = clampi(contentH * 30 / 100, 50, 78);
-      details = AdaptiveSurfRect{sideX, contentY, sideW, detailH};
-      dayparts.y += detailH + gap;
-      dayparts.h -= detailH + gap;
-    }
-  }
-  // END ADAPTIVE SURF GEOMETRY
-
-  if (comp.showTodaysBestLabel) {
-    drawTextCenteredAt(label.x + label.w / 2, label.y + 15,
-      comp.todaysBestLabelMode == SurfAdaptivePolicy::BEST_SPACIOUS ? "Best next 4hrs" : "Today's Best",
-      FONT_B9, ink);
-  }
-  if (comp.showSpot) {
-    drawTextCenteredAt(title.x + title.w / 2, title.y + 18, spot, FONT_B12, ink);
-    int16_t x1, y1; uint16_t tw, th; measureText(spot, FONT_B12, x1, y1, tw, th);
-    const int lineW = min(title.w - 4, (int)tw);
-    DisplayCore::get().fillRect(title.x + (title.w - lineW) / 2, title.y + 22, lineW, 2, ink);
+  // The four anchor geometries never reach this function. Adaptive cells are
+  // intentionally derived from the locked Small/Medium/Large/XL language.
+  if(c.rowSpan==1) {
+    renderAdaptiveSmallFamily(c,data,spot,wave,ink);
+    return;
   }
 
-  const bool horizontal = comp.family == SurfAdaptivePolicy::SHALLOW_WIDE;
-  if (horizontal) {
-    const int ratingW = comp.showRatingWord ? clampi(hero.w * 22 / 100, 58, 125) : 0;
-    const int visualW = comp.showRatingVisual ? clampi(hero.w * 34 / 100, 105, 150) : 0;
-    const int waveW = hero.w - ratingW - visualW;
-    if (comp.showRatingWord) drawTextCenteredAt(hero.x + ratingW / 2, hero.y + hero.h / 2 + 6,
-                                                ratingToWord(data.rating), FONT_B12, ink);
-    if (comp.showRatingVisual) {
-      const int boxW = clampi((visualW - 25) / 6, 12, 20);
-      const int visualPixels = blocksWidthPxSized(boxW, 5);
-      drawRatingVisualSized(hero.x + ratingW + (visualW - visualPixels) / 2,
-                            hero.y + hero.h / 2 - 7, data.rating,
-                            data.ratingFromExperience, data.experienceDiceValue,
-                            ink, boxW, 14, 5, 2, 14);
-    }
-    if (comp.showWaveRange) drawTextCenteredAt(hero.x + ratingW + visualW + waveW / 2,
-                                               hero.y + hero.h / 2 + 6, wave, FONT_B12, ink);
-  } else {
-    const GFXfont* verdictFont = FONT_B12;
-    int16_t bx, by; uint16_t bw, bh;
-    measureText(ratingToWord(data.rating), FONT_B18, bx, by, bw, bh);
-    if (hero.w >= (int)bw + 8 && hero.h >= 120) verdictFont = FONT_B18;
-    int centerY = hero.y + hero.h / 2;
-    if (comp.showRatingWord) drawTextCenteredAt(hero.x + hero.w / 2, centerY - 38,
-                                                ratingToWord(data.rating), verdictFont, ink);
-    if (comp.showRatingVisual) {
-      const int boxW = clampi((hero.w - 45) / 6, 12, 22);
-      const int visualW = blocksWidthPxSized(boxW, 5);
-      drawRatingVisualSized(hero.x + (hero.w - visualW) / 2, centerY - 12,
-                            data.rating, data.ratingFromExperience, data.experienceDiceValue,
-                            ink, boxW, 15, 5, 2, 15);
-    }
-    if (comp.showWaveRange) drawTextCenteredAt(hero.x + hero.w / 2, centerY + 38,
-                                               wave, FONT_B12, ink);
+  if(c.colSpan==1) {
+    renderAdaptiveSmallFamily(c,data,spot,wave,ink);
+    return;
   }
 
-  if (details.w > 0 && details.h > 0) {
-    int rows = (isfinite(data.swellPeriodS) ? 1 : 0) + (isfinite(data.windSpeedMs) ? 1 : 0);
-    if (rows < 1) rows = 1;
-    const int rowH = details.h / rows;
-    int row = 0;
-    if (isfinite(data.swellPeriodS)) {
-      char text[16]; snprintf(text, sizeof(text), "%.0f s", data.swellPeriodS);
-      if (comp.showDirections && isfinite(data.swellDirDegFrom))
-        drawSurfDirectionArrow(details.x + 20, details.y + rowH / 2, clampi(rowH - 12, 18, 34), data.swellDirDegFrom, ink);
-      drawTextCenteredAt(details.x + details.w / 2 + (comp.showDirections ? 10 : 0),
-                         details.y + row * rowH + rowH / 2 + 5, text, FONT_B9, ink);
-      ++row;
-    }
-    if (isfinite(data.windSpeedMs)) {
-      char text[16]; snprintf(text, sizeof(text), "%.0f m/s", data.windSpeedMs);
-      if (comp.showDirections && isfinite(data.windDirDegFrom))
-        drawSurfDirectionArrow(details.x + 20, details.y + row * rowH + rowH / 2, clampi(rowH - 12, 18, 34), data.windDirDegFrom, ink);
-      drawTextCenteredAt(details.x + details.w / 2 + (comp.showDirections ? 10 : 0),
-                         details.y + row * rowH + rowH / 2 + 5, text, FONT_B9, ink);
-    }
+  if(c.colSpan==2) {
+    renderAdaptiveMediumFamily(c,data,spot,wave,ink,c.rowSpan>=3,false);
+    return;
   }
 
-  if (dayparts.w > 0 && comp.daypartCount > 0) {
-    const int columnW = dayparts.w / comp.daypartCount;
-    int shown = 0;
-    for (int i = 0; i < 4 && shown < comp.daypartCount; ++i) {
-      if (!data.day[i].valid) continue;
-      const int cx = dayparts.x + shown * columnW + columnW / 2;
-      const char* label = i == 0 ? "Morning" : i == 1 ? "Noon" : i == 2 ? "Afternoon" : "Evening";
-      drawTextCenteredAt(cx, dayparts.y + 16, label, FONT_B9, ink);
-      drawTextCenteredAt(cx, dayparts.y + 39, ratingToWord(data.day[i].rating), FONT_B9, ink);
-      drawTextCenteredAt(cx, dayparts.y + dayparts.h - 8,
-                         data.day[i].waveRange[0] ? data.day[i].waveRange : wave, FONT_B9, ink);
-      ++shown;
-    }
+  if(c.colSpan==3) {
+    renderAdaptiveMediumFamily(c,data,spot,wave,ink,c.rowSpan>=3,c.rowSpan>=4);
+    return;
   }
-  if (daily.h > 0 && comp.dailyCount > 0) {
-    const int columnW = daily.w / comp.dailyCount;
-    int shown = 0;
-    for (int i = 0; i < 5 && shown < comp.dailyCount; ++i) {
-      if (!data.daily[i].valid) continue;
-      const int cx = daily.x + shown * columnW + columnW / 2;
-      drawTextCenteredAt(cx, daily.y + 18, data.daily[i].label, FONT_B9, ink);
-      drawTextCenteredAt(cx, daily.y + 42, ratingToWord(data.daily[i].rating), FONT_B9, ink);
-      drawTextCenteredAt(cx, daily.y + daily.h - 10,
-                         data.daily[i].waveRange[0] ? data.daily[i].waveRange : wave, FONT_B9, ink);
-      ++shown;
-    }
-  }
-  if (comp.showTrend) drawSurfTrendIndicator(c.x + c.w - pad - 10, c.y + pad, surfTrendSymbol(data), ink);
+
+  // 4x3 is the only adaptive 4-column geometry: use the Medium/XL bridge with
+  // dayparts below, while 4x1/4x2/4x4 stay on the locked renderers.
+  renderAdaptiveMediumFamily(c,data,spot,wave,ink,true,false);
 }
 
 static void renderCommon(const Cell& c,
