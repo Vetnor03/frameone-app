@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import Image from 'next/image'
 import { pilotCombinationPhoto } from '@/app/lib/pilotCombinationPhotos'
+import { createPilotMatteOverlay } from '@/app/lib/pilotMatteEnhancement'
 import { defaultPilotPhotoAlignment, getPilotPhotoAlignment, type PilotPhotoAlignment } from '@/app/lib/pilotPhotoAlignment'
 import { pilotFrameNames, pilotMatteNames, type PilotFrameId, type PilotMatteId } from '@/app/lib/pilotSelection'
 
@@ -105,6 +106,8 @@ function ProductPreview({ frame, matte }: { frame: FrameOption; matte: MatteOpti
   const photoSrc = pilotCombinationPhoto(frame.id, matte.id)
   const [readyPhoto, setReadyPhoto] = useState<{ src: string; alignment: PilotPhotoAlignment } | null>(null)
   const [failedPhotoSrc, setFailedPhotoSrc] = useState<string | null>(null)
+  const matteOverlayRef = useRef<HTMLCanvasElement | null>(null)
+  const enhanceMatte = matte.id === 'green' || matte.id === 'sanguine'
   const photoReady = Boolean(photoSrc && readyPhoto?.src === photoSrc && failedPhotoSrc !== photoSrc)
   const alignment = photoReady ? readyPhoto!.alignment : defaultPilotPhotoAlignment
 
@@ -128,15 +131,45 @@ function ProductPreview({ frame, matte }: { frame: FrameOption; matte: MatteOpti
           style={{
             transformOrigin: 'center',
             transform: `translate(${alignment.offsetX}%, ${alignment.offsetY}%) scale(${alignment.scale})`,
-            // Subtle browser-only colour lift. Keep neutrals and the screen white
-            // natural, while giving the red and green passepartouts extra depth.
-            // The original JPGs and geometry remain completely unchanged.
-            filter: matte.id === 'green' || matte.id === 'sanguine'
-              ? 'saturate(1.18) contrast(1.04)'
-              : 'saturate(1.07) contrast(1.04)',
+            // The photo is unfiltered; only the matte-specific transparent canvas
+            // below gets colour enhancement, leaving the wood and display intact.
           }}
-          onLoad={(event) => setReadyPhoto({ src: photoSrc, alignment: measurePilotPhoto(event.currentTarget) })}
+          onLoad={(event) => {
+            const image = event.currentTarget
+            const nextAlignment = measurePilotPhoto(image)
+            if (enhanceMatte && matteOverlayRef.current) {
+              try {
+                const canvas = matteOverlayRef.current
+                canvas.width = image.naturalWidth
+                canvas.height = image.naturalHeight
+                const context = canvas.getContext('2d', { willReadFrequently: true })
+                if (context && canvas.width && canvas.height) {
+                  context.drawImage(image, 0, 0)
+                  const pixels = context.getImageData(0, 0, canvas.width, canvas.height)
+                  const overlay = createPilotMatteOverlay(pixels.data, canvas.width, canvas.height, matte.id as 'green' | 'sanguine')
+                  pixels.data.set(overlay)
+                  context.putImageData(pixels, 0, 0)
+                }
+              } catch {
+                // On any canvas issue the unmodified photograph is still shown.
+                const canvas = matteOverlayRef.current
+                if (canvas) { canvas.width = 0; canvas.height = 0 }
+              }
+            }
+            setReadyPhoto({ src: photoSrc, alignment: nextAlignment })
+          }}
           onError={() => setFailedPhotoSrc(photoSrc)}
+        />
+      ) : null}
+      {photoSrc && photoSrc !== failedPhotoSrc && enhanceMatte ? (
+        <canvas
+          ref={matteOverlayRef}
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-0 h-full w-full object-contain transition-opacity duration-200 ${photoReady ? 'opacity-100' : 'opacity-0'}`}
+          style={{
+            transformOrigin: 'center',
+            transform: `translate(${alignment.offsetX}%, ${alignment.offsetY}%) scale(${alignment.scale})`,
+          }}
         />
       ) : null}
       {photoSrc && failedPhotoSrc === photoSrc ? (
