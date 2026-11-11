@@ -78,11 +78,15 @@ static const int MAX_REMINDERS=10;
 struct ReminderItem {
   char title[96]={0};
   char time[12]={0};
+  char occurrenceDate[16]={0};
+  char displayDate[24]={0};
   int daysUntil=0;
+  bool isOverdue=false;
 };
 struct ReminderBucket {
   bool used=false;
   int daysUntil=0;
+  bool isOverdue=false;
   int count=0;
   int itemIdx[10]={0};
 };
@@ -115,6 +119,69 @@ static int findBucketByDaysUntil(const ReminderBucket* buckets,int n,int days) {
   for(int i=0;i<n;++i)if(buckets[i].used&&buckets[i].daysUntil==days)return i;
   return -1;
 }
+static int findPrimaryBucketIndex(const ReminderBucket* buckets,int count) {
+  if(!buckets || count<=0)return -1;
+  for(int i=0;i<count;++i)if(buckets[i].used&&buckets[i].daysUntil==0)return i;
+  for(int i=0;i<count;++i)if(buckets[i].used&&buckets[i].daysUntil==1)return i;
+  for(int i=0;i<count;++i)if(buckets[i].used)return i;
+  return -1;
+}
+// Native equivalents of the existing ModuleReminders.cpp date-label helpers.
+// This harness includes the EXACT preview C++ header and original font bits;
+// its storage/display adapters are deliberately small, dependency-free shims.
+static void buildRelativeDateText(int days,bool overdue,char* out,size_t n) {
+  if(!out||!n)return;
+  out[0]='\0';
+  if(overdue || days<0) {
+    const int late=std::abs(days);
+    if(late==1)std::snprintf(out,n,"1 day late");
+    else std::snprintf(out,n,"%d days late",late);
+  } else if(days==0) std::snprintf(out,n,"Today");
+  else if(days==1) std::snprintf(out,n,"Tomorrow");
+  else std::snprintf(out,n,"In %d days",days);
+}
+static bool parseYMD10(const char* str,int& y,int& m,int& d) {
+  if(!str || std::strlen(str)<10 || str[4]!='-' || str[7]!='-')return false;
+  for(int i=0;i<10;++i)if(i!=4&&i!=7&&(str[i]<'0'||str[i]>'9'))
+    return false;
+  y=(str[0]-'0')*1000+(str[1]-'0')*100+(str[2]-'0')*10+(str[3]-'0');
+  m=(str[5]-'0')*10+(str[6]-'0');
+  d=(str[8]-'0')*10+(str[9]-'0');
+  return m>=1&&m<=12&&d>=1&&d<=31;
+}
+static int weekdayIndexYMD(int y,int m,int d) {
+  static int table[]={0,3,2,5,0,3,5,1,4,6,2,4};
+  if(m<3)y-=1;
+  return (y+y/4-y/100+y/400+table[m-1]+d)%7;
+}
+static const char* weekdayNameFull(int index) {
+  static const char* names[]={"Sunday","Monday","Tuesday","Wednesday",
+                              "Thursday","Friday","Saturday"};
+  return index>=0&&index<7?names[index]:"";
+}
+static void buildAdaptiveFallbackHeading(const ReminderBucket& bucket,
+                                         char* out,size_t n) {
+  if(!out||!n)return;
+  out[0]='\0';
+  if(bucket.isOverdue || bucket.daysUntil<0) {
+    buildRelativeDateText(bucket.daysUntil,true,out,n);
+    return;
+  }
+  const int idx=bucket.count>0?bucket.itemIdx[0]:-1;
+  if(idx>=0&&idx<g_cache->count) {
+    const ReminderItem& r=g_cache->items[idx];
+    int y=0,m=0,d=0;
+    if(parseYMD10(r.occurrenceDate,y,m,d)) {
+      const char* weekday=weekdayNameFull(weekdayIndexYMD(y,m,d));
+      if(bucket.daysUntil<=7)std::snprintf(out,n,"On %s",weekday);
+      else if(bucket.daysUntil<=14)std::snprintf(out,n,"%s next week",weekday);
+      else if(r.displayDate[0])safeCopy(out,n,r.displayDate);
+    } else if(r.displayDate[0])safeCopy(out,n,r.displayDate);
+  }
+  if(!out[0])buildRelativeDateText(bucket.daysUntil,false,out,n);
+  if(!out[0])safeCopy(out,n,"Upcoming");
+}
+
 // Byte-for-byte equivalent wrapping semantics to the production C++ helper.
 static int wrapTextToLines(const char* src,char lines[][128],int maxLines,
                            int maxWidth,const GFXfont* font,bool& complete) {
@@ -159,12 +226,13 @@ static void append(ReminderBucket& bucket,const char* title,const char* time) {
   safeCopy(cache.items[idx].title,sizeof(cache.items[idx].title),title);
   safeCopy(cache.items[idx].time,sizeof(cache.items[idx].time),time);
   cache.items[idx].daysUntil=bucket.daysUntil;
+  cache.items[idx].isOverdue=bucket.isOverdue;
   bucket.itemIdx[bucket.count++]=idx;
 }
 static void fixture(const std::string& scenario,ReminderBucket* b) {
   cache=ReminderCache{};
   cache.ok=true;
-  b[0]=ReminderBucket{};b[1]=ReminderBucket{};
+  b[0]=ReminderBucket{};b[1]=ReminderBucket{};b[2]=ReminderBucket{};
   b[0].used=b[1].used=true;
   b[0].daysUntil=0;b[1].daysUntil=1;
   if(scenario=="normal"){
@@ -189,6 +257,29 @@ static void fixture(const std::string& scenario,ReminderBucket* b) {
   } else if(scenario=="future"){
     b[0].used=false;b[1].daysUntil=4;
     append(b[1],"Dette skjer om fire dager","");
+  } else if(scenario=="overdue"){
+    b[1].used=false;b[0].daysUntil=-2;b[0].isOverdue=true;
+    append(b[0],"Ring tannlegen om timen","09:30");
+    safeCopy(cache.items[0].occurrenceDate,
+             sizeof(cache.items[0].occurrenceDate),"2026-11-09");
+  } else if(scenario=="distant"){
+    b[0].used=false;b[1].daysUntil=22;
+    append(b[1],"Julemarked med venner","");
+    safeCopy(cache.items[0].occurrenceDate,
+             sizeof(cache.items[0].occurrenceDate),"2026-12-03");
+    safeCopy(cache.items[0].displayDate,
+             sizeof(cache.items[0].displayDate),"3 December");
+  } else if(scenario=="mixed"){
+    b[2].used=true;b[2].daysUntil=4;
+    append(b[0],"M\xF8te med selger","10:00");
+    append(b[1],"Hente n\xF8kler","");
+    append(b[2],"Bestille materialer","17:30");
+    safeCopy(cache.items[2].occurrenceDate,
+             sizeof(cache.items[2].occurrenceDate),"2026-11-15");
+  } else if(scenario=="unbreakable"){
+    append(b[0],"Supercalifragilisticexpialidociousutenmellomrom","15:00");
+  } else if(scenario=="unavailable"){
+    cache.ok=false;
   } else if(scenario=="many"){
     for(int i=0;i<5;++i){
       char label[88];std::snprintf(label,sizeof(label),"Dagens p\xE5minnelse %d med avtale",i+1);
@@ -219,23 +310,26 @@ int main(int argc,char** argv) {
   if(argc!=2)return 2;
   const fs::path root=argv[1];fs::create_directories(root);
   std::ofstream csv(root/"manifest.csv");
-  csv<<"scenario,theme,cols,rows,rendered,clipped,pbm\n";
-  const std::string scenarios[]={"normal","long","many","tomorrow","norwegian","future","empty"};
+  csv<<"scenario,theme,cols,rows,rendered,clipped,shown,overflow,pbm\n";
+  const std::string scenarios[]={"normal","long","many","tomorrow","norwegian",
+       "future","overdue","distant","mixed","unbreakable","empty","unavailable"};
   int mainFailures=0;
   for(const auto& scene:scenarios)for(int dark=0;dark<2;++dark)
     for(int cols=1;cols<=4;++cols)for(int rows=1;rows<=4;++rows){
       Theme::dark=dark!=0;
       g_width=cols*200;g_height=rows*120;g_clipped=0;
       g_pixels.assign((size_t)g_width*g_height,dark?1:0);
-      ModuleReminders::ReminderBucket buckets[2];
+      ModuleReminders::ReminderBucket buckets[3];
       ModuleReminders::fixture(scene,buckets);
       // All C++ preview code is exactly the firmware header (including the
       // GFX text preflight), rasterized with original glyph bitmap bytes.
       const Cell c={0,0,g_width,g_height};
       // Same field layout as frame Cell's rectangle members.
       // Header accepts c.x/y/w/h only and uses no type-specific overload.
-      const bool rendered=ModuleReminders::renderEditorialRemindersPreview(c,buckets,2);
-      if(rendered){
+      const bool rendered=ModuleReminders::renderEditorialRemindersPreview(c,buckets,3);
+      if(scene=="unavailable" && rendered)++mainFailures;
+      if(scene=="empty" && !rendered)++mainFailures;
+      if(rendered && ModuleReminders::cache.count>0){
         const auto& plan=*ModuleReminders::g_remindersEditorialPlan;
         if(plan.shown<=0 || plan.shown>ModuleReminders::cache.count ||
            plan.shown+plan.overflow!=ModuleReminders::cache.count)
@@ -258,8 +352,12 @@ int main(int argc,char** argv) {
         file=scene+"_"+(dark?"dark":"light")+"_"+std::to_string(cols)+"x"+std::to_string(rows)+".pbm";
         savePBM(root/file);
       }
+      const int shown=(rendered && ModuleReminders::cache.count>0)
+         ?ModuleReminders::g_remindersEditorialPlan->shown:0;
+      const int overflow=(rendered && ModuleReminders::cache.count>0)
+         ?ModuleReminders::g_remindersEditorialPlan->overflow:0;
       csv<<scene<<","<<(dark?"dark":"light")<<","<<cols<<","<<rows<<","
-         <<(rendered?1:0)<<","<<g_clipped<<","<<file<<"\n";
+         <<(rendered?1:0)<<","<<g_clipped<<","<<shown<<","<<overflow<<","<<file<<"\n";
       // First visual review anchors must produce native bitmaps.
       if(scene=="normal" && ((cols==4&&rows==1)||(cols==2&&rows==2)||
          (cols==4&&rows==2)||(cols==4&&rows==4)) && !rendered)++mainFailures;
