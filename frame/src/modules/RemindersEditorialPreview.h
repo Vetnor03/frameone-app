@@ -1,5 +1,5 @@
 #pragma once
-// RE:MIND Reminders vNext R2 — isolated editorial visual preview.
+// RE:MIND Reminders vNext R3 — isolated editorial visual preview.
 // Included from ModuleReminders.cpp WITHIN namespace ModuleReminders.
 // Reuses existing production feed, order, Today/Tomorrow selection and titles.
 // No fetching, API, date calculation, Skip or shared display code is changed.
@@ -47,6 +47,9 @@ struct EditorialReminderPlan {
   int panoramaHeadingX=0, panoramaHeadingY=0;
   const char* panoramaHeading=nullptr;
   const GFXfont* panoramaHeadingFont=nullptr;
+  // Own date labels: never reference temporary stack strings during painting.
+  char primaryHeading[64]={0};
+  char secondaryHeading[64]={0};
   EditorialReminderSection sections[2];
 };
 
@@ -216,12 +219,17 @@ static bool planEditorialReminders(const Cell& c,
     return false;
   const int todayIndex=findBucketByDaysUntil(buckets,bucketCount,0);
   const int tomorrowIndex=findBucketByDaysUntil(buckets,bucketCount,1);
-  // Preserve non-today/tomorrow and overdue rendering through the unchanged
-  // production fallback; no date-group meaning is invented.
-  if(todayIndex<0 && tomorrowIndex<0)return false;
-  const ReminderBucket* primary=todayIndex>=0
-    ?&buckets[todayIndex]:&buckets[tomorrowIndex];
-  const char* primaryHeading=todayIndex>=0?"Today":"Tomorrow";
+  // Use EXACTLY the primary bucket priority already used by production.
+  // When neither day is present, take the same first future / overdue group,
+  // and use its existing date-label builder (never invent a calendar date).
+  const int primaryIndex=todayIndex>=0 ? todayIndex
+    : tomorrowIndex>=0 ? tomorrowIndex
+    : findPrimaryBucketIndex(buckets,bucketCount);
+  if(primaryIndex<0 || primaryIndex>=bucketCount ||
+     !buckets[primaryIndex].used || buckets[primaryIndex].count<=0)return false;
+  const ReminderBucket* primary=&buckets[primaryIndex];
+  // Keep the pre-existing two-section preference: Today then Tomorrow.
+  // Other date groups retain their source order and are disclosed as overflow.
   const ReminderBucket* secondary=(todayIndex>=0 && tomorrowIndex>=0)
     ?&buckets[tomorrowIndex]:nullptr;
 
@@ -231,6 +239,11 @@ static bool planEditorialReminders(const Cell& c,
   if(!g_remindersEditorialPlan)return false;
   EditorialReminderPlan& plan=*g_remindersEditorialPlan;
   plan=EditorialReminderPlan{};
+  buildAdaptiveFallbackHeading(*primary,plan.primaryHeading,
+                               sizeof(plan.primaryHeading));
+  if(secondary)buildAdaptiveFallbackHeading(*secondary,plan.secondaryHeading,
+                                            sizeof(plan.secondaryHeading));
+  const char* primaryHeading=plan.primaryHeading;
 
   const int pad=max(9,min(22,(int)lroundf(min(c.w,c.h)*.070f)));
   plan.pad=pad;
@@ -269,9 +282,9 @@ static bool planEditorialReminders(const Cell& c,
   if(!planned && secondary && bodyH>=215 && w>=525) {
     const int gap=26;
     const int leftW=(w-gap)*53/100;
-    if(planEditorialSection(plan.sections[0],primary,"Today",
+    if(planEditorialSection(plan.sections[0],primary,primaryHeading,
                              x,y,leftW,bodyH,true) &&
-       planEditorialSection(plan.sections[1],secondary,"Tomorrow",
+       planEditorialSection(plan.sections[1],secondary,plan.secondaryHeading,
                              x+leftW+gap,y,w-leftW-gap,bodyH,true)){
       plan.family=REM_EDIT_TWO_COLUMNS;
       plan.sectionCount=2;
@@ -281,9 +294,9 @@ static bool planEditorialReminders(const Cell& c,
   if(!planned && secondary && bodyH>=280) {
     const int gap=14;
     const int firstH=(bodyH-gap)*54/100;
-    if(planEditorialSection(plan.sections[0],primary,"Today",
+    if(planEditorialSection(plan.sections[0],primary,primaryHeading,
                              x,y,w,firstH,true) &&
-       planEditorialSection(plan.sections[1],secondary,"Tomorrow",
+       planEditorialSection(plan.sections[1],secondary,plan.secondaryHeading,
                              x,y+firstH+gap,w,bodyH-firstH-gap,true)){
       plan.family=REM_EDIT_TWO_STORIES;
       plan.sectionCount=2;planned=true;
@@ -334,8 +347,45 @@ static void paintEditorialText(const char* text,const GFXfont* font,
   drawLeft(x-x1,top-y1,text,font,Theme::ink());
 }
 
+// An empty but successfully loaded feed deserves a deliberate quiet state,
+// not a fake item or changed backend semantics. All fonts are measured GFX.
+static bool renderEditorialEmptyPreview(const Cell& c) {
+  if(c.w<135 || c.h<95)return false;
+  const char* heading="No reminders";
+  const char* detail="Nothing upcoming";
+  const int pad=max(9,min(22,(int)lroundf(min(c.w,c.h)*.070f)));
+  const int width=c.w-pad*2, height=c.h-pad*2;
+  const GFXfont* headlineFonts[]={
+    RemindEditorialFonts::fraunces48(),
+    RemindEditorialFonts::dm24(),RemindEditorialFonts::dm18()
+  };
+  const GFXfont* detailFonts[]={
+    RemindEditorialFonts::dm18(),FONT_B9
+  };
+  for(int i=0;i<3;++i)for(int j=0;j<2;++j) {
+    const GFXfont* hero=headlineFonts[i];
+    const GFXfont* sub=detailFonts[j];
+    const int heroH=editorialInkHeight(heading,hero);
+    const int subH=editorialInkHeight(detail,sub);
+    const int gap=height>220?22:height>140?14:9;
+    const int blockH=heroH+gap+subH;
+    if(blockH>height ||
+       !editorialFitsInk(heading,hero,width,height) ||
+       !editorialFitsInk(detail,sub,width,height))continue;
+    const int headingX=c.x+(c.w-textWidth(heading,hero))/2;
+    const int detailX=c.x+(c.w-textWidth(detail,sub))/2;
+    const int top=c.y+(c.h-blockH)/2;
+    paintEditorialText(heading,hero,headingX,top);
+    paintEditorialText(detail,sub,detailX,top+heroH+gap);
+    return true;
+  }
+  return false;
+}
+
 static bool renderEditorialRemindersPreview(const Cell& c,
                                             const ReminderBucket* buckets,int bucketCount) {
+  if(!g_cache || !g_cache->ok)return false;
+  if(g_cache->count==0)return renderEditorialEmptyPreview(c);
   if(!planEditorialReminders(c,buckets,bucketCount))return false;
   const EditorialReminderPlan& plan=*g_remindersEditorialPlan;
   if(plan.family==REM_EDIT_PANORAMA)
