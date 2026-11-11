@@ -22,6 +22,8 @@ namespace fs=std::filesystem;
 static int g_width=800,g_height=480,g_clipped=0;
 static std::vector<uint8_t> g_pixels;
 
+struct Cell { int x,y,w,h; };
+
 namespace Theme {
 static bool dark=false;
 static uint16_t ink(){return dark?0:1;}
@@ -213,7 +215,7 @@ int main(int argc,char** argv) {
       ModuleReminders::fixture(scene,buckets);
       // All C++ preview code is exactly the firmware header (including the
       // GFX text preflight), rasterized with original glyph bitmap bytes.
-      const struct Cell { int x,y,w,h; } c={0,0,g_width,g_height};
+      const Cell c={0,0,g_width,g_height};
       // Same field layout as frame Cell's rectangle members.
       // Header accepts c.x/y/w/h only and uses no type-specific overload.
       const bool rendered=ModuleReminders::renderEditorialRemindersPreview(c,buckets,2);
