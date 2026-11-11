@@ -24,7 +24,7 @@ def test_r1_original_editorial_bitmaps_and_gfx_metrics():
     assert "wrapTextToLines(reminder.title,lines," in PREVIEW
     assert "measureText(text,font,x1,y1,w,h)" in PREVIEW
     assert "planEditorialReminders(" in PREVIEW
-    assert "memset(&plan,0,sizeof(plan))" in PREVIEW
+    assert "plan=EditorialReminderPlan{}" in PREVIEW
     assert "REM_EDIT_PANORAMA" in PREVIEW and "REM_EDIT_TWO_COLUMNS" in PREVIEW
     assert "editorialShiftSection" in PREVIEW
     assert "malloc(sizeof(EditorialReminderPlan))" in PREVIEW
