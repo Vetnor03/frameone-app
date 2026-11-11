@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Compile original GFX bitmap fonts and actual R1 C++ preview
+      - name: Compile original GFX bitmap fonts and actual R3.2 C++ preview
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -Werror \
             -Iframe/tests/native/reminders \
@@ -23,12 +23,14 @@ jobs:
             frame/tests/native/reminders/reminders_preview.cpp \
             frame/src/assets/fonts/RemindEditorialFonts.cpp \
             -o /tmp/reminders-preview-native
-      - name: Generate 16 pixel geometries / Light and Dark / three scenarios
+      - name: Generate all 16 geometries / Light and Dark / 15 scenarios
         run: /tmp/reminders-preview-native reminders-native-output
       - name: Build PNG contact sheets without changing the original 1-bit rasters
         run: |
           python3 -m pip install Pillow
           python3 frame/tests/native/reminders/make_gallery.py
+      - name: Verify exact Light/Dark 1-bit pixel polarity and fallback symmetry
+        run: python3 frame/tests/native/reminders/verify_light_dark.py
       - name: Upload actual C++ 1-bit preview and contact sheets
         uses: actions/upload-artifact@v4
         with:
