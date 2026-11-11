@@ -169,3 +169,44 @@ captured as a native image.
 
 **Date, Weather and Surf are file-for-file untouched. R3 remains draft,
 unmerged, physically untested and not approved for production.**
+
+
+## R3.1 — information hierarchy correction (11 November 2026)
+
+Owner review flagged a crucial failure of the design contract: in R3 the
+Today/Tomorrow label was readable from across the room while the actual
+reminder text could require reading glasses. This is **not acceptable** for
+the physical 1–2 m target even if a native renderer passes CI.
+
+**Locked hierarchy for Reminders previews (not yet physically approved):**
+1. PRIMARY: exact reminder **task title** — largest usable GFX bitmap glyphs;
+   on roomy cells, the first reminder can use original Fraunces48, with
+   following complete tasks in original DM Sans24.
+2. IMPORTANT: full time if one exists, original DM Sans18, with a
+   side-by-side or stacked caption according to true width.
+3. SECONDARY: Today/Tomorrow, overdue or future date grouping, DM Sans18
+   on regular/large cells. Tiny 1-cell labels may be 9pt because the day is
+   context, never the hero.
+4. OPTIONAL: accurate +N more, lower priority than a readable full task.
+
+The native C++ plan tries **Fraunces48 first task + DM Sans24 following** for
+roomy sections, then DM Sans24 for all. Only if no complete first task
+fits does it try DM Sans18 / the old font. It no longer switches every item
+to 18px just to squeeze in one or two more reminders. An impossible title
+goes to the unchanged legacy path rather than being silently cut.
+
+A shallow strip now reserves at most about 110px for the small day label,
+instead of dedicating a quarter of the cell to the word "Today". Header
+typography and task typography are independently measurable in original GFX
+pixel bounds. This is ONE pixel-driven hierarchy, not 16 hardcoded designs.
+
+Verified in actual native one-bit 1×1, 2×2, 4×1, 4×4 and dense 4×4:
+the date no longer dominates the composition; the first task is visibly
+larger and following task rows remain readable. Native CI asserts secondary
+date fonts, original primary task fonts for roomy normal cells, exact
+title preservation, correct overflow accounting, no row intersections and
+zero pixels drawn beyond the native framebuffer.
+
+**This remains a digital design candidate**. 1–2m readability on the real
+V4 is not established until explicit physical QA. Do not merge or flash
+without the owner's separate permission. Date/Weather/Surf remain frozen.
