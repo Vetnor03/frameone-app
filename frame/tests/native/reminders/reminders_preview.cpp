@@ -235,6 +235,24 @@ int main(int argc,char** argv) {
       // Same field layout as frame Cell's rectangle members.
       // Header accepts c.x/y/w/h only and uses no type-specific overload.
       const bool rendered=ModuleReminders::renderEditorialRemindersPreview(c,buckets,2);
+      if(rendered){
+        const auto& plan=*ModuleReminders::g_remindersEditorialPlan;
+        if(plan.shown<=0 || plan.shown>ModuleReminders::cache.count ||
+           plan.shown+plan.overflow!=ModuleReminders::cache.count)
+          ++mainFailures;
+        for(int s=0;s<plan.sectionCount;++s){
+          const auto& section=plan.sections[s];
+          int previousEnd=section.y;
+          for(int i=0;i<section.shown;++i){
+            const auto& row=section.rows[i];
+            if(row.y<previousEnd || row.y+row.h>section.y+section.h ||
+               row.titleX<section.x || row.titleX>=section.x+section.w ||
+               row.lineCount<1 || row.lineCount>3)
+              ++mainFailures;
+            previousEnd=row.y+row.h;
+          }
+        }
+      }
       std::string file="";
       if(rendered){
         file=scene+"_"+(dark?"dark":"light")+"_"+std::to_string(cols)+"x"+std::to_string(rows)+".pbm";
