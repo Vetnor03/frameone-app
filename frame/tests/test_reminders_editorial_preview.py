@@ -1,4 +1,4 @@
-"""R3 source-contract checks; these do not replace native 1-bit visual QA."""
+"""R3.2 source-contract checks; these do not replace native 1-bit visual QA."""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,7 +31,7 @@ def test_r1_original_editorial_bitmaps_and_gfx_metrics():
     # R3.1 visual hierarchy contract: a day is context, never the hero.
     assert 'return editorialFitsInk(title,secondary,width,height)?secondary:nullptr;' in PREVIEW
     assert 'const GFXfont* secondary=compact?FONT_B9:RemindEditorialFonts::dm18();' in PREVIEW
-    assert 'const bool largeHero=h>=250 && w>=300;' in PREVIEW
+    assert 'const bool largeHero=h>=250 && w>=300 && g_cache->count<=5;' in PREVIEW
     assert 'const GFXfont* font=(style==0 && i==0)' in PREVIEW
     assert 'RemindEditorialFonts::fraunces48()' in PREVIEW
     assert ':(style<=1)?RemindEditorialFonts::dm24()' in PREVIEW
