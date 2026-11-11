@@ -446,6 +446,11 @@ int main(int argc,char** argv) {
          ?ModuleReminders::g_remindersEditorialPlan->shown:0;
       const int overflow=(rendered && ModuleReminders::cache.count>0)
          ?ModuleReminders::g_remindersEditorialPlan->overflow:0;
+      // Full 800x480 day-overview reference: useful space must not be
+      // sacrificed to a giant heading or wastefully hidden action rows.
+      if((scene=="six" || scene=="many") && cols==4 && rows==4 &&
+         (!rendered || shown!=ModuleReminders::cache.count || overflow!=0))
+        ++mainFailures;
       csv<<scene<<","<<(dark?"dark":"light")<<","<<cols<<","<<rows<<","
          <<(rendered?1:0)<<","<<g_clipped<<","<<shown<<","<<overflow<<","<<file<<"\n";
       // First visual review anchors must produce native bitmaps.
