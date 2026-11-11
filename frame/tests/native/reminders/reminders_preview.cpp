@@ -235,7 +235,23 @@ static void fixture(const std::string& scenario,ReminderBucket* b) {
   b[0]=ReminderBucket{};b[1]=ReminderBucket{};b[2]=ReminderBucket{};
   b[0].used=b[1].used=true;
   b[0].daysUntil=0;b[1].daysUntil=1;
-  if(scenario=="normal"){
+  if(scenario=="single"){
+    append(b[0],"Hente pakke","16:00");
+  } else if(scenario=="few"){
+    append(b[0],"Handle melk og kaffe","09:00");
+    append(b[0],"Vanne plantene","");
+  } else if(scenario=="six"){
+    for(int i=0;i<3;++i){
+      char label[80];
+      std::snprintf(label,sizeof(label),"Dagens avtale %d",i+1);
+      append(b[0],label,(i%2==0)?"09:00":"");
+    }
+    for(int i=0;i<3;++i){
+      char label[80];
+      std::snprintf(label,sizeof(label),"Morgendagens plan %d",i+1);
+      append(b[1],label,(i%2==0)?"18:00":"");
+    }
+  } else if(scenario=="normal"){
     append(b[0],"Handle melk og kaffe","09:00");
     append(b[0],"M\xF8te med banken","12:30");
     append(b[0],"Hente pakke","16:00");
@@ -313,8 +329,9 @@ int main(int argc,char** argv) {
   const fs::path root=argv[1];fs::create_directories(root);
   std::ofstream csv(root/"manifest.csv");
   csv<<"scenario,theme,cols,rows,rendered,clipped,shown,overflow,pbm\n";
-  const std::string scenarios[]={"normal","long","many","tomorrow","norwegian",
-       "future","overdue","distant","mixed","unbreakable","empty","unavailable"};
+  const std::string scenarios[]={"single","few","normal","six","long","many",
+       "tomorrow","norwegian","future","overdue","distant","mixed","unbreakable",
+       "empty","unavailable"};
   int mainFailures=0;
   for(const auto& scene:scenarios)for(int dark=0;dark<2;++dark)
     for(int cols=1;cols<=4;++cols)for(int rows=1;rows<=4;++rows){
@@ -323,6 +340,13 @@ int main(int argc,char** argv) {
       g_pixels.assign((size_t)g_width*g_height,dark?1:0);
       ModuleReminders::ReminderBucket buckets[3];
       ModuleReminders::fixture(scene,buckets);
+      // Freeze all input fields and bucket references. This is a renderer-only
+      // PR: rendering must not alter title profiles, time, dates, source
+      // index positions, count or any server-provided order.
+      const ModuleReminders::ReminderCache beforeCache=ModuleReminders::cache;
+      const ModuleReminders::ReminderBucket beforeBuckets[3]={
+        buckets[0],buckets[1],buckets[2]
+      };
       // All C++ preview code is exactly the firmware header (including the
       // GFX text preflight), rasterized with original glyph bitmap bytes.
       const Cell c={0,0,g_width,g_height};
@@ -330,6 +354,28 @@ int main(int argc,char** argv) {
       // Header accepts c.x/y/w/h only and uses no type-specific overload.
       const bool rendered=ModuleReminders::renderEditorialRemindersPreview(c,buckets,3);
       if(scene=="unavailable" && rendered)++mainFailures;
+      if(ModuleReminders::cache.count!=beforeCache.count ||
+         ModuleReminders::cache.ok!=beforeCache.ok)++mainFailures;
+      for(int k=0;k<beforeCache.count;++k){
+        const auto& old=beforeCache.items[k];
+        const auto& now=ModuleReminders::cache.items[k];
+        if(std::strcmp(old.title,now.title)!=0 ||
+           std::strcmp(old.time,now.time)!=0 ||
+           std::strcmp(old.occurrenceDate,now.occurrenceDate)!=0 ||
+           std::strcmp(old.displayDate,now.displayDate)!=0 ||
+           old.daysUntil!=now.daysUntil || old.isOverdue!=now.isOverdue)
+          ++mainFailures;
+      }
+      for(int k=0;k<3;++k){
+        if(buckets[k].count!=beforeBuckets[k].count ||
+           buckets[k].used!=beforeBuckets[k].used ||
+           buckets[k].daysUntil!=beforeBuckets[k].daysUntil ||
+           buckets[k].isOverdue!=beforeBuckets[k].isOverdue)
+          ++mainFailures;
+        for(int i=0;i<beforeBuckets[k].count;++i)
+          if(buckets[k].itemIdx[i]!=beforeBuckets[k].itemIdx[i])
+            ++mainFailures;
+      }
       if(scene=="empty" && !rendered)++mainFailures;
       if(rendered && ModuleReminders::cache.count>0){
         const auto& plan=*ModuleReminders::g_remindersEditorialPlan;
@@ -355,6 +401,15 @@ int main(int argc,char** argv) {
           if(section.headingFont && section.w<=220 &&
              section.headingFont!=ModuleReminders::FONT_B9)
             ++mainFailures;
+          // Density never changes importance/order: sparse views highlight
+          // the real first task, and busy overview does not single it out.
+          if((scene=="many" || scene=="six") && section.shown &&
+              section.rows[0].font==RemindEditorialFonts::fraunces48())
+            ++mainFailures;
+          if((scene=="single" || scene=="few") && cols==4 && rows==4 &&
+             section.shown &&
+             section.rows[0].font!=RemindEditorialFonts::fraunces48())
+            ++mainFailures;
           // A roomy ordinary list must privilege readable reminder typography.
           if(scene=="normal" && cols>=2 && rows>=2 && section.shown &&
              (section.rows[0].font==ModuleReminders::FONT_B9 ||
@@ -375,7 +430,8 @@ int main(int argc,char** argv) {
               recovered+=row.lines[line];
             }
             if(row.itemIdx<0 || row.itemIdx>=ModuleReminders::cache.count ||
-               recovered!=ModuleReminders::cache.items[row.itemIdx].title)
+               recovered!=ModuleReminders::cache.items[row.itemIdx].title ||
+               row.itemIdx!=section.bucket->itemIdx[i])
               ++mainFailures;
             previousEnd=row.y+row.h;
           }
@@ -395,7 +451,8 @@ int main(int argc,char** argv) {
       // First visual review anchors must produce native bitmaps.
       // Non-overfull reference scenes must use the new editorial renderer on
       // ALL 16 shapes, in BOTH themes; failure/unbreakable keep safe fallback.
-      if((scene=="normal" || scene=="future" || scene=="overdue" ||
+      if((scene=="single" || scene=="few" || scene=="normal" ||
+          scene=="six" || scene=="future" || scene=="overdue" ||
           scene=="distant" || scene=="mixed" || scene=="empty") && !rendered)
         ++mainFailures;
       if(g_clipped)++mainFailures;
