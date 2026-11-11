@@ -177,6 +177,18 @@ static void fixture(const std::string& scenario,ReminderBucket* b) {
     append(b[0],"Ring R\xF8rleggeren om arbeidet i kjelleren","08:30");
     append(b[0],"Planlegge bursdagsmiddag for \xC5se og \xD8yvind","");
     append(b[1],"Husk \xE5 hente varer p\xE5 postkontoret","17:15");
+  } else if(scenario=="tomorrow"){
+    b[0].used=false;
+    append(b[1],"Lever \xE5rsrapport for prosjektet","08:15");
+    append(b[1],"Bes\xF8ke foreldrene","");
+    append(b[1],"Handle frukt","18:00");
+  } else if(scenario=="norwegian"){
+    append(b[0],"\xC5se og \xD8yvind: \xE6rlig innsats","07:45");
+    append(b[0],"P\xE5minnelse om m\xF8te p\xE5 J\xE6ren","");
+    append(b[1],"Bestill \xF8lbr\xF8d og bl\xE5b\xE6r","14:20");
+  } else if(scenario=="future"){
+    b[0].used=false;b[1].daysUntil=4;
+    append(b[1],"Dette skjer om fire dager","");
   } else if(scenario=="many"){
     for(int i=0;i<5;++i){
       char label[88];std::snprintf(label,sizeof(label),"Dagens p\xE5minnelse %d med avtale",i+1);
@@ -208,7 +220,7 @@ int main(int argc,char** argv) {
   const fs::path root=argv[1];fs::create_directories(root);
   std::ofstream csv(root/"manifest.csv");
   csv<<"scenario,theme,cols,rows,rendered,clipped,pbm\n";
-  const std::string scenarios[]={"normal","long","many"};
+  const std::string scenarios[]={"normal","long","many","tomorrow","norwegian","future","empty"};
   int mainFailures=0;
   for(const auto& scene:scenarios)for(int dark=0;dark<2;++dark)
     for(int cols=1;cols<=4;++cols)for(int rows=1;rows<=4;++rows){
