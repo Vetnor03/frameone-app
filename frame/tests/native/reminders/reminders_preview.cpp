@@ -185,7 +185,7 @@ static void fixture(const std::string& scenario,ReminderBucket* b) {
   } else if(scenario=="norwegian"){
     append(b[0],"\xC5se og \xD8yvind: \xE6rlig innsats","07:45");
     append(b[0],"P\xE5minnelse om m\xF8te p\xE5 J\xE6ren","");
-    append(b[1],"Bestill \xF8lbr\xF8d og bl\xE5b\xE6r","14:20");
+    append(b[1],"Bestill \xF8" "lbr\xF8" "d og bl\xE5" "b\xE6" "r","14:20");
   } else if(scenario=="future"){
     b[0].used=false;b[1].daysUntil=4;
     append(b[1],"Dette skjer om fire dager","");
