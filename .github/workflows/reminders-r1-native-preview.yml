@@ -1,0 +1,38 @@
+name: Reminders R1 native 1-bit preview
+
+on:
+  pull_request:
+    paths:
+      - "frame/src/modules/ModuleReminders.cpp"
+      - "frame/src/modules/RemindersEditorialPreview.h"
+      - "frame/tests/native/reminders/**"
+      - ".github/workflows/reminders-r1-native-preview.yml"
+  workflow_dispatch:
+
+jobs:
+  reminders-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile original GFX bitmap fonts and actual R1 C++ preview
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -Iframe/tests/native/reminders \
+            -Iframe/src/assets/fonts -Iframe/src/modules \
+            frame/tests/native/reminders/reminders_preview.cpp \
+            frame/src/assets/fonts/RemindEditorialFonts.cpp \
+            -o /tmp/reminders-preview-native
+      - name: Generate 16 pixel geometries / Light and Dark / three scenarios
+        run: /tmp/reminders-preview-native reminders-native-output
+      - name: Build PNG contact sheets without changing the original 1-bit rasters
+        run: |
+          python3 -m pip install Pillow
+          python3 frame/tests/native/reminders/make_gallery.py
+      - name: Upload actual C++ 1-bit preview and contact sheets
+        uses: actions/upload-artifact@v4
+        with:
+          name: reminders-r1-native-one-bit-previews
+          path: reminders-native-output/
+          if-no-files-found: error
+          retention-days: 14
