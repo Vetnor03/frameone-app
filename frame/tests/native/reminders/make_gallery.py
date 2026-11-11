@@ -18,7 +18,8 @@ for record in records:
     img = Image.open(pbm).convert("1")
     img.save(root / "png" / (pbm.stem + ".png"), optimize=True)
 
-for scenario in ("normal", "long", "many", "tomorrow", "norwegian", "future", "empty"):
+for scenario in ("normal", "long", "many", "tomorrow", "norwegian", "future",
+                 "overdue", "distant", "mixed", "unbreakable", "empty", "unavailable"):
     for theme in ("light", "dark"):
         background = "white" if theme == "light" else "black"
         foreground = "black" if theme == "light" else "white"
@@ -46,4 +47,4 @@ for scenario in ("normal", "long", "many", "tomorrow", "norwegian", "future", "e
 
 print(f"Rasterized {sum(row['rendered'] == '1' for row in records)}/{len(records)} native scenes")
 print(f"Unsafe out-of-bounds pixels: {sum(int(row['clipped']) for row in records)}")
-print("Original 1-bit PBM, 1:1 PNG, and six contact sheets: reminders-native-output/")
+print("Original 1-bit PBM, 1:1 PNG, and scenario contact sheets: reminders-native-output/")
