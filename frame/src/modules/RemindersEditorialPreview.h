@@ -42,8 +42,10 @@ struct EditorialReminderPlan {
   EditorialReminderSection sections[2];
 };
 
-// Static scratch, not a multi-KB render-loop stack allocation.
-static EditorialReminderPlan g_remindersEditorialPlan;
+// Allocate large preview scratch lazily on the heap: no multi-KB static DRAM
+// increase for the legacy ESP32 target, and no render-loop stack allocation.
+// If allocation fails the caller keeps the unchanged production rendering.
+static EditorialReminderPlan* g_remindersEditorialPlan = nullptr;
 
 static int editorialFontAdvance(const GFXfont* font) {
   return font ? (int)pgm_read_byte(&font->yAdvance) : 0;
@@ -151,7 +153,10 @@ static bool planEditorialReminders(const Cell& c,
   const int x=c.x+pad, y=c.y+pad, w=c.w-2*pad, h=c.h-2*pad;
   if(w<90 || h<70)return false;
 
-  EditorialReminderPlan& plan=g_remindersEditorialPlan;
+  if (!g_remindersEditorialPlan)
+    g_remindersEditorialPlan = static_cast<EditorialReminderPlan*>(malloc(sizeof(EditorialReminderPlan)));
+  if (!g_remindersEditorialPlan) return false;
+  EditorialReminderPlan& plan=*g_remindersEditorialPlan;
   memset(&plan,0,sizeof(plan));
   const int footerReserve=g_cache->count>1 ? 28 : 0;
   const int bodyH=h-footerReserve;
@@ -214,7 +219,7 @@ static void paintEditorialText(const char* txt,const GFXfont* font,
 static bool renderEditorialRemindersPreview(const Cell& c,
                                             const ReminderBucket* buckets,int bucketCount) {
   if(!planEditorialReminders(c,buckets,bucketCount))return false;
-  const EditorialReminderPlan& plan=g_remindersEditorialPlan;
+  const EditorialReminderPlan& plan=*g_remindersEditorialPlan;
   const int pad=max(10,min(23,(int)lroundf(min(c.w,c.h)*.075f)));
   const int usableW=c.w-2*pad;
   const bool panoramic=usableW>=350 &&
