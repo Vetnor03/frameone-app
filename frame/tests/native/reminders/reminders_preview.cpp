@@ -334,14 +334,30 @@ int main(int argc,char** argv) {
         if(plan.shown<=0 || plan.shown>ModuleReminders::cache.count ||
            plan.shown+plan.overflow!=ModuleReminders::cache.count)
           ++mainFailures;
-        for(int s=0;s<plan.sectionCount;++s){
-          const auto& section=plan.sections[s];
+        if((scene=="normal" && std::strcmp(plan.primaryHeading,"Today")!=0) ||
+           (scene=="tomorrow" && std::strcmp(plan.primaryHeading,"Tomorrow")!=0) ||
+           (scene=="future" && std::strcmp(plan.primaryHeading,"In 4 days")!=0) ||
+           (scene=="overdue" && std::strcmp(plan.primaryHeading,"2 days late")!=0) ||
+           (scene=="distant" && std::strcmp(plan.primaryHeading,"3 December")!=0))
+          ++mainFailures;
+        for(int sectionIndex=0;sectionIndex<plan.sectionCount;++sectionIndex){
+          const auto& section=plan.sections[sectionIndex];
           int previousEnd=section.y;
           for(int i=0;i<section.shown;++i){
             const auto& row=section.rows[i];
             if(row.y<previousEnd || row.y+row.h>section.y+section.h ||
                row.titleX<section.x || row.titleX>=section.x+section.w ||
                row.lineCount<1 || row.lineCount>3)
+              ++mainFailures;
+            // This verifies the FULL title survives word wrapping; no cropped
+            // facts or unannounced ellipses in an "accepted" C++ preview row.
+            std::string recovered;
+            for(int line=0;line<row.lineCount;++line){
+              if(line)recovered+=" ";
+              recovered+=row.lines[line];
+            }
+            if(row.itemIdx<0 || row.itemIdx>=ModuleReminders::cache.count ||
+               recovered!=ModuleReminders::cache.items[row.itemIdx].title)
               ++mainFailures;
             previousEnd=row.y+row.h;
           }
@@ -359,8 +375,11 @@ int main(int argc,char** argv) {
       csv<<scene<<","<<(dark?"dark":"light")<<","<<cols<<","<<rows<<","
          <<(rendered?1:0)<<","<<g_clipped<<","<<shown<<","<<overflow<<","<<file<<"\n";
       // First visual review anchors must produce native bitmaps.
-      if(scene=="normal" && ((cols==4&&rows==1)||(cols==2&&rows==2)||
-         (cols==4&&rows==2)||(cols==4&&rows==4)) && !rendered)++mainFailures;
+      // Non-overfull reference scenes must use the new editorial renderer on
+      // ALL 16 shapes, in BOTH themes; failure/unbreakable keep safe fallback.
+      if((scene=="normal" || scene=="future" || scene=="overdue" ||
+          scene=="distant" || scene=="mixed" || scene=="empty") && !rendered)
+        ++mainFailures;
       if(g_clipped)++mainFailures;
     }
   return mainFailures?1:0;
