@@ -348,7 +348,12 @@ int main(int argc,char** argv) {
           ++mainFailures;
         for(int sectionIndex=0;sectionIndex<plan.sectionCount;++sectionIndex){
           const auto& section=plan.sections[sectionIndex];
-          if(section.headingFont && section.headingFont!=RemindEditorialFonts::dm18())
+          if(section.headingFont &&
+             section.headingFont!=RemindEditorialFonts::dm18() &&
+             section.headingFont!=ModuleReminders::FONT_B9)
+            ++mainFailures;
+          if(section.headingFont && section.w<=220 &&
+             section.headingFont!=ModuleReminders::FONT_B9)
             ++mainFailures;
           // A roomy ordinary list must privilege readable reminder typography.
           if(scene=="normal" && cols>=2 && rows>=2 && section.shown &&
