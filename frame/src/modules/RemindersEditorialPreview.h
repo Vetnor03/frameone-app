@@ -1,5 +1,5 @@
 #pragma once
-// RE:MIND Reminders vNext R3.1 — task-first editorial preview.
+// RE:MIND Reminders vNext R3.2 — adaptive day-overview typography.
 // Included from ModuleReminders.cpp WITHIN namespace ModuleReminders.
 // Reuses existing production feed, order, Today/Tomorrow selection and titles.
 // No fetching, API, date calculation, Skip or shared display code is changed.
@@ -160,13 +160,14 @@ static bool planEditorialSection(EditorialReminderSection& section,
     section.headingY=y;
   }
 
-  // R3.1 priority is READABLE ACTION > NUMBER OF ITEMS:
-  // 1. On a large, roomy cell, give the FIRST actual reminder Fraunces 48,
-  //    and the following reminders original DM Sans 24.
-  // 2. On all other cells prefer DM Sans 24 even if that shows fewer items.
-  // 3. Only use 18px / 9pt when no complete first item fits at a larger size.
-  //    Unshown content remains counted explicitly as +N more.
-  const bool largeHero=h>=250 && w>=300;
+  // R3.2: preserve the incoming order and item count exactly. When this
+  // *already fetched* view is sparse, the first full task may be the hero.
+  // A busy day is an overview, not a "next event" widget: use equal DM Sans
+  // typographic emphasis even for the first item. No time-of-day filtering,
+  // re-sorting or change to which reminder the server selected occurs here.
+  // When the large headline cannot fit the first complete task, existing
+  // font-fit fallback handles it without truncation.
+  const bool largeHero=h>=250 && w>=300 && g_cache->count<=5;
   for(int style=largeHero?0:1;style<4;++style) {
     EditorialReminderSection trial=section;
     const int gap=h>260?20:h>155?14:9;
