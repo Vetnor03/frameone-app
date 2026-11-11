@@ -342,8 +342,19 @@ int main(int argc,char** argv) {
            (scene=="overdue" && std::strcmp(plan.primaryHeading,"2 days late")!=0) ||
            (scene=="distant" && std::strcmp(plan.primaryHeading,"3 December")!=0))
           ++mainFailures;
+        // The date must NEVER be a visual hero while a reminder exists.
+        if(plan.family==ModuleReminders::REM_EDIT_PANORAMA &&
+           plan.panoramaHeadingFont!=RemindEditorialFonts::dm18())
+          ++mainFailures;
         for(int sectionIndex=0;sectionIndex<plan.sectionCount;++sectionIndex){
           const auto& section=plan.sections[sectionIndex];
+          if(section.headingFont && section.headingFont!=RemindEditorialFonts::dm18())
+            ++mainFailures;
+          // A roomy ordinary list must privilege readable reminder typography.
+          if(scene=="normal" && cols>=2 && rows>=2 && section.shown &&
+             (section.rows[0].font==ModuleReminders::FONT_B9 ||
+              section.rows[0].font==RemindEditorialFonts::dm18()))
+            ++mainFailures;
           int previousEnd=section.y;
           for(int i=0;i<section.shown;++i){
             const auto& row=section.rows[i];
