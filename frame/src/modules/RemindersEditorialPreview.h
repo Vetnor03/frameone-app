@@ -73,8 +73,8 @@ static bool editorialFitsInk(const char* text,const GFXfont* font,
 // The readable Fraunces 48 style is reserved for the reminder itself.
 static const GFXfont* editorialHeadingFont(const char* title,
                                             int width,int height,bool compact) {
-  (void)compact;
-  const GFXfont* secondary=RemindEditorialFonts::dm18();
+  // In a tiny cell the day is tertiary context: 9pt is intentional here.
+  const GFXfont* secondary=compact?FONT_B9:RemindEditorialFonts::dm18();
   return editorialFitsInk(title,secondary,width,height)?secondary:nullptr;
 }
 
@@ -151,7 +151,8 @@ static bool planEditorialSection(EditorialReminderSection& section,
   section.x=x;section.y=y;section.w=w;section.h=h;
   if(withHeading) {
     // Date is context, not the action: always at the 18px bitmap tier.
-    section.headingFont=editorialHeadingFont(heading,w-2,h,true);
+    section.headingFont=editorialHeadingFont(heading,w-2,h,
+                                             (w<=220 || h<=130));
     if(!section.headingFont)return false;
     const int inkH=editorialInkHeight(heading,section.headingFont);
     const int below=h>240?19:h>135?13:9;
@@ -252,13 +253,13 @@ static bool planEditorialReminders(const Cell& c,
 
   if(w>=355 && bodyH<=152) {
     // A date cannot consume a quarter of a panorama while the task is tiny.
-    const int heroW=max(98,min(126,w*20/100));
+    const int heroW=max(76,min(110,w*17/100));
     const int gap=12;
     const int listX=x+heroW+gap;
     if(planEditorialSection(plan.sections[0],primary,primaryHeading,
                              listX,y,w-(listX-x),bodyH,false)) {
       const GFXfont* heading=editorialHeadingFont(primaryHeading,
-                                heroW-4,bodyH,true);
+                                heroW-4,bodyH,false);
       if(heading) {
         plan.family=REM_EDIT_PANORAMA;
         plan.panoramaHeading=primaryHeading;
