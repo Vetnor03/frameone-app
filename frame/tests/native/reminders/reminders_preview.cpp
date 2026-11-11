@@ -94,7 +94,11 @@ struct ReminderCache {
 static ReminderCache cache;
 static ReminderCache* g_cache=&cache;
 static void safeCopy(char* dst,size_t n,const char* str) {
-  if(!n)return;std::snprintf(dst,n,"%s",str?str:"");
+  if (!n) return;
+  if (!str) { dst[0]='\0'; return; }
+  const size_t len = std::min(std::strlen(str), n - 1);
+  std::memcpy(dst, str, len);
+  dst[len]='\0';
 }
 static void measureText(const char* txt,const GFXfont* font,int16_t& x1,
                         int16_t& y1,uint16_t& tw,uint16_t& th){
