@@ -178,6 +178,10 @@ static bool planEditorialSection(EditorialReminderSection& section,
   int bestScore=-1;
   EditorialReminderSection best=section;
   for(int fi=0;fi<3;++fi){
+    // In cramped cells, show fewer complete, readable reminders before
+    // falling back to 9pt. Use the legacy 9pt glyphs only if neither
+    // original DM Sans bitmap size can show even ONE complete row.
+    if(fi==2 && bestScore>=0)break;
     EditorialReminderSection trial=section;
     const GFXfont* font=fonts[fi];
     const int gap=(h>260?18:h>155?12:7);
