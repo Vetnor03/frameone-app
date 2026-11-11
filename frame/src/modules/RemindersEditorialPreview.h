@@ -239,10 +239,14 @@ static bool planEditorialReminders(const Cell& c,
   if(!g_remindersEditorialPlan)return false;
   EditorialReminderPlan& plan=*g_remindersEditorialPlan;
   plan=EditorialReminderPlan{};
-  buildAdaptiveFallbackHeading(*primary,plan.primaryHeading,
-                               sizeof(plan.primaryHeading));
-  if(secondary)buildAdaptiveFallbackHeading(*secondary,plan.secondaryHeading,
-                                            sizeof(plan.secondaryHeading));
+  if(primary->daysUntil==0) safeCopy(plan.primaryHeading,
+    sizeof(plan.primaryHeading),"Today");
+  else if(primary->daysUntil==1) safeCopy(plan.primaryHeading,
+    sizeof(plan.primaryHeading),"Tomorrow");
+  else buildAdaptiveFallbackHeading(*primary,plan.primaryHeading,
+                                    sizeof(plan.primaryHeading));
+  if(secondary) safeCopy(plan.secondaryHeading,
+                        sizeof(plan.secondaryHeading),"Tomorrow");
   const char* primaryHeading=plan.primaryHeading;
 
   const int pad=max(9,min(22,(int)lroundf(min(c.w,c.h)*.070f)));
