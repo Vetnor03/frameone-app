@@ -58,3 +58,48 @@ Date: 2026-11-11. Parent: [#1429](https://github.com/Vetnor03/frameone-app/issue
 Changes in this branch must stay within Reminders source, Reminders-only tests,
 and this audit document. Date, Weather, Surf, shared fonts, text engine, layout,
 device networking, MQTT, battery, backend and API remain unchanged.
+
+
+## R2 — measured optical composition (11 November 2026)
+
+R2 follows actual R1 native one-bit review. The 4×4 R1 layout clustered all
+items at the top of the panel and 1×1 previews often fell back because a large
+headline consumed the only useful row. The correction remains completely
+Reminders-local:
+
+1. Measured type choices from existing Fraunces72/48, DM Sans24/18, FreeSans9.
+   DM Sans is the text font; the Fraunces headline only receives space **after**
+   a complete first reminder can fit. For a 1×1, the heading drops to DM Sans18.
+2. Layouts derive from the resolved rectangle: centered panoramic headline +
+   vertical events for shallow cells; a balanced vertical stack for other cells;
+   measured side-by-side Today/Tomorrow on spacious wide cells; two stacked
+   date groups on narrower tall cells. This is one content policy, not 16 sketches.
+3. Preflight uses actual C++ font ink bounds, line advances and complete-word
+   wrapping. Times are essential and remain present. An overflowing whole item
+   is disclosed as `+N more`, never silently truncated.
+4. Content is optically shifted within available safe bounds. Section headings
+   stay aligned across two-column designs. The plan is heap-allocated lazily;
+   memory failure retains the old untouched renderer.
+5. Added native fixtures for Norwegian Latin-1 glyphs, all-day, Tomorrow-only,
+   future-only and empty states. The future-only and empty source paths are
+   intentionally passed to the unchanged legacy renderer in R2.
+
+Digital evidence (original C++ renderer, bitmap font data, 1-bit PBM output):
+- [Native Actions run](https://github.com/Vetnor03/frameone-app/actions/runs/43054385984):
+  **PASS**, 152/224 candidate previews; zero pixels outside the framebuffer.
+  In this intentionally broader suite, 32 empty and 32 future-only cases are
+  **expected legacy fallback**. The other eight fallbacks are overfull 1×1
+  combinations (long/many/Tomorrow-only/Norwegian) where full text did not fit.
+  Normal samples now render on all 16 rectangles in both themes (32/32).
+- Assertions also verify per-frame shown+overflow=cache count and that
+  chosen native GFX row regions do not overlap or escape their section.
+- Remaining critical work for R3: actual native raster for legacy fallbacks,
+  complete future-date/overdue / empty-state editorial designs, additional
+  data-profile variants, careful 16-size pixel QA on both themes and
+  physical readability on real V4 before production sign-off.
+- [Original date visual reference](../../docs/design-vnext-phase0-visual-contract.md)
+  and the owner's `RE-MIND-layout-review-100 (2).pdf` page 1 remain visual
+  references, not a source of borrowed Date rendering code.
+
+**No physical V4 test, merge, OTA or flash authorized or performed.**
+Date, Weather, Surf, shared fonts, network, device/API and backend are untouched.
