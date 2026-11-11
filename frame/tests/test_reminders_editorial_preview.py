@@ -30,12 +30,12 @@ def test_r1_original_editorial_bitmaps_and_gfx_metrics():
     assert "malloc(sizeof(EditorialReminderPlan))" in PREVIEW
     # R3.1 visual hierarchy contract: a day is context, never the hero.
     assert 'return editorialFitsInk(title,secondary,width,height)?secondary:nullptr;' in PREVIEW
-    assert 'const GFXfont* secondary=RemindEditorialFonts::dm18();' in PREVIEW
+    assert 'const GFXfont* secondary=compact?FONT_B9:RemindEditorialFonts::dm18();' in PREVIEW
     assert 'const bool largeHero=h>=250 && w>=300;' in PREVIEW
     assert 'const GFXfont* font=(style==0 && i==0)' in PREVIEW
     assert 'RemindEditorialFonts::fraunces48()' in PREVIEW
     assert ':(style<=1)?RemindEditorialFonts::dm24()' in PREVIEW
-    assert 'const int heroW=max(98,min(126,w*20/100));' in PREVIEW
+    assert 'const int heroW=max(76,min(110,w*17/100));' in PREVIEW
     assert 'renderEditorialEmptyPreview(c)' in PREVIEW
     assert 'buildAdaptiveFallbackHeading(*primary,plan.primaryHeading' in PREVIEW
     assert 'findPrimaryBucketIndex(buckets,bucketCount)' in PREVIEW
