@@ -1,5 +1,6 @@
 #include "FrameText.h"
 #include "FrameLayout.h"
+#include "RemindEditorialFonts.h"
 // ===============================
 // ModuleReminders.cpp (FULL FILE - copy/paste)
 // ===============================
@@ -2646,6 +2647,8 @@ static void applyProfileTitles(const Cell& c) {
   }
 }
 
+#include "RemindersEditorialPreview.h"
+
 void preload() {
   ensureLoaded();
 }
@@ -2666,6 +2669,15 @@ void render(const Cell& c, const String& moduleName) {
   int bucketCount = buildBuckets(buckets, MAX_BUCKETS);
   int primaryIdx = findPrimaryBucketIndex(buckets, bucketCount);
   logMemoryStats("after_buckets");
+
+  // R1 design branch only: real 1-bit Fraunces / DM Sans preview, including
+  // every legacy cell geometry. Fallback remains the unchanged live renderer.
+#if REMIND_REMINDERS_EDITORIAL_PREVIEW_ENABLED
+  if (renderEditorialRemindersPreview(c, buckets, bucketCount)) {
+    Serial.println("REM editorial preview complete");
+    return;
+  }
+#endif
 
   if (c.size == CELL_ADAPTIVE) {
     renderAdaptiveReminders(c, buckets, bucketCount);
