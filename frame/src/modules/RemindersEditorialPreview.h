@@ -225,7 +225,7 @@ static bool planEditorialReminders(const Cell& c,
       malloc(sizeof(EditorialReminderPlan)));
   if(!g_remindersEditorialPlan)return false;
   EditorialReminderPlan& plan=*g_remindersEditorialPlan;
-  memset(&plan,0,sizeof(plan));
+  plan=EditorialReminderPlan{};
 
   const int pad=max(9,min(22,(int)lroundf(min(c.w,c.h)*.070f)));
   plan.pad=pad;
