@@ -1,4 +1,4 @@
-"""R1 source-contract checks; these do not replace native 1-bit visual QA."""
+"""R3 source-contract checks; these do not replace native 1-bit visual QA."""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +28,13 @@ def test_r1_original_editorial_bitmaps_and_gfx_metrics():
     assert "REM_EDIT_PANORAMA" in PREVIEW and "REM_EDIT_TWO_COLUMNS" in PREVIEW
     assert "editorialShiftSection" in PREVIEW
     assert "malloc(sizeof(EditorialReminderPlan))" in PREVIEW
+    assert 'renderEditorialEmptyPreview(c)' in PREVIEW
+    assert 'buildAdaptiveFallbackHeading(*primary,plan.primaryHeading' in PREVIEW
+    assert 'findPrimaryBucketIndex(buckets,bucketCount)' in PREVIEW
+    assert 'plan.overflow=max(0,g_cache->count-plan.shown)' in PREVIEW
+    assert 'plan.primaryHeading' in PREVIEW
+    assert 'safeCopy(plan.secondaryHeading' in PREVIEW
+    assert 'if(!g_cache || !g_cache->ok)return false;' in PREVIEW
 
 def test_r1_all_16_rectangles_derive_from_full_800_by_480_panel():
     # Geometry contract only. Physical bounding and raster QA remains pending.
