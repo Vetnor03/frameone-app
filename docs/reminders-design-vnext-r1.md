@@ -36,7 +36,9 @@ Date: 2026-11-11. Parent: [#1429](https://github.com/Vetnor03/frameone-app/issue
   Visible overflow is disclosed with `+N more`. The original renderer remains
   available if R1 preflight cannot display the first complete item.
 - Draws using real GFX calls and theme-derived ink, not CSS/SVG or scaled fonts.
-  Cached plan is static to avoid a large frame-loop stack allocation.
+  The preview plan is heap-allocated on first use to avoid both large stack frames
+  and a static DRAM regression for the old ESP32 target; allocation failure
+  falls back to the original renderer.
 - The design is **experimental**, not physically approved or production locked.
 
 ## R1 limitations / next QA
