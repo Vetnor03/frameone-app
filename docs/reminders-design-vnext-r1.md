@@ -210,3 +210,40 @@ zero pixels drawn beyond the native framebuffer.
 **This remains a digital design candidate**. 1–2m readability on the real
 V4 is not established until explicit physical QA. Do not merge or flash
 without the owner's separate permission. Date/Weather/Surf remain frozen.
+
+
+## R3.2 — overview density without changing functionality (11 November 2026)
+
+The owner approved the visual balance of R3.1 but noted that a daily overview
+should not give disproportionate weight to a single task in a busy day.
+
+This is **strictly a presentation policy**:
+- With **1–5 already-fetched items**, roomy sections may still style the
+  original *first* task in Fraunces48, followed by original DM Sans24.
+- With **6–10 already-fetched items**, all rendered titles use the same
+  DM Sans24 tier when space permits. No item is silently promoted to "next".
+- The threshold is on the **existing cache count** only. It does **not**
+  trigger new fetching, sorting, time filtering, priority scoring, grouping,
+  reordering, API calls, or hidden/completed-item behavior.
+- The smaller-grid fit checks and full-title fallback remain unchanged.
+  All omitted items continue to be explicitly counted as `+N more`.
+
+Native GFX test fixtures now cover **1 / 2 / 5 / 6 / 10 items** plus all
+previous long, all-day, Tomorrow, future, overdue, Norwegian, error, and
+unbreakable-title scenarios in **all 16 rectangles and both themes**.
+
+The updated C++ native harness checks:
+- Every input title, time, occurrence date, display date, overdue flag, and
+  days-until value remains identical after rendering.
+- Original bucket/item references, counts, and order remain identical.
+- Every rendered row is the **next item in its original source bucket**;
+  joining all wrapped lines reconstructs its original title exactly.
+- On 6- and 10-entry samples no Fraunces48 "hero" appears. On 1–2 entry
+  full-size samples it does appear, when it fits.
+- All existing visible-item/overflow accounting and pixel-bound checks stay
+  enabled. The real firmware render path still runs through its unchanged
+  input/profile/fetch logic.
+
+This design choice is **not a change to which item is next or most important**:
+only the use of typography adapts to density, and its physical readability
+remains subject to explicit V4 QA. Date, Weather and Surf stay locked.
