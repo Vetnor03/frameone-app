@@ -103,3 +103,69 @@ Digital evidence (original C++ renderer, bitmap font data, 1-bit PBM output):
 
 **No physical V4 test, merge, OTA or flash authorized or performed.**
 Date, Weather, Surf, shared fonts, network, device/API and backend are untouched.
+
+
+## R3 — edge-case editorial preview and native source QA (11 November 2026)
+
+R3 extends the **existing isolated preview**. It does not redesign locked
+modules, change the app's data contract, or alter any date/Skip rules.
+
+### Actual code changes
+- Successfully loaded **empty** cache now has a measured, quiet editorial
+  "No reminders" / "Nothing upcoming" state using original Fraunces48 /
+  DM Sans bitmap glyphs, centered within the resolved cell. Fetch failures
+  deliberately retain the unchanged legacy "Fetch failed" state.
+- **Future-only** and **overdue-only** groups now use the existing production
+  \`findPrimaryBucketIndex()\` and \`buildAdaptiveFallbackHeading()\`. Tomorrow
+  and Today retain their literal labels, rather than incorrectly becoming
+  "On Thursday" / "On Wednesday" from the future date builder.
+- Dynamic heading buffers belong to the heap-backed plan and remain valid
+  through native GFX painting; no temporary string lifetime dependency.
+- If both Today and Tomorrow are present, the existing preference remains
+  Today then Tomorrow, with later data counted in \`+N more\`. No API, source
+  sorting or configuration changes.
+- In a constrained cell, real original **DM Sans24/18** is preferred whenever
+  one complete row fits. FreeSans9 is fallback-only, not allowed to replace
+  readable original type merely to cram in more tiny rows.
+- Failed preflight, impossible unbreakable titles and unavailable cache still
+  keep the entire original production renderer. No silently shortened words.
+
+### Original C++ one-bit verification
+The native harness compiles the **same R3 C++ preview header** and original
+GFX font bitmap arrays as firmware, using a portable shim for the original
+renderer dependencies (the shim is not the full production runtime). It
+writes original P4 1-bit PBMs plus 1:1 PNGs, not browser/HTML/SVG illustrations.
+
+Native scenarios, each across all **16 geometries × Light/Dark**:
+\`normal\`, \`long\`, \`many\`, \`tomorrow\`, \`norwegian\`, \`future\`,
+\`overdue\`, \`distant\`, \`mixed\`, \`unbreakable\`, \`empty\`, \`unavailable\`.
+
+Native QA checks also:
+- No framebuffer clipping; no row rectangles crossing/overlapping sections.
+- For each rendered row, reconstructing full wrapped lines equals exactly
+  the original pre-normalized title; no lost facts or unexpected ellipses.
+- \`shown+overflow=cache count\` whenever a nonempty preview is accepted.
+- Headings retain exact Today/Tomorrow or truthful existing future/late dates.
+- Reference cases normal, future, overdue, distant, mixed and empty produce
+  full-size native previews in all 16 shapes and both themes.
+- Failures are explicit; empty/unavailable are semantically different.
+
+At the pre-final R3 build, **330/384** scenes rendered with no out-of-bounds
+pixels. The 54 fallback cases were the 32 deliberately failed fetches,
+14 exceptionally long unbreakable-word shapes and eight 1×1 long/dense/
+Norwegian/Tomorrow-only cases with no space for a full item. Native fallback
+status is **not** proof that the entire unchanged legacy renderer has been
+captured as a native image.
+
+### Remaining approval gates
+- Inspect the final 12-scenario contact sheets on a full-size monitor and
+  confirm real-room readability at 1–2 m in both Light and Dark.
+- Fallback scenes require separate original-production renderer regression QA;
+  the native header harness alone does not render the legacy path.
+- End-to-end physical V4 test of 16 geometries after explicit owner approval;
+  **never flash or OTA automatically**.
+- R3 does not remove the previously existing firmware API limit of **10**
+  reminder entries. The app's up-to-20 behavior remains unchanged.
+
+**Date, Weather and Surf are file-for-file untouched. R3 remains draft,
+unmerged, physically untested and not approved for production.**
