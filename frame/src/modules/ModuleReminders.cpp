@@ -16,6 +16,7 @@
 #include <math.h>
 #include <time.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <new>
 #include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
