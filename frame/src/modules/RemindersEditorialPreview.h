@@ -1,5 +1,5 @@
 #pragma once
-// RE:MIND Reminders vNext R3 — isolated editorial visual preview.
+// RE:MIND Reminders vNext R3.1 — task-first editorial preview.
 // Included from ModuleReminders.cpp WITHIN namespace ModuleReminders.
 // Reuses existing production feed, order, Today/Tomorrow selection and titles.
 // No fetching, API, date calculation, Skip or shared display code is changed.
@@ -69,20 +69,13 @@ static bool editorialFitsInk(const char* text,const GFXfont* font,
   return w>0 && h>0 && (int)w<=maxWidth && (int)h<=maxHeight;
 }
 
+// Day/date labels are SECONDARY, never visual hero headlines.
+// The readable Fraunces 48 style is reserved for the reminder itself.
 static const GFXfont* editorialHeadingFont(const char* title,
                                             int width,int height,bool compact) {
-  const GFXfont* fonts[]={
-    RemindEditorialFonts::fraunces72(),
-    RemindEditorialFonts::fraunces48(),
-    RemindEditorialFonts::dm24(),
-    RemindEditorialFonts::dm18()
-  };
-  for(int i=0;i<4;++i) {
-    if(i==0 && (compact || height<260))continue;
-    if(i==1 && compact && height<65)continue;
-    if(editorialFitsInk(title,fonts[i],width,height))return fonts[i];
-  }
-  return nullptr;
+  (void)compact;
+  const GFXfont* secondary=RemindEditorialFonts::dm18();
+  return editorialFitsInk(title,secondary,width,height)?secondary:nullptr;
 }
 
 static int editorialInkHeight(const char* text,const GFXfont* font) {
@@ -157,53 +150,43 @@ static bool planEditorialSection(EditorialReminderSection& section,
   section.bucket=bucket;section.heading=heading;
   section.x=x;section.y=y;section.w=w;section.h=h;
   if(withHeading) {
-    // Preserve enough height for at least one complete reminder. A large
-    // Fraunces header must never displace all content in a 1x1 cell.
-    if(h<105) section.headingFont=RemindEditorialFonts::dm18();
-    else if(h<165) section.headingFont=RemindEditorialFonts::dm24();
-    else section.headingFont=editorialHeadingFont(heading,w-2,h,false);
-    if(!section.headingFont ||
-       !editorialFitsInk(heading,section.headingFont,w-2,h))return false;
+    // Date is context, not the action: always at the 18px bitmap tier.
+    section.headingFont=editorialHeadingFont(heading,w-2,h,true);
+    if(!section.headingFont)return false;
     const int inkH=editorialInkHeight(heading,section.headingFont);
-    const int below= h>240 ? 23 : h>135 ? 17 : 10;
+    const int below=h>240?19:h>135?13:9;
     section.headingH=inkH+below;
     section.headingY=y;
   }
 
-  // A stable font throughout each section is more editorial than per-row
-  // font jumps. Test complete-word rows at the actual GFX bitmap widths.
-  const GFXfont* fonts[]={
-    RemindEditorialFonts::dm24(),RemindEditorialFonts::dm18(),FONT_B9
-  };
-  int bestScore=-1;
-  EditorialReminderSection best=section;
-  for(int fi=0;fi<3;++fi){
-    // In cramped cells, show fewer complete, readable reminders before
-    // falling back to 9pt. Use the legacy 9pt glyphs only if neither
-    // original DM Sans bitmap size can show even ONE complete row.
-    if(fi==2 && bestScore>=0)break;
+  // R3.1 priority is READABLE ACTION > NUMBER OF ITEMS:
+  // 1. On a large, roomy cell, give the FIRST actual reminder Fraunces 48,
+  //    and the following reminders original DM Sans 24.
+  // 2. On all other cells prefer DM Sans 24 even if that shows fewer items.
+  // 3. Only use 18px / 9pt when no complete first item fits at a larger size.
+  //    Unshown content remains counted explicitly as +N more.
+  const bool largeHero=h>=250 && w>=300;
+  for(int style=largeHero?0:1;style<4;++style) {
     EditorialReminderSection trial=section;
-    const GFXfont* font=fonts[fi];
-    const int gap=(h>260?18:h>155?12:7);
+    const int gap=h>260?20:h>155?14:9;
     int cursor=y+trial.headingH;
     for(int i=0;i<bucket->count && i<5;++i) {
-      // Treat the end of the section as a hard ink bound.
+      const GFXfont* font=(style==0 && i==0)
+        ?RemindEditorialFonts::fraunces48()
+        :(style<=1)?RemindEditorialFonts::dm24()
+        :(style==2)?RemindEditorialFonts::dm18():FONT_B9;
       EditorialReminderRow row;
       if(!planEditorialRow(row,bucket->itemIdx[i],x,cursor,w,
                            y+h-cursor,font))break;
       trial.rows[trial.shown++]=row;
-      cursor += row.h + gap;
+      cursor += row.h+gap;
     }
     if(!trial.shown)continue;
     trial.usedH=cursor-y-gap;
-    // Content preservation first; use larger original bitmap typography
-    // when two candidates show the same complete number of items.
-    const int score=trial.shown*100 + (2-fi)*15;
-    if(score>bestScore){bestScore=score;best=trial;}
+    section=trial;
+    return true;
   }
-  if(bestScore<0)return false;
-  section=best;
-  return true;
+  return false;
 }
 
 static void editorialShiftSection(EditorialReminderSection& section,int dy) {
@@ -268,8 +251,9 @@ static bool planEditorialReminders(const Cell& c,
   bool planned=false;
 
   if(w>=355 && bodyH<=152) {
-    const int heroW=max(124,min(235,w*28/100));
-    const int gap=16;
+    // A date cannot consume a quarter of a panorama while the task is tiny.
+    const int heroW=max(98,min(126,w*20/100));
+    const int gap=12;
     const int listX=x+heroW+gap;
     if(planEditorialSection(plan.sections[0],primary,primaryHeading,
                              listX,y,w-(listX-x),bodyH,false)) {
@@ -319,8 +303,8 @@ static bool planEditorialReminders(const Cell& c,
     plan.sectionCount=1;
   }
 
-  // Controlled optical balance: each section uses a shared offset in the
-  // two-column design so both Fraunces headlines stay on the same baseline.
+  // Controlled optical balance: sections share a secondary-heading baseline.
+  // Large Fraunces ink belongs to real reminder content, never Today/Tomorrow.
   if(plan.family==REM_EDIT_TWO_COLUMNS) {
     int used=max(plan.sections[0].usedH,plan.sections[1].usedH);
     const int shift=min(78,max(0,(bodyH-used)*30/100));
