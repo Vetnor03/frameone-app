@@ -76,7 +76,7 @@ static const GFXfont* editorialHeadingFont(const char* title,
   };
   for(int i=0;i<4;++i) {
     if(i==0 && (compact || height<260))continue;
-    if(i==1 && compact && height<90)continue;
+    if(i==1 && compact && height<65)continue;
     if(editorialFitsInk(title,fonts[i],width,height))return fonts[i];
   }
   return nullptr;
@@ -154,8 +154,13 @@ static bool planEditorialSection(EditorialReminderSection& section,
   section.bucket=bucket;section.heading=heading;
   section.x=x;section.y=y;section.w=w;section.h=h;
   if(withHeading) {
-    section.headingFont=editorialHeadingFont(heading,w-2,h,false);
-    if(!section.headingFont)return false;
+    // Preserve enough height for at least one complete reminder. A large
+    // Fraunces header must never displace all content in a 1x1 cell.
+    if(h<105) section.headingFont=RemindEditorialFonts::dm18();
+    else if(h<165) section.headingFont=RemindEditorialFonts::dm24();
+    else section.headingFont=editorialHeadingFont(heading,w-2,h,false);
+    if(!section.headingFont ||
+       !editorialFitsInk(heading,section.headingFont,w-2,h))return false;
     const int inkH=editorialInkHeight(heading,section.headingFont);
     const int below= h>240 ? 23 : h>135 ? 17 : 10;
     section.headingH=inkH+below;
