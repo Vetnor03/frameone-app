@@ -21,10 +21,13 @@ def test_r1_original_editorial_bitmaps_and_gfx_metrics():
     assert "RemindEditorialFonts::fraunces48()" in PREVIEW
     assert "RemindEditorialFonts::dm24()" in PREVIEW
     assert "RemindEditorialFonts::dm18()" in PREVIEW
-    assert "wrapTextToLines(item.title,lines,maxLines,titleW,font,complete)" in PREVIEW
-    assert "measureText(txt,font,x1,y1,tw,th)" in PREVIEW
-    assert "return false;" in PREVIEW
+    assert "wrapTextToLines(reminder.title,lines," in PREVIEW
+    assert "measureText(text,font,x1,y1,w,h)" in PREVIEW
+    assert "planEditorialReminders(" in PREVIEW
     assert "memset(&plan,0,sizeof(plan))" in PREVIEW
+    assert "REM_EDIT_PANORAMA" in PREVIEW and "REM_EDIT_TWO_COLUMNS" in PREVIEW
+    assert "editorialShiftSection" in PREVIEW
+    assert "malloc(sizeof(EditorialReminderPlan))" in PREVIEW
 
 def test_r1_all_16_rectangles_derive_from_full_800_by_480_panel():
     # Geometry contract only. Physical bounding and raster QA remains pending.
