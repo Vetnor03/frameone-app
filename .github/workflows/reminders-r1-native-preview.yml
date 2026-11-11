@@ -1,4 +1,4 @@
-name: Reminders R1 native 1-bit preview
+name: Reminders R3 native 1-bit QA
 
 on:
   pull_request:
@@ -32,7 +32,7 @@ jobs:
       - name: Upload actual C++ 1-bit preview and contact sheets
         uses: actions/upload-artifact@v4
         with:
-          name: reminders-r1-native-one-bit-previews
+          name: reminders-r3-native-one-bit-previews
           path: reminders-native-output/
           if-no-files-found: error
           retention-days: 14
