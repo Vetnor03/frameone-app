@@ -254,6 +254,8 @@ static void fixture(const std::string& scenario,ReminderBucket* b) {
     append(b[0],"\xC5se og \xD8yvind: \xE6rlig innsats","07:45");
     append(b[0],"P\xE5minnelse om m\xF8te p\xE5 J\xE6ren","");
     append(b[1],"Bestill \xF8" "lbr\xF8" "d og bl\xE5" "b\xE6" "r","14:20");
+    // All six Norwegian bitmap glyphs, uppercase and lowercase, on one row.
+    append(b[0],"\xC6\xD8\xC5 \xE6\xF8\xE5","");
   } else if(scenario=="future"){
     b[0].used=false;b[1].daysUntil=4;
     append(b[1],"Dette skjer om fire dager","");
