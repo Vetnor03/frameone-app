@@ -18,7 +18,7 @@ for record in records:
     img = Image.open(pbm).convert("1")
     img.save(root / "png" / (pbm.stem + ".png"), optimize=True)
 
-for scenario in ("normal", "long", "many"):
+for scenario in ("normal", "long", "many", "tomorrow", "norwegian", "future", "empty"):
     for theme in ("light", "dark"):
         background = "white" if theme == "light" else "black"
         foreground = "black" if theme == "light" else "white"
