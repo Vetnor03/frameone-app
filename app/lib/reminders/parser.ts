@@ -255,10 +255,40 @@ export function validateReminderParseResult(value: unknown, language: ReminderPa
   return { status: 'needs_clarification', reminder: null, partial: reminder, missing_fields: missing, question }
 }
 
-
 const EXPLICIT_CLOCK = '(?:[01]?\\d|2[0-3])(?:[:.][0-5]\\d)?'
 const SELECTED_DATE_TIME_SUFFIX = new RegExp(
-  '(?:^|\\s)(?:kl(?:okken)?\\.?\\s*)?(' + EXPLICIT_CLOCK + ')(?:\\s*(?:-|–|—|til|to)\\s*(' + EXPLICIT_CLOCK + '))?\\s*
+  '(?:^|\\s)(?:kl(?:okken)?\\.?\\s*)?(' + EXPLICIT_CLOCK + ')(?:\\s*(?:-|–|—|til|to)\\s*(' + EXPLICIT_CLOCK + '))?\\s*$',
+  'i',
+)
+const OTHER_SCHEDULE_WORDING = /\b(?:i morgen|imorgen|tomorrow|today|i dag|neste|mandag|tirsdag|onsdag|torsdag|fredag|lørdag|søndag|monday|tuesday|wednesday|thursday|friday|saturday|sunday|hver|every|daglig|ukentlig|månedlig|årlig|daily|weekly|monthly|yearly|etter jobb|after work|senere|later|i kveld|tonight|bursdag|fødselsdag|birthday)\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[./]\d{1,2}[./]?\d{0,4}\b/i
+
+/**
+ * Fail-safe for unambiguous text entered on a selected calendar day.
+ * Never infer a new date or a vague time. If the user supplies a date,
+ * recurrence, or an unsupported time phrase, leave interpretation to the model.
+ */
+export function parseSelectedDateReminderFallback(context: ReminderParseContext): ReminderParseResult | null {
+  if (!context.partial || context.clarificationQuestion || context.clarificationAnswer) return null
+  const partial = validateParsedReminder(context.partial)
+  const raw = context.text.trim()
+  if (!partial?.due_date || partial.title !== raw || partial.due_time || partial.end_date || partial.end_time || partial.repeat_type !== 'none') return null
+  const match = raw.match(SELECTED_DATE_TIME_SUFFIX)
+  const title = match ? raw.slice(0, match.index).trim() : raw
+  if (!title || title.length > 500 || OTHER_SCHEDULE_WORDING.test(title)) return null
+  // An unmatched number/time may carry information we cannot represent.
+  if (!match && (/\d/.test(raw) || /\b(?:kl(?:okken)?|morgen|kveld|formiddag|ettermiddag|før|etter|around|at|before|after)\b/i.test(raw))) return null
+  const normalizeClock = (value: string) => {
+    const [hour, minute = '00'] = value.replace('.', ':').split(':')
+    return hour.padStart(2, '0') + ':' + minute
+  }
+  const dueTime = match ? normalizeClock(match[1]) : null
+  const endTime = match?.[2] ? normalizeClock(match[2]) : null
+  if (dueTime && endTime && endTime <= dueTime) return null
+  const reminder = validateParsedReminder({ ...partial, title, due_time: dueTime, end_time: endTime })
+  return reminder ? { status: 'ready', reminder, partial: null, missing_fields: [], question: null } : null
+}
+
+function outputText(payload: any) {
   for (const item of payload?.output ?? []) for (const content of item?.content ?? []) {
     if (content?.type === 'output_text' && typeof content.text === 'string') return content.text
   }
@@ -375,149 +405,5 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
     if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) logParseFailure('reminder_parse_timeout')
     else logParseFailure('reminder_parse_openai_error')
     return fallback
-  } finally { clearTimeout(timeout) }
-}
-,
-  'i',
-)
-const OTHER_SCHEDULE_WORDING = /\b(?:i morgen|imorgen|tomorrow|today|i dag|neste|mandag|tirsdag|onsdag|torsdag|fredag|lørdag|søndag|monday|tuesday|wednesday|thursday|friday|saturday|sunday|hver|every|daglig|ukentlig|månedlig|årlig|daily|weekly|monthly|yearly|etter jobb|after work|senere|later|i kveld|tonight|bursdag|fødselsdag|birthday)\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[./]\d{1,2}[./]?\d{0,4}\b/i
-
-/**
- * Fail-safe for unambiguous text entered on a selected calendar day.
- * Never infer a new date or a vague time. If the user supplies a date,
- * recurrence, or an unsupported time phrase, leave interpretation to the model.
- */
-export function parseSelectedDateReminderFallback(context: ReminderParseContext): ReminderParseResult | null {
-  if (!context.partial || context.clarificationQuestion || context.clarificationAnswer) return null
-  const partial = validateParsedReminder(context.partial)
-  const raw = context.text.trim()
-  if (!partial?.due_date || partial.title !== raw || partial.due_time || partial.end_date || partial.end_time || partial.repeat_type !== 'none') return null
-  const match = raw.match(SELECTED_DATE_TIME_SUFFIX)
-  const title = match ? raw.slice(0, match.index).trim() : raw
-  if (!title || title.length > 500 || OTHER_SCHEDULE_WORDING.test(title)) return null
-  // An unmatched number/time may carry information we cannot represent.
-  if (!match && (/\d/.test(raw) || /\b(?:kl(?:okken)?|morgen|kveld|formiddag|ettermiddag|før|etter|around|at|before|after)\b/i.test(raw))) return null
-  const normalizeClock = (value: string) => {
-    const [hour, minute = '00'] = value.replace('.', ':').split(':')
-    return hour.padStart(2, '0') + ':' + minute
-  }
-  const dueTime = match ? normalizeClock(match[1]) : null
-  const endTime = match?.[2] ? normalizeClock(match[2]) : null
-  if (dueTime && endTime && endTime <= dueTime) return null
-  const reminder = validateParsedReminder({ ...partial, title, due_time: dueTime, end_time: endTime })
-  return reminder ? { status: 'ready', reminder, partial: null, missing_fields: [], question: null } : null
-}
-
-function outputText(payload: any) {
-  for (const item of payload?.output ?? []) for (const content of item?.content ?? []) {
-    if (content?.type === 'output_text' && typeof content.text === 'string') return content.text
-  }
-  return ''
-}
-
-const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] })
-const reminderSchema = {
-  type: 'object', additionalProperties: false,
-  properties: {
-    title: { type: 'string', minLength: 1, maxLength: 500 },
-    due_date: nullable({ type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }),
-    due_time: nullable({ type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }),
-    end_date: nullable({ type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }),
-    end_time: nullable({ type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }),
-    repeat_type: { type: 'string', enum: [...REMINDER_REPEAT_TYPES] },
-    custom_repeat_days: nullable({ type: 'integer', minimum: 1 }),
-    repeat_weekdays: nullable({ type: 'array', minItems: 1, maxItems: 7, uniqueItems: true, items: { type: 'integer', minimum: 1, maximum: 7 } }),
-    tag: nullable({ type: 'string', enum: [...REMINDER_TAGS] }),
-    ambiguities: { type: 'array', items: { type: 'string', maxLength: 240 } },
-  },
-  required: ['title', 'due_date', 'due_time', 'end_date', 'end_time', 'repeat_type', 'custom_repeat_days', 'repeat_weekdays', 'tag', 'ambiguities'],
-}
-export const reminderParseJsonSchema = {
-  type: 'object', additionalProperties: false,
-  properties: {
-    reminder: reminderSchema,
-    missing_fields: { type: 'array', items: { type: 'string', enum: [...REMINDER_MISSING_FIELDS] } },
-    question: nullable({ type: 'string', minLength: 1, maxLength: 240 }),
-  },
-  required: ['reminder', 'missing_fields', 'question'],
-}
-
-function logParseFailure(reason: string, details?: { status: number }) {
-  // Keep this deliberately structured and free of request/model content and identifiers.
-  console.error(reason, details || {})
-}
-
-function logParseCompleted(durationMs: number, outcome: ReminderParseResult['status']) {
-  // Timing telemetry must never include request/model output or user identifiers.
-  console.info('reminder_parse_completed', { duration_ms: durationMs, outcome })
-}
-
-export async function parseReminder(context: ReminderParseContext, fetcher: typeof fetch = fetch): Promise<ReminderParseResult | null> {
-  if (!process.env.OPENAI_API_KEY || !context.text.trim() || !Date.parse(context.localNow)) {
-    logParseFailure('reminder_parse_validation_error')
-    return null
-  }
-  const model = costControlledModel(process.env.REMINDER_PARSE_MODEL)
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), REMINDER_PARSE_TIMEOUT_MS)
-  const requestStartedAt = Date.now()
-  try {
-    const response = await fetcher('https://api.openai.com/v1/responses', {
-      method: 'POST', signal: controller.signal,
-      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model, store: false,
-        reasoning: { effort: 'none' },
-        input: [
-          { role: 'developer', content: [{ type: 'input_text', text: `Parse or complete a reminder in the existing RE:MIND schema. Version: ${REMINDER_PARSE_VERSION}. Always return exactly one reminder candidate plus missing_fields and question; never decide a status. Resolve relative dates only from localNow and timezone. Never invent a date, clock time, end, tag, person, place, or repeat rule. Treat every non-null field in existing_partial as already supplied structured context. Preserve it unless the user's current text or clarification answer explicitly changes that field. A clarification answer is additive: fill or modify what the question asks without clearing unrelated fields. due_date is required; due_time is generally optional. Put due_date in missing_fields whenever it is unknown. If wording clearly implies a time that is too vague to represent safely (for example later, after work, or an undefined evening), also put due_time in missing_fields. When missing_fields is non-empty, provide one calm, concise question written naturally in the requested language; otherwise question must be null. A birthday or bursdag/fødselsdag is inherently an annual anniversary: use repeat_type yearly even when the user does not explicitly say every year, unless they explicitly request a one-time reminder.\n\nCanonical title normalization: the title is the semantic reminder content, not a frame-optimized short label. Remove date, start-time, end-time, and recurrence wording only when that exact information was successfully represented in the corresponding structured field. Keep all unrepresented or meaningful content. Thus Norwegian equivalents of “Ring mamma på torsdag” and “Ring mamma torsdag kl. 18” become “Ring mamma” when their date/time fields are resolved, while “Ring mamma om bursdagen hennes på torsdag” keeps “om bursdagen hennes” and “Møte på kontoret torsdag” keeps “på kontoret”. Do not rewrite manually created reminders; this parser only normalizes the current natural-language request. Any meaningful information unsupported by structured fields remains in title. end_date/end_time describe this occurrence, never recurrence termination. Sunday recurrence is weekly with a Sunday due_date. For recurring schedules on selected weekdays, use repeat_type weekdays and repeat_weekdays with ISO weekday numbers Monday=1 through Sunday=7. “hver ukedag” / “every weekday” means [1,2,3,4,5]; a list such as “mandag, onsdag og fredag” / “Monday, Wednesday and Friday” means [1,3,5]. due_date must be the first upcoming selected weekday that can still occur at the requested due_time. Do not use daily for weekday-only schedules. custom_repeat_days is only for an explicit every-N-days rule. repeat_weekdays must be null for all repeat types except weekdays. ambiguities may describe non-blocking unsupported intent.` }] },
-          { role: 'user', content: [{ type: 'input_text', text: JSON.stringify({ original_reminder_text: context.text.trim(), existing_partial: context.partial, clarification_question: context.clarificationQuestion, clarification_answer: context.clarificationAnswer, localNow: context.localNow, timezone: context.timezone || null, language: context.language }) }] },
-        ],
-        text: { format: { type: 'json_schema', name: 'reminder_parse', strict: true, schema: reminderParseJsonSchema } }, max_output_tokens: 450,
-      }),
-    })
-    if (!response.ok) {
-      logParseFailure('reminder_parse_openai_http_error', { status: response.status })
-      return null
-    }
-    const payload = await response.json()
-    await recordOpenAIUsage('reminder_parse', model, payload)
-    let decoded: unknown
-    try { decoded = JSON.parse(outputText(payload)) } catch {
-      logParseFailure('reminder_parse_invalid_json')
-      return null
-    }
-    if (decoded && typeof decoded === 'object' && !Array.isArray(decoded)) {
-      const output = decoded as Record<string, unknown>
-      output.reminder = mergeExistingReminder(context.partial, output.reminder, context.clarificationAnswer)
-      if (output.reminder && typeof output.reminder === 'object' && !Array.isArray(output.reminder)) {
-        const validatedReminder = validateParsedReminder(output.reminder)
-        if (validatedReminder) {
-          const birthdayAwareReminder = inferBirthdayRecurrence(validatedReminder, context.text)
-          const weekdayAwareReminder = inferWeekdayRecurrence(
-            birthdayAwareReminder,
-            [context.text, context.clarificationAnswer].filter(Boolean).join(' '),
-            context.localNow,
-            context.timezone,
-          )
-          output.reminder = inferRecurringReminderStartDate(weekdayAwareReminder, context.localNow, context.timezone)
-        }
-        const reminder = output.reminder as Record<string, unknown>
-        if (reminder.due_date != null && Array.isArray(output.missing_fields)) {
-          output.missing_fields = output.missing_fields.filter((field) => field !== 'due_date')
-        }
-        if (reminder.due_time != null && Array.isArray(output.missing_fields)) {
-          output.missing_fields = output.missing_fields.filter((field) => field !== 'due_time')
-        }
-        if (Array.isArray(output.missing_fields) && output.missing_fields.length === 0) output.question = null
-      }
-    }
-    const result = validateReminderParseResult(decoded, context.language)
-    if (!result) logParseFailure('reminder_parse_invalid_result')
-    else logParseCompleted(Date.now() - requestStartedAt, result.status)
-    return result
-  } catch (error) {
-    if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) logParseFailure('reminder_parse_timeout')
-    else logParseFailure('reminder_parse_openai_error')
-    return null
   } finally { clearTimeout(timeout) }
 }
