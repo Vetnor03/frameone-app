@@ -278,7 +278,11 @@ static void drawLevels() {
 static void drawContent() {
   const uint16_t background=kBG[gBG];
   gInk=(gBG<=1)?GxEPD_BLACK:GxEPD_WHITE;
-  display.fillScreen(background);
+  // Use drawPixel-backed fillRect for exact 4G palette states (including
+  // solid BLACK). The upstream 4G fillScreen() brightness shortcut is
+  // less reliable at brightness=0 on some versions.
+  display.fillScreen(GxEPD_WHITE);
+  display.fillRect(0,0,kW,kH,background);
   const Cell c={(kW-int(gCols)*200)/2,(kH-int(gRows)*120)/2,
                 int(gCols)*200,int(gRows)*120};
   if(!ModuleReminders::renderEditorialRemindersPreview(
