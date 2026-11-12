@@ -391,6 +391,11 @@ test('selected calendar date and explicit time range override an incomplete mode
     await parseReminder(ctx, responseFor(candidate(incomplete))),
     ready({ ...partial, title: 'Egon med jobb', due_time: '19:00', end_time: '21:00' }),
   )
+  const duplicatedTitle = { ...partial, due_time: '19:00', end_time: '21:00' }
+  assert.deepEqual(
+    await parseReminder(ctx, responseFor(candidate(duplicatedTitle))),
+    ready({ ...partial, title: 'Egon med jobb', due_time: '19:00', end_time: '21:00' }),
+  )
 })
 
 test('unresolved dates, invalid ranges and follow-ups are never silently guessed', async () => {
