@@ -267,7 +267,7 @@ const OTHER_SCHEDULE_WORDING = /\b(?:i morgen|imorgen|tomorrow|today|i dag|neste
  * Never infer a new date or a vague time. If the user supplies a date,
  * recurrence, or an unsupported time phrase, leave interpretation to the model.
  */
-export function parseSelectedDateReminderFallback(context: ReminderParseContext): ReminderParseResult | null {
+export function parseSelectedDateReminderFallback(context: ReminderParseContext): Extract<ReminderParseResult, { status: 'ready' }> | null {
   if (!context.partial || context.clarificationQuestion || context.clarificationAnswer) return null
   const partial = validateParsedReminder(context.partial)
   const raw = context.text.trim()
