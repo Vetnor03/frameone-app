@@ -397,7 +397,8 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
     const resolved = fallback && (!result || result.status !== 'ready' || (
       result.reminder.due_date !== fallback.reminder.due_date ||
       result.reminder.due_time !== fallback.reminder.due_time ||
-      result.reminder.end_time !== fallback.reminder.end_time
+      result.reminder.end_time !== fallback.reminder.end_time ||
+      (fallback.reminder.due_time !== null && result.reminder.title === context.text.trim())
     )) ? fallback : result
     if (resolved) logParseCompleted(Date.now() - requestStartedAt, resolved.status)
     return resolved
