@@ -15900,7 +15900,7 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, selec
     return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}T${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}${sign}${pad2(Math.floor(Math.abs(offset) / 60))}:${pad2(Math.abs(offset) % 60)}`
   }
 
-  const draftFromText = (): ReminderUiItem => ({ id: '', title: text.trim(), date: fallbackDate, time: null, endDate: null, endTime: null, tag: null, repeat: 'none', customRepeatDays: null, repeatWeekdays: null })
+  const draftFromText = (): ReminderUiItem => ({ id: '', title: text.trim(), date: selectedDate || fallbackDate, time: null, endDate: null, endTime: null, tag: null, repeat: 'none', customRepeatDays: null, repeatWeekdays: null })
   const initialPartial = (): any => selectedDate ? {
     title: text.trim(), due_date: selectedDate, due_time: null, end_date: null, end_time: null,
     repeat_type: 'none', custom_repeat_days: null, repeat_weekdays: null, tag: null, ambiguities: [],
@@ -15971,9 +15971,9 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, selec
         <label className="mt-6 block text-lg font-medium text-[color:var(--fg-95)]">{language === 'no' ? 'Hva vil du bli påminnet om?' : 'What should I remind you about?'}</label>
         {selectedDateLabel && <div className="mt-2 text-sm text-[color:var(--fg-60)]">{language === 'no' ? 'Valgt dato' : 'Selected date'} · {selectedDateLabel}</div>}
         <textarea autoFocus rows={4} value={text} onChange={(e) => { setText(e.target.value); setFailed(false); setClarificationRounds(0) }} placeholder={language === 'no' ? 'Tannlege neste tirsdag kl. 14:30' : 'Dentist next Tuesday at 14:30'} className="mt-3 w-full resize-none rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4 text-[color:var(--fg-90)] outline-none" />
-        <SensitiveInformationHelper language={language} />
+        <SensitiveInformationHelper language={language} compact />
         {failed && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{language === 'no' ? 'Klarte ikke å tolke alt. Prøv igjen eller rediger detaljene manuelt.' : "Couldn't understand that completely. Try again or edit the details manually."}</p>}
-        {parsing ? <ReminderThinkingState language={language} completing={false} /> : <button onClick={() => interpret()} disabled={!text.trim()} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{language === 'no' ? 'FORTSETT' : 'CONTINUE'}</button>}
+        {parsing ? <ReminderThinkingState language={language} completing={false} /> : <button onClick={() => interpret()} disabled={!text.trim()} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{language === 'no' ? (failed ? 'PRØV IGJEN' : 'FORTSETT') : (failed ? 'TRY AGAIN' : 'CONTINUE')}</button>}
         {failed && <button onClick={() => onEditDetails(draftFromText())} className="mt-3 h-10 w-full text-xs tracking-widest text-[color:var(--fg-60)]">{language === 'no' ? 'REDIGER DETALJER' : 'EDIT DETAILS'}</button>}
       </> : clarification ? <>
         <div className="mt-7 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">

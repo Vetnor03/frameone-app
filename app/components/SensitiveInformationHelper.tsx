@@ -1,9 +1,21 @@
 type AppLanguage = 'en' | 'no'
 
-export default function SensitiveInformationHelper({ language }: { language: AppLanguage }) {
+export default function SensitiveInformationHelper({ language, compact = false }: { language: AppLanguage; compact?: boolean }) {
   const description = language === 'no'
     ? 'Av hensyn til sikkerheten og personvernet ditt bør du ikke dele passord, betalingsopplysninger, fødselsnummer, helseopplysninger eller annen sensitiv eller fortrolig informasjon.'
     : 'For your security and privacy, don’t share passwords, payment details, national ID numbers, health information, or other sensitive or confidential information.'
+
+
+  if (compact) {
+    return (
+      <details className="mt-3 rounded-lg text-[11px] text-[color:var(--fg-60)]">
+        <summary className="cursor-pointer py-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2aa3ff]">
+          {language === 'no' ? 'Personvern: Ikke del sensitive opplysninger' : 'Privacy: Do not share sensitive information'}
+        </summary>
+        <p className="mt-1 leading-4">{description}</p>
+      </details>
+    )
+  }
 
   return (
     <aside

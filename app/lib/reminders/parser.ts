@@ -255,6 +255,39 @@ export function validateReminderParseResult(value: unknown, language: ReminderPa
   return { status: 'needs_clarification', reminder: null, partial: reminder, missing_fields: missing, question }
 }
 
+const EXPLICIT_CLOCK = '(?:[01]?\\d|2[0-3])(?:[:.][0-5]\\d)?'
+const SELECTED_DATE_TIME_SUFFIX = new RegExp(
+  '(?:^|\\s)(?:kl(?:okken)?\\.?\\s*)?(' + EXPLICIT_CLOCK + ')(?:\\s*(?:-|–|—|til|to)\\s*(' + EXPLICIT_CLOCK + '))?\\s*$',
+  'i',
+)
+const OTHER_SCHEDULE_WORDING = /\b(?:i morgen|imorgen|tomorrow|today|i dag|neste|mandag|tirsdag|onsdag|torsdag|fredag|lørdag|søndag|monday|tuesday|wednesday|thursday|friday|saturday|sunday|hver|every|daglig|ukentlig|månedlig|årlig|daily|weekly|monthly|yearly|etter jobb|after work|senere|later|i kveld|tonight|bursdag|fødselsdag|birthday)\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[./]\d{1,2}[./]?\d{0,4}\b/i
+
+/**
+ * Fail-safe for unambiguous text entered on a selected calendar day.
+ * Never infer a new date or a vague time. If the user supplies a date,
+ * recurrence, or an unsupported time phrase, leave interpretation to the model.
+ */
+export function parseSelectedDateReminderFallback(context: ReminderParseContext): Extract<ReminderParseResult, { status: 'ready' }> | null {
+  if (!context.partial || context.clarificationQuestion || context.clarificationAnswer) return null
+  const partial = validateParsedReminder(context.partial)
+  const raw = context.text.trim()
+  if (!partial?.due_date || partial.title !== raw || partial.due_time || partial.end_date || partial.end_time || partial.repeat_type !== 'none') return null
+  const match = raw.match(SELECTED_DATE_TIME_SUFFIX)
+  const title = match ? raw.slice(0, match.index).trim() : raw
+  if (!title || title.length > 500 || OTHER_SCHEDULE_WORDING.test(title)) return null
+  // An unmatched number/time may carry information we cannot represent.
+  if (!match && (/\d/.test(raw) || /\b(?:kl(?:okken)?|morgen|kveld|formiddag|ettermiddag|før|etter|around|at|before|after)\b/i.test(raw))) return null
+  const normalizeClock = (value: string) => {
+    const [hour, minute = '00'] = value.replace('.', ':').split(':')
+    return hour.padStart(2, '0') + ':' + minute
+  }
+  const dueTime = match ? normalizeClock(match[1]) : null
+  const endTime = match?.[2] ? normalizeClock(match[2]) : null
+  if (dueTime && endTime && endTime <= dueTime) return null
+  const reminder = validateParsedReminder({ ...partial, title, due_time: dueTime, end_time: endTime })
+  return reminder ? { status: 'ready', reminder, partial: null, missing_fields: [], question: null } : null
+}
+
 function outputText(payload: any) {
   for (const item of payload?.output ?? []) for (const content of item?.content ?? []) {
     if (content?.type === 'output_text' && typeof content.text === 'string') return content.text
@@ -300,9 +333,10 @@ function logParseCompleted(durationMs: number, outcome: ReminderParseResult['sta
 }
 
 export async function parseReminder(context: ReminderParseContext, fetcher: typeof fetch = fetch): Promise<ReminderParseResult | null> {
+  const fallback = parseSelectedDateReminderFallback(context)
   if (!process.env.OPENAI_API_KEY || !context.text.trim() || !Date.parse(context.localNow)) {
     logParseFailure('reminder_parse_validation_error')
-    return null
+    return context.text.trim() && Date.parse(context.localNow) ? fallback : null
   }
   const model = costControlledModel(process.env.REMINDER_PARSE_MODEL)
   const controller = new AbortController()
@@ -324,14 +358,14 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
     })
     if (!response.ok) {
       logParseFailure('reminder_parse_openai_http_error', { status: response.status })
-      return null
+      return fallback
     }
     const payload = await response.json()
     await recordOpenAIUsage('reminder_parse', model, payload)
     let decoded: unknown
     try { decoded = JSON.parse(outputText(payload)) } catch {
       logParseFailure('reminder_parse_invalid_json')
-      return null
+      return fallback
     }
     if (decoded && typeof decoded === 'object' && !Array.isArray(decoded)) {
       const output = decoded as Record<string, unknown>
@@ -360,11 +394,17 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
     }
     const result = validateReminderParseResult(decoded, context.language)
     if (!result) logParseFailure('reminder_parse_invalid_result')
-    else logParseCompleted(Date.now() - requestStartedAt, result.status)
-    return result
+    const resolved = fallback && (!result || result.status !== 'ready' || (
+      result.reminder.due_date !== fallback.reminder.due_date ||
+      result.reminder.due_time !== fallback.reminder.due_time ||
+      result.reminder.end_time !== fallback.reminder.end_time ||
+      (fallback.reminder.due_time !== null && result.reminder.title === context.text.trim())
+    )) ? fallback : result
+    if (resolved) logParseCompleted(Date.now() - requestStartedAt, resolved.status)
+    return resolved
   } catch (error) {
     if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) logParseFailure('reminder_parse_timeout')
     else logParseFailure('reminder_parse_openai_error')
-    return null
+    return fallback
   } finally { clearTimeout(timeout) }
 }
