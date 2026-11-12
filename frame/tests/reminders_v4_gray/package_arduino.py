@@ -105,8 +105,14 @@ if not (LIB/"library.properties").is_file():
 LIBZIP=OUT/"GxEPD2_4G_ARDUINO_LIBRARY.zip"
 with ZipFile(LIBZIP,"w",ZIP_DEFLATED,compresslevel=6) as z:
     for file in LIB.rglob("*"):
-        if file.is_file() and not any(x in {".git",".pio",".github"} for x in file.parts):
-            z.write(file,Path("GxEPD2_4G")/file.relative_to(LIB))
+        relative=file.relative_to(LIB)
+        if file.is_file() and not any(x in {".git",".pio",".github"} for x in relative.parts):
+            z.write(file,Path("GxEPD2_4G")/relative)
+with ZipFile(LIBZIP) as z:
+    if "GxEPD2_4G/library.properties" not in z.namelist() or len(z.namelist())<10:
+        raise SystemExit("Driver installer invalid: missing library.properties or sources")
+if LIBZIP.stat().st_size<10000:
+    raise SystemExit("Driver installer suspiciously empty")
 
 # Additional metadata, no keys/token IDs.
 names=sorted(p.name for p in SKETCH.iterdir() if p.is_file())
