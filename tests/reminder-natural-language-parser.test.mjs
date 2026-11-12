@@ -366,4 +366,41 @@ test('parser version and occurrence end semantics are explicit', () => {
   assert.doesNotMatch(source, /repeat_until/)
 })
 
+
+test('selected December calendar day recovers Norwegian time ranges when the parser service fails', async () => {
+  for (const [input, title, from, until] of [
+    ['Egon med jobb 19-21', 'Egon med jobb', '19:00', '21:00'],
+    ['Egon med jobb 19:00–21:00', 'Egon med jobb', '19:00', '21:00'],
+    ['Middag kl. 18 til 20', 'Middag', '18:00', '20:00'],
+    ['Tannlege kl. 14:30', 'Tannlege', '14:30', null],
+    ['Handle mat', 'Handle mat', null, null],
+  ]) {
+    const partial = { ...base, title: input, due_date: '2026-12-11', due_time: null }
+    const ctx = { ...context(input, 'no'), partial }
+    const expected = { ...partial, title, due_time: from, end_time: until }
+    assert.deepEqual(await parseReminder(ctx, async () => new Response('', { status: 503 })), ready(expected), input)
+  }
+})
+
+test('selected calendar date and explicit time range override an incomplete model interpretation', async () => {
+  const input = 'Egon med jobb 19-21'
+  const partial = { ...base, title: input, due_date: '2026-12-11', due_time: null }
+  const ctx = { ...context(input, 'no'), partial }
+  const incomplete = { ...partial, title: 'Egon med jobb', due_date: '2026-12-12', due_time: '19:00', end_time: null }
+  assert.deepEqual(
+    await parseReminder(ctx, responseFor(candidate(incomplete))),
+    ready({ ...partial, title: 'Egon med jobb', due_time: '19:00', end_time: '21:00' }),
+  )
+})
+
+test('unresolved dates, invalid ranges and follow-ups are never silently guessed', async () => {
+  const unresponsive = async () => new Response('', { status: 503 })
+  const selected = (text) => ({ ...context(text, 'no'), partial: { ...base, title: text, due_date: '2026-12-11', due_time: null } })
+  for (const text of ['Møte neste tirsdag 19-21', 'Møte 12/12 19-21', 'Møte hver fredag 19-21', 'Møte 21-19', 'Møte etter jobb']) {
+    assert.equal(await parseReminder(selected(text), unresponsive), null, text)
+  }
+  assert.equal(await parseReminder(context('Egon med jobb 19-21', 'no'), unresponsive), null)
+  assert.equal(await parseReminder({ ...selected('Egon med jobb 19-21'), clarificationQuestion: 'Når?', clarificationAnswer: 'i morgen' }, unresponsive), null)
+})
+
 test.after(() => { if (originalKey == null) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalKey })
