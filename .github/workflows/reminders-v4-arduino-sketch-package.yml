@@ -1,0 +1,78 @@
+name: V4 GREYSCALE — Arduino IDE sketch ZIP (Surf-style, NO FLASH)
+
+on:
+  pull_request:
+    paths:
+      - "frame/tests/reminders_v4_gray/**"
+      - "frame/src/modules/RemindersEditorialPreview.h"
+      - "frame/src/assets/fonts/RemindEditorialFonts.*"
+      - ".github/workflows/reminders-v4-arduino-sketch-package.yml"
+  workflow_dispatch:
+
+jobs:
+  arduino-sketch-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install PlatformIO 6.1.18
+        run: python -m pip install "platformio==6.1.18"
+      - name: Build unchanged standalone C++ Grayscale QA test
+        run: pio run -d frame/tests/reminders_v4_gray -e v4_gray_qa
+      - name: Build Arduino IDE sketch folder and library installer
+        run: python frame/tests/reminders_v4_gray/package_arduino.py
+      - name: Compile translated Arduino IDE sketch files (NOT just original main.cpp)
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from shutil import copy2, rmtree
+          root=Path("frame/tests/reminders_v4_gray")
+          src=root/"arduino-package/frame_v2.5.1"
+          verify=root/"arduino-verify-pio"
+          if verify.exists(): rmtree(verify)
+          (verify/"boards").mkdir(parents=True)
+          (verify/"src").mkdir()
+          copy2("frame/boards/alfred_v1_2.json",verify/"boards/alfred_v1_2.json")
+          copy2(src/"partitions.csv",verify/"partitions.csv")
+          for file in src.iterdir():
+              if file.suffix in {".cpp",".h"}:
+                  copy2(file,verify/"src"/file.name)
+          (verify/"src/main.cpp").write_text((src/"frame_v2.5.1.ino").read_text())
+          (verify/"platformio.ini").write_text(
+              "[platformio]\n"
+              "default_envs = arduino_qa\n"
+              "boards_dir = boards\n"
+              "[env:arduino_qa]\n"
+              "platform = espressif32@6.6.0\n"
+              "framework = arduino\n"
+              "board = alfred_v1_2\n"
+              "board_build.flash_size = 16MB\n"
+              "board_build.flash_mode = qio\n"
+              "board_build.memory_type = qio_opi\n"
+              "board_build.psram_type = opi\n"
+              "board_build.partitions = partitions.csv\n"
+              "lib_deps =\n"
+              "  https://github.com/ZinggJM/GxEPD2_4G.git#de006169dba1d905f618d70423f0e1a9215b20c7\n"
+              "  adafruit/Adafruit GFX Library@1.12.6\n"
+              "  adafruit/Adafruit BusIO@1.17.4\n"
+              "build_flags = -DFRAME_HW_ALFRED_V1_2=1\n"
+          )
+          PY
+          pio run -d frame/tests/reminders_v4_gray/arduino-verify-pio -e arduino_qa
+      - name: Check Arduino ZIP layout and no unauthorized production changes
+        run: |
+          test -s frame/tests/reminders_v4_gray/arduino-package/frame_v2.5.1/frame_v2.5.1.ino
+          test -s frame/tests/reminders_v4_gray/arduino-package/frame_v2.5.1/RemindersGrayQA.cpp
+          test -s frame/tests/reminders_v4_gray/arduino-package/frame_v2.5.1/partitions.csv
+          test -s frame/tests/reminders_v4_gray/arduino-package/GxEPD2_4G_ARDUINO_LIBRARY.zip
+          echo "Arduino sketch verified. No flash, no upload, no OTA."
+      - name: Upload ONE ZIP with familiar Arduino folder structure
+        uses: actions/upload-artifact@v4
+        with:
+          name: RE_MIND_REMINDERS_V4_REAL_GREYSCALE_SERIAL_ARDUINO_QA
+          path: frame/tests/reminders_v4_gray/arduino-package/
+          if-no-files-found: error
+          retention-days: 14
