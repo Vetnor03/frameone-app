@@ -53,9 +53,13 @@ def test_subtle_list_ornaments_do_not_replace_content():
     assert "static void newsEditorialLozenge(" in preview
     assert "d.drawPixel(cx-dx,cy+dy,color);" in preview
     assert "d.drawPixel(cx+dx,cy+dy,color);" in preview
-    assert "out.markerX=x+7;" in preview
+    assert "out.markerX=marginMarker?x-8:x+7;" in preview
+    assert "out.markerR=marginMarker?2:3;" in preview
     assert "out.x=x+markerInset;" in preview
-    assert "const bool ornament=g_cache->count>1 && w>=184;" in preview
+    assert "const bool normalMarker=g_cache->count>1 && w>=184;" in preview
+    assert "const bool marginMarker=g_cache->count>1 && compactSideMarker &&" in preview
+    assert "const bool compactSideMarker=c.w<=220 && c.h>=240;" in preview
+    assert "bodyFont,compactSideMarker))break;" in preview
     assert "if(block.markerR>0)" in preview
     assert "newsEditorialLozenge(block.markerX,block.markerY,block.markerR);" in preview
     assert "newsEditorialBalance(trial,bodyY+bodyH);" in preview
