@@ -352,11 +352,20 @@ static bool renderEditorialCountdownPreview(const Cell& c) {
       heroRect.x+heroRect.w+gutter,area.y,
       area.w-heroRect.w-gutter,area.h
     };
+  } else if (policy.showCalendar && area.w>=430 && area.h>=390) {
+    // Preserve the calendar on medium-wide tall cells (e.g. 3x4).
+    // A sidebar here would steal too much space from the main event.
+    const int calH=min(185,area.h*42/100);
+    calendarRect=CountdownEditorialRect{
+      area.x,area.y+area.h-calH,area.w,calH
+    };
+    heroRect.h-=calH+16;
   }
 
   // A roomy left panel may hold a short editorial list underneath the hero.
-  // Never displace the two primary facts in compact cells.
-  if (eventCount>0 && !sideList && heroRect.w>=290 && heroRect.h>=260) {
+  // Never sacrifice a calendar or primary facts for extra rows.
+  if (eventCount>0 && !sideList && !calendarRect.w &&
+      heroRect.w>=290 && heroRect.h>=260) {
     const int listH=min(156,heroRect.h*37/100);
     listRect=CountdownEditorialRect{
       heroRect.x,heroRect.y+heroRect.h-listH,heroRect.w,listH
