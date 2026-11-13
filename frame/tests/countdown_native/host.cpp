@@ -169,6 +169,10 @@ static void prepareScenario(const std::string& scenario){
     append("Sommerferie",218,false,"2027-06-19","19. juni 2027");
     append("Jul",42,true,"2026-12-25","25. desember");
     append("Bryllup",120,false,"2027-03-13");
+  } else if(scenario=="pinned_past"){
+    append("Avsluttet reise",-3,true,"2026-11-10");
+    append("Vinterferie",84,false,"2027-02-05");
+    append("Helgetur",7,false,"2026-11-20");
   } else if(scenario=="dense"){
     append("Jul",42,true,"2026-12-25");
     append("F\xF8""dselsdag",13,false,"2026-11-26");
@@ -185,6 +189,17 @@ static void prepareScenario(const std::string& scenario){
     std::cerr<<"Unknown scenario "<<scenario<<"\n";std::exit(2);
   }
   sortCacheItems(); // EXACT production comparator and selection helpers
+  if(scenario=="pinned") {
+    assert(g_cache.items[0].pinned);
+    assert(strcmp(g_cache.items[findNearestIdx()].title,"Jul")==0);
+  }
+  if(scenario=="pinned_past") {
+    assert(g_cache.items[0].pinned && g_cache.items[0].isPast);
+    assert(strcmp(g_cache.items[findNearestIdx()].title,"Helgetur")==0);
+    const CountdownItem* upcoming[MAX_EVENTS]={nullptr};
+    const int n=collectAdaptiveUpcoming(findNearestIdx(),upcoming,MAX_EVENTS);
+    assert(n==1 && strcmp(upcoming[0]->title,"Vinterferie")==0);
+  }
 }
 
 // We intentionally test the 16 rectangles, not 16 arbitrary visual presets.
@@ -192,7 +207,7 @@ int main(int argc,char** argv){
   if(argc<2){std::cerr<<"Usage: host OUT_DIR\n";return 2;}
   const std::string base=argv[1];
   const char* scenarios[]={"one","dense","long","today","past","pinned",
-                          "empty","failed","far","long_number"};
+                          "pinned_past","empty","failed","far","long_number"};
   std::cout<<"scenario,theme,cols,rows,preview,fallback,escaped,offscreen,ink_pixels\n";
   for(const char* scenario:scenarios) {
     for(int theme=0;theme<2;++theme) {
