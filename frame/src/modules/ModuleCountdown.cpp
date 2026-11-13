@@ -1873,10 +1873,15 @@ void render(const Cell& c, const String& moduleName) {
 
   ensureLoaded();
 
-  if (c.size == CELL_ADAPTIVE) {
+  // R3 V4 QA: the opt-in editorial preview replaces all 16 shapes,
+  // including frozen legacy anchors (4x1, 2x2, 4x2, 4x4).
+  // The production build is unchanged and still uses the original
+  // size-specific renderer if this preview is disabled or declines a cell.
 #if REMIND_COUNTDOWN_EDITORIAL_PREVIEW_ENABLED
-    if (renderEditorialCountdownPreview(c)) return;
+  if (renderEditorialCountdownPreview(c)) return;
 #endif
+
+  if (c.size == CELL_ADAPTIVE) {
     renderAdaptiveCountdown(c);
     return;
   }
