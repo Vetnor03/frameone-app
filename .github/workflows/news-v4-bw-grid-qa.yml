@@ -68,6 +68,8 @@ jobs:
           grep -q 'cmd=="L"' frame/tests/news_v4_bw_grid/src/main.cpp
           grep -q 'cmd=="D"' frame/tests/news_v4_bw_grid/src/main.cpp
           grep -q 'newsEditorialLozenge' frame/tests/news_v4_bw_grid/arduino-package/frame_v2.5.1/NewsEditorialPreview.h
+          grep -q 'newsEditorialFinalizeOrnaments' frame/tests/news_v4_bw_grid/arduino-package/frame_v2.5.1/NewsEditorialPreview.h
+          grep -q 'if(plan.shown!=1)return;' frame/tests/news_v4_bw_grid/arduino-package/frame_v2.5.1/NewsEditorialPreview.h
           test -s frame/tests/news_v4_bw_grid/arduino-package/frame_v2.5.1/frame_v2.5.1.ino
           test -s frame/tests/news_v4_bw_grid/arduino-package/frame_v2.5.1/partitions.csv
           echo "Only compiled. NO device upload, erase flash or OTA."
