@@ -54,6 +54,6 @@ test('Normal and Custom are both first-time options, and Normal carries a subtle
   assert.match(setup, /Finish setup/)
   assert.doesNotMatch(setup, /Open frame editor/)
   assert.doesNotMatch(setup, /const setupPurposes: SetupPurpose\[\] = SHOW_CUSTOM_LAYOUT_UI/)
-  // The advanced custom geometry release flag stays off for pilot.
-  assert.match(home, /const SHOW_CUSTOM_LAYOUT_UI = false/)
+  // The advanced custom geometry editor is available again.
+  assert.match(home, /const SHOW_CUSTOM_LAYOUT_UI = true/)
 })
