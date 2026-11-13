@@ -132,10 +132,11 @@ static bool planEditorialNews(const Cell& c){
     };
 
     for(int fi=0;fi<3;++fi) {
-      // The plan stores up to 8 × 6 unscaled headline lines (~6 KB).
-      // Keep it heap-backed; do not place a second copy on ESP32 stack.
+      // The plan stores up to 8 × 6 original bitmap headline lines.
+      // Reuse its heap allocation; only chosen rows may be read by painters.
       EditorialNewsPlan& trial=*g_newsEditorialPlan;
-      memset(&trial,0,sizeof(trial));
+      trial.shown=0;
+      trial.overflow=0;
       trial.columns=cols;
       trial.headingFont=showHeading?headingFont:nullptr;
       trial.headerX=left;
