@@ -1208,6 +1208,15 @@ static void renderAdaptiveGroceries(const Cell& c) {
   capacity = min(12, min(capacity, g_cache.count));
   const int rotation = getRotationStep4h();
   const int perColumn = max(1, (capacity + columns - 1) / columns);
+  // The original 26px rowStep above determines EXACTLY which shopping
+  // items fit. When there is spare vertical room, spread those same
+  // selected rows optically and permit a larger original DM Sans bitmap.
+  // This changes presentation ONLY, never capacity, rotation or overflow.
+  const int visualRows = layout.horizontal ? 1 : (capacity + columns - 1) / columns;
+  const int visualRoom = max(0, listH - (g_cache.count > capacity ? overflowH : 0));
+  const int visualStep = !layout.horizontal && visualRows > 0 &&
+                          visualRoom >= visualRows * 30 + 22
+    ? min(42, max(rowStep, visualRoom / (visualRows + 1))) : rowStep;
   for (int i = 0; i < capacity; ++i) {
     const GroceryItem& item = g_cache.items[wrapIndex(rotation + i, g_cache.count)];
     int x, y, width;
@@ -1221,12 +1230,12 @@ static void renderAdaptiveGroceries(const Cell& c) {
       const int columnW = groceryW / columns;
       x = innerX + col * columnW + 14;
       width = max(1, columnW - 20);
-      y = listY + row * rowStep + 15;
+      y = listY + row * visualStep + visualStep / 2;
       // Keep the original geometry, item index, four-hour rotation, count
       // and list capacity; ornament is drawn only after a full-font fit.
     }
 #if REMIND_GROCERIES_EDITORIAL_PREVIEW_ENABLED
-    if (groceriesEditorialItem(item,x,y,width,layout.horizontal ? max(26,listH) : rowStep,
+    if (groceriesEditorialItem(item,x,y,width,layout.horizontal ? max(26,listH) : visualStep,
                                layout.horizontal,capacity))
       continue;
 #endif
