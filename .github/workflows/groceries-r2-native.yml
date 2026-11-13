@@ -1,0 +1,43 @@
+name: Groceries R2 — exact original C++ 1-bit renderer (NO FLASH)
+on:
+  pull_request:
+    paths:
+      - "frame/src/modules/ModuleGroceries.cpp"
+      - "frame/src/modules/GroceriesEditorialPreview.h"
+      - "frame/tests/native/groceries/**"
+      - ".github/workflows/groceries-r2-native.yml"
+  workflow_dispatch:
+jobs:
+  native-groceries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify existing rotation, cache, menu, insight and source policies remain unchanged
+        run: python3 frame/tests/native/groceries/source_contract.py
+      - name: Generate exact source-owned adaptive rendering C++ excerpt
+        run: python3 frame/tests/native/groceries/extract_renderer.py
+      - name: Compile native GFX renderer against original bitmap font arrays
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra \
+            -Iframe/tests/native/groceries \
+            -Iframe/src/modules \
+            -Iframe/src/assets/fonts \
+            frame/tests/native/groceries/groceries_native.cpp \
+            frame/src/assets/fonts/RemindEditorialFonts.cpp \
+            -o /tmp/groceries-native
+      - name: Rasterize 12 scenarios across 16 grid dimensions and both ink themes
+        run: /tmp/groceries-native groceries-native-output
+      - name: Produce genuine 1-bit contact sheets and verify exact Light-Dark inverse
+        run: |
+          python3 -m pip install Pillow
+          python3 frame/tests/native/groceries/make_gallery.py
+      - name: Upload original source-rendered 1-bit output (not a mockup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: RE_MIND_GROCERIES_R2_ORIGINAL_CPP_16_LIGHT_DARK
+          path: groceries-native-output/
+          if-no-files-found: error
+          retention-days: 14
