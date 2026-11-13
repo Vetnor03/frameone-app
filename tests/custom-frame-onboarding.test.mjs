@@ -54,3 +54,13 @@ test('Custom finishes with selected layout and slots before the one initial fram
   assert.ok(completion.indexOf("complete_initial_device_onboarding") < completion.indexOf('await requestDeviceUpdate('))
   assert.doesNotMatch(onboarding, /finish\('custom'\)[\s\S]*Open frame editor/)
 })
+
+test('new custom setup hides Stocks and Soccer without removing device capabilities', () => {
+  assert.ok(!CUSTOM_SETUP_MODULES.includes('stocks'))
+  assert.ok(!CUSTOM_SETUP_MODULES.includes('soccer'))
+  assert.ok(CUSTOM_SETUP_MODULES.includes('surf'))
+  assert.ok(CUSTOM_SETUP_MODULES.includes('ski'))
+  assert.deepEqual(validateCustomSetup('full', { 0: 'stocks' }, true), { valid: false, reason: 'invalid_module' })
+  assert.deepEqual(validateCustomSetup('full', { 0: 'soccer' }, true), { valid: false, reason: 'invalid_module' })
+  assert.match(onboarding, /CUSTOM_SETUP_MODULES\.filter\(/)
+})
