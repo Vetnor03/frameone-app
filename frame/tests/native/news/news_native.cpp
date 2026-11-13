@@ -27,6 +27,16 @@ static void pixel(int x,int y,uint16_t ink){
   if(x<0||y<0||x>=g_width||y>=g_height){++g_clipped;return;}
   g_pixels[(size_t)y*g_width+x]=ink?1:0;
 }
+// Pixel-accurate stand-in for DisplayCore::get().drawPixel(), used by the
+// exact production C++ editorial lozenge implementation below.
+namespace DisplayCore {
+class NativeCanvas {
+ public:
+  void drawPixel(int x,int y,uint16_t ink) {pixel(x,y,ink);}
+};
+static NativeCanvas& get(){static NativeCanvas canvas;return canvas;}
+}
+
 static void glyphBounds(const char* text,const GFXfont* font,
                         int16_t& x1,int16_t& y1,uint16_t& w,uint16_t& h) {
   int cursor=0,minX=999999,minY=999999,maxX=-999999,maxY=-999999;
@@ -228,6 +238,18 @@ int main(int argc,char** argv){
         if(block.sourceIndex!=i || block.x<0 || block.y<0 ||
            block.x+block.w>g_width || block.y+block.h>g_height ||
            block.lineCount<1 || block.lineCount>6)++failures;
+        // Every ornamental marker must be entirely inside the source cell,
+        // left of its associated full headline, without ink collision.
+        if(block.markerR>0 &&
+           (block.markerX-block.markerR<0 ||
+            block.markerX+block.markerR>=block.x ||
+            block.markerY-block.markerR<block.y ||
+            block.markerY+block.markerR>=block.y+block.h ||
+            block.markerX+block.markerR>=g_width ||
+            block.markerY+block.markerR>=g_height))
+          ++failures;
+        if(block.markerR>0 && ModuleNews::g_storage.count<=1)
+          ++failures;
         std::string rejoined;
         for(int line=0;line<block.lineCount;++line){
           if(line)rejoined+=' ';
