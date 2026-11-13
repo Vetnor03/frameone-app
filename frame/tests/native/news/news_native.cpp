@@ -264,20 +264,20 @@ int main(int argc,char** argv){
         if(rejoined!=before.items[i].title)++failures;
       }
       if(g_markerPixels!=expectedMarkerPixels)++failures;
-      // V4 physical QA: narrow-tall spans 2/3/4 must show tiny margin
-      // diamonds while preserving the SAME density and full titles.
-      if(scene=="normal" && cols==1 && rows>=2){
-        if(shown!=rows-1 || overflow!=before.count-shown)++failures;
+      // The owner observed the physical passepartout covering bullets
+      // in 1-column cells. Markers must sit exactly on the same safe x
+      // baseline as the "Nyheter" heading; never overdraw headline glyphs.
+      if(scene=="normal" && cols==1){
+        if(shown!=rows || overflow!=before.count-shown)++failures;
         for(int i=0;i<shown;++i){
           const auto& block=plan.blocks[i];
-          if(block.markerR!=3 || block.markerX+block.markerR>=block.x ||
-             block.markerX-block.markerR<2)
+          if(block.markerR!=3 ||
+             block.markerX!=plan.headerX ||
+             block.markerX-block.markerR<11 ||
+             block.markerX+block.markerR>=block.x)
             ++failures;
         }
       }
-      // Short single-cell layout remains intentionally ornament-free.
-      if(scene=="normal" && cols==1 && rows==1 &&
-         shown>0 && plan.blocks[0].markerR!=0)++failures;
       ++accepted;
     }else{++legacy;}
     if(ModuleNews::g_storage.count!=before.count ||
