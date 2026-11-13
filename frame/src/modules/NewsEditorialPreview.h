@@ -106,7 +106,7 @@ static bool newsEditorialBlock(EditorialNewsBlock& out,int sourceIndex,
   out.sourceIndex=sourceIndex;
   out.x=x+markerInset;out.y=y;out.w=w-markerInset;out.h=used;
   if(normalMarker || marginMarker){
-    out.markerR=marginMarker?2:3;
+    out.markerR=3; // same refined diamond size as every wider News layout
     out.markerX=marginMarker?x-8:x+7;
     out.markerY=y+7;
   }
