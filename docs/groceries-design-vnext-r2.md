@@ -26,7 +26,7 @@ V4 frame; not production-merged, and no OTA or physical flashing.
 
 ## Native QA (not a mockup)
 
-[CI #43422280526](https://github.com/Vetnor03/frameone-app/actions/runs/43422280526) **PASS**.
+[CI #43422906150](https://github.com/Vetnor03/frameone-app/actions/runs/43422906150) **PASS**.
 
 The test script **extracts the actual adaptive C++ renderer from
 `ModuleGroceries.cpp`** on each run. It compiles that C++ together
@@ -51,7 +51,7 @@ production network/API or physical panel controller.
   versus initial R2 source render before optical spacing improvements.
 
 Native artifact: **`RE_MIND_GROCERIES_R2_ORIGINAL_CPP_16_LIGHT_DARK`**
-in CI #43422280526; contains original binary PBMs, 24 complete
+in CI #43422906150; contains original binary PBMs, 24 complete
 16-layout contact sheets and a CSV manifest, not HTML screenshots.
 
 ## Review questions / remaining work
