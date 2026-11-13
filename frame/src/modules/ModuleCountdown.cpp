@@ -16,6 +16,14 @@
 #include <math.h>
 #include <time.h>
 
+// Countdown R2 development preview: default OFF, legacy pixels unchanged.
+#ifndef REMIND_COUNTDOWN_EDITORIAL_PREVIEW_ENABLED
+#define REMIND_COUNTDOWN_EDITORIAL_PREVIEW_ENABLED 0
+#endif
+#if REMIND_COUNTDOWN_EDITORIAL_PREVIEW_ENABLED
+#include "RemindEditorialFonts.h"
+#endif
+
 #include "FreeSans9ptNO.h"
 #include "FreeSansBold12ptNO.h"
 #include "FreeSansBold18ptNO.h"
@@ -1847,6 +1855,10 @@ static void renderAdaptiveCountdown(const Cell& c) {
   if(calendar.w){tm nowTm;if(getLocalTmQuick(nowTm))drawCountdownCalendarMonth(calendar.x,calendar.y,calendar.w,calendar.h,nowTm.tm_year+1900,nowTm.tm_mon,nowTm.tm_year+1900,nowTm.tm_mon,nowTm.tm_mday,hero,true,true);}
 }
 
+// The opt-in header is included inside ModuleCountdown to reuse the exact
+// production cache, selected hero, upcoming order and calendar renderer.
+#include "CountdownEditorialPreview.h"
+
 // =========================================================
 // Public API
 // =========================================================
@@ -1862,6 +1874,9 @@ void render(const Cell& c, const String& moduleName) {
   ensureLoaded();
 
   if (c.size == CELL_ADAPTIVE) {
+#if REMIND_COUNTDOWN_EDITORIAL_PREVIEW_ENABLED
+    if (renderEditorialCountdownPreview(c)) return;
+#endif
     renderAdaptiveCountdown(c);
     return;
   }
