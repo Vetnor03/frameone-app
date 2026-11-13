@@ -254,6 +254,14 @@ int main(int argc,char** argv){
             block.markerX+block.markerR>=g_width ||
             block.markerY+block.markerR>=g_height))
           ++failures;
+        // Whether a dot is rendered is determined by the number VISIBLE
+        // in this layout, not by the number cached by the feed.
+        if(shown==1 &&
+           (block.markerR!=0 || block.markerInset!=0 ||
+            block.markerX!=0 || block.markerY!=0))
+          ++failures;
+        if(shown>=2 && block.markerR>0 && block.markerInset<=0)
+          ++failures;
         if(block.markerR>0 && ModuleNews::g_storage.count<=1)
           ++failures;
         std::string rejoined;
@@ -264,6 +272,7 @@ int main(int argc,char** argv){
         if(rejoined!=before.items[i].title)++failures;
       }
       if(g_markerPixels!=expectedMarkerPixels)++failures;
+      if(shown==1 && g_markerPixels!=0)++failures;
       // The owner observed the physical passepartout covering bullets
       // in 1-column cells. Markers must sit exactly on the same safe x
       // baseline as the "Nyheter" heading; never overdraw headline glyphs.
@@ -275,10 +284,12 @@ int main(int argc,char** argv){
         if(shown!=expectedShown || overflow!=before.count-shown)++failures;
         for(int i=0;i<shown;++i){
           const auto& block=plan.blocks[i];
-          if(block.markerR!=3 ||
-             block.markerX!=plan.headerX ||
-             block.markerX-block.markerR<11 ||
-             block.markerX+block.markerR>=block.x)
+          if(shown==1){
+            if(block.markerR!=0 || block.x!=plan.headerX)++failures;
+          }else if(block.markerR!=3 ||
+                   block.markerX!=plan.headerX ||
+                   block.markerX-block.markerR<11 ||
+                   block.markerX+block.markerR>=block.x)
             ++failures;
         }
       }
