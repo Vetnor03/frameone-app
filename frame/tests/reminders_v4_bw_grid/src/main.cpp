@@ -1,14 +1,14 @@
-// RE:MIND Alfred V4 — manual standalone TRUE FOUR-GREY firmware QA.
+// RE:MIND Alfred V4 — standalone black/white Reminders 16-layout GRID QA.
 //
 // IMPORTANT: This is NOT production firmware. Only the original,
- // unmodified RemindersEditorialPreview.h + approved bitmap fonts are used
+// unmodified RemindersEditorialPreview.h + approved bitmap fonts are used
 // for actual content. Fixtures are local; no backend, WiFi, Skip or NVS writes.
 // This sketch powers the EPD only when USB is present, uses only full-screen
-// GxEPD2_4G waveform updates and restores the hardware power-off sequence.
+// original GxEPD2_BW full refreshes and the existing power-off sequence.
 //
-// UART: 115200, newline. Commands: help, levels, bg 0..3, next, prev,
-// size 1x1..4x4, scene few|normal|many|long|tomorrow|empty|norwegian,
-// render, status. A background edit automatically changes ink contrast.
+// UART: 115200, newline. 1..16 selects Surf-style geometry, L/D/T theme.
+// Full 4x4 grid visible for every selection; active rectangle double outlined.
+// Offline fixed Reminders samples only. No OTA / no auto flash.
 
 #include <Arduino.h>
 #include <SPI.h>
