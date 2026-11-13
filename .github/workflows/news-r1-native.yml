@@ -1,0 +1,35 @@
+name: News R1 — original GFX native 1-bit QA (NO FLASH)
+on:
+  pull_request:
+    paths:
+      - "frame/src/modules/NewsEditorialPreview.h"
+      - "frame/src/modules/ModuleNews.cpp"
+      - "frame/tests/native/news/**"
+      - ".github/workflows/news-r1-native.yml"
+  workflow_dispatch:
+jobs:
+  news-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile exact News preview and original Fraunces/DM Sans bitmap fonts
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -Iframe/tests/native/news -Iframe/src/assets/fonts -Iframe/src/modules \
+            frame/tests/native/news/news_native.cpp \
+            frame/src/assets/fonts/RemindEditorialFonts.cpp \
+            -o /tmp/news-preview-native
+      - name: Render 10 content scenarios, all 16 cell forms, Light and Dark
+        run: /tmp/news-preview-native news-native-output
+      - name: Create gallery and check exact 1-bit inverse in Light/Dark
+        run: |
+          python3 -m pip install Pillow
+          python3 frame/tests/native/news/make_gallery.py
+      - name: Preserve original P4 raster + 16-size contact sheets
+        uses: actions/upload-artifact@v4
+        with:
+          name: news-r1-original-gfx-1bit-16-layouts
+          path: news-native-output/
+          if-no-files-found: error
+          retention-days: 14
