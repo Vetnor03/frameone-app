@@ -115,6 +115,54 @@ static bool planEditorialNews(const Cell& c){
   if(bodyH<22)return false;
 
   const int maxItems=min(g_cache->count,NEWS_EDITORIAL_MAX_BLOCKS);
+
+  // Roomy sparse News views benefit from an editorial lead story. Only
+  // TYPOGRAPHY changes: original feed item 0 remains first and every following
+  // item retains its exact index. No recency, ranking or time logic.
+  // The large Fraunces headline must fit completely before this family wins.
+  if(g_cache->count>=2 && g_cache->count<=5 &&
+     width>=680 && bodyH>=240) {
+    EditorialNewsPlan& featured=*g_newsEditorialPlan;
+    featured.shown=0;featured.overflow=0;featured.columns=2;
+    featured.headingFont=showHeading?headingFont:nullptr;
+    featured.headerX=left;featured.headerY=top;
+    featured.footerH=footerH;featured.footerW=width;
+    featured.footerX=left;featured.footerY=top+height-footerH;
+    EditorialNewsBlock lead;
+    if(newsEditorialBlock(lead,0,left,bodyY,width,bodyH-140,
+                         RemindEditorialFonts::fraunces48())) {
+      featured.blocks[featured.shown++]=lead;
+      const int gap=max(18,min(30,width/32));
+      const int colWidth=(width-gap)/2;
+      int y=bodyY+lead.h+18;
+      int idx=1;
+      while(idx<maxItems && y<bodyY+bodyH){
+        EditorialNewsBlock row[2];
+        int accepted=0,rowH=0;
+        for(int col=0;col<2 && idx+col<maxItems;++col) {
+          if(!newsEditorialBlock(row[col],idx+col,
+                 left+col*(colWidth+gap),y,colWidth,bodyY+bodyH-y,
+                 RemindEditorialFonts::dm24()))break;
+          rowH=max(rowH,row[col].h);
+          ++accepted;
+        }
+        if(!accepted)break;
+        for(int col=0;col<accepted;++col)
+          featured.blocks[featured.shown++]=row[col];
+        idx+=accepted;
+        y+=rowH+16;
+        if(accepted<2)break;
+      }
+      featured.overflow=g_cache->count-featured.shown;
+      char footer[32];
+      snprintf(footer,sizeof(footer),"+%d more",featured.overflow);
+      if(featured.shown>=2 &&
+         (featured.overflow==0 || newsEditorialFits(footer,
+              RemindEditorialFonts::dm18(),featured.footerW,footerH)))
+        return true;
+    }
+  }
+
   const bool twoCols=width>=630 && g_cache->count>=2;
   const int columnChoices[2]={twoCols?2:1,1};
   for(int choice=0;choice<(twoCols?2:1);++choice) {
