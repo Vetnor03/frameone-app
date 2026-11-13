@@ -14,7 +14,7 @@ test('Custom setup supports every built-in layout without advanced custom geomet
   assert.deepEqual(starterCustomCells('full'), { 0: 'date' })
   assert.equal(starterCustomCells('invalid'), null)
   assert.ok(!CUSTOM_SETUP_MODULES.includes('assistant'))
-  assert.match(home, /const SHOW_CUSTOM_LAYOUT_UI = false/)
+  assert.match(home, /const SHOW_CUSTOM_LAYOUT_UI = true/)
   assert.match(onboarding, /allLayouts\(language\)\.map/)
   assert.match(onboarding, /<FrameLayoutRenderer/)
 })

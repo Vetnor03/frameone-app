@@ -63,7 +63,7 @@ type FrameSetupSelection = { purpose: SetupPurpose; modules: NonNullable<Setting
 // Release visibility switches. Keep the underlying implementation/data intact so
 // these features can be re-enabled without rebuilding them.
 const SHOW_AI_FOLLOW_UI = false
-const SHOW_CUSTOM_LAYOUT_UI = false
+const SHOW_CUSTOM_LAYOUT_UI = true
 const SHOW_NOTIFICATIONS_UI = false
 // Start new frames in responsive/Instant mode; existing saved preferences take precedence.
 const DEFAULT_POWER_SAVER = false
