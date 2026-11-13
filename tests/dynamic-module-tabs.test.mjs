@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 import { deriveDynamicModuleKeys } from '../app/lib/dynamicModuleTabs.mjs'
+import { isVisibleAppModule } from '../app/lib/modulePickerCatalog.mjs'
 
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 
@@ -62,4 +63,15 @@ test('pinned active modules lead active unpinned modules and pinned inactive mod
     deriveDynamicModuleKeys(assignments, ['reminders', 'countdown', 'date']),
     ['reminders', 'weather', 'countdown'],
   )
+})
+
+test('saved and pinned stocks/soccer remain intact in model but are hidden from visible tabs', () => {
+  const saved = { 0: 'stocks', 1: 'soccer', 2: 'weather', 3: 'date' }
+  const pinned = ['soccer', 'stocks', 'countdown']
+  const derived = deriveDynamicModuleKeys(saved, pinned)
+  assert.deepEqual(derived, ['soccer', 'stocks', 'weather', 'countdown'])
+  assert.deepEqual(derived.filter(isVisibleAppModule), ['weather', 'countdown'])
+  assert.match(home, /\.filter\(\(m\) => isVisibleAppModule\(m\)/)
+  assert.deepEqual(saved, { 0: 'stocks', 1: 'soccer', 2: 'weather', 3: 'date' })
+  assert.deepEqual(pinned, ['soccer', 'stocks', 'countdown'])
 })
