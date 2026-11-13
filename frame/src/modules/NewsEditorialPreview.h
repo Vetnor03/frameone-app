@@ -132,7 +132,10 @@ static bool planEditorialNews(const Cell& c){
     };
 
     for(int fi=0;fi<3;++fi) {
-      EditorialNewsPlan trial=EditorialNewsPlan{};
+      // The plan stores up to 8 × 6 unscaled headline lines (~6 KB).
+      // Keep it heap-backed; do not place a second copy on ESP32 stack.
+      EditorialNewsPlan& trial=*g_newsEditorialPlan;
+      memset(&trial,0,sizeof(trial));
       trial.columns=cols;
       trial.headingFont=showHeading?headingFont:nullptr;
       trial.headerX=left;
@@ -176,7 +179,6 @@ static bool planEditorialNews(const Cell& c){
               RemindEditorialFonts::dm18(),trial.footerW,footerH))
           continue;
       }
-      *g_newsEditorialPlan=trial;
       return true;
     }
   }
