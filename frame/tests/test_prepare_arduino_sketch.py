@@ -94,3 +94,28 @@ def test_ci_compiles_only_normal_arduino_sketch_with_mqtt():
     assert 'Compile MQTT-enabled Alfred with Arduino CLI' not in workflow
     assert '--enable-mqtt' not in workflow
     assert "alfred-v1_2-standard-arduino-sketch-unflashed" in workflow
+
+
+def test_countdown_preview_export_isolated_and_opens_in_arduino(tmp_path):
+    standard = tmp_path / "standard" / "frame_v2.5.1"
+    special = tmp_path / "special" / "frame_v2.5.1"
+    for folder, extra in [(standard, []), (special, ["--countdown-preview"])]:
+        subprocess.run(
+            [sys.executable, str(SCRIPT), "--output", str(folder), *extra],
+            check=True, capture_output=True, text=True,
+        )
+    assert (standard / "frame_v2.5.1.ino").is_file()
+    assert (special / "frame_v2.5.1.ino").is_file()
+    original = (SOURCE_ROOT / "modules" / "ModuleCountdown.cpp").read_text()
+    normal = (standard / "ModuleCountdown.cpp").read_text()
+    preview = (special / "ModuleCountdown.cpp").read_text()
+    assert normal == original
+    assert preview.startswith("#define REMIND_COUNTDOWN_EDITORIAL_PREVIEW_ENABLED 1\\n".replace("\\\\n", "\\n"))
+    assert preview.endswith(original)
+    assert (special / "CountdownEditorialPreview.h").is_file()
+    assert (special / "partitions.csv").is_file()
+    assert (special / "COUNTDOWN_USB_TEST_README.txt").is_file()
+    assert not (standard / "COUNTDOWN_USB_TEST_README.txt").exists()
+    for name in ("ModuleDate.cpp", "ModuleWeather.cpp", "ModuleSurf.cpp",
+                 "ModuleReminders.cpp", "ModuleNews.cpp"):
+        assert (special / name).read_bytes() == (standard / name).read_bytes()
