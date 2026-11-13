@@ -1,5 +1,6 @@
 #include "FrameText.h"
 #include "FrameLayout.h"
+#include "RemindEditorialFonts.h"
 // ===============================
 // ModuleReminders.cpp (FULL FILE - copy/paste)
 // ===============================
@@ -15,6 +16,7 @@
 #include <math.h>
 #include <time.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <new>
 #include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
@@ -2646,6 +2648,8 @@ static void applyProfileTitles(const Cell& c) {
   }
 }
 
+#include "RemindersEditorialPreview.h"
+
 void preload() {
   ensureLoaded();
 }
@@ -2666,6 +2670,15 @@ void render(const Cell& c, const String& moduleName) {
   int bucketCount = buildBuckets(buckets, MAX_BUCKETS);
   int primaryIdx = findPrimaryBucketIndex(buckets, bucketCount);
   logMemoryStats("after_buckets");
+
+  // Approved R3.3 Reminders typography and measured adaptive compositions.
+  // Source order, dates, Skip, time profiles and legacy fallback are unchanged.
+#if REMIND_REMINDERS_EDITORIAL_PREVIEW_ENABLED
+  if (renderEditorialRemindersPreview(c, buckets, bucketCount)) {
+    Serial.println("REM editorial render complete");
+    return;
+  }
+#endif
 
   if (c.size == CELL_ADAPTIVE) {
     renderAdaptiveReminders(c, buckets, bucketCount);
