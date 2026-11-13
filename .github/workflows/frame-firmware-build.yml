@@ -125,6 +125,33 @@ jobs:
           arduino-cli compile --verbose --warnings default --export-binaries \
             --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" \
             "$RUNNER_TEMP/frame_v2.5.1"
+      - name: Prepare isolated Countdown R3.1 Arduino IDE sketch
+        run: |
+          python frame/tools/prepare_arduino_sketch.py \
+            --output "$RUNNER_TEMP/countdown-arduino/frame_v2.5.1" \
+            --countdown-preview
+      - name: Compile Countdown R3.1 preview with Arduino CLI
+        run: |
+          arduino-cli compile --verbose --warnings default --export-binaries \
+            --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" \
+            "$RUNNER_TEMP/countdown-arduino/frame_v2.5.1"
+      - name: Create familiar Arduino sketch ZIP (folder plus ino)
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/countdown-arduino/frame_v2.5.1/frame_v2.5.1.ino"
+          test -s "$RUNNER_TEMP/countdown-arduino/frame_v2.5.1/partitions.csv"
+          grep -q '^#define REMIND_COUNTDOWN_EDITORIAL_PREVIEW_ENABLED 1' \
+            "$RUNNER_TEMP/countdown-arduino/frame_v2.5.1/ModuleCountdown.cpp"
+          (cd "$RUNNER_TEMP/countdown-arduino" && \
+            zip -qr "$RUNNER_TEMP/RE-MIND-Countdown-V4-Arduino-IDE.zip" frame_v2.5.1)
+      - name: Archive Countdown Arduino IDE ZIP for manual USB flashing only
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: countdown-v4-r3_1-arduino-ide-flash-zip
+          path: ${{ runner.temp }}/RE-MIND-Countdown-V4-Arduino-IDE.zip
+          if-no-files-found: error
+          retention-days: 14
       - name: Archive normal Alfred Arduino sketch (MQTT included)
         if: success() && github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
