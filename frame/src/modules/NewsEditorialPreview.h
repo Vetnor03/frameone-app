@@ -1,5 +1,5 @@
 #pragma once
-// RE:MIND News Design vNext R2.2 — passepartout-safe list bullets at heading margin.
+// RE:MIND News Design vNext R2.3 — list ornaments only when two or more items are visible.
 // Included from ModuleNews.cpp INSIDE namespace ModuleNews. Original fetching,
 // article order, cache, language, invalidation, fallback and API are untouched.
 // Real Fraunces/DM Sans GFX bitmaps; no scaled fonts or CSS.
@@ -19,6 +19,7 @@ struct EditorialNewsBlock {
   // Refined, ink-only four-point marker. All positions are planned in
   // actual pixels, never overlay headline glyph bounds.
   int markerX=0,markerY=0,markerR=0;
+  int markerInset=0;
   const GFXfont* font=nullptr;
   char lines[NEWS_EDITORIAL_MAX_LINES][NEWS_WRAP_LINE_BYTES]={{0}};
 };
@@ -106,6 +107,7 @@ static bool newsEditorialBlock(EditorialNewsBlock& out,int sourceIndex,
   out=EditorialNewsBlock{};
   out.sourceIndex=sourceIndex;
   out.x=x+markerInset;out.y=y;out.w=w-markerInset;out.h=used;
+  out.markerInset=markerInset;
   if(normalMarker || marginMarker){
     out.markerR=3; // same refined diamond size as every wider News layout
     out.markerX=marginMarker?x:x+7;
@@ -114,6 +116,23 @@ static bool newsEditorialBlock(EditorialNewsBlock& out,int sourceIndex,
   out.font=font;out.lineCount=count;out.lineStep=step;
   for(int i=0;i<count;++i)safeCopy(out.lines[i],sizeof(out.lines[i]),lines[i]);
   return true;
+}
+
+// Bullets distinguish VISIBLE list items; the number available in the feed
+// is not relevant. A single displayed headline (even with +N more) is not a
+// list, so remove its marker. Reclaim its reserved marker lane and align the
+// complete preflighted title with the original left edge / Nyheter heading.
+// Existing line wrapping only gains space; shown and overflow never change.
+static void newsEditorialFinalizeOrnaments(EditorialNewsPlan& plan){
+  if(plan.shown!=1)return;
+  EditorialNewsBlock& only=plan.blocks[0];
+  if(only.markerR<=0)return;
+  only.x-=only.markerInset;
+  only.w+=only.markerInset;
+  only.markerInset=0;
+  only.markerX=0;
+  only.markerY=0;
+  only.markerR=0;
 }
 
 // Optical rhythm for sparse complete lists: use some of the available
@@ -224,6 +243,7 @@ static bool planEditorialNews(const Cell& c){
       if(featured.shown>=2 &&
          (featured.overflow==0 || newsEditorialFits(footer,
               RemindEditorialFonts::dm18(),featured.footerW,footerH))){
+        newsEditorialFinalizeOrnaments(featured);
         newsEditorialBalance(featured,bodyY+bodyH);
         return true;
       }
@@ -296,6 +316,7 @@ static bool planEditorialNews(const Cell& c){
               RemindEditorialFonts::dm18(),trial.footerW,footerH))
           continue;
       }
+      newsEditorialFinalizeOrnaments(trial);
       newsEditorialBalance(trial,bodyY+bodyH);
       return true;
     }
