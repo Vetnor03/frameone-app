@@ -270,7 +270,7 @@ int main(int argc,char** argv){
         if(shown!=rows-1 || overflow!=before.count-shown)++failures;
         for(int i=0;i<shown;++i){
           const auto& block=plan.blocks[i];
-          if(block.markerR!=2 || block.markerX+block.markerR>=block.x ||
+          if(block.markerR!=3 || block.markerX+block.markerR>=block.x ||
              block.markerX-block.markerR<2)
             ++failures;
         }
