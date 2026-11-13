@@ -13,6 +13,10 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+      - name: Verify original News feed/cache contracts are unchanged
+        run: |
+          python3 -m pip install pytest
+          python3 -m pytest -q frame/tests/test_news_module.py frame/tests/test_news_editorial_contract.py
       - name: Compile exact News preview and original Fraunces/DM Sans bitmap fonts
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -Werror \
