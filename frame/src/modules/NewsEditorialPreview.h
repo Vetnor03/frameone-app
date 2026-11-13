@@ -110,6 +110,35 @@ static bool newsEditorialBlock(EditorialNewsBlock& out,int sourceIndex,
   return true;
 }
 
+// Optical rhythm for sparse complete lists: use some of the available
+// lower panel instead of packing all the headlines against the top edge.
+// All shifts stay inside the measured content bounds. Row partners in a
+// two-column layout share exactly the same shift. This is visual-only.
+static void newsEditorialBalance(EditorialNewsPlan& plan,int bottom){
+  if(plan.overflow || plan.shown<=0)return;
+  int lastBottom=0;
+  int rowCount=0;
+  int lastRowY=-1;
+  for(int i=0;i<plan.shown;++i){
+    const EditorialNewsBlock& b=plan.blocks[i];
+    lastBottom=max(lastBottom,b.y+b.h);
+    if(b.y!=lastRowY){++rowCount;lastRowY=b.y;}
+  }
+  const int space=bottom-lastBottom;
+  if(space<36)return;
+  const int extraGap=rowCount>1?min(24,space/(rowCount*2+3)):0;
+  const int shift=min(42,(space-extraGap*(rowCount-1))/3);
+  int row=-1;
+  lastRowY=-1;
+  for(int i=0;i<plan.shown;++i){
+    EditorialNewsBlock& b=plan.blocks[i];
+    if(b.y!=lastRowY){lastRowY=b.y;++row;}
+    const int delta=shift+row*extraGap;
+    b.y+=delta;
+    if(b.markerR)b.markerY+=delta;
+  }
+}
+
 // Adaptive content-first layout: body font and complete headlines take
 // precedence over showing many tiny lines. Two-column layout is selected
 // from measured physical aspect/width; story order remains row-major:
@@ -185,8 +214,10 @@ static bool planEditorialNews(const Cell& c){
       snprintf(footer,sizeof(footer),"+%d more",featured.overflow);
       if(featured.shown>=2 &&
          (featured.overflow==0 || newsEditorialFits(footer,
-              RemindEditorialFonts::dm18(),featured.footerW,footerH)))
+              RemindEditorialFonts::dm18(),featured.footerW,footerH))){
+        newsEditorialBalance(featured,bodyY+bodyH);
         return true;
+      }
     }
   }
 
@@ -256,6 +287,7 @@ static bool planEditorialNews(const Cell& c){
               RemindEditorialFonts::dm18(),trial.footerW,footerH))
           continue;
       }
+      newsEditorialBalance(trial,bodyY+bodyH);
       return true;
     }
   }
