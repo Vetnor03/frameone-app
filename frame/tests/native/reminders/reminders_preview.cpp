@@ -415,13 +415,23 @@ int main(int argc,char** argv) {
              (section.rows[0].font==ModuleReminders::FONT_B9 ||
               section.rows[0].font==RemindEditorialFonts::dm18()))
             ++mainFailures;
+          // A horizontal spread is intentionally two rows at the SAME y,
+          // in separate measured x rectangles. Other families stay stacked.
+          const bool spread=plan.family==ModuleReminders::REM_EDIT_SPREAD;
           int previousEnd=section.y;
           for(int i=0;i<section.shown;++i){
             const auto& row=section.rows[i];
-            if(row.y<previousEnd || row.y+row.h>section.y+section.h ||
-               row.titleX<section.x || row.titleX>=section.x+section.w ||
+            if((!spread && row.y<previousEnd) ||
+               row.y<section.y || row.y+row.h>section.y+section.h ||
+               row.x<section.x || row.x+row.w>section.x+section.w ||
+               row.titleX<row.x || row.titleX>=row.x+row.w ||
                row.lineCount<1 || row.lineCount>3)
               ++mainFailures;
+            if(spread && i>0) {
+              const auto& prev=section.rows[i-1];
+              if(prev.x+prev.w>=row.x || row.y!=prev.y)
+                ++mainFailures;
+            }
             // This verifies the FULL title survives word wrapping; no cropped
             // facts or unannounced ellipses in an "accepted" C++ preview row.
             std::string recovered;
@@ -446,6 +456,18 @@ int main(int argc,char** argv) {
          ?ModuleReminders::g_remindersEditorialPlan->shown:0;
       const int overflow=(rendered && ModuleReminders::cache.count>0)
          ?ModuleReminders::g_remindersEditorialPlan->overflow:0;
+      // Physical owner feedback: full-width shallow/half-height areas
+      // must not leave the right side empty when complete items fit.
+      if(scene=="normal" && cols==4 && rows==1 &&
+         (!rendered || shown<2 ||
+          ModuleReminders::g_remindersEditorialPlan->family!=ModuleReminders::REM_EDIT_SPREAD ||
+          ModuleReminders::g_remindersEditorialPlan->sections[0].rows[1].x<=400))
+        ++mainFailures;
+      if(scene=="normal" && cols==4 && rows==2 &&
+         (!rendered || shown<4 ||
+          ModuleReminders::g_remindersEditorialPlan->family!=ModuleReminders::REM_EDIT_TWO_COLUMNS ||
+          ModuleReminders::g_remindersEditorialPlan->sectionCount!=2))
+        ++mainFailures;
       // Full 800x480 day-overview reference: useful space must not be
       // sacrificed to a giant heading or wastefully hidden action rows.
       if((scene=="six" || scene=="many") && cols==4 && rows==4 &&
