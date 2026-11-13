@@ -38,10 +38,12 @@ static void cdEditorialText(const char* s, const GFXfont* f, int x, int top) {
 static void cdEditorialDiamond(int cx, int cy) {
   auto& d = DisplayCore::get();
   const uint16_t ink = Theme::ink();
-  for (int delta=-3; delta<=3; ++delta) {
-    const int width=3-abs(delta);
-    d.drawFastHLine(cx-width, cy+delta, width*2+1, ink);
+  for (int dy=-3; dy<=3; ++dy) {
+    const int dx=3-abs(dy);
+    d.drawPixel(cx-dx,cy+dy,ink);
+    d.drawPixel(cx+dx,cy+dy,ink);
   }
+  d.drawPixel(cx,cy,ink);
 }
 
 static const int CD_EDITORIAL_MAX_TITLE_LINES = 3;
@@ -266,13 +268,11 @@ static int cdEditorialUpcoming(const CountdownEditorialRect& r,
   const int rowH = max(29,cdEditorialAdvance(font)+7);
   const int capacity = min(eventCount,max(0,(r.h-headH-footerH)/rowH));
   if (capacity < 1) return 0;
-  const bool diamond = capacity >= 2 && r.w >= 200;
-  const int markerSpace = diamond ? 16 : 0;
   const int metricW = min(102,max(52,r.w*28/100));
-  const int titleW = r.w - markerSpace - metricW - 14;
-  if (titleW < 56) return 0;
+  if (r.w - metricW - 14 < 56) return 0;
 
-  // Validate actual metric widths and text bounds before drawing a list.
+  // Decide ornaments from actual visible rows, NOT source event count.
+  // A single visible event reclaims its marker lane, exactly like News R2.3.
   int shown = 0;
   for (int i=0; i<capacity; ++i) {
     char metric[48];
@@ -281,6 +281,9 @@ static int cdEditorialUpcoming(const CountdownEditorialRect& r,
     ++shown;
   }
   if (!shown) return 0;
+  const bool diamond = shown >= 2 && r.w >= 200;
+  const int markerSpace = diamond ? 16 : 0;
+  const int titleW = r.w - markerSpace - metricW - 14;
   if (!cdEditorialFits(heading,RemindEditorialFonts::dm18(),r.w,22))
     return 0;
 
