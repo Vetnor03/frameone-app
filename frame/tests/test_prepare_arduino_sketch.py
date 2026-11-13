@@ -110,7 +110,7 @@ def test_countdown_preview_export_isolated_and_opens_in_arduino(tmp_path):
     normal = (standard / "ModuleCountdown.cpp").read_text()
     preview = (special / "ModuleCountdown.cpp").read_text()
     assert normal == original
-    assert preview.startswith("#define REMIND_COUNTDOWN_EDITORIAL_PREVIEW_ENABLED 1\\n".replace("\\\\n", "\\n"))
+    assert preview.splitlines()[0] == "#define REMIND_COUNTDOWN_EDITORIAL_PREVIEW_ENABLED 1"
     assert preview.endswith(original)
     assert (special / "CountdownEditorialPreview.h").is_file()
     assert (special / "partitions.csv").is_file()
