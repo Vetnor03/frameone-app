@@ -1,5 +1,5 @@
 #pragma once
-// RE:MIND News Design vNext R1 — visual-only editorial preview.
+// RE:MIND News Design vNext R2 — editorial list ornaments & whitespace.
 // Included from ModuleNews.cpp INSIDE namespace ModuleNews. Original fetching,
 // article order, cache, language, invalidation, fallback and API are untouched.
 // Real Fraunces/DM Sans GFX bitmaps; no scaled fonts or CSS.
@@ -16,6 +16,9 @@ struct EditorialNewsBlock {
   int sourceIndex = -1;
   int x=0,y=0,w=0,h=0;
   int lineCount=0,lineStep=0;
+  // Refined, ink-only four-point marker. All positions are planned in
+  // actual pixels, never overlay headline glyph bounds.
+  int markerX=0,markerY=0,markerR=0;
   const GFXfont* font=nullptr;
   char lines[NEWS_EDITORIAL_MAX_LINES][NEWS_WRAP_LINE_BYTES]={{0}};
 };
@@ -52,6 +55,21 @@ static void newsEditorialText(const char* str,const GFXfont* font,
   drawLeft(left-bx,top-by,str,font);
 }
 
+// A tiny four-point editorial lozenge: quieter than a conventional bullet,
+// but distinct enough to separate successive full headlines at a glance.
+// It is composed of individual original 1-bit pixels, not an image or font.
+static void newsEditorialLozenge(int cx,int cy,int r){
+  if(r<=0)return;
+  auto& d=DisplayCore::get();
+  const uint16_t color=Theme::ink();
+  for(int dy=-r;dy<=r;++dy){
+    const int dx=r-abs(dy);
+    d.drawPixel(cx-dx,cy+dy,color);
+    d.drawPixel(cx+dx,cy+dy,color);
+  }
+  d.drawPixel(cx,cy,color);
+}
+
 static bool newsEditorialBlock(EditorialNewsBlock& out,int sourceIndex,
                                int x,int y,int w,int height,
                                const GFXfont* font){
@@ -59,7 +77,11 @@ static bool newsEditorialBlock(EditorialNewsBlock& out,int sourceIndex,
      w<75 || height<24 || !font)return false;
   const NewsItem& source=g_cache->items[sourceIndex];
   if(!source.used || !source.title[0])return false;
-  const int maxWidth=w-4;
+  // Every list item gets a small editorial marker when the real measured
+  // width supports it. For cramped columns, legible unbroken titles win.
+  const bool ornament=g_cache->count>1 && w>=184;
+  const int markerInset=ornament?19:0;
+  const int maxWidth=w-markerInset-4;
   const int step=max(20,newsEditorialAdvance(font));
   const int linesFit=min(NEWS_EDITORIAL_MAX_LINES,
                          max(1,(height+step-10)/step));
@@ -77,7 +99,12 @@ static bool newsEditorialBlock(EditorialNewsBlock& out,int sourceIndex,
   if(used>height)return false;
   out=EditorialNewsBlock{};
   out.sourceIndex=sourceIndex;
-  out.x=x;out.y=y;out.w=w;out.h=used;
+  out.x=x+markerInset;out.y=y;out.w=w-markerInset;out.h=used;
+  if(ornament){
+    out.markerR=3;
+    out.markerX=x+7;
+    out.markerY=y+7;
+  }
   out.font=font;out.lineCount=count;out.lineStep=step;
   for(int i=0;i<count;++i)safeCopy(out.lines[i],sizeof(out.lines[i]),lines[i]);
   return true;
@@ -134,7 +161,7 @@ static bool planEditorialNews(const Cell& c){
       featured.blocks[featured.shown++]=lead;
       const int gap=max(18,min(30,width/32));
       const int colWidth=(width-gap)/2;
-      int y=bodyY+lead.h+18;
+      int y=bodyY+lead.h+max(19,min(27,bodyH/12));
       int idx=1;
       while(idx<maxItems && y<bodyY+bodyH){
         EditorialNewsBlock row[2];
@@ -150,7 +177,7 @@ static bool planEditorialNews(const Cell& c){
         for(int col=0;col<accepted;++col)
           featured.blocks[featured.shown++]=row[col];
         idx+=accepted;
-        y+=rowH+16;
+        y+=rowH+max(14,min(23,bodyH/18));
         if(accepted<2)break;
       }
       featured.overflow=g_cache->count-featured.shown;
@@ -192,7 +219,8 @@ static bool planEditorialNews(const Cell& c){
       trial.footerH=footerH;trial.footerW=width;
       trial.footerX=left;trial.footerY=top+height-footerH;
       const GFXfont* bodyFont=fonts[fi];
-      const int itemGap=bodyH>=300?19:bodyH>=180?12:8;
+      // Distinguish stories with breathing room, not heavy grid lines.
+      const int itemGap=bodyH>=300?25:bodyH>=180?17:10;
       int currentY=bodyY;
       int nextIndex=0;
       while(nextIndex<maxItems && currentY<bodyY+bodyH) {
@@ -242,6 +270,8 @@ static bool renderEditorialNewsPreview(const Cell& c){
                       plan.headerX,plan.headerY);
   for(int i=0;i<plan.shown;++i){
     const EditorialNewsBlock& block=plan.blocks[i];
+    if(block.markerR>0)
+      newsEditorialLozenge(block.markerX,block.markerY,block.markerR);
     for(int n=0;n<block.lineCount;++n)
       newsEditorialText(block.lines[n],block.font,
                         block.x,block.y+n*block.lineStep);
