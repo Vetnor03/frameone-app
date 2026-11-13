@@ -1,0 +1,37 @@
+name: Manual V4 TRUE grayscale Reminders test build (NO FLASH)
+
+on:
+  pull_request:
+    paths:
+      - "frame/tests/reminders_v4_gray/**"
+      - "frame/src/assets/fonts/RemindEditorialFonts.*"
+      - "frame/src/modules/RemindersEditorialPreview.h"
+      - ".github/workflows/reminders-v4-true-gray-build.yml"
+  workflow_dispatch:
+
+jobs:
+  build-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install reproducible PlatformIO
+        run: python -m pip install "platformio==6.1.18"
+      - name: Compile standalone Alfred V4 / GxEPD2 4G (no upload)
+        run: pio run -d frame/tests/reminders_v4_gray -e v4_gray_qa
+      - name: Confirm firmware exists and no upload was invoked
+        run: |
+          test -s frame/tests/reminders_v4_gray/.pio/build/v4_gray_qa/firmware.bin
+          ls -lh frame/tests/reminders_v4_gray/.pio/build/v4_gray_qa/firmware.bin
+          echo "Build complete. No OTA, serial upload, NVS or device action performed."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reminders-v4-true-gray-MANUAL-USB-TEST-UNFLASHED
+          path: |
+            frame/tests/reminders_v4_gray/.pio/build/v4_gray_qa/firmware.bin
+            frame/tests/reminders_v4_gray/README.md
+          if-no-files-found: error
+          retention-days: 14
