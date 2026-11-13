@@ -52,6 +52,54 @@ jobs:
       - run: pio run -d frame -e alfred_v1_2_refresh_audit
       # Countdown-only R2 candidate, compiled but never flashed or deployed.
       - run: pio run -d frame -e alfred_v1_2_countdown_r2_preview
+      # Keep this binary separated from normal firmware and OTA artifacts.
+      # USB test only; publishing, flashing and pairing are never CI actions.
+      - name: Package isolated Countdown V4 USB test firmware
+        run: |
+          set -euo pipefail
+          profile="frame/.pio/build/alfred_v1_2_countdown_r2_preview"
+          out="$RUNNER_TEMP/countdown-v4-usb"
+          mkdir -p "$out"
+          test -s "$profile/firmware.bin"
+          for file in firmware.bin bootloader.bin partitions.bin boot_app0.bin; do
+            if test -s "$profile/$file"; then cp "$profile/$file" "$out/$file"; fi
+          done
+          cp frame/partitions_alfred_16mb.csv "$out/partition-layout.csv"
+          git rev-parse HEAD > "$out/source-commit.txt"
+          sha256sum "$out/"*.bin > "$out/SHA256SUMS.txt"
+          cat > "$out/READ_ME_FIRST.txt" <<'EOF'
+          RE:MIND Countdown Design vNext R3.1 -- USB TEST ONLY
+          Source: draft GitHub PR #1522, NOT main and NOT an OTA release.
+          Target: verified ESP32-S3 N16R8 Alfred V1.2 / RE:MIND V4 hardware.
+          Build profile: alfred_v1_2_countdown_r2_preview, editorial flag ON.
+          Standard Alfred firmware: unchanged; frame identity is not baked in.
+
+          SAFE RECOMMENDED USB TEST
+          1. Use the isolated USB test frame, connect it by USB.
+          2. Download the PR source/branch, install PlatformIO if necessary.
+          3. In a terminal opened at repository root, with the correct COM port:
+             pio run -d frame -e alfred_v1_2_countdown_r2_preview -t upload --upload-port COM5
+             (replace COM5 with the actual USB port)
+          4. Serial monitor: pio device monitor --port COM5 -b 115200
+          5. Use the existing custom-layout interface and select Countdown
+             in 1x1 through 4x4 footprints; check Light and Dark.
+          6. Photograph any questionable geometry against the passepartout.
+
+          Preserve NVS and the stored pairing; do NOT Erase All Flash.
+          The ZIP's .bin files are build verification artifacts, NOT a
+          one-click OTA update or an instruction to overwrite active flash.
+          Do not write arbitrary offsets with esptool or use legacy
+          frame_esp32 binaries on this S3 hardware. No pilot fleet updates.
+          Nothing is flashed from GitHub Actions.
+          EOF
+      - name: Archive Countdown USB-only candidate (unflashed)
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: countdown-v4-r3_1-usb-test-unflashed
+          path: ${{ runner.temp }}/countdown-v4-usb/
+          if-no-files-found: error
+          retention-days: 14
       - run: pio run -d frame -e frame_esp32
       - run: pio run -d frame -e alfred_v1_2 -t size
 
