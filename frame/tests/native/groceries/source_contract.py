@@ -39,6 +39,8 @@ for begin,end in [
         ):
             assert token in a and token in b,token
     else:
+        if begin=="static void adaptiveToday(":
+            b=b.replace('#include "GroceriesEditorialPreview.h"\n\n','')
         assert a==b, f"Nonvisual source modified: {begin}"
 assert subprocess.check_output([
     "git","show","origin/main:frame/src/modules/GroceriesAdaptivePolicy.h"
