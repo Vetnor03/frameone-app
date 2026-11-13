@@ -42,3 +42,26 @@ GxEPD2 v1.6.4, Adafruit GFX and Adafruit BusIO.
 Verify the Arduino IDE uses your original V4 partition table and
 hardware profile; do not upload if it has selected a generic default
 partition table instead of the included V4 partitions.csv.
+
+
+COMPILER TROUBLESHOOTING (ARDUINO ESP32 CORE 3.3.11)
+---------------------------------------------------
+If compile/link reports repeated 'multiple definition of GxEPD2_...' errors
+and lists BOTH libraries GxEPD2 and GxEPD2_4G:
+1. Close Arduino IDE.
+2. Move the OLD experiment folder out of the Arduino libraries directory:
+   C:\\Users\\<your-user>\\Documents\\Arduino\\libraries\\GxEPD2_4G
+   (e.g. move to Desktop as a backup; do NOT move it merely to another
+   subfolder under Arduino\\libraries).
+3. KEEP the normal GxEPD2 library installed. Restart Arduino IDE.
+4. Compile again. At end, only GxEPD2 should be listed, not GxEPD2_4G.
+These duplicate-symbol errors arise in the user's library setup, NOT the
+Reminders layout renderer. No firmware or design change is required.
+
+BEFORE UPLOADING: In Tools > Partition Scheme choose Custom, confirm the
+included frame_v2.5.1/partitions.csv is used, and compare the generated
+partition table against the existing V4 table (app0 0x10000, app1 0x610000,
+NVS 0x9000). Log showing PartitionScheme=fatflash is a warning to CHECK;
+a local partitions.csv may override the menu choice in Arduino core 3.3.11,
+but do not assume that without verifying build output. Do not Erase All
+Flash and do not upload until partition compatibility is established.
