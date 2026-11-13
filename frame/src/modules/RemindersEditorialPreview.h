@@ -1,5 +1,5 @@
 #pragma once
-// RE:MIND Reminders vNext R3.2 — adaptive day-overview typography.
+// RE:MIND Reminders vNext R3.3 — measured horizontal composition for wide, short cells.
 // Included from ModuleReminders.cpp WITHIN namespace ModuleReminders.
 // Reuses existing production feed, order, Today/Tomorrow selection and titles.
 // No fetching, API, date calculation, Skip or shared display code is changed.
@@ -16,6 +16,7 @@
 enum EditorialRemindersFamily {
   REM_EDIT_STACKED,
   REM_EDIT_PANORAMA,
+  REM_EDIT_SPREAD,
   REM_EDIT_TWO_COLUMNS,
   REM_EDIT_TWO_STORIES
 };
@@ -191,6 +192,52 @@ static bool planEditorialSection(EditorialReminderSection& section,
   return false;
 }
 
+// For extremely wide, shallow rectangles, a vertical list wastes most of
+// the panel. Keep the first TWO original reminders in their existing order,
+// but place them as equal, legible side-by-side blocks under one small day label.
+// If any whole word cannot fit at a readable native bitmap size, return false
+// and allow the original panorama / legacy fallback to handle it unchanged.
+static bool planEditorialSpread(EditorialReminderSection& section,
+                                const ReminderBucket* bucket,
+                                const char* heading,int x,int y,int w,int h) {
+  if(!bucket || bucket->count<2 || w<650 || h<66)return false;
+  const GFXfont* labelFont=editorialHeadingFont(heading,w-2,h,false);
+  if(!labelFont)return false;
+  const int headingInkH=editorialInkHeight(heading,labelFont);
+  const int headingH=headingInkH+10;
+  const int gap=max(18,min(30,w/34));
+  const int leftW=(w-gap)/2;
+  const int rightX=x+leftW+gap;
+  const int rightW=w-leftW-gap;
+  const int itemY=y+headingH;
+  const int remainingH=y+h-itemY;
+  if(leftW<150 || rightW<150 || remainingH<30)return false;
+
+  const GFXfont* titleFonts[]={
+    RemindEditorialFonts::dm24(),RemindEditorialFonts::dm18()
+  };
+  for(int fi=0;fi<2;++fi){
+    EditorialReminderRow first, second;
+    if(!planEditorialRow(first,bucket->itemIdx[0],x,itemY,
+                         leftW,remainingH,titleFonts[fi]))continue;
+    if(!planEditorialRow(second,bucket->itemIdx[1],rightX,itemY,
+                         rightW,remainingH,titleFonts[fi]))continue;
+    EditorialReminderSection trial=EditorialReminderSection{};
+    trial.bucket=bucket;
+    trial.heading=heading;
+    trial.headingFont=labelFont;
+    trial.headingY=y;
+    trial.headingH=headingH;
+    trial.x=x;trial.y=y;trial.w=w;trial.h=h;
+    trial.shown=2;
+    trial.rows[0]=first;trial.rows[1]=second;
+    trial.usedH=headingH+max(first.h,second.h);
+    section=trial;
+    return true;
+  }
+  return false;
+}
+
 static void editorialShiftSection(EditorialReminderSection& section,int dy) {
   section.headingY+=dy;
   for(int i=0;i<section.shown;++i){
@@ -252,7 +299,17 @@ static bool planEditorialReminders(const Cell& c,
   if(bodyH<37)return false;
   bool planned=false;
 
-  if(w>=355 && bodyH<=152) {
+  // Full-width one-row panoramas: two complete original items share the
+  // horizontal field. Pixel/aspect based; not sixteen layout-specific designs.
+  if(w>=650 && bodyH<=105 &&
+     planEditorialSpread(plan.sections[0],primary,primaryHeading,
+                         x,y,w,bodyH)) {
+    plan.family=REM_EDIT_SPREAD;
+    plan.sectionCount=1;
+    planned=true;
+  }
+
+  if(!planned && w>=355 && bodyH<=152) {
     // A date cannot consume a quarter of a panorama while the task is tiny.
     const int heroW=max(76,min(110,w*17/100));
     const int gap=12;
@@ -273,7 +330,10 @@ static bool planEditorialReminders(const Cell& c,
       }
     }
   }
-  if(!planned && secondary && bodyH>=215 && w>=525) {
+  // A wide two-row cell should show Today AND Tomorrow across the
+  // available width; preserve the old threshold for every narrower shape.
+  if(!planned && secondary && w>=525 &&
+     (bodyH>=215 || (w>=700 && bodyH>=165))) {
     const int gap=26;
     const int leftW=(w-gap)*53/100;
     if(planEditorialSection(plan.sections[0],primary,primaryHeading,
@@ -322,6 +382,9 @@ static bool planEditorialReminders(const Cell& c,
     EditorialReminderSection& s=plan.sections[0];
     const int shift=min(92,max(0,(bodyH-s.usedH)*32/100));
     editorialShiftSection(s,shift);
+  } else if(plan.family==REM_EDIT_SPREAD) {
+    // Rows stay side by side with a shared top alignment, not stacked.
+    // Small reserved footer below them still shows accurate +N more.
   } else {
     EditorialReminderSection& s=plan.sections[0];
     editorialShiftSection(s,max(0,(bodyH-s.usedH)/2));
