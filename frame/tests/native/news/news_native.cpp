@@ -155,7 +155,7 @@ static void fixture(const std::string& name){
     append("Ny bro skal gjere reisa kortare for pendlarane");
   }else if(name=="two"){
     append("Ny bro skal gjere reisa kortare");
-    append("Mildare vêr venta i helga");
+    append("Mildare v\xEA" "r venta i helga");
   }else if(name=="six" || name=="fourteen"){
     const int count=name=="six"?6:14;
     for(int i=0;i<count;++i){
@@ -176,7 +176,7 @@ static void fixture(const std::string& name){
     append("Kort nytt i dag");
   }else{
     append("Fleire vil bruke toget til jobb");
-    append("Slik blir vêret dei neste dagane");
+    append("Slik blir v\xEA" "ret dei neste dagane");
     append("Lokale arrangement samlar familiar");
     append("Nye prosjekt er klare for bygging");
   }
