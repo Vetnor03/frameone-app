@@ -48,6 +48,19 @@ def test_original_fonts_and_complete_text():
     assert 'font->yAdvance' in preview
     assert 'g_newsEditorialPlan=new(std::nothrow)' in preview
 
+def test_subtle_list_ornaments_do_not_replace_content():
+    # Editorial marker is separately drawn in real 1-bit pixels.
+    assert "static void newsEditorialLozenge(" in preview
+    assert "d.drawPixel(cx-dx,cy+dy,color);" in preview
+    assert "d.drawPixel(cx+dx,cy+dy,color);" in preview
+    assert "out.markerX=x+7;" in preview
+    assert "out.x=x+markerInset;" in preview
+    assert "const bool ornament=g_cache->count>1 && w>=184;" in preview
+    assert "if(block.markerR>0)" in preview
+    assert "newsEditorialLozenge(block.markerX,block.markerY,block.markerR);" in preview
+    assert "newsEditorialBalance(trial,bodyY+bodyH);" in preview
+    assert "newsEditorialBalance(featured,bodyY+bodyH);" in preview
+
 def test_no_risky_or_unrelated_code():
     for forbidden in ("httpGet", "NetClient::", "setConfig(", "fetchNews(", "invalidate(",
                       "prefs.", "WiFi", "OTA", "display.update"):
