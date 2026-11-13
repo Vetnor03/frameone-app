@@ -1,5 +1,5 @@
 #pragma once
-// RE:MIND News Design vNext R2 — editorial list ornaments & whitespace.
+// RE:MIND News Design vNext R2.1 — editorial list ornaments, including narrow tall cells.
 // Included from ModuleNews.cpp INSIDE namespace ModuleNews. Original fetching,
 // article order, cache, language, invalidation, fallback and API are untouched.
 // Real Fraunces/DM Sans GFX bitmaps; no scaled fonts or CSS.
@@ -72,15 +72,20 @@ static void newsEditorialLozenge(int cx,int cy,int r){
 
 static bool newsEditorialBlock(EditorialNewsBlock& out,int sourceIndex,
                                int x,int y,int w,int height,
-                               const GFXfont* font){
+                               const GFXfont* font,
+                               bool compactSideMarker=false){
   if(!g_cache || sourceIndex<0 || sourceIndex>=g_cache->count ||
      w<75 || height<24 || !font)return false;
   const NewsItem& source=g_cache->items[sourceIndex];
   if(!source.used || !source.title[0])return false;
-  // Every list item gets a small editorial marker when the real measured
-  // width supports it. For cramped columns, legible unbroken titles win.
-  const bool ornament=g_cache->count>1 && w>=184;
-  const int markerInset=ornament?19:0;
+  // Wide items have an inset lozenge; narrow, tall 1-column cells get a
+  // smaller lozenge in the ALREADY RESERVED left padding. This deliberately
+  // keeps the entire existing headline width, wrapping and item count.
+  // Very short cells retain their R2 appearance and are not squeezed.
+  const bool normalMarker=g_cache->count>1 && w>=184;
+  const bool marginMarker=g_cache->count>1 && compactSideMarker &&
+                          w>=145 && w<184 && x>=8;
+  const int markerInset=normalMarker?19:0;
   const int maxWidth=w-markerInset-4;
   const int step=max(20,newsEditorialAdvance(font));
   const int linesFit=min(NEWS_EDITORIAL_MAX_LINES,
@@ -100,9 +105,9 @@ static bool newsEditorialBlock(EditorialNewsBlock& out,int sourceIndex,
   out=EditorialNewsBlock{};
   out.sourceIndex=sourceIndex;
   out.x=x+markerInset;out.y=y;out.w=w-markerInset;out.h=used;
-  if(ornament){
-    out.markerR=3;
-    out.markerX=x+7;
+  if(normalMarker || marginMarker){
+    out.markerR=marginMarker?2:3;
+    out.markerX=marginMarker?x-8:x+7;
     out.markerY=y+7;
   }
   out.font=font;out.lineCount=count;out.lineStep=step;
@@ -171,6 +176,7 @@ static bool planEditorialNews(const Cell& c){
   if(bodyH<22)return false;
 
   const int maxItems=min(g_cache->count,NEWS_EDITORIAL_MAX_BLOCKS);
+  const bool compactSideMarker=c.w<=220 && c.h>=240;
 
   // Roomy sparse News views benefit from an editorial lead story. Only
   // TYPOGRAPHY changes: original feed item 0 remains first and every following
@@ -261,7 +267,7 @@ static bool planEditorialNews(const Cell& c){
           const int x=left+col*(colWidth+gutter);
           if(!newsEditorialBlock(current[col],nextIndex+col,x,currentY,
                                 colWidth,bodyY+bodyH-currentY,
-                                bodyFont))break;
+                                bodyFont,compactSideMarker))break;
           rowUsed=max(rowUsed,current[col].h);
           ++accepted;
         }
