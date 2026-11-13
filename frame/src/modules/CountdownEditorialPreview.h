@@ -117,6 +117,24 @@ static bool cdEditorialTitlePlan(const char* title, int w, int h,
     if (cdEditorialWrapTitle(title, candidates[i], w, h,
                             maxLines, out)) return true;
   }
+  // Countdown is not a news list: at postcard sizes, a measured readable
+  // abbreviation of an extreme event title beats hiding the event entirely.
+  // Keep the true source title and its exact selection unchanged.
+  const GFXfont* compactFonts[]={RemindEditorialFonts::dm18(),FONT_B12};
+  for(const GFXfont* compact:compactFonts) {
+    char shortened[96];
+    fitTextToWidth(title,shortened,sizeof(shortened),w,compact);
+    if(!shortened[0] || !cdEditorialFits(shortened,compact,w,h))continue;
+    CountdownEditorialTitle abbreviated;
+    abbreviated.font=compact;
+    abbreviated.lines=1;
+    abbreviated.step=max(1,cdEditorialAdvance(compact));
+    abbreviated.height=cdEditorialInkHeight(shortened,compact);
+    abbreviated.widest=textWidth(shortened,compact);
+    safeCopy(abbreviated.text[0],sizeof(abbreviated.text[0]),shortened);
+    out=abbreviated;
+    return true;
+  }
   return false;
 }
 
@@ -198,7 +216,7 @@ static bool cdEditorialHero(const CountdownItem& hero,
 
   const GFXfont* dateFont = RemindEditorialFonts::dm18();
   if (!cdEditorialFits(date, dateFont, r.w-4, 26)) dateFont = FONT_B9;
-  const bool dateFits = showDate &&
+  const bool dateFits = showDate && r.h >= 125 &&
     cdEditorialFits(date, dateFont, r.w-4, 24);
   const int dateH = dateFits ? 22 : 0;
 
@@ -229,7 +247,11 @@ static bool cdEditorialHero(const CountdownItem& hero,
 
   // Vertical grammar for portraits, squares, and medium-height rectangles.
   // Give the event sufficient room *before* choosing the count's font.
-  const int titleH = min(r.h*46/100, max(40,r.h-47-dateH));
+  // A tiny square has enough pixels for two strong facts, but not the
+  // roomy title/metric split used by large portrait layouts.
+  const int titleH = r.h < 125
+    ? max(28,min(38,r.h*32/100))
+    : min(r.h*46/100,max(40,r.h-47-dateH));
   const int metricY = r.y+titleH+5;
   const CountdownEditorialRect metric{
     r.x,metricY,r.w,r.h-titleH-5-dateH-(dateH?5:0)
