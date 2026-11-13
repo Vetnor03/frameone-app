@@ -208,7 +208,7 @@ static bool cdEditorialMetric(const char* number, const char* unit,
 
 static bool cdEditorialHero(const CountdownItem& hero,
                             const CountdownEditorialRect& r,
-                            bool showDate) {
+                            bool showDate, bool balancedWideHero=false) {
   char number[16], unit[16], date[32];
   formatDaysNumber(hero.daysLeft, number, sizeof(number));
   formatDaysUnit(hero.daysLeft, unit, sizeof(unit));
@@ -219,6 +219,43 @@ static bool cdEditorialHero(const CountdownItem& hero,
   const bool dateFits = showDate && r.h >= 125 &&
     cdEditorialFits(date, dateFont, r.w-4, 24);
   const int dateH = dateFits ? 22 : 0;
+
+  // In a wide split with several upcoming events, don't spread three
+  // related facts across the full height of the left panel. Measure the
+  // genuine glyphs and center the title / day count / date as one group.
+  // This affects spatial rhythm ONLY: selected hero and date are unchanged.
+  if (balancedWideHero && r.w >= 290 && r.h >= 235) {
+    CountdownEditorialTitle balancedTitle;
+    const int titleBudget = min(140, max(82, r.h * 35 / 100));
+    const int metricH = min(106, max(76, r.h * 29 / 100));
+    if (cdEditorialTitlePlan(hero.title, r.w-8, titleBudget, balancedTitle)) {
+      const int titleMetricGap = 22;
+      const int metricDateGap = dateFits ? 14 : 0;
+      const int groupH = balancedTitle.height + titleMetricGap +
+                         metricH + metricDateGap + dateH;
+      const int smallUnitWidth = textWidth(unit, RemindEditorialFonts::dm18());
+      const bool countFits =
+        cdEditorialCountFont(number, r.w-smallUnitWidth-9, metricH) ||
+        cdEditorialCountFont(number, r.w, metricH-32);
+      if (countFits && groupH <= r.h) {
+        const int groupY = r.y + (r.h-groupH)/2;
+        const CountdownEditorialRect titleBox{
+          r.x, groupY, r.w, balancedTitle.height
+        };
+        const CountdownEditorialRect metricBox{
+          r.x, groupY+balancedTitle.height+titleMetricGap, r.w, metricH
+        };
+        cdEditorialPaintTitle(balancedTitle, titleBox, true);
+        if (!cdEditorialMetric(number,unit,metricBox)) return false;
+        if (dateFits) {
+          const int dateW=textWidth(date,dateFont);
+          cdEditorialText(date,dateFont,r.x+(r.w-dateW)/2,
+                          metricBox.y+metricH+metricDateGap);
+        }
+        return true;
+      }
+    }
+  }
 
   // Landscape ribbons: equal emphasis for event title and count, side by side.
   // All dimensions are measured from the actual assigned pixel rectangle.
@@ -237,9 +274,13 @@ static bool cdEditorialHero(const CountdownItem& hero,
         number, metricW-textWidth(unit,RemindEditorialFonts::dm18())-9, r.h
       );
       if (countFont || cdEditorialCountFont(number,metricW,r.h-30)) {
-        cdEditorialPaintTitle(title,tr,false);
-        if (dateFits) cdEditorialText(date,dateFont,r.x,
-                                    r.y+r.h-dateH);
+        // Center within the title's OWN half; the number keeps its place.
+        cdEditorialPaintTitle(title,tr,true);
+        if (dateFits && cdEditorialFits(date,dateFont,titleW,24)) {
+          const int dateW=textWidth(date,dateFont);
+          cdEditorialText(date,dateFont,r.x+(titleW-dateW)/2,
+                          r.y+r.h-dateH);
+        }
         return cdEditorialMetric(number,unit,mr);
       }
     }
@@ -280,7 +321,7 @@ static bool cdEditorialHero(const CountdownItem& hero,
 
 static int cdEditorialUpcoming(const CountdownEditorialRect& r,
                                const CountdownItem* const* events,
-                               int eventCount) {
+                               int eventCount, bool centerWideList=false) {
   if (eventCount <= 0 || r.w < 170 || r.h < 50) return 0;
   const GFXfont* font = RemindEditorialFonts::dm18();
   const GFXfont* metricFont = FONT_B9;
@@ -309,13 +350,21 @@ static int cdEditorialUpcoming(const CountdownEditorialRect& r,
   if (!cdEditorialFits(heading,RemindEditorialFonts::dm18(),r.w,22))
     return 0;
 
-  cdEditorialText(heading,RemindEditorialFonts::dm18(),r.x,r.y);
+  // On wide dense cells the incoming events previously hugged the top
+  // edge while the rest of their column was empty. Center the ACTUAL
+  // measured block vertically, preserving original left-aligned rows.
+  const bool overflow = eventCount > shown;
+  const int blockH = headH + shown * rowH + (overflow?footerH:0);
+  const int blockY = centerWideList
+    ? r.y + max(0,(r.h-blockH)/2) : r.y;
+
+  cdEditorialText(heading,RemindEditorialFonts::dm18(),r.x,blockY);
   DisplayCore::get().drawFastHLine(
-    r.x,r.y+cdEditorialInkHeight(heading,RemindEditorialFonts::dm18())+3,
+    r.x,blockY+cdEditorialInkHeight(heading,RemindEditorialFonts::dm18())+3,
     min(r.w,textWidth(heading,RemindEditorialFonts::dm18())),Theme::ink()
   );
   for (int i=0; i<shown; ++i) {
-    const int y = r.y+headH+i*rowH+3;
+    const int y = blockY+headH+i*rowH+3;
     if (diamond && shown>=2) cdEditorialDiamond(r.x+5,y+8);
     char label[96],metric[48];
     fitTextToWidth(events[i]->title,label,sizeof(label),titleW,font);
@@ -330,7 +379,9 @@ static int cdEditorialUpcoming(const CountdownEditorialRect& r,
     snprintf(more,sizeof(more),"+%d more",eventCount-shown);
     const GFXfont* caption=FONT_B9;
     if (cdEditorialFits(more,caption,r.w,18))
-      cdEditorialText(more,caption,r.x,r.y+r.h-16);
+      cdEditorialText(more,caption,r.x,
+                      centerWideList ? blockY+headH+shown*rowH+2
+                                     : r.y+r.h-16);
   }
   return shown;
 }
@@ -407,9 +458,9 @@ static bool renderEditorialCountdownPreview(const Cell& c) {
   if (!cdEditorialTitlePlan(hero.title,headlineW,max(20,headlineH-4),
                             preflight)) return false;
 
-  if (!cdEditorialHero(hero,heroRect,policy.showDate)) return false;
+  if (!cdEditorialHero(hero,heroRect,policy.showDate,sideList)) return false;
   if (listRect.w && listRect.h)
-    cdEditorialUpcoming(listRect,events,eventCount);
+    cdEditorialUpcoming(listRect,events,eventCount,sideList);
   if (calendarRect.w) {
     tm nowTm;
     if (getLocalTmQuick(nowTm))
