@@ -56,7 +56,7 @@ def test_subtle_list_ornaments_do_not_replace_content():
     assert "out.markerX=marginMarker?x:x+7;" in preview
     assert "out.markerR=3; // same refined diamond size" in preview
     assert "out.x=x+markerInset;" in preview
-    assert "const int markerInset=normalMarker?19:marginMarker?10:0;" in preview
+    assert "const int markerInset=normalMarker?19:marginMarker?7:0;" in preview
     assert "const int pad=max(c.w<=220?14:10," in preview
     assert "const bool normalMarker=g_cache->count>1 && w>=184;" in preview
     assert "const bool marginMarker=g_cache->count>1 && compactSideMarker &&" in preview
