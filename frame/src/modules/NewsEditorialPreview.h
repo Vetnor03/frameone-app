@@ -1,5 +1,5 @@
 #pragma once
-// RE:MIND News Design vNext R2.1 — editorial list ornaments, including narrow tall cells.
+// RE:MIND News Design vNext R2.2 — passepartout-safe list bullets at heading margin.
 // Included from ModuleNews.cpp INSIDE namespace ModuleNews. Original fetching,
 // article order, cache, language, invalidation, fallback and API are untouched.
 // Real Fraunces/DM Sans GFX bitmaps; no scaled fonts or CSS.
@@ -78,14 +78,15 @@ static bool newsEditorialBlock(EditorialNewsBlock& out,int sourceIndex,
      w<75 || height<24 || !font)return false;
   const NewsItem& source=g_cache->items[sourceIndex];
   if(!source.used || !source.title[0])return false;
-  // Wide items have an inset lozenge; narrow, tall 1-column cells get a
-  // smaller lozenge in the ALREADY RESERVED left padding. This deliberately
-  // keeps the entire existing headline width, wrapping and item count.
-  // Very short cells retain their R2 appearance and are not squeezed.
+  // Place the tiny diamond at the same x as the "Nyheter" heading on
+  // 1-column shapes (1x1 through 1x4), *inside* the passepartout safe edge.
+  // Make a genuine glyph-free marker lane: never draw a dot over a title.
+  // Width fit is measured again; prefer a safe existing-renderer fallback
+  // to overlapping or cutting off words.
   const bool normalMarker=g_cache->count>1 && w>=184;
   const bool marginMarker=g_cache->count>1 && compactSideMarker &&
-                          w>=145 && w<184 && x>=8;
-  const int markerInset=normalMarker?19:0;
+                          w>=145 && w<184 && x>=12;
+  const int markerInset=normalMarker?19:marginMarker?14:0;
   const int maxWidth=w-markerInset-4;
   const int step=max(20,newsEditorialAdvance(font));
   const int linesFit=min(NEWS_EDITORIAL_MAX_LINES,
@@ -107,7 +108,7 @@ static bool newsEditorialBlock(EditorialNewsBlock& out,int sourceIndex,
   out.x=x+markerInset;out.y=y;out.w=w-markerInset;out.h=used;
   if(normalMarker || marginMarker){
     out.markerR=3; // same refined diamond size as every wider News layout
-    out.markerX=marginMarker?x-8:x+7;
+    out.markerX=marginMarker?x:x+7;
     out.markerY=y+7;
   }
   out.font=font;out.lineCount=count;out.lineStep=step;
@@ -155,7 +156,9 @@ static bool planEditorialNews(const Cell& c){
     g_newsEditorialPlan=new(std::nothrow) EditorialNewsPlan{};
   if(!g_newsEditorialPlan)return false;
 
-  const int pad=max(10,min(23,min(c.w,c.h)*7/100));
+  // On narrow cells the heading's 14px inset is already proven safe on
+  // the physical frame. Keep that same inset for the 1x1 marker as well.
+  const int pad=max(c.w<=220?14:10,min(23,min(c.w,c.h)*7/100));
   const int left=c.x+pad,top=c.y+pad;
   const int width=c.w-2*pad,height=c.h-2*pad;
   if(width<110 || height<60)return false;
@@ -176,7 +179,7 @@ static bool planEditorialNews(const Cell& c){
   if(bodyH<22)return false;
 
   const int maxItems=min(g_cache->count,NEWS_EDITORIAL_MAX_BLOCKS);
-  const bool compactSideMarker=c.w<=220 && c.h>=240;
+  const bool compactSideMarker=c.w<=220;
 
   // Roomy sparse News views benefit from an editorial lead story. Only
   // TYPOGRAPHY changes: original feed item 0 remains first and every following
