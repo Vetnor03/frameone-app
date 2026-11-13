@@ -13,9 +13,12 @@ This is a reusable **visual rule**, not a backend or data-flow feature.
 2. **Beautiful rhythm.** Give successive items consistent separation, with
    intentional whitespace. Avoid visually crowded rows and dominant module
    labels, rules or table-like borders.
-3. **Refined mark.** Where native cell width permits, a tiny four-point
-   **lozenge/diamond dot** marks the beginning of each complete item. It uses
-   1-bit ink pixels, so it works identically in Light and Dark, without
+3. **Refined mark.** When **two or more items are actually visible**,
+   and native cell width permits, a tiny four-point **lozenge/diamond dot**
+   marks the beginning of each complete item. A single visible item uses
+   **no marker**, even when the source contains more items (`+N more`);
+   reclaim its reserved marker lane for headline readability. It uses 1-bit
+   ink pixels, so it works identically in Light and Dark, without
    photographs, illustration scaling or new font dependencies.
 4. **Adaptive restraint.** Reserve the actual measured width of a marker;
    if space is constrained, remove the decoration rather than shrink or
