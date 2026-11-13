@@ -6,6 +6,7 @@
 #include "FrameText.h"
 #include "NetClient.h"
 #include "Theme.h"
+#include "RemindEditorialFonts.h"
 
 #include "FreeSans9ptNO.h"
 #include "FreeSansBold12ptNO.h"
@@ -453,6 +454,8 @@ static void renderList(const Cell& c) {
   }
 }
 
+#include "NewsEditorialPreview.h"
+
 void setConfig(const FrameConfig* cfg) {
   // Language is read from g_cfg at draw time. A config/layout redraw does not
   // make the already fetched NRK headlines stale.
@@ -470,6 +473,11 @@ void preload() { ensureLoaded(); }
 void render(const Cell& c, const String&) {
   ensureLoaded();
   if (!g_cache || !g_cache->ok || g_cache->count <= 0) { drawEmpty(c); return; }
+  // Isolated R1 visual test: uses the same cached titles and existing feed order.
+  // Any failed complete-title GFX preflight retains the unchanged legacy path.
+#if REMIND_NEWS_EDITORIAL_PREVIEW_ENABLED
+  if (renderEditorialNewsPreview(c)) return;
+#endif
   if (shallowLayout(c)) renderShallow(c);
   else renderList(c);
 }
