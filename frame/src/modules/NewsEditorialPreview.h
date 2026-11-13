@@ -86,7 +86,7 @@ static bool newsEditorialBlock(EditorialNewsBlock& out,int sourceIndex,
   const bool normalMarker=g_cache->count>1 && w>=184;
   const bool marginMarker=g_cache->count>1 && compactSideMarker &&
                           w>=145 && w<184 && x>=12;
-  const int markerInset=normalMarker?19:marginMarker?10:0;
+  const int markerInset=normalMarker?19:marginMarker?7:0;
   const int maxWidth=w-markerInset-4;
   const int step=max(20,newsEditorialAdvance(font));
   const int linesFit=min(NEWS_EDITORIAL_MAX_LINES,
