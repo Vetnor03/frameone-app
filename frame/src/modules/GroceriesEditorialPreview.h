@@ -56,9 +56,15 @@ static bool groceriesEditorialItem(const GroceryItem& item,
     if(tw==0 || th==0 || (int)tw>width-4 || (int)th>rowH-4)
       continue;
     const int inkX=horizontal?x+(width-(int)tw)/2:x;
-    drawLeft(inkX-bx,baseline,raw,font,Theme::ink());
+    // Use measured glyph height to center each complete item within its
+    // actual allocated row, rather than inheriting the old FreeSans baseline.
+    // Horizontal strips retain the original baseline and width/column splits.
+    const int rowTop=baseline-rowH/2;
+    const int inkBaseline=horizontal?baseline:
+      rowTop+max(0,(rowH-(int)th)/2)-by;
+    drawLeft(inkX-bx,inkBaseline,raw,font,Theme::ink());
     if(!horizontal && visibleCount>=2)
-      groceriesEditorialLozenge(x-8,baseline-5);
+      groceriesEditorialLozenge(x-8,rowTop+rowH/2);
     return true;
   }
   return false;
