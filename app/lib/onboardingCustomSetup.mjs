@@ -9,7 +9,7 @@ export const CUSTOM_SETUP_LAYOUT_SLOTS = Object.freeze({
 
 export const CUSTOM_SETUP_MODULES = Object.freeze([
   'date', 'reminders', 'news', 'weather', 'countdown',
-  'groceries', 'stocks', 'soccer', 'surf', 'ski',
+  'groceries', 'surf', 'ski',
 ])
 
 export function starterCustomCells(layout) {
