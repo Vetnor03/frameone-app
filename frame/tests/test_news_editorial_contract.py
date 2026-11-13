@@ -54,7 +54,7 @@ def test_subtle_list_ornaments_do_not_replace_content():
     assert "d.drawPixel(cx-dx,cy+dy,color);" in preview
     assert "d.drawPixel(cx+dx,cy+dy,color);" in preview
     assert "out.markerX=marginMarker?x-8:x+7;" in preview
-    assert "out.markerR=marginMarker?2:3;" in preview
+    assert "out.markerR=3; // same refined diamond size" in preview
     assert "out.x=x+markerInset;" in preview
     assert "const bool normalMarker=g_cache->count>1 && w>=184;" in preview
     assert "const bool marginMarker=g_cache->count>1 && compactSideMarker &&" in preview
