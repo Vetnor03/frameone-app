@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { additionalModuleGroups, recommendedModuleKeys } from '../app/lib/modulePickerCatalog.mjs'
+import { additionalModuleGroups, recommendedModuleKeys, isVisibleAppModule } from '../app/lib/modulePickerCatalog.mjs'
 
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 const available = JSON.parse(readFileSync(new URL('../shared/frame-modules.json', import.meta.url), 'utf8'))
@@ -22,27 +22,28 @@ test('exactly the four chosen core modules are visible first', () => {
 
 test('secondary modules are alphabetized by translated category and translated title', () => {
   const english = groups('en')
-  assert.deepEqual(english.map((group) => group.label), ['Everyday', 'Finance', 'Sports'])
+  assert.deepEqual(english.map((group) => group.label), ['Everyday', 'Sports'])
   assert.deepEqual(english.map((group) => group.modules), [
     ['countdown', 'groceries'],
-    ['stocks'],
-    ['ski', 'soccer', 'surf'],
+    ['ski', 'surf'],
   ])
   const norwegian = groups('no')
-  assert.deepEqual(norwegian.map((group) => group.label), ['Hverdag', 'Sport', 'Økonomi'])
+  assert.deepEqual(norwegian.map((group) => group.label), ['Hverdag', 'Sport'])
   assert.deepEqual(norwegian.map((group) => group.modules), [
     ['groceries', 'countdown'],
-    ['soccer', 'ski', 'surf'],
-    ['stocks'],
+    ['ski', 'surf'],
   ])
 })
 
-test('all public existing modules remain available exactly once, and AI Follow stays hidden', () => {
+test('public modules are unique, and investments, soccer and AI Follow are hidden', () => {
   const displayed = [...recommendedModuleKeys, ...groups('en').flatMap((group) => group.modules)]
-  const publiclyAvailable = available.map((module) => module.id).filter((id) => id !== 'assistant')
+  const publiclyAvailable = available.map((module) => module.id)
+    .filter((id) => id !== 'assistant' && isVisibleAppModule(id))
   assert.deepEqual([...displayed].sort(), [...publiclyAvailable].sort())
   assert.equal(new Set(displayed).size, displayed.length)
-  assert.equal(displayed.length, 10)
+  assert.equal(displayed.length, 8)
+  assert.ok(!displayed.includes('stocks'))
+  assert.ok(!displayed.includes('soccer'))
   assert.ok(!displayed.includes('assistant'))
   assert.ok(groups('en', true).flatMap((group) => group.modules).includes('assistant'))
 })
@@ -64,4 +65,20 @@ test('single More Modules disclosure groups and scrolls without nested dropdowns
 
 test('Normal setup uses the curated News core preset while Countdown stays available in More Modules', () => {
   assert.match(home, /const presetCells: Record<number, ModuleKey \| null> = \{ 0: 'date', 1: 'reminders', 2: 'weather', 3: 'news' \}/)
+})
+
+
+test('hidden modules are excluded from picker in both languages and stay available in the device schema', () => {
+  assert.equal(isVisibleAppModule('stocks'), false)
+  assert.equal(isVisibleAppModule('soccer'), false)
+  assert.equal(isVisibleAppModule('countdown'), true)
+  for (const language of ['no', 'en']) {
+    const shown = [...recommendedModuleKeys, ...groups(language, true).flatMap((group) => group.modules)]
+    assert.ok(!shown.includes('stocks'))
+    assert.ok(!shown.includes('soccer'))
+    assert.ok(shown.includes('ski'))
+    assert.ok(shown.includes('surf'))
+  }
+  assert.ok(available.some((module) => module.id === 'stocks'))
+  assert.ok(available.some((module) => module.id === 'soccer'))
 })
