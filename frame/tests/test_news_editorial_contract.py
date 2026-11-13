@@ -64,6 +64,12 @@ def test_subtle_list_ornaments_do_not_replace_content():
     assert "bodyFont,compactSideMarker))break;" in preview
     assert "if(block.markerR>0)" in preview
     assert "newsEditorialLozenge(block.markerX,block.markerY,block.markerR);" in preview
+    assert "newsEditorialFinalizeOrnaments(trial);" in preview
+    assert "newsEditorialFinalizeOrnaments(featured);" in preview
+    assert "if(plan.shown!=1)return;" in preview
+    assert "only.x-=only.markerInset;" in preview
+    assert "only.w+=only.markerInset;" in preview
+    assert "only.markerR=0;" in preview
     assert "newsEditorialBalance(trial,bodyY+bodyH);" in preview
     assert "newsEditorialBalance(featured,bodyY+bodyH);" in preview
 
