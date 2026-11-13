@@ -25,12 +25,7 @@ static const GFXfont* FONT_B9 = &FreeSans9pt8b;
 static const GFXfont* FONT_B12 = &FreeSansBold12pt8b;
 static const GFXfont* FONT_B18 = RemindEditorialFonts::dm24();
 
-static size_t strlcpy(char* dst, const char* src, size_t size) {
-  if (!src) src="";
-  const size_t len=strlen(src);
-  if (size) { const size_t n=min(len,size-1); memcpy(dst,src,n);dst[n]=0; }
-  return len;
-}
+// The Linux host libc provides strlcpy; production supplies its Arduino variant.
 
 struct Cell { int x=0,y=0,w=0,h=0; };
 struct CountdownItem {
@@ -164,11 +159,11 @@ static void prepareScenario(const std::string& scenario){
   if(scenario=="one"){
     append("Sommerferie",218,false,"2027-06-19","19. juni 2027");
   } else if(scenario=="today"){
-    append("V\\xE5r bryllupsdag",0,true,"2026-11-13","13. november");
+    append("V\xE5r bryllupsdag",0,true,"2026-11-13","13. november");
   } else if(scenario=="past"){
-    append("F\\xF8dselsdag",-4,false,"2026-11-09","9. november");
+    append("F\xF8dselsdag",-4,false,"2026-11-09","9. november");
   } else if(scenario=="long"){
-    append("V\\xE5r fantastiske sommerferie til Lofoten og Vester\\xE5len",
+    append("V\xE5r fantastiske sommerferie til Lofoten og Vester\xE5len",
            193,false,"2027-05-25","25. mai 2027");
   } else if(scenario=="pinned"){
     append("Sommerferie",218,false,"2027-06-19","19. juni 2027");
@@ -176,11 +171,11 @@ static void prepareScenario(const std::string& scenario){
     append("Bryllup",120,false,"2027-03-13");
   } else if(scenario=="dense"){
     append("Jul",42,true,"2026-12-25");
-    append("F\\xF8dselsdag",13,false,"2026-11-26");
+    append("F\xF8dselsdag",13,false,"2026-11-26");
     append("Reise til Danmark",17,false,"2026-11-30");
     append("Sommerferie",218,false,"2027-06-19");
     append("Middag",34,false,"2026-12-17");
-    append("Nytt\\xE5r",49,false,"2027-01-01");
+    append("Nytt\xE5r",49,false,"2027-01-01");
     append("Helgetur",58,false,"2027-01-10");
   } else if(scenario=="far"){
     append("Huset er ferdig",2048,false,"2032-06-11");
