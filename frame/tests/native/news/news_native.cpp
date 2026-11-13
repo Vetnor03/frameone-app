@@ -268,7 +268,11 @@ int main(int argc,char** argv){
       // in 1-column cells. Markers must sit exactly on the same safe x
       // baseline as the "Nyheter" heading; never overdraw headline glyphs.
       if(scene=="normal" && cols==1){
-        if(shown!=rows || overflow!=before.count-shown)++failures;
+        // Baseline density must remain 1/1/2/3 items for sizes 1/2/3/4.
+        // The physical frame's passepartout needs safe margins, not fewer
+        // complete news headlines.
+        const int expectedShown=max(1,rows-1);
+        if(shown!=expectedShown || overflow!=before.count-shown)++failures;
         for(int i=0;i<shown;++i){
           const auto& block=plan.blocks[i];
           if(block.markerR!=3 ||
