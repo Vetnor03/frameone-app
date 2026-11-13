@@ -77,7 +77,11 @@ static NewsCache* g_cache=&g_storage;
 static bool norwegian=false;
 static const char* headerText(){return norwegian?"Nyheter":"News";}
 static void safeCopy(char* dst,size_t size,const char* src) {
-  if(size)snprintf(dst,size,"%s",src?src:"");
+  if(!size)return;
+  if(!src){dst[0]='\0';return;}
+  const size_t length=min(size-1,strlen(src));
+  memcpy(dst,src,length);
+  dst[length]='\0';
 }
 static void measureText(const char* text,const GFXfont* font,
                         int16_t& x1,int16_t& y1,uint16_t& w,uint16_t& h){
