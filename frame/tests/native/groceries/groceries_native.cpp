@@ -204,6 +204,7 @@ static void fixture(const std::string& scene,int rotation){
   if(scene=="forty")count=40;
   if(scene=="dinner_only")count=0;
   if(scene=="long"||scene=="quantity"||scene=="norwegian")count=8;
+  g_cache.count=count; // field is set by the real JSON parser in production
   const char* names[]={"Melk","Br\xF8" "d","Epler","Kaffe","Egg","Ris",
                        "Havregryn","Sm\xF8" "r","Gulrot","Tomat",
                        "Ost","Sjokolade","Olivenolje","Vaskemiddel"};
@@ -269,6 +270,10 @@ int main(int argc,char** argv){
     const int rotation=(scene=="forty" || scene=="quantity")?5:1;
     ModuleGroceries::fixture(scene,rotation);
     const ModuleGroceries::GroceryCache before=ModuleGroceries::g_cache;
+    // Reject accidentally empty positive fixtures rather than claiming a
+    // decorative/list-ink test passed on a blank image.
+    if(scene!="empty" && scene!="failed" && scene!="dinner_only" &&
+       before.count<=0) {puts("BUG: grocery fixture unexpectedly empty");return 1;}
     Theme::dark=(dark!=0);
     g_w=cols*200;g_h=rows*120;
     g_pixels.assign((size_t)g_w*g_h,Theme::dark?0:1);
