@@ -7,6 +7,7 @@
 #include "DeviceIdentity.h"
 #include "NetClient.h"
 #include "GroceriesAdaptivePolicy.h"
+#include "RemindEditorialFonts.h"
 
 #include "FreeSans9ptNO.h"
 #include "FreeSansBold12ptNO.h"
@@ -1122,7 +1123,12 @@ static void adaptiveCenteredLine(int x, int y, int width, const char* value, con
   drawLeft(x + (width - static_cast<int>(tw)) / 2 - x1, y, fit, font, Theme::ink());
 }
 
+#include "GroceriesEditorialPreview.h"
+
 static void adaptiveHeading(int x, int top, int width, int height, const char* value) {
+#if REMIND_GROCERIES_EDITORIAL_PREVIEW_ENABLED
+  if (groceriesEditorialHeading(x,top,width,height,value)) return;
+#endif
   if (width < 4 || height < 4) return;
   char fit[80] = {0};
   fitTextToWidth(value, fit, sizeof(fit), width, FONT_B12);
@@ -1216,7 +1222,20 @@ static void renderAdaptiveGroceries(const Cell& c) {
       x = innerX + col * columnW + 14;
       width = max(1, columnW - 20);
       y = listY + row * rowStep + 15;
-      d.fillCircle(x - 8, y - 5, 3, ink);
+      // Keep the original geometry, item index, four-hour rotation, count
+      // and list capacity; ornament is drawn only after a full-font fit.
+    }
+#if REMIND_GROCERIES_EDITORIAL_PREVIEW_ENABLED
+    if (groceriesEditorialItem(item,x,y,width,layout.horizontal ? max(26,listH) : rowStep,
+                               layout.horizontal,capacity))
+      continue;
+#endif
+    if (!layout.horizontal) {
+#if REMIND_GROCERIES_EDITORIAL_PREVIEW_ENABLED
+      if (capacity >= 2) groceriesEditorialLozenge(x-8,y-5);
+#else
+      d.fillCircle(x-8,y-5,3,ink);
+#endif
     }
     if (layout.horizontal) {
       char raw[72] = {0};
