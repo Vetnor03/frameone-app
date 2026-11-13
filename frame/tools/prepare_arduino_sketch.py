@@ -71,7 +71,7 @@ def rewrite_local_includes(source: Path, contents: str, known_paths: set[str]) -
     return INCLUDE_PATTERN.sub(replace, contents)
 
 
-def prepare(output: Path) -> int:
+def prepare(output: Path, countdown_preview: bool = False) -> int:
     output = output.expanduser().resolve()
     source_root = SOURCE_ROOT.resolve()
 
@@ -97,6 +97,13 @@ def prepare(output: Path) -> int:
     prepared: list[tuple[str, str]] = []
     for source in sources:
         contents = source.read_text(encoding="utf-8")
+        if countdown_preview and source.relative_to(SOURCE_ROOT).as_posix() == "modules/ModuleCountdown.cpp":
+            # Opt in only for the exported test sketch. Never change canonical
+            # source or enable this in the normal Alfred production export.
+            contents = (
+                "#define REMIND_COUNTDOWN_EDITORIAL_PREVIEW_ENABLED 1\n"
+                + contents
+            )
         prepared.append(
             (source.name, rewrite_local_includes(source, contents, known_paths))
         )
@@ -105,6 +112,18 @@ def prepare(output: Path) -> int:
     for filename, contents in prepared:
         (output / filename).write_text(contents, encoding="utf-8")
     shutil.copyfile(PARTITIONS_SOURCE, output / "partitions.csv")
+    if countdown_preview:
+        (output / "COUNTDOWN_USB_TEST_README.txt").write_text(
+            "RE:MIND Countdown R3.1 -- USB TEST V4 ONLY\n"
+            "Open frame_v2.5.1.ino in Arduino IDE. Select ESP32S3 Dev Module,\n"
+            "Flash 16MB / QIO 80MHz / PSRAM OPI / USB HW CDC+JTAG,\n"
+            "USB CDC On Boot enabled; keep partitions.csv. Upload via USB.\n"
+            "DO NOT select Erase All Flash: preserve pairing and Wi-Fi.\n"
+            "This is an opt-in Countdown visual test, NOT production OTA.\n"
+            "Only the exported ModuleCountdown.cpp has its preview flag enabled.\n"
+            "All other modules and canonical source remain unchanged.\n",
+            encoding="utf-8",
+        )
 
     print(f"Prepared {len(prepared)} firmware files in {output}")
     print(f"Installed {PARTITIONS_SOURCE.name} as partitions.csv")
@@ -119,10 +138,15 @@ def main() -> int:
         type=Path,
         help=f"new or empty destination folder named {SKETCH_NAME}",
     )
+    parser.add_argument(
+        "--countdown-preview",
+        action="store_true",
+        help="opt in to the isolated Countdown R3.1 renderer in the exported sketch only",
+    )
     args = parser.parse_args()
 
     try:
-        prepare(args.output)
+        prepare(args.output, countdown_preview=args.countdown_preview)
     except RuntimeError as error:
         parser.error(str(error))
     return 0
