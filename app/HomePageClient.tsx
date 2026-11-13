@@ -50,7 +50,7 @@ import { projectSlotMemoryIntoBuiltInLayout, sanitizeLayoutModuleMemory as sanit
 import { AddLayoutCard, CustomLayoutPreview, InlineCustomLayoutEditor, editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
 import type { EditorCell } from './lib/frameLayoutEditor.mjs'
 import { MAX_FRAME_NAME_LENGTH, normalizeFrameName } from './lib/frameName.mjs'
-import { recommendedModuleKeys, additionalModuleGroups } from './lib/modulePickerCatalog.mjs'
+import { recommendedModuleKeys, additionalModuleGroups, isVisibleAppModule } from './lib/modulePickerCatalog.mjs'
 
 type CoreTabKey = 'frame' | 'connect' | 'settings'
 type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'ski' | 'reminders' | 'news' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
@@ -1684,7 +1684,7 @@ export default function HomePage() {
       : cellsByLayout[layoutKey]
 
     return deriveDynamicModuleKeys<ModuleKey>(activeLayoutModules, pinnedModuleTabs)
-      .filter((m) => SHOW_AI_FOLLOW_UI || m !== 'assistant')
+      .filter((m) => isVisibleAppModule(m) && (SHOW_AI_FOLLOW_UI || m !== 'assistant'))
       .map((m) => ({
         key: m as ModuleKey,
         label: moduleLabel(language, m),

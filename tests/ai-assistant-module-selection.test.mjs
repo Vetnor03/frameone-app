@@ -13,7 +13,7 @@ test('AI Follow implementation remains intact behind the release UI switch', () 
   assert.match(home, /const SHOW_AI_FOLLOW_UI = false/)
   const tabsBlock = home.match(/const tabs = useMemo\(\(\) => \{[\s\S]*?\}, \[dynamicTabs, language\]\)/)?.[0] ?? ''
   assert.doesNotMatch(tabsBlock, /key: 'assistant' as const/)
-  assert.match(home, /deriveDynamicModuleKeys<ModuleKey>[\s\S]*filter\(\(m\) => SHOW_AI_FOLLOW_UI \|\| m !== 'assistant'\)/)
+  assert.match(home, /deriveDynamicModuleKeys<ModuleKey>[\s\S]*filter\(\(m\) => isVisibleAppModule\(m\) && \(SHOW_AI_FOLLOW_UI \|\| m !== 'assistant'\)\)/)
   assert.match(home, /SHOW_AI_FOLLOW_UI && \(tab === 'assistant' \|\| tab === 'ai-assistant'\)/)
 })
 
@@ -28,7 +28,7 @@ test('AI Follow tab stays hidden while the lightweight RE:MIND helper remains av
 
 test('AI Follow module is hidden but helper and Tips & Tricks settings remain visible', () => {
   assert.match(home, /additionalModuleGroups\(language, \(moduleKey\) => moduleLabel\(language, moduleKey\), SHOW_AI_FOLLOW_UI\)/)
-  assert.match(pickerCatalog, /\.filter\(\(module\) => showAiFollow \|\| module !== 'assistant'\)/)
+  assert.match(pickerCatalog, /\.filter\(\(module\) => isVisibleAppModule\(module\) && \(showAiFollow \|\| module !== 'assistant'\)\)/)
   assert.match(home, /ASSISTANT & TIPS/)
   assert.match(home, /Show RE:MIND Assistant/)
   assert.match(home, /Tips & Tricks/)

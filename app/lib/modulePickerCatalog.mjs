@@ -1,5 +1,10 @@
 // Presentation-only catalog for the frame's module picker.
 // This does not change saved layouts, active modules or module capabilities.
+// Temporarily suppress these from public app navigation and selectors only.
+// Leave saved assignments, device APIs, renderer support and settings intact.
+export const hiddenAppModuleKeys = Object.freeze(['stocks', 'soccer'])
+export const isVisibleAppModule = (moduleKey) => !hiddenAppModuleKeys.includes(moduleKey)
+
 export const recommendedModuleKeys = Object.freeze(['reminders', 'news', 'date', 'weather'])
 
 const additionalCategories = [
@@ -31,7 +36,7 @@ export function additionalModuleGroups(language, moduleLabel, showAiFollow = fal
       key: category.key,
       label: category.labels[language === 'no' ? 'no' : 'en'],
       modules: category.modules
-        .filter((module) => showAiFollow || module !== 'assistant')
+        .filter((module) => isVisibleAppModule(module) && (showAiFollow || module !== 'assistant'))
         .sort((a, b) => moduleLabel(a).localeCompare(moduleLabel(b), locale)),
     }))
     .filter((category) => category.modules.length > 0)
