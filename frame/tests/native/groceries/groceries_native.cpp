@@ -27,6 +27,7 @@ namespace fs=std::filesystem;
 static int g_w=800,g_h=480,g_outside=0,g_diamondPixels=0,g_rotationStep=0;
 static std::vector<uint8_t> g_pixels;
 static std::vector<std::string> g_drawn;
+static std::vector<std::string> g_formattedItems;
 static void plot(int x,int y,uint16_t ink){
   if(x<0||y<0||x>=g_w||y>=g_h){++g_outside;return;}
   g_pixels[(size_t)y*g_w+x]=ink?1:0;
@@ -151,6 +152,7 @@ static void fitTextToWidth(const char* src,char* dst,size_t dstSize,int maxWidth
 static const char* emptyPhrase(){return g_cache.languageNo?"Alt er klart":"All set";}
 static void formatItem(const GroceryItem& item,char* out,size_t n){
   if(!out||!n)return;
+  g_formattedItems.emplace_back(item.name);
   if(item.qty>1)snprintf(out,n,"%dx %s",item.qty,item.name);
   else safeCopy(out,n,item.name);
 }
@@ -277,7 +279,7 @@ int main(int argc,char** argv){
     Theme::dark=(dark!=0);
     g_w=cols*200;g_h=rows*120;
     g_pixels.assign((size_t)g_w*g_h,Theme::dark?0:1);
-    g_outside=0;g_diamondPixels=0;g_drawn.clear();
+    g_outside=0;g_diamondPixels=0;g_drawn.clear();g_formattedItems.clear();
     const Cell c={0,0,g_w,g_h};
     ModuleGroceries::renderAdaptiveGroceries(c);
     if(memcmp(&ModuleGroceries::g_cache,&before,sizeof(before)))++failed;
@@ -310,6 +312,17 @@ int main(int argc,char** argv){
     capacity=min(12,min(capacity,cache.count));
     if(family.family==GroceriesAdaptivePolicy::EMPTY)capacity=0;
     if(cache.count>0 && capacity<0)++failed;
+    // R2 uses the SAME item selection in the actual extracted renderer.
+    // The formatter records the accessed items. Legacy fallback may format
+    // an item twice, so match the expected rotated sequence as a subsequence.
+    size_t position=0;
+    for(int i=0;i<capacity;++i){
+      const auto& want=before.items[ModuleGroceries::wrapIndex(rotation+i,cache.count)];
+      while(position<g_formattedItems.size() &&
+            g_formattedItems[position]!=want.name)++position;
+      if(position>=g_formattedItems.size())++failed;
+      else ++position;
+    }
     if(capacity==1 && g_diamondPixels>0)++failed;
     if(cache.count==0 && g_diamondPixels>0)++failed;
     if(g_diamondPixels%15!=0)++failed; // 4*3 + 3 ink pixel attempts per diamond
