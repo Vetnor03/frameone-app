@@ -17,7 +17,7 @@ using std::max;
 namespace fs=std::filesystem;
 
 struct Cell {int x,y,w,h;};
-static int g_width=800,g_height=480,g_clipped=0;
+static int g_width=800,g_height=480,g_clipped=0,g_markerPixels=0;
 static std::vector<uint8_t> g_pixels;
 namespace Theme {
 static bool dark=false;
@@ -32,7 +32,10 @@ static void pixel(int x,int y,uint16_t ink){
 namespace DisplayCore {
 class NativeCanvas {
  public:
-  void drawPixel(int x,int y,uint16_t ink) {pixel(x,y,ink);}
+  void drawPixel(int x,int y,uint16_t ink) {
+    ++g_markerPixels;
+    pixel(x,y,ink);
+  }
 };
 static NativeCanvas& get(){static NativeCanvas canvas;return canvas;}
 }
@@ -225,6 +228,7 @@ int main(int argc,char** argv){
     g_width=cols*200;g_height=rows*120;
     g_pixels.assign((size_t)g_width*g_height,Theme::dark?0:1);
     g_clipped=0;
+    g_markerPixels=0;
     const Cell cell={0,0,g_width,g_height};
     const bool ok=ModuleNews::renderEditorialNewsPreview(cell);
     int shown=0,overflow=0;
@@ -233,8 +237,10 @@ int main(int argc,char** argv){
       shown=plan.shown;overflow=plan.overflow;
       if(shown<1||shown>ModuleNews::g_storage.count ||
          shown+overflow!=ModuleNews::g_storage.count)++failures;
+      int expectedMarkerPixels=0;
       for(int i=0;i<shown;++i){
         const auto& block=plan.blocks[i];
+        if(block.markerR>0)expectedMarkerPixels+=4*block.markerR+3;
         if(block.sourceIndex!=i || block.x<0 || block.y<0 ||
            block.x+block.w>g_width || block.y+block.h>g_height ||
            block.lineCount<1 || block.lineCount>6)++failures;
@@ -257,6 +263,7 @@ int main(int argc,char** argv){
         }
         if(rejoined!=before.items[i].title)++failures;
       }
+      if(g_markerPixels!=expectedMarkerPixels)++failures;
       ++accepted;
     }else{++legacy;}
     if(ModuleNews::g_storage.count!=before.count ||
