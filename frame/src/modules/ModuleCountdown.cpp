@@ -5,6 +5,7 @@
 // ===============================
 #include "ModuleCountdown.h"
 #include "CountdownAdaptivePolicy.h"
+#include "RemindEditorialFonts.h"
 #include "DisplayCore.h"
 #include "Theme.h"
 #include "Config.h"
@@ -1847,6 +1848,8 @@ static void renderAdaptiveCountdown(const Cell& c) {
   if(calendar.w){tm nowTm;if(getLocalTmQuick(nowTm))drawCountdownCalendarMonth(calendar.x,calendar.y,calendar.w,calendar.h,nowTm.tm_year+1900,nowTm.tm_mon,nowTm.tm_year+1900,nowTm.tm_mon,nowTm.tm_mday,hero,true,true);}
 }
 
+#include "CountdownEditorialPreview.h"
+
 // =========================================================
 // Public API
 // =========================================================
@@ -1860,6 +1863,10 @@ void render(const Cell& c, const String& moduleName) {
   (void)moduleName;
 
   ensureLoaded();
+
+  // Approved V5 Countdown, native GFX measured live data, all 16 footprints.
+  // Existing empty/failure, tiny-cell and fallback behavior remains intact.
+  if (renderEditorialCountdown(c)) return;
 
   if (c.size == CELL_ADAPTIVE) {
     renderAdaptiveCountdown(c);
