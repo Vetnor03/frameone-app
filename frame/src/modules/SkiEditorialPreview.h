@@ -55,7 +55,7 @@ static void skiEditorialPunctuation(char* value) {
     if(a==0xC2 && b==0xB0) {
       *write++=(char)0xB0; read+=2;
     } else if(a==0xC2 && b==0xB7) {
-      *write++=' '; *write++='|'; *write++=' '; read+=2;
+      *write++='|'; read+=2;
     } else {
       *write++=*read++;
     }
@@ -151,10 +151,10 @@ static bool skiEditorialDraw(const Cell& cell,const SkiCache& data,bool paint) {
     const SkiEditorialRect hero{body.x,body.y,heroW,body.h};
     const SkiEditorialRect details{
       body.x+heroW+gutter,body.y,body.w-heroW-gutter,body.h};
-    const char* facts[]={totalText,conditions,avalanche,
-                          haveResort?resort:nullptr,havePowder?powder:nullptr};
-    int rows=0;
-    for(const char* f:facts)if(f&&f[0])++rows;
+    const char* facts[5]={totalText,conditions,avalanche,nullptr,nullptr};
+    int rows=3;
+    if(haveResort)facts[rows++]=resort;
+    if(havePowder)facts[rows++]=powder;
     const int rowH=30,rowGap=8;
     while(rows>3 && rows*rowH+(rows-1)*rowGap>details.h-8)--rows;
     if(rows<3 || !skiEditorialMetric(
@@ -176,13 +176,12 @@ static bool skiEditorialDraw(const Cell& cell,const SkiCache& data,bool paint) {
 
   // Portrait and medium cards: layout the actual content as ONE block.
   // Available facts are selected by measured height, never by grid index.
-  const char* facts[]={totalText,conditions,avalanche,
-                        haveResort?resort:nullptr,havePowder?powder:nullptr};
+  const char* facts[5]={totalText,conditions,avalanche,nullptr,nullptr};
+  int rows=3;
+  if(haveResort)facts[rows++]=resort;
+  if(havePowder)facts[rows++]=powder;
   const int rowH=23,rowGap=6;
   const int heroH=min(110,max(66,body.h*39/100));
-  int rows=3;
-  if(haveResort)++rows;
-  if(havePowder)++rows;
   const int gapH=10;
   while(rows>1 && heroH+gapH+
         rows*rowH+(rows-1)*rowGap>body.h)--rows;
