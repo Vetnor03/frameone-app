@@ -74,9 +74,9 @@ export function countdownLayout(profile,c){
  if(c.family==='horizontal'){
   // Treat label, value and date as one measured phrase; never pin the date to the right edge.
   const dateW=c.showTargetDate?clamp(Math.floor(primaryRect.width*.19),60,112):0
-  const titleW=c.showTitle?clamp(Math.floor(primaryRect.width*.30),70,160):0
+  const titleW=c.showTitle?clamp(Math.floor(primaryRect.width*.30),54,160):0
   const separators=(titleW?gap:0)+(dateW?gap:0)
-  const metricW=Math.max(54,Math.min(200,primaryRect.width-titleW-dateW-separators))
+  const metricW=Math.max(30,Math.min(200,primaryRect.width-titleW-dateW-separators))
   const groupW=Math.min(primaryRect.width,titleW+dateW+metricW+separators)
   const groupX=primaryRect.x+Math.floor((primaryRect.width-groupW)/2)
   heroGroupRect={x:groupX,y:primaryRect.y,width:groupW,height:primaryRect.height}
@@ -121,8 +121,8 @@ export function countdownLayout(profile,c){
    const rowRect={x:groupX,y:rowY,width:groupW,height:rowH}
    // The right-side metric belongs to its label. Use a compact central pair, not opposite edges.
    const pairW=Math.min(groupW,Math.max(125,Math.round(groupW*.79)))
-   const titleW=Math.max(54,Math.floor(pairW*.67))
-   const metricW=pairW-titleW-8
+   const metricW=Math.min(120,Math.max(62,Math.floor(pairW*.30)))
+   const titleW=pairW-metricW-8
    const pairX=groupX+Math.floor((groupW-pairW)/2)
    upcomingRows.push(Object.freeze({rowRect,titleRect:{x:pairX,y:rowY,width:titleW,height:rowH},metricRect:{x:pairX+titleW+8,y:rowY,width:metricW,height:rowH}}))
   }
