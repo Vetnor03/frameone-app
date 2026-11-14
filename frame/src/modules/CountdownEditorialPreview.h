@@ -300,7 +300,6 @@ static bool cdEditorialHero(const CountdownItem& hero,
 
   // V5: portraits/squares place the measured title, count+unit and date
   // as ONE centered typographic block, rather than scattering them.
-  CountdownEditorialTitle title;
   const int titleBudget=min(126,max(26,r.h*38/100));
   if(!cdEditorialTitlePlan(hero.title,r.w-8,titleBudget,title))return false;
   const int gap=max(7,min(16,r.h/19));
