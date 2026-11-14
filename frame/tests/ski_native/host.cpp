@@ -19,6 +19,7 @@
 #include "FreeSansBold18ptNO.h"
 using std::min;
 using std::max;
+using std::isfinite;
 #define FONT_9 (&FreeSans9pt8b)
 #define FONT_B12 (&FreeSansBold12pt8b)
 #define FONT_B18 (&FreeSansBold18pt8b)
@@ -50,6 +51,9 @@ class MockDisplay {
   }
   void drawFastHLine(int x,int y,int w,uint16_t color){
     for(int dx=0;dx<w;++dx)drawPixel(x+dx,y,color);
+  }
+  void drawFastVLine(int x,int y,int h,uint16_t color){
+    for(int dy=0;dy<h;++dy)drawPixel(x,y+dy,color);
   }
   void drawLine(int x0,int y0,int x1,int y1,uint16_t color){
     int dx=abs(x1-x0),sx=x0<x1?1:-1,dy=-abs(y1-y0),sy=y0<y1?1:-1,e=dx+dy;
