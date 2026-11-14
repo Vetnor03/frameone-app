@@ -222,7 +222,7 @@ type PilotInvitation = {
   orderStatus: string | null
 }
 
-export default function PilotConfigurator({ inviteId, demoMode = false }: { inviteId: string; demoMode?: boolean }) {
+export default function PilotConfigurator({ inviteId, demoMode = false, testKey = '' }: { inviteId: string; demoMode?: boolean; testKey?: string }) {
   const [frameId, setFrameId] = useState<PilotFrameId>('american-walnut')
   const [matteId, setMatteId] = useState<PilotMatteId>('beige')
   const [step, setStep] = useState<1 | 2>(1)
@@ -230,6 +230,9 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
   const [submittedEmail, setSubmittedEmail] = useState('')
+  const [emailTestSending, setEmailTestSending] = useState(false)
+  const [emailTestSent, setEmailTestSent] = useState(false)
+  const [emailTestError, setEmailTestError] = useState('')
   const [invitation, setInvitation] = useState<PilotInvitation | null>(null)
   const [inviteError, setInviteError] = useState('')
   const [inviteUsed, setInviteUsed] = useState(false)
@@ -289,7 +292,7 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
     // The founder's demo exercises every screen without contacting the API.
     // Production submissions always go through the invitation-validated POST below.
     if (demoMode) {
-      setSubmittedEmail(invitation.email)
+      setSubmittedEmail(testKey ? 'vetlecn@live.no (test)' : invitation.email)
       setSubmitted(true)
       return
     }
@@ -321,6 +324,28 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
       setError(submissionError instanceof Error ? submissionError.message : 'Could not save your pilot order.')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function sendTestEmail() {
+    if (!demoMode || !testKey || !submitted || emailTestSending || emailTestSent) return
+    setEmailTestSending(true)
+    setEmailTestError('')
+    try {
+      const response = await fetch('/api/pilot/test-selection-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testKey, frameId, matteId }),
+      })
+      const result = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(typeof result?.error === 'string' ? result.error : 'Kunne ikke sende test-e-post.')
+      }
+      setEmailTestSent(true)
+    } catch (reason) {
+      setEmailTestError(reason instanceof Error ? reason.message : 'Kunne ikke sende test-e-post.')
+    } finally {
+      setEmailTestSending(false)
     }
   }
 
@@ -459,7 +484,21 @@ export default function PilotConfigurator({ inviteId, demoMode = false }: { invi
                   <div className="flex justify-between gap-5 py-3"><dt className="text-black/40">Matte</dt><dd className="text-right font-medium">{matte.name}</dd></div>
                   <div className="flex justify-between gap-5 py-3"><dt className="text-black/40">Email</dt><dd className="min-w-0 truncate text-right font-medium">{submittedEmail}</dd></div>
                 </dl>
-
+                {demoMode && testKey ? (
+                  <div className="mt-5 border-t border-black/10 pt-5">
+                    <p className="mb-3 text-[12px] leading-5 text-black/55">Test e-postbekreftelsen med bilde av akkurat denne kombinasjonen. Dette oppretter ingen pilotbestilling.</p>
+                    <button
+                      type="button"
+                      onClick={sendTestEmail}
+                      disabled={emailTestSending || emailTestSent}
+                      className="min-h-11 rounded-[11px] bg-[#1d1d1b] px-5 text-[12px] font-semibold text-white disabled:opacity-50"
+                    >
+                      {emailTestSent ? 'Test-e-post sendt ✓' : emailTestSending ? 'Sender test-e-post…' : 'Send test-e-post til vetlecn@live.no'}
+                    </button>
+                    {emailTestSent ? <p role="status" className="mt-2 text-[12px] text-black/60">E-posten er sendt til vetlecn@live.no. Sjekk innboksen.</p> : null}
+                    {emailTestError ? <p role="alert" className="mt-2 text-[12px] text-red-900">{emailTestError}</p> : null}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </section>
