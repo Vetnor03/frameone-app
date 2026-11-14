@@ -154,7 +154,7 @@ static void prepare(const std::string& scenario){
   g_cache.liftsOpen=6;g_cache.liftsTotal=8;
   strcpy(g_cache.resortName,"Hemsedal");
   g_cache.powderFound=true;
-  strcpy(g_cache.powderDate,"søndag");
+  FrameText::normalizeUtf8ForDisplay(g_cache.powderDate,sizeof(g_cache.powderDate),"søndag");
   g_cache.powderLowCm=12;g_cache.powderHighCm=25;
   if(scenario=="english"){
     g_cache.norwegian=false;
@@ -179,8 +179,8 @@ static void prepare(const std::string& scenario){
   } else if(scenario=="long_location"){
     strcpy(g_cache.location,"KVITFJELL VEST STORE ALPINSENTER");
   } else if(scenario=="long_resort"){
-    strcpy(g_cache.resortName,"Et usedvanlig langt navn på et alpinanlegg");
-    strcpy(g_cache.powderDate,"søndag 15. november");
+    FrameText::normalizeUtf8ForDisplay(g_cache.resortName,sizeof(g_cache.resortName),"Et usedvanlig langt navn på et alpinanlegg");
+    FrameText::normalizeUtf8ForDisplay(g_cache.powderDate,sizeof(g_cache.powderDate),"søndag 15. november");
   } else if(scenario=="powder_no_resort"){
     g_cache.resortAvailable=false;
   } else if(scenario=="resort_no_powder"){
