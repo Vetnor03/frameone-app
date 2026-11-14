@@ -25,8 +25,8 @@ def test_ski_uses_multi_hour_cache_and_extended_conditions():
     assert "3UL * 60UL * 60UL * 1000UL" in SKI
     assert 'doc["resort"]' in SKI
     assert 'doc["next_powder_day"]' in SKI
-    assert "Next powder" in SKI
-    assert "Neste pudderdag" in SKI
+    assert "Powder alert" in SKI
+    assert "Pudderalarm" in SKI
 
 
 def test_ski_device_adapter_exposes_resort_powder_and_language():
