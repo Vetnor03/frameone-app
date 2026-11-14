@@ -271,14 +271,14 @@ bool powderText(const SkiCache& data, char* out, size_t outSize) {
   if (!data.powderFound || !data.powderDate[0]) return false;
   if (isfinite(data.powderLowCm) && isfinite(data.powderHighCm)) {
     snprintf(out, outSize, "%s %s · %d-%d cm",
-      data.norwegian ? "Neste pudderdag" : "Next powder",
+      data.norwegian ? "Pudderalarm" : "Powder alert",
       data.powderDate, rounded(data.powderLowCm), rounded(data.powderHighCm));
   } else if (isfinite(data.powderMidCm)) {
     snprintf(out, outSize, "%s %s · %d cm",
-      data.norwegian ? "Neste pudderdag" : "Next powder",
+      data.norwegian ? "Pudderalarm" : "Powder alert",
       data.powderDate, rounded(data.powderMidCm));
   } else {
-    snprintf(out, outSize, "%s %s", data.norwegian ? "Neste pudderdag" : "Next powder", data.powderDate);
+    snprintf(out, outSize, "%s %s", data.norwegian ? "Pudderalarm" : "Powder alert", data.powderDate);
   }
   return true;
 }
