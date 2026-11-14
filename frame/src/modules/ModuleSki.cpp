@@ -5,6 +5,7 @@
 #include "NetClient.h"
 #include "Config.h"
 #include "FrameText.h"
+#include "RemindEditorialFonts.h"
 
 #include <ArduinoJson.h>
 #include <math.h>
@@ -270,14 +271,14 @@ bool powderText(const SkiCache& data, char* out, size_t outSize) {
   if (!data.powderFound || !data.powderDate[0]) return false;
   if (isfinite(data.powderLowCm) && isfinite(data.powderHighCm)) {
     snprintf(out, outSize, "%s %s · %d-%d cm",
-      data.norwegian ? "Neste pudderdag" : "Next powder",
+      data.norwegian ? "Pudderalarm" : "Powder alert",
       data.powderDate, rounded(data.powderLowCm), rounded(data.powderHighCm));
   } else if (isfinite(data.powderMidCm)) {
     snprintf(out, outSize, "%s %s · %d cm",
-      data.norwegian ? "Neste pudderdag" : "Next powder",
+      data.norwegian ? "Pudderalarm" : "Powder alert",
       data.powderDate, rounded(data.powderMidCm));
   } else {
-    snprintf(out, outSize, "%s %s", data.norwegian ? "Neste pudderdag" : "Next powder", data.powderDate);
+    snprintf(out, outSize, "%s %s", data.norwegian ? "Pudderalarm" : "Powder alert", data.powderDate);
   }
   return true;
 }
@@ -383,6 +384,8 @@ void drawExpanded(const Cell& c, const SkiCache& data) {
   }
 }
 
+#include "SkiEditorialPreview.h"
+
 void drawUnavailable(const Cell& c) {
   drawCenteredBaseline(c, c.y + c.h / 2 - 8, "SKI", FONT_B12);
   drawCenteredBaseline(c, c.y + c.h / 2 + 24, "Data unavailable", FONT_9);
@@ -398,6 +401,12 @@ void render(const Cell& c, const String& moduleName) {
     drawUnavailable(c);
     return;
   }
+
+#if REMIND_SKI_EDITORIAL_PREVIEW_ENABLED
+  // Isolated Ski R1 review. Legacy paths are unchanged if it is disabled
+  // or an unusual rectangle cannot preflight safely.
+  if (renderSkiEditorialPreview(c, data)) return;
+#endif
 
   const int colSpan = c.colSpan > 0 ? c.colSpan : max(1, c.w / 200);
   const int rowSpan = c.rowSpan > 0 ? c.rowSpan : max(1, c.h / 120);
