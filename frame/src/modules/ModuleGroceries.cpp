@@ -7,6 +7,7 @@
 #include "DeviceIdentity.h"
 #include "NetClient.h"
 #include "GroceriesAdaptivePolicy.h"
+#include "RemindEditorialFonts.h"
 
 #include "FreeSans9ptNO.h"
 #include "FreeSansBold12ptNO.h"
@@ -225,31 +226,11 @@ static void formatItem(const GroceryItem& item, char* out, size_t outSize) {
   }
 }
 
+#include "GroceriesNewsStyle.h"
+
 static int drawHeader(const Cell& c, const char* header, int topPad, const GFXfont* font) {
-  auto& d = DisplayCore::get();
-  const uint16_t ink = Theme::ink();
-
-  char fit[64] = {0};
-  fitTextToWidth(header, fit, sizeof(fit), c.w - 24, font);
-
-  int16_t x1, y1;
-  uint16_t tw, th;
-  measureText(fit, font, x1, y1, tw, th);
-
-  int baseline = c.y + topPad - y1;
-  int x = c.x + c.w / 2 - (int)tw / 2 - x1;
-
-  d.setFont(font);
-  d.setTextSize(1);
-  d.setTextColor(ink);
-  d.setCursor(x, baseline);
-  d.print(fit);
-  d.setFont(nullptr);
-
-  int underlineY = baseline + y1 + (int)th + 2;
-  d.fillRect(c.x + c.w / 2 - (int)tw / 2, underlineY, tw, 2, ink);
-
-  return underlineY + 12;
+  (void)font; // Grocery headings follow the already-locked News style.
+  return groceriesNewsHeading(c,header,topPad);
 }
 
 static void drawEmptyState(const Cell& c, const char* line1, const char* line2) {
@@ -475,7 +456,7 @@ static void drawSimpleList(const Cell& c, int maxItems, const GFXfont* font) {
     int y = startY + i * lineH;
     if (y > c.y + c.h - 14) break;
 
-    d.fillCircle(c.x + padX, y - 5, 3, ink);
+    if (visibleCount >= 2) groceriesNewsDiamond(c.x + padX, y - 5);
     drawLeft(c.x + padX + 16, y, fit, font, ink);
   }
 
@@ -527,64 +508,27 @@ static void renderSmall(const Cell& c) {
     return;
   }
 
-  const int visibleCount = min(g_cache.count, 3);
-
-  if (g_cache.count > visibleCount) {
-    char moreBuf[24] = {0};
-    snprintf(moreBuf, sizeof(moreBuf), "+%d", g_cache.count - visibleCount);
-
-    int16_t mx1, my1;
-    uint16_t mw, mh;
-    measureText(moreBuf, FONT_B9, mx1, my1, mw, mh);
-
-    drawLeft(c.x + c.w - 12 - (int)mw - mx1, c.y + 12 - my1, moreBuf, FONT_B9, ink);
+  const int rowH=23;
+  const int available=max(0,c.y+c.h-9-contentTop);
+  const int visibleCount=min(3,min(g_cache.count,available/rowH));
+  const int rotation=getRotationStep4h();
+  const int blockH=visibleCount*rowH;
+  const int listY=contentTop+max(0,(available-blockH)/2);
+  const int inset=max(14,min(23,c.w*7/100));
+  for(int i=0;i<visibleCount;++i) {
+    const GroceryItem& item=g_cache.items[wrapIndex(rotation+i,g_cache.count)];
+    char raw[72]={0};
+    formatItem(item,raw,sizeof(raw)); // quantities and order unchanged
+    groceriesNewsItem(raw,c.x+inset,listY+i*rowH,
+                      c.w-inset*2,rowH,false,visibleCount);
   }
-
-  int contentBottom = c.y + c.h - 10;
-  int contentH = contentBottom - contentTop;
-  if (contentH <= 8) return;
-
-  const int dividerInsetTop = 8;
-  const int dividerInsetBottom = 8;
-  const int dividerY = contentTop + dividerInsetTop;
-  const int dividerH = max(8, contentH - dividerInsetTop - dividerInsetBottom);
-
-  if (visibleCount == 2) {
-    d.drawFastVLine(c.x + c.w / 2, dividerY, dividerH, ink);
-  } else if (visibleCount == 3) {
-    d.drawFastVLine(c.x + c.w / 3, dividerY, dividerH, ink);
-    d.drawFastVLine(c.x + (c.w * 2) / 3, dividerY, dividerH, ink);
-  }
-
-  const int rotation = getRotationStep4h();
-  const int textPadX = 8;
-
-  for (int i = 0; i < visibleCount; i++) {
-    int idx = wrapIndex(rotation + i, g_cache.count);
-
-    int secX0 = c.x + (c.w * i) / visibleCount;
-    int secX1 = c.x + (c.w * (i + 1)) / visibleCount;
-    int secW = secX1 - secX0;
-
-    char raw[72] = {0};
-    formatItem(g_cache.items[idx], raw, sizeof(raw));
-
-    char fit[72] = {0};
-    fitTextToWidth(raw, fit, sizeof(fit), secW - textPadX * 2 - 4, FONT_B12);
-
-    int16_t tx1, ty1;
-    uint16_t tw, th;
-    measureText(fit, FONT_B12, tx1, ty1, tw, th);
-
-    int cx = secX0 + secW / 2;
-    int baselineY = contentTop + (contentH - (int)th) / 2 - ty1;
-
-    d.setFont(FONT_B12);
-    d.setTextColor(ink);
-    d.setTextSize(1);
-    d.setCursor(cx - (int)tw / 2 - tx1, baselineY);
-    d.print(fit);
-    d.setFont(nullptr);
+  if(g_cache.count>visibleCount) {
+    char more[24]={0};
+    snprintf(more,sizeof(more),"+%d",g_cache.count-visibleCount);
+    int16_t mx=0,my=0;uint16_t mw=0,mh=0;
+    measureText(more,FONT_B9,mx,my,mw,mh);
+    drawLeft(c.x+c.w-12-(int)mw-mx,c.y+12-my,
+             more,FONT_B9,ink);
   }
 }
 
@@ -600,9 +544,12 @@ static void drawGroceryColumns(const Cell& c, int contentTop, int maxVisibleItem
   const int visibleCount = min(g_cache.count, maxVisibleItems);
   const bool hasMore = g_cache.count > visibleCount;
 
-  const int lineH = fontLineHeight(FONT_B9);
-  const int lineGap = 8;
-  const int rowStep = lineH + lineGap;
+  // News uses real DM Sans bitmap glyphs, not the legacy FreeSans list font.
+  // Keep 6 lines per column and the existing source rotation.
+  const GFXfont* listFont=RemindEditorialFonts::dm18();
+  const int lineH=18;
+  const int lineGap=7;
+  const int rowStep=lineH+lineGap;
   const int listTop = contentTop + 6;
   const int rotation = getRotationStep4h();
 
@@ -621,9 +568,9 @@ static void drawGroceryColumns(const Cell& c, int contentTop, int maxVisibleItem
       char raw[72] = {0};
       formatItem(g_cache.items[idx], raw, sizeof(raw));
 
-      fitTextToWidth(raw, lines[i], sizeof(lines[i]), c.w - 52, FONT_B9);
+      fitTextToWidth(raw, lines[i], sizeof(lines[i]), c.w - 52, listFont);
 
-      int w = textWidth(lines[i], FONT_B9);
+      int w = textWidth(lines[i], listFont);
       if (w > longestW) longestW = w;
     }
 
@@ -637,12 +584,12 @@ static void drawGroceryColumns(const Cell& c, int contentTop, int maxVisibleItem
 
       int16_t tx1, ty1;
       uint16_t tw, th;
-      measureText(lines[i], FONT_B9, tx1, ty1, tw, th);
+      measureText(lines[i], listFont, tx1, ty1, tw, th);
 
       int baseline = centerY - (int)th / 2 - ty1;
 
-      d.fillCircle(textX - gap - dotR, centerY, dotR, ink);
-      drawLeft(textX, baseline, lines[i], FONT_B9, ink);
+      if (visibleCount >= 2) groceriesNewsDiamond(textX - gap - dotR, centerY);
+      drawLeft(textX, baseline, lines[i], listFont, ink);
     }
 
     return;
@@ -675,9 +622,9 @@ static void drawGroceryColumns(const Cell& c, int contentTop, int maxVisibleItem
       char raw[72] = {0};
       formatItem(g_cache.items[idx], raw, sizeof(raw));
 
-      fitTextToWidth(raw, lines[i], sizeof(lines[i]), maxTextW, FONT_B9);
+      fitTextToWidth(raw, lines[i], sizeof(lines[i]), maxTextW, listFont);
 
-      int w = textWidth(lines[i], FONT_B9);
+      int w = textWidth(lines[i], listFont);
       if (w > longestW) longestW = w;
     }
 
@@ -691,12 +638,12 @@ static void drawGroceryColumns(const Cell& c, int contentTop, int maxVisibleItem
 
       int16_t tx1, ty1;
       uint16_t tw, th;
-      measureText(lines[i], FONT_B9, tx1, ty1, tw, th);
+      measureText(lines[i], listFont, tx1, ty1, tw, th);
 
       int baseline = centerY - (int)th / 2 - ty1;
 
-      d.fillCircle(textX - gap - dotR, centerY, dotR, ink);
-      drawLeft(textX, baseline, lines[i], FONT_B9, ink);
+      if (visibleCount >= 2) groceriesNewsDiamond(textX - gap - dotR, centerY);
+      drawLeft(textX, baseline, lines[i], listFont, ink);
     }
   }
 
@@ -950,7 +897,7 @@ static void drawRunningLowList(const Cell& left, int leftTop) {
 
     int baseline = centerY - (int)th / 2 - ty1;
 
-    d.fillCircle(textX - dotGap - dotR, centerY, dotR, ink);
+    if (visibleCount >= 2) groceriesNewsDiamond(textX - dotGap - dotR, centerY);
     drawLeft(textX, baseline, lines[i], FONT_B9, ink);
   }
 }
@@ -995,7 +942,7 @@ static void drawMealIdeasList(const Cell& right, int rightTop) {
     char recipeFit[72] = {0};
     fitTextToWidth(recipe.name, recipeFit, sizeof(recipeFit), right.w - padX * 2 - 18, FONT_B9);
 
-    d.fillCircle(right.x + padX, y - 5, 3, ink);
+    if (visibleCount >= 2) groceriesNewsDiamond(right.x + padX, y - 5);
     drawLeft(right.x + padX + 14, y, recipeFit, FONT_B9, ink);
 
     y += lineH + 2;
@@ -1123,17 +1070,7 @@ static void adaptiveCenteredLine(int x, int y, int width, const char* value, con
 }
 
 static void adaptiveHeading(int x, int top, int width, int height, const char* value) {
-  if (width < 4 || height < 4) return;
-  char fit[80] = {0};
-  fitTextToWidth(value, fit, sizeof(fit), width, FONT_B12);
-  int16_t x1, y1;
-  uint16_t tw, th;
-  measureText(fit, FONT_B12, x1, y1, tw, th);
-  if (static_cast<int>(tw) > width) return;
-  const int textX = x + (width - static_cast<int>(tw)) / 2 - x1;
-  drawLeft(textX, top + min(height - 4, 18) - y1, fit, FONT_B12, Theme::ink());
-  DisplayCore::get().fillRect(x + (width - static_cast<int>(tw)) / 2,
-                              top + height - 3, tw, 2, Theme::ink());
+  groceriesNewsAdaptiveHeading(x,top,width,height,value);
 }
 
 static void renderAdaptiveGroceries(const Cell& c) {
@@ -1202,35 +1139,23 @@ static void renderAdaptiveGroceries(const Cell& c) {
   capacity = min(12, min(capacity, g_cache.count));
   const int rotation = getRotationStep4h();
   const int perColumn = max(1, (capacity + columns - 1) / columns);
-  for (int i = 0; i < capacity; ++i) {
-    const GroceryItem& item = g_cache.items[wrapIndex(rotation + i, g_cache.count)];
-    int x, y, width;
-    if (layout.horizontal) {
-      x = innerX + groceryW * i / capacity + 4;
-      width = groceryW * (i + 1) / capacity - groceryW * i / capacity - 8;
-      y = listY + min(18, listH / 2);
-      if (i) d.drawFastVLine(innerX + groceryW * i / capacity, listY, max(1, listH - (g_cache.count > capacity ? overflowH : 0)), ink);
+  for (int i=0;i<capacity;++i) {
+    const GroceryItem& item=g_cache.items[wrapIndex(rotation+i,g_cache.count)];
+    int x=innerX,y=listY,width=0,height=rowStep;
+    if(layout.horizontal) {
+      x=innerX+groceryW*i/capacity+4;
+      width=groceryW*(i+1)/capacity-groceryW*i/capacity-8;
+      height=max(1,listH-(g_cache.count>capacity?overflowH:0));
     } else {
-      const int col = i / perColumn, row = i % perColumn;
-      const int columnW = groceryW / columns;
-      x = innerX + col * columnW + 14;
-      width = max(1, columnW - 20);
-      y = listY + row * rowStep + 15;
-      d.fillCircle(x - 8, y - 5, 3, ink);
+      const int col=i/perColumn,row=i%perColumn;
+      const int columnW=groceryW/columns;
+      x=innerX+col*columnW+14;
+      width=max(1,columnW-20);
+      y=listY+row*rowStep;
     }
-    if (layout.horizontal) {
-      char raw[72] = {0};
-      formatItem(item, raw, sizeof(raw));
-      adaptiveCenteredLine(x, y, width, raw, FONT_B12);
-    } else if (item.qty > 1) {
-      char quantity[16] = {0};
-      snprintf(quantity, sizeof(quantity), "%dx", item.qty);
-      const int quantityW = textWidth(quantity, FONT_B9);
-      if (quantityW <= width) {
-        adaptiveLine(x, y, quantityW, quantity, FONT_B9);
-        adaptiveLine(x + quantityW + 6, y, max(1, width - quantityW - 6), item.name, FONT_B9);
-      }
-    } else adaptiveLine(x, y, width, item.name, FONT_B9);
+    char raw[72]={0};
+    formatItem(item,raw,sizeof(raw)); // retain quantities and ordering
+    groceriesNewsItem(raw,x,y,width,height,layout.horizontal,capacity);
   }
   if (g_cache.count > capacity && listH >= overflowH) {
     char more[24] = {0};
