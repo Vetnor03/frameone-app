@@ -33,3 +33,24 @@ def test_preview_has_no_grid_numbers_or_static_bitmap_shortcuts():
     assert "CountdownImages.h" not in MOD
     assert "drawGrid" not in PREVIEW
     assert "drawPixel" not in PREVIEW # no decorative pixels; original GFX fonts only
+
+def test_r2_tiny_card_only_shows_fresh_snow():
+    assert "const bool tiny=area.w<225;" in PREVIEW
+    assert "if(tiny) {" in PREVIEW
+    assert "return skiEditorialMetric(freshNumber,freshCaption,hero,paint);" in PREVIEW
+    assert 'if(!skiEditorialMetric(freshNumber,freshCaption,fresh,paint) ||' in PREVIEW
+
+def test_r2_shallow_weather_is_a_measured_vertical_pair():
+    assert "skiEditorialWeatherParts(data,temp,sizeof(temp),wind,sizeof(wind));" in PREVIEW
+    assert "const int weatherH=(bodyH-3)/2;" in PREVIEW
+    assert "bodyY+weatherH+3" in PREVIEW
+
+def test_r2_slim_fact_labels_are_complete_and_source_grounded():
+    assert 'data.norwegian?"Heiser: %d/%d":"Lifts: %d/%d"' in PREVIEW
+    assert 'data.liftsOpen,data.liftsTotal' in PREVIEW
+    assert 'data.norwegian?"Pudderalarm":"Powder alert"' in PREVIEW
+    assert "data.powderLowCm" in PREVIEW
+    assert "data.powderHighCm" in PREVIEW
+    assert "skiEditorialShortDay(data.powderDate,day,sizeof(day));" in PREVIEW
+    assert "skiEditorialExact(facts[i],row,true,paint)" in PREVIEW
+    assert "if(!tw || !th || (int)tw>r.w-4 || (int)th>r.h-2)continue;" in PREVIEW
