@@ -441,7 +441,8 @@ static bool renderEditorialCountdown(const Cell& c) {
   // Calendar (if present) and primary event still have priority.
   if (eventCount>0 && !sideList && !calendarRect.w &&
       heroRect.w>=290 && heroRect.h>=260) {
-    const int listH=min(156,heroRect.h*35/100);
+    const int listH=min(max(90,heroRect.h-164),
+                       min(178,max(116,heroRect.h*39/100)));
     const int heroH=min(heroRect.h-listH-12,max(142,heroRect.h*57/100));
     const int groupH=heroH+12+listH;
     const int groupY=heroRect.y+max(0,(heroRect.h-groupH)/2);
