@@ -1,0 +1,37 @@
+name: Ski editorial R1 native 1-bit QA
+on:
+  pull_request:
+    paths:
+      - 'frame/src/modules/ModuleSki.cpp'
+      - 'frame/src/modules/SkiEditorialPreview.h'
+      - 'frame/tools/ski_r1_native.py'
+      - 'frame/tests/ski_native/**'
+      - 'frame/platformio.ini'
+      - '.github/workflows/ski-r1-native.yml'
+  workflow_dispatch:
+
+jobs:
+  ski-physical-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Render actual Ski C++ 1-bit glyphs for 16 geometry shapes
+        run: |
+          python -m pip install pillow
+          python frame/tools/ski_r1_native.py --output "${RUNNER_TEMP}/ski-r1-gallery"
+      - name: Archive native contact sheets and 800x480 pixels (unflashed)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ski-r1-native-384-frame-visual-review-unflashed
+          path: ${{ runner.temp }}/ski-r1-gallery/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Compile separate Ski R1 V4 preview (never deployed)
+        run: |
+          python -m pip install platformio==6.1.19
+          pio run -d frame -e alfred_v1_2_ski_r1_preview
