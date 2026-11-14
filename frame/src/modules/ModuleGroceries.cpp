@@ -544,9 +544,12 @@ static void drawGroceryColumns(const Cell& c, int contentTop, int maxVisibleItem
   const int visibleCount = min(g_cache.count, maxVisibleItems);
   const bool hasMore = g_cache.count > visibleCount;
 
-  const int lineH = fontLineHeight(FONT_B9);
-  const int lineGap = 8;
-  const int rowStep = lineH + lineGap;
+  // News uses real DM Sans bitmap glyphs, not the legacy FreeSans list font.
+  // Keep 6 lines per column and the existing source rotation.
+  const GFXfont* listFont=RemindEditorialFonts::dm18();
+  const int lineH=18;
+  const int lineGap=7;
+  const int rowStep=lineH+lineGap;
   const int listTop = contentTop + 6;
   const int rotation = getRotationStep4h();
 
@@ -565,9 +568,9 @@ static void drawGroceryColumns(const Cell& c, int contentTop, int maxVisibleItem
       char raw[72] = {0};
       formatItem(g_cache.items[idx], raw, sizeof(raw));
 
-      fitTextToWidth(raw, lines[i], sizeof(lines[i]), c.w - 52, FONT_B9);
+      fitTextToWidth(raw, lines[i], sizeof(lines[i]), c.w - 52, listFont);
 
-      int w = textWidth(lines[i], FONT_B9);
+      int w = textWidth(lines[i], listFont);
       if (w > longestW) longestW = w;
     }
 
@@ -581,12 +584,12 @@ static void drawGroceryColumns(const Cell& c, int contentTop, int maxVisibleItem
 
       int16_t tx1, ty1;
       uint16_t tw, th;
-      measureText(lines[i], FONT_B9, tx1, ty1, tw, th);
+      measureText(lines[i], listFont, tx1, ty1, tw, th);
 
       int baseline = centerY - (int)th / 2 - ty1;
 
       if (visibleCount >= 2) groceriesNewsDiamond(textX - gap - dotR, centerY);
-      drawLeft(textX, baseline, lines[i], FONT_B9, ink);
+      drawLeft(textX, baseline, lines[i], listFont, ink);
     }
 
     return;
@@ -619,9 +622,9 @@ static void drawGroceryColumns(const Cell& c, int contentTop, int maxVisibleItem
       char raw[72] = {0};
       formatItem(g_cache.items[idx], raw, sizeof(raw));
 
-      fitTextToWidth(raw, lines[i], sizeof(lines[i]), maxTextW, FONT_B9);
+      fitTextToWidth(raw, lines[i], sizeof(lines[i]), maxTextW, listFont);
 
-      int w = textWidth(lines[i], FONT_B9);
+      int w = textWidth(lines[i], listFont);
       if (w > longestW) longestW = w;
     }
 
@@ -635,12 +638,12 @@ static void drawGroceryColumns(const Cell& c, int contentTop, int maxVisibleItem
 
       int16_t tx1, ty1;
       uint16_t tw, th;
-      measureText(lines[i], FONT_B9, tx1, ty1, tw, th);
+      measureText(lines[i], listFont, tx1, ty1, tw, th);
 
       int baseline = centerY - (int)th / 2 - ty1;
 
       if (visibleCount >= 2) groceriesNewsDiamond(textX - gap - dotR, centerY);
-      drawLeft(textX, baseline, lines[i], FONT_B9, ink);
+      drawLeft(textX, baseline, lines[i], listFont, ink);
     }
   }
 
