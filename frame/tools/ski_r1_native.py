@@ -42,9 +42,15 @@ def extract(source:str,name:str)->str:
 def struct(source:str)->str:
     i=source.find("struct SkiCache {")
     if i<0:raise RuntimeError("SkiCache was renamed")
-    j=source.find("};",i)
-    if j<0:raise RuntimeError("SkiCache unterminated")
-    return source[i:j+2]+"\nstatic SkiCache g_cache;\n"
+    opening=source.index("{",i)
+    depth=0
+    for j in range(opening,len(source)):
+        if source[j]=="{":depth+=1
+        elif source[j]=="}":
+            depth-=1
+            if depth==0:
+                return source[i:j+1]+";\nstatic SkiCache g_cache;\n"
+    raise RuntimeError("SkiCache unterminated")
 
 def contact(out:Path,scenario:str,theme:str,rows:list[dict])->None:
     # Full original 1-bit framebuffer source scaled nearest-neighbor for QA.
