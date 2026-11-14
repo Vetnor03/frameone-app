@@ -47,6 +47,10 @@ jobs:
           python-version: "3.12"
       - run: pip install platformio==6.1.19 pytest
       - run: pytest -q frame/tests
+      - name: Native V5 1-bit glyph and out-of-cell QA (all 16, dark/light)
+        run: |
+          python -m pip install Pillow
+          python frame/tools/countdown_r3_native.py --output "$RUNNER_TEMP/countdown-v5-native"
       - run: pio run -v -d frame -e alfred_v1_2
       # TEMP_REFRESH_AUDIT: compile the gated diagnostic code until removal.
       - run: pio run -d frame -e alfred_v1_2_refresh_audit
