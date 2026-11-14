@@ -50,17 +50,85 @@ export function countdownComposition(profile,state){
  return Object.freeze({available:true,family,showTitle:title&&ih>=105,showCount:true,showUnit:true,showTargetDate:date&&ih>=130,upcomingRows:rows,overflow:Math.max(0,events.length-rows),showCalendar:calendarUseful,splitPercent:0})
 }
 
+// Geometry policy: measure compact content groups before positioning them.
+// All positions are relative to the assigned cell: never bleed into adjacent cells.
 export function countdownLayout(profile,c){
- const pad=Math.max(8,Math.min(18,Math.floor(Math.min(profile.width,profile.height)*7/100))),inner={x:pad,y:pad,width:Math.max(1,profile.width-pad*2),height:Math.max(1,profile.height-pad*2)}
+ const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v))
+ const pad=Math.max(8,Math.min(18,Math.floor(Math.min(profile.width,profile.height)*7/100)))
+ const inner={x:pad,y:pad,width:Math.max(1,profile.width-2*pad),height:Math.max(1,profile.height-2*pad)}
  if(!c.available)return Object.freeze({pad,emptyRect:inner,primaryRect:null,heroGroupRect:null,titleRect:null,countRect:null,unitRect:null,targetDateRect:null,upcomingRect:null,upcomingGroupRect:null,upcomingRows:[],calendarRect:null,overflowRect:null})
- let primaryRect={...inner},upcomingRect=null,calendarRect=null,gap=14
- if(c.family==='split-horizontal'){const pw=Math.floor((inner.width-gap)*c.splitPercent/100);primaryRect={x:inner.x,y:inner.y,width:pw,height:inner.height};upcomingRect={x:inner.x+pw+gap,y:inner.y,width:inner.width-pw-gap,height:inner.height}}
- else if(c.upcomingRows||c.showCalendar){const listH=c.upcomingRows?25+c.upcomingRows*28+(c.upcomingRows-1)*4+(c.overflow?18:0):0,calH=c.showCalendar?Math.min(190,Math.floor(inner.height*42/100)):0;primaryRect={x:inner.x,y:inner.y,width:inner.width,height:Math.max(91,inner.height-listH-calH-(listH?gap:0)-(calH?gap:0))};if(listH)upcomingRect={x:inner.x,y:primaryRect.y+primaryRect.height+gap,width:inner.width,height:listH};if(calH)calendarRect={x:inner.x,y:inner.y+inner.height-calH,width:inner.width,height:calH}}
- let titleRect=null,countRect,unitRect,targetDateRect=null,heroGroupRect=primaryRect
- if(c.family==='horizontal'){const dateW=c.showTargetDate?Math.min(150,Math.max(70,Math.floor(primaryRect.width*23/100))):0,titleW=c.showTitle?Math.min(Math.floor(primaryRect.width*38/100),Math.max(70,primaryRect.width-dateW-145)):0,metricX=primaryRect.x+titleW+(titleW?10:0),metricW=primaryRect.width-titleW-(titleW?10:0)-dateW-(dateW?10:0),countW=Math.max(30,Math.floor(metricW*58/100));if(titleW)titleRect={x:primaryRect.x,y:primaryRect.y,width:titleW,height:primaryRect.height};countRect={x:metricX,y:primaryRect.y,width:countW,height:primaryRect.height};unitRect={x:metricX+countW,y:primaryRect.y,width:metricW-countW,height:primaryRect.height};if(dateW)targetDateRect={x:primaryRect.x+primaryRect.width-dateW,y:primaryRect.y,width:dateW,height:primaryRect.height}}
- else{const titleH=c.showTitle?Math.min(38,Math.max(24,Math.floor(primaryRect.height*20/100))):0,dateH=c.showTargetDate?24:0,unitH=22,contentH=titleH+Math.min(88,Math.max(42,primaryRect.height-titleH-unitH-dateH))+unitH+dateH,groupH=(c.family==='stack'?primaryRect.height:Math.min(primaryRect.height-2,Math.max(contentH,primaryRect.height-120)));heroGroupRect=c.family==='stack'?primaryRect:{x:primaryRect.x,y:primaryRect.y+(primaryRect.height-groupH)/2,width:primaryRect.width,height:groupH};if(titleH)titleRect={x:heroGroupRect.x,y:heroGroupRect.y,width:heroGroupRect.width,height:titleH};countRect={x:heroGroupRect.x,y:heroGroupRect.y+titleH,width:heroGroupRect.width,height:Math.max(30,heroGroupRect.height-titleH-unitH-dateH)};unitRect={x:heroGroupRect.x,y:countRect.y+countRect.height,width:heroGroupRect.width,height:unitH};if(dateH)targetDateRect={x:heroGroupRect.x,y:unitRect.y+unitRect.height,width:heroGroupRect.width,height:dateH}}
- let upcomingGroupRect=null,overflowRect=null;const upcomingRows=[]
- if(upcomingRect){const footerH=c.overflow?18:0,rowH=Math.min(34,Math.max(1,Math.floor((upcomingRect.height-27-5-4*(c.upcomingRows-1))/c.upcomingRows)),Math.max(28,upcomingRect.width*.085)),groupH=27+5+c.upcomingRows*rowH+(c.upcomingRows-1)*4,groupY=c.family==='split-horizontal'?upcomingRect.y+(upcomingRect.height-groupH)/2:upcomingRect.y;upcomingGroupRect={x:upcomingRect.x,y:groupY,width:upcomingRect.width,height:groupH};for(let i=0;i<c.upcomingRows;i++){const rowRect={x:upcomingRect.x,y:groupY+32+i*(rowH+4),width:upcomingRect.width,height:rowH},metricW=Math.min(120,Math.max(62,Math.floor(rowRect.width*30/100)));upcomingRows.push(Object.freeze({rowRect,titleRect:{x:rowRect.x,y:rowRect.y,width:rowRect.width-metricW-10,height:rowH},metricRect:{x:rowRect.x+rowRect.width-metricW,y:rowRect.y,width:metricW,height:rowH}}))}if(footerH)overflowRect={x:upcomingRect.x,y:upcomingRect.y+upcomingRect.height-footerH,width:upcomingRect.width,height:footerH}}
+ const gap=clamp(Math.round(Math.min(inner.width,inner.height)*.06),8,14)
+ let primaryRect={...inner},upcomingRect=null,calendarRect=null
+ if(c.family==='split-horizontal'){
+  const pw=Math.floor((inner.width-gap)*c.splitPercent/100)
+  primaryRect={x:inner.x,y:inner.y,width:pw,height:inner.height}
+  upcomingRect={x:inner.x+pw+gap,y:inner.y,width:inner.width-pw-gap,height:inner.height}
+ }else if(c.upcomingRows||c.showCalendar){
+  const listH=c.upcomingRows?25+c.upcomingRows*28+(c.upcomingRows-1)*4+(c.overflow?18:0):0
+  const calH=c.showCalendar?Math.min(190,Math.floor(inner.height*.42)):0
+  primaryRect={x:inner.x,y:inner.y,width:inner.width,height:Math.max(91,inner.height-listH-calH-(listH?gap:0)-(calH?gap:0))}
+  if(listH)upcomingRect={x:inner.x,y:primaryRect.y+primaryRect.height+gap,width:inner.width,height:listH}
+  if(calH)calendarRect={x:inner.x,y:inner.y+inner.height-calH,width:inner.width,height:calH}
+ }
+ let titleRect=null,countRect=null,unitRect=null,targetDateRect=null,heroGroupRect=null
+ if(c.family==='horizontal'){
+  // Treat label, value and date as one measured phrase; never pin the date to the right edge.
+  const dateW=c.showTargetDate?clamp(Math.floor(primaryRect.width*.19),60,112):0
+  const titleW=c.showTitle?clamp(Math.floor(primaryRect.width*.30),70,160):0
+  const separators=(titleW?gap:0)+(dateW?gap:0)
+  const metricW=Math.max(54,Math.min(200,primaryRect.width-titleW-dateW-separators))
+  const groupW=Math.min(primaryRect.width,titleW+dateW+metricW+separators)
+  const groupX=primaryRect.x+Math.floor((primaryRect.width-groupW)/2)
+  heroGroupRect={x:groupX,y:primaryRect.y,width:groupW,height:primaryRect.height}
+  let cursor=groupX
+  if(titleW){titleRect={x:cursor,y:primaryRect.y,width:titleW,height:primaryRect.height};cursor+=titleW+gap}
+  const countW=Math.max(30,Math.floor(metricW*.58))
+  countRect={x:cursor,y:primaryRect.y,width:countW,height:primaryRect.height}
+  unitRect={x:cursor+countW,y:primaryRect.y,width:metricW-countW,height:primaryRect.height}
+  cursor+=metricW
+  if(dateW)targetDateRect={x:cursor+gap,y:primaryRect.y,width:dateW,height:primaryRect.height}
+ }else{
+  // Keep the complete hero together. Extra height is outer breathing room, not internal gaps.
+  const titleH=c.showTitle?clamp(Math.round(primaryRect.height*.14),22,38):0
+  const dateH=c.showTargetDate?22:0
+  const unitH=20
+  const countH=clamp(Math.round(primaryRect.height*.30),34,88)
+  const innerGap=clamp(Math.round(primaryRect.height*.025),3,10)
+  const groupH=Math.min(primaryRect.height,titleH+countH+unitH+dateH+innerGap*(Number(!!titleH)+Number(!!dateH)))
+  const groupW=Math.min(primaryRect.width,Math.max(90,Math.floor(primaryRect.width*.84)),380)
+  const groupX=primaryRect.x+Math.floor((primaryRect.width-groupW)/2)
+  const groupY=primaryRect.y+Math.floor((primaryRect.height-groupH)/2)
+  heroGroupRect={x:groupX,y:groupY,width:groupW,height:groupH}
+  let cursor=groupY
+  if(titleH){titleRect={x:groupX,y:cursor,width:groupW,height:titleH};cursor+=titleH+innerGap}
+  countRect={x:groupX,y:cursor,width:groupW,height:countH};cursor+=countH
+  unitRect={x:groupX,y:cursor,width:groupW,height:unitH};cursor+=unitH
+  if(dateH)targetDateRect={x:groupX,y:cursor+innerGap,width:groupW,height:dateH}
+ }
+ const upcomingRows=[]
+ let upcomingGroupRect=null,overflowRect=null
+ if(upcomingRect&&c.upcomingRows){
+  const footerH=c.overflow?18:0
+  const rowH=clamp(Math.floor((upcomingRect.height-32-footerH-4*(c.upcomingRows-1))/c.upcomingRows),16,34)
+  const groupH=32+c.upcomingRows*rowH+4*(c.upcomingRows-1)
+  const maxRowsWidth=Math.min(upcomingRect.width,420)
+  const groupW=c.family==='split-horizontal'?upcomingRect.width:Math.min(maxRowsWidth,Math.max(130,Math.round(upcomingRect.width*.84)))
+  const groupX=upcomingRect.x+Math.floor((upcomingRect.width-groupW)/2)
+  const groupY=upcomingRect.y+Math.max(0,Math.floor((upcomingRect.height-footerH-groupH)/2))
+  upcomingGroupRect={x:groupX,y:groupY,width:groupW,height:Math.min(groupH,upcomingRect.height-footerH)}
+  for(let i=0;i<c.upcomingRows;i++){
+   const rowY=groupY+32+i*(rowH+4)
+   const rowRect={x:groupX,y:rowY,width:groupW,height:rowH}
+   // The right-side metric belongs to its label. Use a compact central pair, not opposite edges.
+   const pairW=Math.min(groupW,Math.max(125,Math.round(groupW*.79)))
+   const titleW=Math.max(54,Math.floor(pairW*.67))
+   const metricW=pairW-titleW-8
+   const pairX=groupX+Math.floor((groupW-pairW)/2)
+   upcomingRows.push(Object.freeze({rowRect,titleRect:{x:pairX,y:rowY,width:titleW,height:rowH},metricRect:{x:pairX+titleW+8,y:rowY,width:metricW,height:rowH}}))
+  }
+  if(footerH)overflowRect={x:groupX,y:upcomingRect.y+upcomingRect.height-footerH,width:groupW,height:footerH}
+ }
  return Object.freeze({pad,emptyRect:null,primaryRect,heroGroupRect,titleRect,countRect,unitRect,targetDateRect,upcomingRect,upcomingGroupRect,upcomingRows:Object.freeze(upcomingRows),calendarRect,overflowRect})
 }
+
 export function fitCountdownStructuredText(value,width,height,measure,{maxFont=16,minFont=9}={}){if(!value||width<=0||height<=0)return null;for(let size=Math.floor(maxFont);size>=Math.ceil(minFont);size--)if(size<=height&&measure(value,size)<=width)return Object.freeze({text:value,fontSize:size});return null}
