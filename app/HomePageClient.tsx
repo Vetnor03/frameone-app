@@ -28,9 +28,8 @@ import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationStatusLabe
 import WasteSetupModal from './components/WasteSetupModal'
 import NewsModuleSettingsTab from './components/NewsModuleSettingsTab'
 import { wasteCollectionDisplayTitle } from './lib/integrations/waste/display'
-import { hasChosenWeatherLocation, norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders, OSLO_WEATHER } from './lib/onboardingDefaults'
+import { hasChosenWeatherLocation, norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders } from './lib/onboardingDefaults'
 import { firstReminderOccurrenceDate, nextReminderOccurrenceDate as nextReminderOccurrenceDateShared, normalizeRepeatWeekdays } from './lib/reminders/recurrence'
-import { CUSTOM_SETUP_MODULES, starterCustomCells, validateCustomSetup } from './lib/onboardingCustomSetup.mjs'
 import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
 import { deriveDynamicModuleKeys } from './lib/dynamicModuleTabs.mjs'
 import { initializeProductAnalytics, trackProductEvent } from './lib/productAnalytics.mjs'
@@ -57,8 +56,7 @@ type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'ski' | 'reminders'
 type CellSize = 'small' | 'medium' | 'large'
 type LayoutKey = 'default' | 'pyramid' | 'square' | 'full'
 type TabKey = CoreTabKey | ModuleKey
-type SetupPurpose = 'normal' | 'custom'
-type FrameSetupSelection = { purpose: SetupPurpose; modules: NonNullable<SettingsJson['modules']>; customLayout?: LayoutKey; customCells?: Record<number, ModuleKey | null> }
+type FrameSetupSelection = { modules: NonNullable<SettingsJson['modules']> }
 
 // Release visibility switches. Keep the underlying implementation/data intact so
 // these features can be re-enabled without rebuilding them.
@@ -2423,41 +2421,15 @@ export default function HomePage() {
     let nextModules = { ...modulesJson, ...selection.modules }
     let nextPinnedTabs: ModuleKey[] = []
 
-    if (selection.purpose === 'custom') {
-      const checked = validateCustomSetup(selection.customLayout, selection.customCells, hasChosenWeatherLocation(nextModules.weather?.[0]))
-      if (!checked.valid || !checked.cells) {
-        const explanation = checked.reason === 'weather_location'
-          ? (language === 'no' ? 'Velg et sted for Vær før du fullfører.' : 'Choose a Weather location before finishing.')
-          : (language === 'no' ? 'Velg minst én modul og kontroller oppsettet.' : 'Choose at least one module and check your layout.')
-        throw new Error(explanation)
-      }
-      nextLayout = selection.customLayout!
-      nextCellsByLayout = { ...makeEmptyCellsByLayout(), [nextLayout]: checked.cells as Record<number, ModuleKey | null> }
-      // Do not assign default Oslo weather to a frame that has no Weather slot.
-      if (!checked.weatherSelected) delete nextModules.weather
-      if (checked.newsSelected) {
-        const news = nextModules.news && typeof nextModules.news === 'object' && !Array.isArray(nextModules.news) ? nextModules.news : {}
-        nextModules.news = { ...news, feed: news.feed === 'latest' ? 'latest' : 'top' }
-      }
+    // Every first-time frame starts with a usable layout; customization happens later in the app.
+    if (!hasChosenWeatherLocation(nextModules.weather?.[0])) {
+      throw new Error(language === 'no' ? 'Velg et sted for værmeldingen før du fullfører.' : 'Choose a weather location before finishing setup.')
     }
-
-    if (selection.purpose === 'normal') {
-      // A skipped location must not silently configure Oslo for a pilot frame.
-      if (!hasChosenWeatherLocation(nextModules.weather?.[0])) {
-        throw new Error(language === 'no' ? 'Velg et sted for værmeldingen før du fullfører.' : 'Choose a weather location before finishing setup.')
-      }
-      nextLayout = 'pyramid'
-      const presetCells: Record<number, ModuleKey | null> = { 0: 'date', 1: 'reminders', 2: 'weather', 3: 'news' }
-      nextCellsByLayout = { ...makeEmptyCellsByLayout(), pyramid: presetCells }
-      // Normal setup uses curated NRK Toppsaker unless Latest News was chosen.
-      const savedNews = nextModules.news && typeof nextModules.news === 'object' && !Array.isArray(nextModules.news) ? nextModules.news : {}
-      // Start Normal frames with NRK Top Stories; users can change this from News settings later.
-      nextModules.news = { ...savedNews, feed: 'top' }
-    }
-
-    if (selection.purpose === 'normal' && (!Array.isArray(nextModules.weather) || !nextModules.weather.length)) {
-      nextModules.weather = [{ ...OSLO_WEATHER }]
-    }
+    nextLayout = 'pyramid'
+    const presetCells: Record<number, ModuleKey | null> = { 0: 'date', 1: 'reminders', 2: 'weather', 3: 'news' }
+    nextCellsByLayout = { ...makeEmptyCellsByLayout(), pyramid: presetCells }
+    const savedNews = nextModules.news && typeof nextModules.news === 'object' && !Array.isArray(nextModules.news) ? nextModules.news : {}
+    nextModules.news = { ...savedNews, feed: 'top' }
 
     nextModules = normalizeModulesForSave(nextModules)
     const currentCellsForLayout = nextCellsByLayout[nextLayout] || emptyCellsFor(nextLayout)
@@ -9619,163 +9591,77 @@ function FrameSetupFlow({
   activeDeviceId: string
   onComplete: (selection: FrameSetupSelection) => Promise<void>
 }) {
-  const guidedModules = ['weather'] as const
-  const savedDraft = typeof window === 'undefined' ? null : (() => { try { return JSON.parse(sessionStorage.getItem(`remind:onboarding:${activeDeviceId}`) || 'null') } catch { return null } })()
-  const [step, setStep] = useState<'purpose' | 'guided' | 'custom' | 'connect'>(
-    savedDraft?.step === 'guided' || savedDraft?.step === 'custom' || savedDraft?.step === 'connect' ? savedDraft.step : 'purpose',
+  // Resume the same weather/Connect page after OAuth redirects or a reload.
+  // Legacy Normal/Custom drafts enter the new streamlined flow safely.
+  const savedDraft = typeof window === 'undefined' ? null : (() => {
+    try { return JSON.parse(sessionStorage.getItem(`remind:onboarding:${activeDeviceId}`) || 'null') }
+    catch { return null }
+  })()
+  const [step, setStep] = useState<'weather' | 'connect'>(() =>
+    savedDraft?.step === 'connect' && hasChosenWeatherLocation(savedDraft?.modules?.weather?.[0]) ? 'connect' : 'weather',
   )
-  const [purpose, setPurpose] = useState<SetupPurpose>(savedDraft?.purpose === 'custom' ? 'custom' : 'normal')
-  const [moduleIndex, setModuleIndex] = useState(Number.isInteger(savedDraft?.moduleIndex) ? Math.max(0, Math.min(guidedModules.length - 1, savedDraft.moduleIndex)) : 0)
-  const [modules, setModules] = useState<Record<string, any>>({ ...(savedDraft?.modules || {}), integration_selection_explicit: true, integrations: { ...(savedDraft?.modules?.integrations || {}) } })
-  const [customLayout, setCustomLayout] = useState<LayoutKey>(() => {
-    const key = savedDraft?.customLayout
-    return key === 'default' || key === 'pyramid' || key === 'square' || key === 'full' ? key : 'pyramid'
-  })
-  const [customCellsByLayout, setCustomCellsByLayout] = useState<Record<LayoutKey, Record<number, ModuleKey | null>>>(() => {
-    const drafts = savedDraft?.customCellsByLayout
-    return Object.fromEntries((['default', 'pyramid', 'square', 'full'] as const).map((key) => {
-      const defaults = starterCustomCells(key) as Record<number, ModuleKey | null>
-      const stored = drafts?.[key]
-      const cells = Object.fromEntries(Object.keys(defaults).map((slot) => {
-        const candidate = stored && Object.prototype.hasOwnProperty.call(stored, slot) ? stored[slot] : defaults[Number(slot)]
-        return [Number(slot), candidate === null || CUSTOM_SETUP_MODULES.includes(candidate) ? candidate : null]
-      }))
-      return [key, cells]
-    })) as Record<LayoutKey, Record<number, ModuleKey | null>>
+  const [modules, setModules] = useState<Record<string, any>>({
+    ...(savedDraft?.modules || {}),
+    integration_selection_explicit: true,
+    integrations: { ...(savedDraft?.modules?.integrations || {}) },
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Do not finalize a new frame before provider status and any OAuth return
-  // have populated the selected integrations in this onboarding draft.
+  // OAuth/provider discovery must finish before the first frame configuration is committed.
   const [connectionsChecking, setConnectionsChecking] = useState(true)
   const isNo = language === 'no'
-  const current = guidedModules[moduleIndex]
   const weatherLocationChosen = hasChosenWeatherLocation(modules.weather?.[0])
-  const customCells = customCellsByLayout[customLayout]
-  const customModules = Object.values(customCells).filter((module): module is ModuleKey => module !== null)
-  const customWeatherSelected = customModules.includes('weather')
-  const customNewsSelected = customModules.includes('news')
-  const customSelection = validateCustomSetup(customLayout, customCells, weatherLocationChosen)
-  const connectedAppCount = Object.values(modules.integrations || {}).filter((config) => config && typeof config === 'object' && (config as Record<string, unknown>).enabled === true).length
-  const progressTotal = purpose === 'normal' ? guidedModules.length + 1 : 2
-  const progressCurrent = step === 'connect' ? progressTotal : step === 'custom' ? 1 : moduleIndex + 1
-
-  function chooseCustomModule(slot: number, module: string) {
-    if (saving || !(slot in customCells)) return
-    const next = module && CUSTOM_SETUP_MODULES.includes(module) ? module as ModuleKey : null
-    setCustomCellsByLayout((layouts) => ({
-      ...layouts,
-      [customLayout]: { ...layouts[customLayout], [slot]: next },
-    }))
-    setError(null)
-  }
+  const connectedAppCount = Object.values(modules.integrations || {})
+    .filter((config) => config && typeof config === 'object' && (config as Record<string, unknown>).enabled === true).length
 
   useEffect(() => {
-    sessionStorage.setItem(`remind:onboarding:${activeDeviceId}`, JSON.stringify({ step, purpose, moduleIndex, modules, customLayout, customCellsByLayout }))
-  }, [activeDeviceId, step, purpose, moduleIndex, modules, customLayout, customCellsByLayout])
+    sessionStorage.setItem(`remind:onboarding:${activeDeviceId}`, JSON.stringify({ step, modules }))
+  }, [activeDeviceId, step, modules])
 
   function selectIntegration(key: ConnectAppKey, config: Record<string, unknown> = { enabled: true }) {
-    setModules(value => ({ ...value, integration_selection_explicit: true, integrations: { ...(value.integrations || {}), [key]: config } }))
+    setModules((value) => ({
+      ...value,
+      integration_selection_explicit: true,
+      integrations: { ...(value.integrations || {}), [key]: config },
+    }))
   }
 
-  async function finish(selectedPurpose: SetupPurpose) {
-    if (saving) return
+  async function finish() {
+    if (saving || connectionsChecking) return
     try {
       setSaving(true)
       setError(null)
-      await onComplete(selectedPurpose === 'custom'
-        ? { purpose: 'custom', modules, customLayout, customCells }
-        : { purpose: selectedPurpose, modules })
+      await onComplete({ modules })
     } catch (reason) {
       console.error('Initial frame setup failed', reason)
       setError(errorMessage(reason, isNo ? 'Kunne ikke fullføre oppsettet. Prøv igjen.' : 'Could not finish setup. Please try again.'))
-    } finally { setSaving(false) }
-  }
-
-  async function advance() {
-    if (current === 'weather' && !weatherLocationChosen) {
-      setError(isNo ? 'Velg et sted for værmeldingen før du fortsetter.' : 'Choose a weather location before continuing.')
-      return
+    } finally {
+      setSaving(false)
     }
-    setError(null)
-    if (moduleIndex < guidedModules.length - 1) { setModuleIndex(index => index + 1); return }
-    setStep('connect')
   }
 
-  function goBack() {
-    if (saving) return
-    setError(null)
-    if (step === 'connect') {
-      if (purpose === 'custom') setStep('custom')
-      else { setModuleIndex(guidedModules.length - 1); setStep('guided') }
-    } else if (step === 'custom') setStep('purpose')
-    else if (step === 'guided' && moduleIndex > 0) setModuleIndex(index => index - 1)
-    else if (step === 'guided') setStep('purpose')
-  }
-
-  const shell = (children: React.ReactNode, showProgress = false) => <div className="absolute inset-0 z-40 flex items-center justify-center px-3 text-[color:var(--fg)]" style={{ background: 'radial-gradient(circle at top, rgba(42,163,255,0.12), transparent 34%), var(--app-bg)' }}>
-    <div className="flex max-h-[94vh] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] shadow-[0_28px_90px_rgba(0,0,0,0.22)]">
-      <div className="border-b border-[color:var(--bd-10)] px-5 py-4"><div className="flex items-center justify-between"><button type="button" disabled={step === 'purpose' || saving} onClick={goBack} className="text-xs uppercase tracking-widest disabled:opacity-30">← {isNo ? 'Tilbake' : 'Back'}</button>{showProgress && <span className="text-xs text-[color:var(--fg-50)]">{progressCurrent} / {progressTotal}</span>}</div>{showProgress && <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[color:var(--bd-10)]"><div className="h-full rounded-full bg-[#2aa3ff]" style={{ width: `${(progressCurrent / progressTotal) * 100}%` }} /></div>}</div>
-      <div className="overflow-y-auto p-6">{children}</div>
+  const shell = (children: React.ReactNode) => (
+    <div className="absolute inset-0 z-40 flex items-center justify-center px-3 text-[color:var(--fg)]" style={{ background: 'radial-gradient(circle at top, rgba(42,163,255,0.12), transparent 34%), var(--app-bg)' }}>
+      <div className="flex max-h-[94vh] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] shadow-[0_28px_90px_rgba(0,0,0,0.22)]">
+        <div className="border-b border-[color:var(--bd-10)] px-5 py-4">
+          <div className="flex items-center justify-between">
+            <button type="button" disabled={step === 'weather' || saving} onClick={() => { setError(null); setStep('weather') }} className="text-xs uppercase tracking-widest disabled:opacity-30">← {isNo ? 'Tilbake' : 'Back'}</button>
+            <span className="text-xs text-[color:var(--fg-50)]">{step === 'weather' ? 1 : 2} / 2</span>
+          </div>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[color:var(--bd-10)]">
+            <div className="h-full rounded-full bg-[#2aa3ff]" style={{ width: step === 'weather' ? '50%' : '100%' }} />
+          </div>
+        </div>
+        <div className="overflow-y-auto p-6">{children}</div>
+      </div>
     </div>
-  </div>
+  )
 
-  if (step === 'purpose') {
-    const setupPurposes: SetupPurpose[] = ['normal', 'custom']
-    return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{isNo ? 'Førstegangsoppsett' : 'First-time setup'}</div><h1 className="mt-3 text-2xl font-medium">{isNo ? 'Velg oppsett' : 'Choose your setup'}</h1><div className="mt-6 space-y-3">{setupPurposes.map(key => <button key={key} type="button" aria-pressed={purpose === key} onClick={() => setPurpose(key)} className={`w-full rounded-2xl border px-4 py-4 text-left ${purpose === key ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-15)]'}`}><span className="flex items-center justify-between text-sm uppercase tracking-[0.18em]"><span>{key === 'normal' ? 'Normal' : 'Custom'}</span>{key === 'normal' && <span className="text-[10px] font-normal normal-case tracking-normal text-[color:var(--fg-60)]">{isNo ? 'Anbefalt' : 'Recommended'}</span>}</span><span className="mt-2 block text-xs normal-case leading-5 tracking-normal text-[color:var(--fg-55)]">{key === 'normal' ? (isNo ? 'Dato, Påminnelser, Vær og Nyheter.' : 'Date, Reminders, Weather, and News.') : (isNo ? 'Velg egne moduler og layout.' : 'Choose your own modules and layout.')}</span></button>)}</div><button onClick={() => { setError(null); if (purpose === 'normal') { setModuleIndex(0); setStep('guided') } else setStep('custom') }} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white">{isNo ? 'Fortsett' : 'Continue'}</button></>)
-  }
-
-  if (step === 'custom') return shell(<>
+  if (step === 'weather') return shell(<>
     <div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div>
-    <h1 className="mt-3 text-2xl font-medium">Custom</h1>
-    <p className="mt-2 text-sm leading-5 text-[color:var(--fg-65)]">{isNo ? 'Velg layout og moduler før rammen oppdateres første gang.' : 'Choose your layout and modules before the frame’s first update.'}</p>
-
-    <div className="mt-5 text-xs uppercase tracking-widest text-[color:var(--fg-60)]">{isNo ? 'Layout' : 'Layout'}</div>
-    <div className="mt-2 grid grid-cols-2 gap-2">
-      {allLayouts(language).map((option) => <button
-        key={option.key}
-        type="button"
-        disabled={saving}
-        aria-pressed={customLayout === option.key}
-        onClick={() => { setCustomLayout(option.key); setError(null) }}
-        className={`rounded-xl border px-3 py-3 text-left disabled:opacity-50 ${customLayout === option.key ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-15)]'}`}
-      ><div className="text-sm font-medium">{option.title}</div><div className="mt-1 text-[11px] text-[color:var(--fg-55)]">{option.subtitle}</div></button>)}
-    </div>
-
-    <div className="mt-4 text-xs text-[color:var(--fg-60)]">{isNo ? 'Trykk på et felt for å velge modul.' : 'Tap a frame section to choose its module.'}</div>
-    <div className="mt-2 h-[180px] overflow-hidden rounded-2xl border border-[color:var(--bd-15)] p-2">
-      <FrameLayoutRenderer
-        layoutKey={customLayout}
-        cells={customCells}
-        language={language}
-        onCellTap={(slot) => document.getElementById(`custom-onboarding-slot-${slot}`)?.focus()}
-      />
-    </div>
-
-    <div className="mt-4 space-y-2">
-      {Object.keys(customCells).map((slot) => {
-        const slotIndex = Number(slot)
-        return <label key={slot} className="flex items-center gap-3">
-          <span className="w-16 shrink-0 text-xs text-[color:var(--fg-60)]">{isNo ? 'Felt' : 'Slot'} {slotIndex + 1}</span>
-          <select
-            id={`custom-onboarding-slot-${slotIndex}`}
-            aria-label={isNo ? `Modul for felt ${slotIndex + 1}` : `Module for slot ${slotIndex + 1}`}
-            value={customCells[slotIndex] ?? ''}
-            disabled={saving}
-            onChange={(event) => chooseCustomModule(slotIndex, event.target.value)}
-            className="min-w-0 flex-1 rounded-xl border border-[color:var(--bd-20)] bg-[color:var(--app-bg)] px-3 py-2.5 text-sm text-[color:var(--fg)]"
-          >
-            <option value="">{isNo ? 'Tomt felt' : 'Empty slot'}</option>
-            {CUSTOM_SETUP_MODULES.filter((key): key is ModuleKey => isModuleKey(key)).map((key) =>
-              <option key={key} value={key} disabled={customModules.includes(key) && customCells[slotIndex] !== key}>{moduleLabel(language, key)}</option>
-            )}
-          </select>
-        </label>
-      })}
-    </div>
-
-    {customWeatherSelected && <div className="mt-5">
-      <div className="mb-2 text-sm text-[color:var(--fg-70)]">{isNo ? 'Sted for værmeldingen' : 'Weather location'}</div>
+    <h1 className="mt-3 text-2xl font-medium">{isNo ? 'Vær' : 'Weather'}</h1>
+    <div className="mt-6">
+      <div className="mb-3 text-sm text-[color:var(--fg-65)]">{isNo ? 'Velg stedet der rammen skal stå.' : 'Choose the location where your frame will be used.'}</div>
       <WeatherLocationRow
         language={language}
         id={1}
@@ -9783,33 +9669,18 @@ function FrameSetupFlow({
         label={modules.weather?.[0]?.label || (isNo ? 'Velg sted' : 'Select location')}
         cfg={modules.weather?.[0] || null}
         showDetails={false}
-        onPicked={(picked) => { setError(null); setModules((value) => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] })) }}
+        onPicked={(picked) => {
+          setError(null)
+          setModules((value) => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))
+        }}
       />
-      {!weatherLocationChosen && <p className="mt-2 text-xs text-[color:var(--fg-60)]">{isNo ? 'Velg et sted før du fullfører.' : 'Choose a location before finishing.'}</p>}
-    </div>}
-
-    {customNewsSelected && <div className="mt-5">
-      <div className="mb-2 text-sm text-[color:var(--fg-70)]">{isNo ? 'Nyheter fra NRK' : 'News from NRK'}</div>
-      <div className="grid grid-cols-2 gap-2">
-        {(['top', 'latest'] as const).map((feed) =>
-          <button key={feed} type="button" disabled={saving} aria-pressed={(modules.news?.feed === 'latest' ? 'latest' : 'top') === feed}
-            onClick={() => setModules((value) => ({ ...value, news: { ...(value.news || {}), feed } }))}
-            className={`rounded-xl border px-2 py-3 text-xs ${(modules.news?.feed === 'latest' ? 'latest' : 'top') === feed ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-15)]'}`}
-          >{feed === 'top' ? (isNo ? 'Toppsaker' : 'Top Stories') : (isNo ? 'Siste nytt' : 'Latest News')}</button>
-        )}
-      </div>
-    </div>}
-
-    {customModules.some((module) => ['surf', 'stocks', 'soccer', 'ski'].includes(module)) &&
-      <p className="mt-4 text-xs leading-5 text-[color:var(--fg-55)]">{isNo ? 'Sport og investeringer kan trenge flere innstillinger etter oppsettet.' : 'Sports and investments may need additional configuration after setup.'}</p>}
-    {customSelection.reason === 'no_modules' && <p className="mt-4 text-xs text-[color:var(--fg-60)]">{isNo ? 'Velg minst én modul.' : 'Select at least one module.'}</p>}
+      {!weatherLocationChosen && <p className="mt-3 text-xs leading-5 text-[color:var(--fg-60)]">{isNo ? 'Velg et sted for å få riktig værmelding. Dette kan endres senere.' : 'Choose a location for an accurate forecast. You can change it later.'}</p>}
+    </div>
     {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}
-    <button onClick={() => { if (customSelection.valid) { setError(null); setStep('connect') } }} disabled={saving || !customSelection.valid} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">
-      {isNo ? 'Neste: Koble til apper' : 'Next: Connect Apps'}
-    </button>
-  </>, true)
+    <button onClick={() => { if (weatherLocationChosen) { setError(null); setStep('connect') } }} disabled={saving || !weatherLocationChosen} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{isNo ? 'Neste' : 'Next'}</button>
+  </>)
 
-  if (step === 'connect') return shell(<>
+  return shell(<>
     <div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div>
     <div className="mt-3 flex items-center gap-2">
       <h1 className="text-2xl font-medium">{isNo ? 'Koble til apper' : 'Connect Apps'}</h1>
@@ -9818,11 +9689,6 @@ function FrameSetupFlow({
     <p className="mt-2 text-sm leading-5 text-[color:var(--fg-65)]">
       {isNo ? 'Koble til tjenestene du bruker, så dukker informasjonen deres opp automatisk i RE:MIND. Du kan gjøre dette senere også.' : 'Connect services you use to bring their information into RE:MIND automatically. You can always do this later.'}
     </p>
-    {purpose === 'custom' && !customModules.includes('reminders') && (
-      <p role="note" className="mt-3 text-xs leading-5 text-[color:var(--fg-60)]">
-        {isNo ? 'Legg til Påminnelser-modulen senere hvis du vil vise tilkoblede påminnelser på rammen.' : 'Add the Reminders module later to display connected reminders on your frame.'}
-      </p>
-    )}
     <div className="mt-4 h-[min(430px,43vh)] min-h-[180px]">
       <ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup onIntegrationChanged={selectIntegration} onOnboardingConnectionCheckChange={setConnectionsChecking} />
     </div>
@@ -9830,17 +9696,13 @@ function FrameSetupFlow({
       {connectedAppCount > 0 ? (isNo ? `${connectedAppCount} tjeneste${connectedAppCount === 1 ? '' : 'r'} valgt` : `${connectedAppCount} service${connectedAppCount === 1 ? '' : 's'} connected`) : (isNo ? 'Ingen tilkoblinger kreves for å komme i gang.' : 'No connections are required to get started.')}
     </p>
     {error && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{error}</p>}
-    <button onClick={() => finish(purpose)} disabled={saving || connectionsChecking} className="mt-4 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.15em] text-white disabled:opacity-50">
+    <button onClick={finish} disabled={saving || connectionsChecking} className="mt-4 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.15em] text-white disabled:opacity-50">
       {saving ? (isNo ? 'Lagrer…' : 'Saving…') : connectionsChecking ? (isNo ? 'Sjekker tilkoblinger…' : 'Checking connections…') : connectedAppCount ? (isNo ? 'Fullfør oppsettet' : 'Finish setup') : (isNo ? 'Hopp over og fullfør' : 'Skip for now & finish')}
     </button>
     <p className="mt-3 text-center text-[11px] leading-4 text-[color:var(--fg-50)]">{isNo ? 'Du finner alltid tilkoblingene under Connect senere.' : 'You can manage your connections anytime from Connect.'}</p>
-  </>, true)
-
-  return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">{current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nyheter' : 'News')}</h1>
-    {current === 'weather' && <div className="mt-6"><div className="mb-3 text-sm text-[color:var(--fg-65)]">{isNo ? 'Velg stedet der rammen skal stå.' : 'Choose the location where your frame will be used.'}</div><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Velg sted' : 'Select location')} cfg={modules.weather?.[0] || null} showDetails={false} onPicked={(picked) => { setError(null); setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] })) }} />{!weatherLocationChosen && <p className="mt-3 text-xs leading-5 text-[color:var(--fg-60)]">{isNo ? 'Velg et sted for å få riktig værmelding. Dette kan endres senere.' : 'Choose a location for an accurate forecast. You can change it later.'}</p>}</div>}
-    {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={advance} disabled={saving || (current === 'weather' && !weatherLocationChosen)} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : (isNo ? 'Neste' : 'Next')}</button>
-  </>, true)
+  </>)
 }
+
 function FirstFrameOnboarding({
   language,
   frames,
