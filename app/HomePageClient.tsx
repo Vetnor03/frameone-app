@@ -9827,11 +9827,12 @@ function FrameSetupFlow({
   return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">{current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nyheter' : 'News')}</h1>
     {current === 'weather' && <div className="mt-6"><div className="mb-3 text-sm text-[color:var(--fg-65)]">{isNo ? 'Velg stedet der rammen skal stå.' : 'Choose the location where your frame will be used.'}</div><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Velg sted' : 'Select location')} cfg={modules.weather?.[0] || null} onPicked={(picked) => { setError(null); setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] })) }} />{!weatherLocationChosen && <p className="mt-3 text-xs leading-5 text-[color:var(--fg-60)]">{isNo ? 'Velg et sted for å få riktig værmelding. Dette kan endres senere.' : 'Choose a location for an accurate forecast. You can change it later.'}</p>}</div>}
     {current === 'news' && <div className="mt-4 h-[min(450px,52vh)]"><NewsModuleSettingsTab
+      hideHeading
       language={language}
       feed={modules.news?.feed === 'latest' ? 'latest' : 'top'}
       onFeedChange={(feed) => setModules(value => ({ ...value, news: { ...(value.news || {}), feed } }))}
     /></div>}
-    {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={advance} disabled={saving || (current === 'weather' && !weatherLocationChosen)} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : moduleIndex === guidedModules.length - 1 ? (isNo ? 'Fullfør' : 'Finish') : (isNo ? 'Neste' : 'Next')}</button>
+    {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={advance} disabled={saving || (current === 'weather' && !weatherLocationChosen)} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : (isNo ? 'Neste' : 'Next')}</button>
   </>, true)
 }
 function FirstFrameOnboarding({

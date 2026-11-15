@@ -47,3 +47,16 @@ test('Onboarding offers working integrations plus experimental Spond, but hides 
   assert.match(source, /app\.status === 'experimental' && <span/)
   assert.match(source, /\.\.\.dynamicTabs,\s*\{ key: 'connect'/)
 })
+
+
+test('News onboarding uses one heading and Next before Connect Apps', () => {
+  const newsTab = readFileSync(new URL('../app/components/NewsModuleSettingsTab.tsx', import.meta.url), 'utf8')
+  const guided = onboarding.slice(onboarding.lastIndexOf('  return shell(<><div className="text-xs uppercase'))
+  assert.match(guided, /current === 'news'[\s\S]*?<NewsModuleSettingsTab\s+hideHeading/)
+  assert.match(newsTab, /hideHeading\?: boolean/)
+  assert.match(newsTab, /\{!hideHeading && <div[^>]*>\{isNo \? 'NYHETER' : 'NEWS'\}<\/div>\}/)
+  assert.match(guided, /onClick=\{advance\}/)
+  assert.match(onboarding, /setStep\('connect'\)/)
+  assert.match(guided, /saving \? \(isNo \? 'Lagrer…' : 'Saving…'\) : \(isNo \? 'Neste' : 'Next'\)/)
+  assert.doesNotMatch(guided, /moduleIndex === guidedModules\.length - 1 \? \(isNo \? 'Fullfør' : 'Finish'\)/)
+})
