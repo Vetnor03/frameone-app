@@ -35,8 +35,9 @@ test('activity publishing does nothing for other customers and when experiment d
   assert.equal(calls, 0)
 })
 
-test('app activity requests require membership and a single allowlisted frame', () => {
-  assert.match(route, /if \(!mqttEnabledForDevice\(deviceId\)\)/)
+test('app activity requests require membership for allowlisted or auto-eligible frames', () => {
+  assert.match(route, /if \(!mqttEnabledForDevice\(deviceId\) && !ablyAutoConfigured/)
+  assert.match(route, /MQTT_ABLY_AUTO_PAIRED_SINCE/)
   assert.match(route, /authenticateUserForDevice\(req, deviceId\)/)
   assert.match(route, /publishPilotActivity\(deviceId\)/)
   assert.doesNotMatch(route, /request_device_display_revision/)
