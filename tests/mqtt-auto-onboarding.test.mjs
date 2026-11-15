@@ -15,7 +15,7 @@ const enabled = {
   ablyApiKey: key, ablyRootCaPem: ca,
 }
 
-function database({ pairedAt = '2026-11-16T00:01:00.000Z', members = 1, error = false } = {}) {
+function database({ createdAt = '2026-11-16T00:00:30.000Z', pairedAt = '2026-11-16T00:01:00.000Z', members = 1, error = false } = {}) {
   const called = []
   return {
     called,
@@ -23,7 +23,7 @@ function database({ pairedAt = '2026-11-16T00:01:00.000Z', members = 1, error = 
       called.push(table)
       if (table === 'devices') return {
         select: () => ({ eq: () => ({ maybeSingle: async () => ({
-          data: pairedAt === null ? null : { paired_at: pairedAt },
+          data: pairedAt === null ? null : { created_at: createdAt, paired_at: pairedAt },
           error: error ? new Error('database unavailable') : null,
         }) }) }),
       }
@@ -52,14 +52,17 @@ test('automatic MQTT onboarding is explicitly gated and requires valid UTC cutof
   for (const overrides of invalid) assert.equal(ablyAutoConfigured({ ...enabled, ...overrides }), false)
 })
 
-test('only current member frames paired at or after the cutoff become eligible', () => {
-  assert.equal(ablyAutoForPairedDevice('frm_new', since, true, enabled), true)
-  assert.equal(ablyAutoForPairedDevice('frm_new', '2026-11-17T13:00:00Z', true, enabled), true)
-  assert.equal(ablyAutoForPairedDevice('frm_old', '2026-11-15T23:59:59.999Z', true, enabled), false)
-  assert.equal(ablyAutoForPairedDevice('frm_removed', since, false, enabled), false)
-  assert.equal(ablyAutoForPairedDevice('frm_unpaired', null, true, enabled), false)
-  assert.equal(ablyAutoForPairedDevice('bad/#', since, true, enabled), false)
-  assert.equal(ablyAutoForPairedDevice('frm_new', since, true, { ...enabled, ablyAutoEnabled: 'false' }), false)
+test('automatic MQTT only enrolls newly registered AND paired frames, never recycled old frames', () => {
+  assert.equal(ablyAutoForPairedDevice('frm_new', since, since, true, enabled), true)
+  assert.equal(ablyAutoForPairedDevice('frm_new', since, '2026-11-17T13:00:00Z', true, enabled), true)
+  assert.equal(ablyAutoForPairedDevice('frm_old', '2026-11-15T23:59:59.999Z', '2026-11-17T13:00:00Z', true, enabled), false)
+  assert.equal(ablyAutoForPairedDevice('frm_old', since, '2026-11-15T23:59:59.999Z', true, enabled), false)
+  assert.equal(ablyAutoForPairedDevice('frm_removed', since, since, false, enabled), false)
+  assert.equal(ablyAutoForPairedDevice('frm_unpaired', since, null, true, enabled), false)
+  assert.equal(ablyAutoForPairedDevice('frm_no_creation', null, since, true, enabled), false)
+  assert.equal(ablyAutoForPairedDevice('bad/#', since, since, true, enabled), false)
+  assert.equal(ablyAutoForPairedDevice('frm_new', since, since, true, { ...enabled, ablyAutoEnabled: 'false' }), false)
+  assert.equal(ablyAutoForPairedDevice('frm_wrong_order', '2026-11-17T13:00:00Z', since, true, enabled), false)
 })
 
 test('automatic enrollment lookup requires paired_at, live membership and available database', async () => {
@@ -68,6 +71,8 @@ test('automatic enrollment lookup requires paired_at, live membership and availa
   assert.deepEqual(valid.called, ['devices', 'device_members'])
   assert.equal(await isAblyAutoEligibleForDevice('frm_new', enabled, database({ members: 0 })), false)
   assert.equal(await isAblyAutoEligibleForDevice('frm_new', enabled, database({ pairedAt: null })), false)
+  assert.equal(await isAblyAutoEligibleForDevice('frm_new', enabled, database({ createdAt: null })), false)
+  assert.equal(await isAblyAutoEligibleForDevice('frm_new', enabled, database({ createdAt: '2026-10-01T10:00:00Z' })), false)
   assert.equal(await isAblyAutoEligibleForDevice('frm_new', enabled, database({ pairedAt: '2026-11-15T12:00:00Z' })), false)
   assert.equal(await isAblyAutoEligibleForDevice('frm_new', enabled, database({ error: true })), false)
   const disabled = database()
