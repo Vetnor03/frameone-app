@@ -44,15 +44,21 @@ export function ablyAutoConfigured(env: MqttRolloutEnv): boolean {
 
 export function ablyAutoForPairedDevice(
   deviceId: string,
+  createdAt: unknown,
   pairedAt: unknown,
   hasCurrentMember: boolean,
   env: MqttRolloutEnv,
 ): boolean {
+  // A frame that existed before rollout is not a NEW frame merely because
+  // its owner removed and re-paired it after the activation cutoff.
   if (!ablyAutoConfigured(env) || !/^[A-Za-z0-9_-]{1,128}$/.test(deviceId) ||
-      !hasCurrentMember || typeof pairedAt !== 'string') return false
-  const pairedTimestamp = Date.parse(pairedAt)
-  return Number.isFinite(pairedTimestamp) &&
-    pairedTimestamp >= Date.parse(env.ablyAutoPairedSince!)
+      !hasCurrentMember || typeof createdAt !== 'string' ||
+      typeof pairedAt !== 'string') return false
+  const cutoff = Date.parse(env.ablyAutoPairedSince!)
+  const registered = Date.parse(createdAt)
+  const paired = Date.parse(pairedAt)
+  return Number.isFinite(registered) && Number.isFinite(paired) &&
+    registered >= cutoff && paired >= registered && paired >= cutoff
 }
 
 // An explicit five-frame pilot is separate from both the canary and fleet.
