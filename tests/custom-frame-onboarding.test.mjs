@@ -12,7 +12,7 @@ test('customization is available inside the app, not in first-time setup', () =>
   assert.match(home, /onCellTap=\{openPicker\}/)
   assert.match(home, /function openPicker\(slot: number\)/)
   assert.match(home, /function beginCreateLayout\(\)/)
-  assert.match(home, /function beginEditLayout\(\)/)
+  assert.match(home, /function beginEditLayout\(layout:/)
   assert.match(home, /<InlineCustomLayoutEditor/)
   assert.doesNotMatch(onboarding, /setupPurposes|Choose your setup|Velg oppsett|customSelection|<FrameLayoutRenderer|CUSTOM_SETUP_MODULES/)
   assert.match(onboarding, /useState<'weather' \| 'connect'>/)
