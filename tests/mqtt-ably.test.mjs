@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createHmac } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { ablyCanaryForDevice, mqttEnabledForDevice } from '../app/lib/device/mqttRollout.ts'
+import { ablyCanaryForDevice, ablyPilotForDevice, mqttEnabledForDevice } from '../app/lib/device/mqttRollout.ts'
 import { publishPilotRevision } from '../app/lib/device/mqttPilotPublish.ts'
 import {
   ABLY_MQTT_HOST, ABLY_MQTT_PORT, ABLY_TOKEN_TTL_SEC,
@@ -84,6 +84,41 @@ test('Ably canary routes hints correctly, preserving old EMQX and disabled other
   assert.equal(calls.length, 2)
 })
 
+test('five-frame Ably pilot rejects unlisted and malformed allowlists', async () => {
+  const pilot = {
+    ...base, fleetEnabled: 'false', ablyPilotEnabled: 'true',
+    ablyPilotDeviceIds: 'frm_a, frm_b, frm_c, frm_d, frm_e',
+  }
+  for (const id of ['frm_a', 'frm_b', 'frm_c', 'frm_d', 'frm_e']) {
+    assert.equal(ablyPilotForDevice(id, pilot), true)
+    assert.equal(mqttEnabledForDevice(id, pilot), true)
+  }
+  for (const id of ['frm_other', 'frm_A', 'bad/#']) {
+    assert.equal(mqttEnabledForDevice(id, pilot), false)
+  }
+  for (const list of ['', 'frm_a,', 'frm_a,frm_a',
+    'frm_a,frm_b,frm_c,frm_d,frm_e,frm_f', 'frm_a,frm/#']) {
+    assert.equal(ablyPilotForDevice('frm_a', { ...pilot, ablyPilotDeviceIds: list }), false)
+  }
+  assert.equal(ablyPilotForDevice('frm_a', { ...pilot, ablyPilotEnabled: 'false' }), false)
+  assert.equal(ablyPilotForDevice('frm_a', { ...pilot, ablyApiKey: '' }), false)
+  assert.equal(ablyPilotForDevice('frm_a', { ...pilot, ablyRootCaPem: '' }), false)
+  const calls = []
+  const fakeFetch = async (url, init) => {
+    calls.push({ url, init })
+    return { ok: true, status: 201 }
+  }
+  const config = { enabled: 'false', fleetEnabled: 'false', fleetProvider: 'ably_jwt_v1',
+    ablyPilotEnabled: 'true', ablyPilotDeviceIds: pilot.ablyPilotDeviceIds,
+    ablyApiKey: key, ablyRootCaPem: ca }
+  assert.equal(await publishPilotRevision('frm_b', 42, config, fakeFetch), 'published')
+  assert.equal(calls[0].url,
+    'https://main.realtime.ably.net/channels/remind%2Fpilot%2Frevisions%2Ffrm_b/messages')
+  assert.deepEqual(JSON.parse(calls[0].init.body), { name: 'mqtt-hint', data: '42' })
+  assert.equal(await publishPilotRevision('frm_other', 43, config, fakeFetch), 'disabled')
+  assert.equal(calls.length, 1)
+})
+
 test('JWT is signed, scoped to one frame subscribe-only, short lived and unique by identity', () => {
   const at = 1800000000
   const a = makeAblyFrameCredentials('frm_one', key, at)
@@ -144,6 +179,7 @@ test('backend requires physical device auth and pairing before issuing Ably JWT'
   assert.match(route, /MQTT_ABLY_CANARY_ENABLED/)
   assert.match(route, /MQTT_ABLY_CANARY_DEVICE_ID/)
   assert.match(route, /ablyCanaryForDevice\(deviceId/)
+  assert.match(route, /ablyPilotForDevice\(deviceId/)
   assert.match(route, /makeAblyFrameCredentials\(deviceId, process\.env\.MQTT_ABLY_API_KEY\)/)
   assert.match(route, /broker_host: ABLY_MQTT_HOST/)
   assert.match(route, /broker_port: ABLY_MQTT_PORT/)

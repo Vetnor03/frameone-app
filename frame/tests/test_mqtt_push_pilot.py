@@ -97,7 +97,7 @@ def test_smart_instant_only_accelerates_while_authenticated_app_is_active():
     wifi = read('src/device/WiFiManager.cpp')
     main = read('src/frame_v2.5.1.ino')
     assert 'if (length == 10 && memcmp(payload, "active:120", 10) == 0)' in mqtt
-    assert 'ACTIVITY_TTL_MS = 120000UL' in mqtt
+    assert 'ACTIVITY_TTL_MS = 75000UL' in mqtt
     assert 'g_appActiveDeadlineMs = millis() + ACTIVITY_TTL_MS;' in mqtt
     assert 'bool appActivityIsActive()' in mqtt
     assert 'bool appActivityIsActive();' in header

@@ -32,7 +32,7 @@ static bool g_notificationPending = false;
 static bool g_subscriptionResyncPending = false;
 static bool g_appActivePowerApplied = false;
 static uint32_t g_appActiveDeadlineMs = 0;
-static const uint32_t ACTIVITY_TTL_MS = 120000UL;
+static const uint32_t ACTIVITY_TTL_MS = 75000UL;
 static uint32_t g_retryAfterMs = 0;
 static const uint32_t CONNECT_RETRY_MS = 60000;
 static const uint32_t MQTT_DISABLED_RETRY_MS = 30UL * 60UL * 1000UL;
@@ -58,7 +58,7 @@ void onMessage(char* topic, byte* payload, unsigned int length) {
   if (g_topic != topic || length == 0 || length > 20) return;
   // A short-lived app presence hint never triggers a redraw or config fetch.
   // It only controls Wi-Fi listening policy; the device applies its own
-  // 120-second ceiling and reverts even if the app crashes.
+  // 75-second ceiling and reverts even if the app crashes.
   if (length == 10 && memcmp(payload, "active:120", 10) == 0) {
     g_appActiveDeadlineMs = millis() + ACTIVITY_TTL_MS;
     return;

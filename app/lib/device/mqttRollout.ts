@@ -20,7 +20,24 @@ export type MqttRolloutEnv = {
   ablyRootCaPem?: string
   ablyCanaryEnabled?: string
   ablyCanaryDeviceId?: string
+  ablyPilotEnabled?: string
+  ablyPilotDeviceIds?: string
 }
+// An explicit five-frame pilot is separate from both the canary and fleet.
+// Reject malformed, duplicated and oversized lists rather than broadening scope.
+export function ablyPilotForDevice(deviceId: string, env: MqttRolloutEnv): boolean {
+  if (env.ablyPilotEnabled !== 'true' ||
+      !/^[A-Za-z0-9_-]{1,128}$/.test(deviceId) ||
+      !isAblyApiKey(env.ablyApiKey) ||
+      !env.ablyRootCaPem || env.ablyRootCaPem.length > 4096 ||
+      !env.ablyRootCaPem.includes('-----BEGIN CERTIFICATE-----') ||
+      !env.ablyRootCaPem.includes('-----END CERTIFICATE-----')) return false
+  const ids = (env.ablyPilotDeviceIds ?? '').split(',').map(id => id.trim())
+  return ids.length >= 1 && ids.length <= 5 &&
+    ids.every(id => /^[A-Za-z0-9_-]{1,128}$/.test(id)) &&
+    new Set(ids).size === ids.length && ids.includes(deviceId)
+}
+
 export function ablyCanaryForDevice(deviceId: string, env: MqttRolloutEnv): boolean {
   return env.ablyCanaryEnabled === 'true' &&
     env.ablyCanaryDeviceId === deviceId &&
@@ -49,10 +66,13 @@ export function mqttEnabledForDevice(deviceId: string, env: MqttRolloutEnv = {
   ablyRootCaPem: process.env.MQTT_ABLY_ROOT_CA_PEM,
   ablyCanaryEnabled: process.env.MQTT_ABLY_CANARY_ENABLED,
   ablyCanaryDeviceId: process.env.MQTT_ABLY_CANARY_DEVICE_ID,
+  ablyPilotEnabled: process.env.MQTT_ABLY_PILOT_ENABLED,
+  ablyPilotDeviceIds: process.env.MQTT_ABLY_PILOT_DEVICE_IDS,
 }): boolean {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(deviceId)) return false
   if (env.pilotEnabled === 'true' && deviceId === env.pilotDeviceId) return true
   if (ablyCanaryForDevice(deviceId, env)) return true
+  if (ablyPilotForDevice(deviceId, env)) return true
 
   // Fleet enablement is independent of the original single-frame experiment.
   // All fleet transport and broker-management inputs must be present before

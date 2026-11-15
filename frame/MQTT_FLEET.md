@@ -91,6 +91,20 @@ changes.
 Serverless has a 1,000 concurrent connection limit and account/ACL quotas;
 check pricing and scale before pilot expansion.
 
+## Five-device Ably pilot allowlist (November 2026)
+
+The five loaned pilot frames can use MQTT without enabling the full fleet:
+set `MQTT_ABLY_PILOT_ENABLED=true` and the private Vercel variable
+`MQTT_ABLY_PILOT_DEVICE_IDS` to a comma-separated list of the actual 1–5
+paired device IDs. Duplicate, malformed or overlong lists fail closed.
+Each frame must authenticate with its physical device token and be paired;
+its Ably JWT permits subscribing to only its own channel.
+The existing EMQX prototype and Ably canary are independent. Leave the new
+pilot switch OFF until two-frame broker topic-isolation, reconnect, update ACK,
+and battery-current testing pass; never enable `MQTT_FLEET_ENABLED` solely
+for this test. Removing an ID prevents new JWT issuance but existing tokens
+remain valid until expiry; emergency revocation requires broker-side action.
+
 ## Security & lifecycle work before selling
 
 - Deprovision MQTT account/ACL when a device is revoked, resold, or factory

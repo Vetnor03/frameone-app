@@ -8,9 +8,9 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 // This is a best-effort hint, not a persisted presence tracker. A background
-// tab sends nothing, and the frame expires the hint itself after 120 seconds.
+// tab sends nothing, and the frame expires the hint itself after 75 seconds.
 // The device must belong to an authenticated user. Only the explicitly
-// allowlisted pilot device is eligible for a broker publish.
+// allowlisted pilot frames are eligible for a broker publish.
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as { device_id?: unknown } | null
   const deviceId = deviceIdFrom(body?.device_id)
