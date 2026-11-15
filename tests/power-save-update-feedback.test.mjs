@@ -39,21 +39,11 @@ test('pending save feedback is recovered from backend settings vs physical rende
   assert.match(home, /if \(!renderAt \|\| activeDeviceIdRef\.current !== deviceId\) return/)
 })
 
-test('Normal and Custom are both first-time options, and Normal carries a subtle recommendation', () => {
-  assert.match(setup, /const setupPurposes: SetupPurpose\[\] = \['normal', 'custom'\]/)
-  assert.match(setup, /savedDraft\?\.purpose === 'custom' \? 'custom' : 'normal'/)
-  assert.match(setup, /savedDraft\?\.step === 'guided' \|\| savedDraft\?\.step === 'custom'/)
-  assert.match(setup, /text-\[10px\] font-normal normal-case tracking-normal/)
-  assert.match(setup, /Anbefalt' : 'Recommended'/)
-  assert.match(setup, /if \(purpose === 'normal'\)/)
-  assert.match(setup, /else setStep\('custom'\)/)
-  assert.match(setup, /finish\(purpose\)/)
-  assert.match(setup, /Next: Connect Apps/)
-  assert.match(setup, /Choose your layout and modules before the frame’s first update/)
-  assert.match(setup, /<FrameLayoutRenderer/)
-  assert.match(setup, /Finish setup/)
-  assert.doesNotMatch(setup, /Open frame editor/)
-  assert.doesNotMatch(setup, /const setupPurposes: SetupPurpose\[\] = SHOW_CUSTOM_LAYOUT_UI/)
-  // The advanced custom geometry editor is available again.
+test('first-time setup starts with Weather and Connect; frame editing remains available after', () => {
+  assert.match(setup, /useState<'weather' \| 'connect'>/)
+  assert.match(setup, /setStep\('connect'\)/)
+  assert.match(setup, /<ConnectAppsScreen/)
+  assert.doesNotMatch(setup, /setupPurposes|Choose your setup|<FrameLayoutRenderer|customSelection/)
   assert.match(home, /const SHOW_CUSTOM_LAYOUT_UI = true/)
+  assert.match(home, /function openPicker\(slot: number\)/)
 })

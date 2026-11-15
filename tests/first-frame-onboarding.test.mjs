@@ -8,39 +8,29 @@ const remindersRoute = readFileSync(new URL('../app/api/device/reminders/route.t
 const setup = home.slice(home.indexOf('function FrameSetupFlow({'), home.indexOf('function FirstFrameOnboarding({'))
 const connect = home.slice(home.indexOf('function ConnectAppsScreen({'), home.indexOf('function FrameSetupFlow({'))
 
-test('first screen restores Normal and Custom with current recommended preset', () => {
-  assert.match(setup, /const setupPurposes: SetupPurpose\[\] = \['normal', 'custom'\]/)
-  assert.match(setup, /Recommended/)
-  assert.match(setup, /Date, Reminders, Weather, and News\./)
-  assert.match(setup, /Dato, Påminnelser, Vær og Nyheter\./)
-  assert.match(setup, /Choose your own modules and layout\./)
+test('first setup begins immediately with Weather, without choosing a mode', () => {
+  assert.match(setup, /useState<'weather' \| 'connect'>/)
+  assert.match(setup, /if \(step === 'weather'\) return shell/)
+  assert.match(setup, /Choose the location where your frame will be used/)
+  assert.doesNotMatch(setup, /setupPurposes|Choose your setup|Velg oppsett|Custom|Recommended/)
 })
-
-test('guided Normal setup is two pages: Weather and optional Connect Apps', () => {
-  assert.match(setup, /const guidedModules = \['weather'\] as const/)
-  assert.match(setup, /progressTotal = purpose === 'normal' \? guidedModules\.length \+ 1 : 2/)
+test('guided setup consists only of Weather and optional Connect Apps', () => {
+  assert.match(setup, /step === 'weather' \? 1 : 2/)
   assert.match(setup, /setStep\('connect'\)/)
-  assert.match(setup, /showDetails=\{false\} onPicked=/)
-  assert.doesNotMatch(setup, /<NewsModuleSettingsTab/)
-  assert.doesNotMatch(setup, /current === 'date'/)
-  assert.doesNotMatch(setup, /AI Follow|create_ai_assistant_watch|get_ai_subscription_entitlements/)
+  assert.match(setup, /showDetails=\{false\}/)
+  assert.match(setup, /<ConnectAppsScreen/)
+  assert.doesNotMatch(setup, /<NewsModuleSettingsTab|<FrameLayoutRenderer|AI Follow|create_ai_assistant_watch/)
 })
-
-test('normal completion creates all four unpinned modules while custom stays custom', () => {
+test('first-time completion always creates four default modules and NRK Top Stories', () => {
   assert.match(home, /0: 'date', 1: 'reminders', 2: 'weather', 3: 'news'/)
   assert.match(home, /nextModules\.news = \{ \.\.\.savedNews, feed: 'top' \}/)
   assert.match(home, /const starterCountdowns = norwegianStarterCountdowns\(language\)/)
   assert.match(home, /let nextPinnedTabs: ModuleKey\[\] = \[\]/)
-  assert.match(setup, /finish\('custom'\)/)
-  assert.match(setup, /purpose: selectedPurpose/)
-  assert.doesNotMatch(setup, /onComplete\(\{ purpose: 'normal'/)
-  assert.match(setup, /await onComplete\(selectedPurpose === 'custom'/)
-  assert.match(setup, /customLayout, customCells/)
-  assert.match(home, /validateCustomSetup\(selection\.customLayout, selection\.customCells/)
-  assert.match(home, /nextCellsByLayout = \{ \.\.\.makeEmptyCellsByLayout\(\), \[nextLayout\]: checked\.cells/)
+  assert.match(setup, /await onComplete\(\{ modules \}\)/)
+  assert.doesNotMatch(setup, /purpose:|customLayout|customCells|normal|customSelection/)
+  assert.doesNotMatch(home.slice(home.indexOf('  async function completeFrameSetup('), home.indexOf('  async function customLayoutRequest(')), /selection\.purpose|validateCustomSetup/)
   assert.match(home, /await requestDeviceUpdate\(supabase, activeDeviceId, crypto\.randomUUID\(\)\)/)
 })
-
 test('first-time completion persists waiting feedback until a real frame render', () => {
   const completion = home.slice(home.indexOf('  async function completeFrameSetup('), home.indexOf('  async function customLayoutRequest('))
   assert.match(completion, /\.from\('device_settings'\)/)
@@ -66,15 +56,14 @@ test('fresh integration selection starts empty and only records explicit connect
   assert.doesNotMatch(remindersRoute, /\.in\('user_id', (?:spond|teams|waste)UserIds\)/)
 })
 
-test('weather setup is location-only and preserves the selected configuration', () => {
+test('weather setup collects a location only and never opens forecast details', () => {
   assert.match(setup, /Select location/)
   assert.doesNotMatch(setup, /Oslo is used if you skip|current temperature|sunrise|UV|precipitation|next week/i)
   assert.match(setup, /weather: \[\{ id: 1, \.\.\.picked/)
-  assert.match(home, /selection\.purpose === 'normal' && \(!Array\.isArray\(nextModules\.weather\) \|\| !nextModules\.weather\.length\)/)
-  assert.match(home, /if \(!checked\.weatherSelected\) delete nextModules\.weather/)
+  assert.match(setup, /showDetails=\{false\}/)
+  assert.doesNotMatch(home.slice(home.indexOf('  async function completeFrameSetup('), home.indexOf('  async function customLayoutRequest(')), /OSLO_WEATHER/)
 })
-
-test('Normal setup requires an explicitly picked weather location, not silent Oslo default', () => {
+test('weather location is required before Next and before committing setup', () => {
   assert.equal(hasChosenWeatherLocation(null), false)
   assert.equal(hasChosenWeatherLocation({}), false)
   assert.equal(hasChosenWeatherLocation({ label: 'Oslo', lat: null, lon: null }), false)
@@ -83,12 +72,11 @@ test('Normal setup requires an explicitly picked weather location, not silent Os
   assert.equal(hasChosenWeatherLocation({ label: '', lat: 58.970, lon: 5.733 }), false)
   assert.equal(hasChosenWeatherLocation({ label: 'Stavanger', lat: 58.97005, lon: 5.73332 }), true)
   assert.match(setup, /const weatherLocationChosen = hasChosenWeatherLocation\(modules\.weather\?\.\[0\]\)/)
-  assert.match(setup, /disabled=\{saving \|\| \(current === 'weather' && !weatherLocationChosen\)\}/)
+  assert.match(setup, /disabled=\{saving \|\| !weatherLocationChosen\}/)
   assert.match(home, /if \(!hasChosenWeatherLocation\(nextModules\.weather\?\.\[0\]\)\)/)
   assert.match(setup, /Choose the location where your frame will be used\./)
   assert.match(setup, /Velg stedet der rammen skal stå\./)
 })
-
 test('first-frame welcome text is localized for Norwegian users', () => {
   const welcome = home.slice(home.indexOf('function FirstFrameOnboarding({'), home.indexOf('function MyFramesSection({'))
   assert.match(welcome, /Legg til din første ramme/)
@@ -120,13 +108,13 @@ test('structured errors never stringify as object Object and completion remains 
 
 test('incomplete setup and OAuth draft survive reload while completion clears the draft', () => {
   assert.match(home, /setSetupDeviceId\(!hasSavedSettings \|\| hasOnboardingDraft \? deviceId : null\)/)
-  assert.match(setup, /sessionStorage\.getItem\(`remind:onboarding:\$\{activeDeviceId\}`\)/)
-  assert.match(setup, /sessionStorage\.setItem\(`remind:onboarding:\$\{activeDeviceId\}`/)
-  assert.match(setup, /customLayout, customCellsByLayout \}\)/)
-  assert.match(home, /sessionStorage\.removeItem\(`remind:onboarding:\$\{activeDeviceId\}`\)/)
+  assert.match(setup, /sessionStorage\.getItem\(\`remind:onboarding:\$\{activeDeviceId\}\`\)/)
+  assert.match(setup, /sessionStorage\.setItem\(\`remind:onboarding:\$\{activeDeviceId\}\`/)
+  assert.match(setup, /JSON\.stringify\(\{ step, modules \}\)/)
+  assert.match(setup, /savedDraft\?\.step === 'connect'/)
+  assert.match(home, /sessionStorage\.removeItem\(\`remind:onboarding:\$\{activeDeviceId\}\`\)/)
   assert.match(connect, /initialTeamsOAuthStatus === 'connected'/)
 })
-
 test('account credentials and frame enablement are separate and legacy frames remain compatible', () => {
   assert.match(home, /function frameUsesIntegration/)
   assert.match(home, /integration_selection_explicit !== true.*connectAppIsConnected/)

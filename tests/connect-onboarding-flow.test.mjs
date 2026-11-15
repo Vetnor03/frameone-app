@@ -8,27 +8,24 @@ const end = source.indexOf('function FirstFrameOnboarding(', start)
 assert.ok(start >= 0 && end > start, 'FrameSetupFlow exists')
 const onboarding = source.slice(start, end)
 
-test('Normal onboarding has Weather then optional Connect Apps, no news page or weather preview', () => {
-  assert.match(onboarding, /const guidedModules = \['weather'\] as const/)
-  assert.match(onboarding, /progressTotal = purpose === 'normal' \? guidedModules\.length \+ 1 : 2/)
-  assert.match(onboarding, /setStep\('connect'\)/)
-  assert.doesNotMatch(onboarding, /<NewsModuleSettingsTab/)
-  assert.match(onboarding, /showDetails=\{false\} onPicked=/)
-  assert.match(onboarding, /disabled=\{saving \|\| \(current === 'weather' && !weatherLocationChosen\)\}/)
+test('first-time setup has no Normal/Custom choice; opens Weather then Connect Apps', () => {
+  assert.doesNotMatch(onboarding, /setupPurposes|Choose your setup|Velg oppsett|customSelection|setPurpose/)
+  assert.match(onboarding, /useState<'weather' \| 'connect'>/)
+  assert.match(onboarding, /savedDraft\?\.step === 'connect' && hasChosenWeatherLocation/)
+  assert.match(onboarding, /if \(step === 'weather'\) return shell/)
+  assert.match(onboarding, /showDetails=\{false\}/)
+  assert.match(onboarding, /onClick=\{\(\) => \{ if \(weatherLocationChosen\) \{ setError\(null\); setStep\('connect'\) \} \}\}/)
+  assert.match(onboarding, /disabled=\{saving \|\| !weatherLocationChosen\}/)
+  assert.doesNotMatch(onboarding, /<NewsModuleSettingsTab|Custom|<FrameLayoutRenderer/)
 })
 
-test('Custom setup must visit the same Connect step', () => {
-  assert.match(onboarding, /if \(customSelection\.valid\) \{ setError\(null\); setStep\('connect'\) \}/)
-  assert.doesNotMatch(onboarding, /finish\('custom'\)/)
-  assert.match(onboarding, /if \(step === 'connect'\) return shell/)
-  assert.match(onboarding, /onClick=\{\(\) => finish\(purpose\)\}/)
-})
-
-test('Back navigation and progress both handle the new shared step', () => {
-  assert.match(onboarding, /if \(step === 'connect'\)/)
-  assert.match(onboarding, /if \(purpose === 'custom'\) setStep\('custom'\)/)
-  assert.match(onboarding, /progressCurrent.*progressTotal/)
-  assert.match(onboarding, /savedDraft\?\.step === 'connect'/)
+test('Connect Apps is the second and final page with working back, skip and OAuth draft recovery', () => {
+  assert.match(onboarding, /step === 'weather' \? 1 : 2\} \/ 2/)
+  assert.match(onboarding, /onClick=\{\(\) => \{ setError\(null\); setStep\('weather'\) \}\}/)
+  assert.match(onboarding, /onClick=\{finish\} disabled=\{saving \|\| connectionsChecking\}/)
+  assert.match(onboarding, /await onComplete\(\{ modules \}\)/)
+  assert.match(onboarding, /sessionStorage\.setItem\(\`remind:onboarding:\$\{activeDeviceId\}\`/)
+  assert.match(onboarding, /Skip for now & finish/)
 })
 
 test('Skipping is explicit and setup waits for provider discovery and OAuth return', () => {
