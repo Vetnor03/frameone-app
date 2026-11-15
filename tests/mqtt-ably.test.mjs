@@ -148,7 +148,7 @@ test('JWT is signed, scoped to one frame subscribe-only, short lived and unique 
 
 test('REST hint publishes only exact device channel with server-only API key', async () => {
   let called
-  const result = await publishAblyFrameHint('frm_one', 'active:75', key, async (url, init) => {
+  const result = await publishAblyFrameHint('frm_one', 'active:120', key, async (url, init) => {
     called = { url, init }
     return { ok: true, status: 201 }
   })
@@ -158,7 +158,7 @@ test('REST hint publishes only exact device channel with server-only API key', a
   assert.equal(called.init.method, 'POST')
   assert.equal(called.init.redirect, 'error')
   assert.equal(called.init.headers.authorization, 'Basic ' + Buffer.from(key).toString('base64'))
-  assert.deepEqual(JSON.parse(called.init.body), { name: 'mqtt-hint', data: 'active:75' })
+  assert.deepEqual(JSON.parse(called.init.body), { name: 'mqtt-hint', data: 'active:120' })
   assert.equal(await publishAblyFrameHint('bad/#', '1', key, async () => {
     throw Error('should not call')
   }), 'failed')
