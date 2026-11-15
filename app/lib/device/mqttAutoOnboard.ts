@@ -3,8 +3,8 @@ import { ablyAutoConfigured, ablyAutoForPairedDevice, type MqttRolloutEnv } from
 
 /**
  * Automatic Ably onboarding uses the existing pairing record, not a guessed
- * device ID or a manufacturing-time secret. Both the pairing timestamp and
- * current membership must exist. Missing/failed database reads fail closed.
+ * device ID or a manufacturing-time secret. Original registration timestamp,
+ * pairing timestamp and current membership must exist. Missing/failed database reads fail closed.
  *
  * This only runs when the explicit new-frame rollout gate is configured.
  */
@@ -24,13 +24,13 @@ export async function isAblyAutoEligibleForDevice(
     // Avoid opening a service-role connection unless this rollout is enabled.
     const db = database ?? (await import('../supabase/serviceClient')).createServiceClient()
     const { data: device, error: deviceError } = await db
-      .from('devices').select('paired_at').eq('device_id', deviceId).maybeSingle()
-    if (deviceError || !device || !ablyAutoForPairedDevice(deviceId, device.paired_at, true, env)) return false
+      .from('devices').select('created_at,paired_at').eq('device_id', deviceId).maybeSingle()
+    if (deviceError || !device || !ablyAutoForPairedDevice(deviceId, device.created_at, device.paired_at, true, env)) return false
 
     // A stale paired_at must not authorize a removed/unshared frame.
     const { data: members, error: memberError } = await db
       .from('device_members').select('device_id').eq('device_id', deviceId).limit(1)
-    return !memberError && ablyAutoForPairedDevice(deviceId, device.paired_at, Boolean(members?.length), env)
+    return !memberError && ablyAutoForPairedDevice(deviceId, device.created_at, device.paired_at, Boolean(members?.length), env)
   } catch {
     return false
   }
