@@ -4,6 +4,8 @@ export const ASSISTANT_TIPS = [
   { id: 'reminder-example', en: 'Try: “Remind me to call Mum tomorrow.”', no: 'Prøv: «Minn meg på å ringe mamma i morgen.»', command: { en: 'Remind me to call Mum tomorrow', no: 'Minn meg på å ringe mamma i morgen' } },
   { id: 'settings-help', en: 'I can help you find settings too.', no: 'Jeg kan også hjelpe deg å finne innstillinger.' },
   { id: 'power-save', en: 'Longer battery life, less responsive.', no: 'Lengre batteritid, mindre responsiv.' },
+  // Append instead of reordering: saved assistant_tips_shown entries are numeric indexes.
+  { id: 'customize-frame-cells', en: 'Tap any cell in your frame preview to choose its module. You can change this anytime.', no: 'Trykk på et felt i rammevisningen for å velge modul. Du kan endre det når som helst.' },
 ] as const
 
 export const ASSISTANT_TIP_LIMIT = ASSISTANT_TIPS.length
@@ -17,6 +19,11 @@ export function assistantPlaceholder(tipId: string | undefined, language: 'en' |
 
 export function nextAssistantTip(shown: number[], language: 'en' | 'no' = 'en') {
   const shownSet = new Set(shown.filter((index) => Number.isInteger(index)))
-  const index = ASSISTANT_TIPS.findIndex((_, candidate) => !shownSet.has(candidate))
+  // Introduce the essential frame customization gesture first, including for existing accounts.
+  // Historical tip indexes are preserved so earlier tips are never accidentally reset.
+  const customizationIndex = ASSISTANT_TIPS.findIndex((tip) => tip.id === 'customize-frame-cells')
+  const index = customizationIndex >= 0 && !shownSet.has(customizationIndex)
+    ? customizationIndex
+    : ASSISTANT_TIPS.findIndex((_, candidate) => !shownSet.has(candidate))
   return index < 0 ? null : { index, id: ASSISTANT_TIPS[index].id, text: ASSISTANT_TIPS[index][language] }
 }
