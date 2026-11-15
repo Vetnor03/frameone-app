@@ -143,5 +143,5 @@ export async function publishPilotActivity(
   config: BrokerConfig = defaultBrokerConfig(),
   fetchImpl: typeof fetch = fetch,
 ): Promise<PilotPushResult> {
-  return publishPilotMessage(deviceId, 'active:75', config, fetchImpl)
+  return publishPilotMessage(deviceId, 'active:120', config, fetchImpl)
 }
