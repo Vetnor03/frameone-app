@@ -235,7 +235,8 @@ For a controlled, *future* rollout only:
 - Set `MQTT_ABLY_AUTO_ENABLED=true` only after the two-frame broker isolation,
   reconnect, battery/latency tests, and secure pairing-v2 enrollment are passed.
   With this gate enabled, only frames with `devices.paired_at` at/after the
-  cutoff **and** at least one current `device_members` membership qualify.
+  cutoff, originally registered at/after the same cutoff (`devices.created_at`), **and** at least one current `device_members` membership qualify.
+  Old frames re-paired after cutoff remain excluded; this is intentional.
   Incorrect, missing or unavailable database state is a deny.
 - The existing EMQX prototype and explicit Ably canary/5-device allowlist
   remain independent. No reflash is required for a device with the standard
