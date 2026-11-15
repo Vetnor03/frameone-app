@@ -130,7 +130,7 @@ This extension does not add any user-facing mode or change Power Save. Only
    session POSTs to `/api/device/mqtt-pilot/activity`. Only the allowlisted
    physical frame can be targeted; the endpoint verifies membership before
    publishing. The app will not send for any other frame or in Power Save.
-2. The publisher sends `active:75` to the **existing** device-scoped
+2. The publisher sends `active:120` to the **existing** device-scoped
    `remind/pilot/revisions/{device_id}` topic, QoS 1, non-retained. The
    existing EMQX subscribe-only device ACL still applies. Presence is a
    **power-mode hint, never a display command**.
@@ -142,10 +142,10 @@ This extension does not add any user-facing mode or change Power Save. Only
    receive interval, and MQTT's local socket is serviced on the same ~10s
    cadence. This makes **no** 10-second HTTP revision requests when MQTT is
    connected.
-5. Upon receiving `active:75`, the frame temporarily uses
+5. Upon receiving `active:120`, the frame temporarily uses
    `WIFI_PS_MIN_MODEM` at the router's DTIM interval, retaining connected
    automatic light sleep, and services the MQTT client approximately every
-   **one second**. Subsequent valid hints extend the local 75-second TTL.
+   **one second**. On updated firmware, each valid hint extends the local 75-second TTL (the original `active:120` wire format is retained for older flashed frames).
 6. When TTL expires, MQTT disconnects, or the frame is no longer on battery,
    the frame restores the standard low-power/USB Wi-Fi policy. Missing or
    maliciously delayed hints cannot permanently hold fast reception on.
