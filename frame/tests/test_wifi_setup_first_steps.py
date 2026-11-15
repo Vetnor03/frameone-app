@@ -7,7 +7,8 @@ WIFI = SCREEN.split("static void drawWifiSetup(void* vctx) {", 1)[1].split("\nvo
 
 
 def test_wifi_setup_has_large_real_ap_name_then_four_clear_steps():
-    assert 'drawCenteredInFrame("Connect your frame to Wi-Fi", FRAME_Y + 68, &FreeMonoBold12pt7b);' in WIFI
+    # The network SSID is the sole header; avoid a redundant introduction.
+    assert 'Connect your frame to Wi-Fi' not in WIFI
     assert 'drawCenteredInFrame(ctx->ssid, FRAME_Y + 150, &FreeMonoBold18pt7b);' in WIFI
     assert 'snprintf(connectLine, sizeof(connectLine), "2. Connect to %s", ctx->ssid);' in WIFI
     steps = [
