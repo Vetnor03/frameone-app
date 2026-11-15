@@ -1,4 +1,4 @@
-# RE:MIND MQTT push pilot (NOT deployed / NOT enabled by default)
+# RE:MIND MQTT push pilot (per-device opt-in)
 
 ## Objective
 
@@ -11,8 +11,8 @@ persistent TLS socket, keepalive, router listen-beacon behavior, and TLS
 reconnects can offset or exceed the removed HTTPS requests. Measure the
 complete board current over hours/days before considering this production.
 
-Normal app/firmware behavior is unchanged unless the pilot is *explicitly*
-configured and compiled. No firmware OTA or broker is deployed by this code.
+The standard Alfred ESP32-S3 firmware includes MQTT, but broker eligibility is
+separately enabled per device. No firmware OTA or broker is deployed by this code.
 
 ## Broker requirements (before the pilot can function)
 
@@ -60,7 +60,7 @@ durable revision still succeed; the frame's fallback retrieves it.
 
 ## Firmware test candidate
 
-Build the separate **alfred_v1_2_mqtt_pilot** PlatformIO environment.
+Use the standard **alfred_v1_2** PlatformIO environment, with MQTT included.
 The test broker's public hostname is included in pilot source only:
 `i5138504.ala.us-east-1.emqxsl.com:8883`. Never embed the EMQX
 password, App ID, App Secret, or RE:MIND device token in firmware.
@@ -73,7 +73,8 @@ the device ID matches the explicit `MQTT_PILOT_DEVICE_ID` allowlist, and the
 physical frame Bearer token matches the token stored for that device. MQTT
 then connects with the separate account; it never sends the HTTP frame token
 to the broker. Both network transports verify TLS certificates.
-The standard firmware builds still define `FRAME_MQTT_PILOT_ENABLED=0`.
+The standard Alfred ESP32-S3 firmware includes MQTT; older ESP32 hardware
+profiles keep the feature compiled out. Broker access remains server-gated.
 
 The experimental MQTT client:
 - subscribes to only its own topic, with QoS 1;
@@ -123,8 +124,8 @@ telemetry, the flashed binary and actual current **before** interpreting results
 
 ## Smart Instant adaptive app presence (additional pilot behavior)
 
-This extension does not add any user-facing mode or change Power Save. Only
-`frm_54AE37455F34` receives app-presence notifications during this pilot.
+This extension does not add a user-facing mode or change Power Save. Only
+backend-allowlisted frames receive app-presence notifications.
 
 1. When the RE:MIND app opens in the foreground, the authorized user's
    session POSTs to `/api/device/mqtt-pilot/activity`. Only the allowlisted
@@ -132,7 +133,7 @@ This extension does not add any user-facing mode or change Power Save. Only
    publishing. The app will not send for any other frame or in Power Save.
 2. The publisher sends `active:120` to the **existing** device-scoped
    `remind/pilot/revisions/{device_id}` topic, QoS 1, non-retained. The
-   existing EMQX subscribe-only device ACL still applies. Presence is a
+   existing per-device subscribe-only broker capability still applies. Presence is a
    **power-mode hint, never a display command**.
 3. While the app is visible and the user recently interacted with it, the app
    sends presence at most once per ~30 seconds, checking on a 15s timer.
