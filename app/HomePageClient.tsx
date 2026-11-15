@@ -2451,7 +2451,8 @@ export default function HomePage() {
       nextCellsByLayout = { ...makeEmptyCellsByLayout(), pyramid: presetCells }
       // Normal setup uses curated NRK Toppsaker unless Latest News was chosen.
       const savedNews = nextModules.news && typeof nextModules.news === 'object' && !Array.isArray(nextModules.news) ? nextModules.news : {}
-      nextModules.news = { ...savedNews, feed: savedNews.feed === 'latest' ? 'latest' : 'top' }
+      // Start Normal frames with NRK Top Stories; users can change this from News settings later.
+      nextModules.news = { ...savedNews, feed: 'top' }
     }
 
     if (selection.purpose === 'normal' && (!Array.isArray(nextModules.weather) || !nextModules.weather.length)) {
@@ -20041,24 +20042,25 @@ function WeatherLocationSheet({
     }
 
     setLoading(true)
+    const controller = new AbortController()
 
     const handle = window.setTimeout(async () => {
       try {
         const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=10&language=${language === 'no' ? 'no' : 'en'}&format=json`
 
-        const resp = await fetch(url)
+        const resp = await fetch(url, { signal: controller.signal })
         if (!resp.ok) throw new Error('Search failed')
 
         const data = await resp.json()
-        setResults(Array.isArray(data?.results) ? data.results : [])
+        if (!controller.signal.aborted) setResults(Array.isArray(data?.results) ? data.results : [])
       } catch {
-        setResults([])
+        if (!controller.signal.aborted) setResults([])
       } finally {
-        setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       }
     }, 250)
 
-    return () => window.clearTimeout(handle)
+    return () => { window.clearTimeout(handle); controller.abort() }
   }, [query, language])
 
   function pick(r: any) {
