@@ -19,7 +19,7 @@ test('broker activity hint is minimal, non-retained, scoped to pilot topic, and 
   })
   assert.equal(result, 'published')
   assert.equal(sent.topic, 'remind/pilot/revisions/frm_54AE37455F34')
-  assert.equal(sent.payload, 'active:75')
+  assert.equal(sent.payload, 'active:120')
   assert.equal(sent.retain, false)
   assert.equal(sent.qos, 1)
   assert.ok(!JSON.stringify(sent).includes('fake-secret'))
