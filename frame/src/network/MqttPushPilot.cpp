@@ -59,7 +59,7 @@ void onMessage(char* topic, byte* payload, unsigned int length) {
   // A short-lived app presence hint never triggers a redraw or config fetch.
   // It only controls Wi-Fi listening policy; the device applies its own
   // 75-second ceiling and reverts even if the app crashes.
-  if (length == 9 && memcmp(payload, "active:75", 9) == 0) {
+  if (length == 10 && memcmp(payload, "active:120", 10) == 0) {
     g_appActiveDeadlineMs = millis() + ACTIVITY_TTL_MS;
     return;
   }
