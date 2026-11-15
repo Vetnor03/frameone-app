@@ -15,10 +15,12 @@ export default function NewsModuleSettingsTab({
   language,
   feed,
   onFeedChange,
+  hideHeading = false,
 }: {
   language: 'en' | 'no'
   feed: NewsFeed
   onFeedChange: (feed: NewsFeed) => void
+  hideHeading?: boolean
 }) {
   const isNo = language === 'no'
   const [items, setItems] = useState<NewsRow[]>([])
@@ -66,7 +68,7 @@ export default function NewsModuleSettingsTab({
 
   return (
     <div className="h-full min-h-0 flex flex-col">
-      <div className="mt-2 text-xl font-semibold tracking-widest">{isNo ? 'NYHETER' : 'NEWS'}</div>
+      {!hideHeading && <div className="mt-2 text-xl font-semibold tracking-widest">{isNo ? 'NYHETER' : 'NEWS'}</div>}
       <div className="mt-1 text-sm text-[color:var(--fg-60)]">
         {isNo ? 'Velg hvilke nyheter som vises i appen og på rammen.' : 'Choose which stories appear in the app and on your frame.'}
       </div>
