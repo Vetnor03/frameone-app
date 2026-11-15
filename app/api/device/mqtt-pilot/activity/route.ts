@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { authenticateUserForDevice, deviceIdFrom } from '@/app/lib/device/updateStateAuth'
 import { publishPilotActivity } from '@/app/lib/device/mqttPilotPublish'
-import { mqttEnabledForDevice } from '@/app/lib/device/mqttRollout'
+import { ablyAutoConfigured, mqttEnabledForDevice } from '@/app/lib/device/mqttRollout'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -17,7 +17,13 @@ export async function POST(req: Request) {
   if (!deviceId) return NextResponse.json({ error: 'missing_device_id' }, { status: 400 })
 
   // No broker calls and no new DB work when the experiment is switched off.
-  if (!mqttEnabledForDevice(deviceId)) {
+  if (!mqttEnabledForDevice(deviceId) && !ablyAutoConfigured({
+    ablyAutoEnabled: process.env.MQTT_ABLY_AUTO_ENABLED,
+    ablyAutoPairedSince: process.env.MQTT_ABLY_AUTO_PAIRED_SINCE,
+    fleetProvider: process.env.MQTT_FLEET_PROVIDER,
+    ablyApiKey: process.env.MQTT_ABLY_API_KEY,
+    ablyRootCaPem: process.env.MQTT_ABLY_ROOT_CA_PEM,
+  })) {
     return NextResponse.json({ enabled: false }, {
       headers: { 'Cache-Control': 'no-store' },
     })
@@ -31,7 +37,7 @@ export async function POST(req: Request) {
   const result = await publishPilotActivity(deviceId)
   // Presence is deliberately best-effort: failures do not block app editing
   // or the existing durable manual Update action.
-  return NextResponse.json({ enabled: true, delivered: result === 'published' }, {
+  return NextResponse.json({ enabled: result !== 'disabled', delivered: result === 'published' }, {
     headers: { 'Cache-Control': 'no-store' },
   })
 }
