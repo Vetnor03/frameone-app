@@ -136,12 +136,12 @@ export async function publishPilotRevision(
 }
 
 // The presence hint is not an update request, and cannot cause a redraw.
-// The frame enforces an absolute 120-second ceiling even if a malformed
+// The frame enforces an absolute 75-second ceiling even if a malformed
 // or delayed activity hint is received. Repeated app activity extends it.
 export async function publishPilotActivity(
   deviceId: string,
   config: BrokerConfig = defaultBrokerConfig(),
   fetchImpl: typeof fetch = fetch,
 ): Promise<PilotPushResult> {
-  return publishPilotMessage(deviceId, 'active:120', config, fetchImpl)
+  return publishPilotMessage(deviceId, 'active:75', config, fetchImpl)
 }
