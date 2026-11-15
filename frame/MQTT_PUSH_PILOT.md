@@ -130,22 +130,22 @@ This extension does not add any user-facing mode or change Power Save. Only
    session POSTs to `/api/device/mqtt-pilot/activity`. Only the allowlisted
    physical frame can be targeted; the endpoint verifies membership before
    publishing. The app will not send for any other frame or in Power Save.
-2. The publisher sends `active:120` to the **existing** device-scoped
+2. The publisher sends `active:75` to the **existing** device-scoped
    `remind/pilot/revisions/{device_id}` topic, QoS 1, non-retained. The
    existing EMQX subscribe-only device ACL still applies. Presence is a
    **power-mode hint, never a display command**.
 3. While the app is visible and the user recently interacted with it, the app
-   sends presence at most once per ~50 seconds, checking on a 45s timer.
-   After 90s without interaction or when hidden, it stops sending. A returning
+   sends presence at most once per ~30 seconds, checking on a 15s timer.
+   After 60s without interaction or when hidden, it stops sending. A returning
    user or a fresh app visit triggers another hint.
 4. Normally, the frame keeps the existing `WIFI_PS_MAX_MODEM` ~10-second
    receive interval, and MQTT's local socket is serviced on the same ~10s
    cadence. This makes **no** 10-second HTTP revision requests when MQTT is
    connected.
-5. Upon receiving `active:120`, the frame temporarily uses
+5. Upon receiving `active:75`, the frame temporarily uses
    `WIFI_PS_MIN_MODEM` at the router's DTIM interval, retaining connected
    automatic light sleep, and services the MQTT client approximately every
-   **one second**. Subsequent valid hints extend the local 120-second TTL.
+   **one second**. Subsequent valid hints extend the local 75-second TTL.
 6. When TTL expires, MQTT disconnects, or the frame is no longer on battery,
    the frame restores the standard low-power/USB Wi-Fi policy. Missing or
    maliciously delayed hints cannot permanently hold fast reception on.
@@ -160,7 +160,8 @@ once the presence hint is received; actual DTIM depends on the customer's
 router. Neither lower average power nor instant e-paper render is guaranteed
 without whole-board current and tap-to-ACK measurements.
 
-**Build/runtime gate:** Smart Instant requires the separate MQTT
-`alfred_v1_2_mqtt_pilot` firmware build and `MQTT_PILOT_ENABLED=true` only
-after final broker/firmware validation. Non-pilot firmware remains unchanged,
-as do all customer frames and normal Power Save.
+**Build/runtime gate:** MQTT is included in the standard `alfred_v1_2`
+firmware. The original EMQX pilot, Ably canary and five-device Ably allowlist
+are separately gated in the backend. Leave general fleet enablement OFF until
+broker isolation, battery current and physical latency tests pass. Power Save
+remains independent.
