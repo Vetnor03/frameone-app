@@ -217,3 +217,60 @@ gets scoped, one-hour, subscribe-only credentials. Set the canary enabled
 flag back to `false` to roll back server-side without reflashing.
 Only activate this after a passing build and verify the live publish and
 physical subscribe path before approving broader rollout.
+
+## Automatic MQTT for newly paired frames (November 2026; **OFF** by default)
+
+The standard Alfred firmware and backend already support Ably scoped JWT
+subscriptions. A new device can now gain MQTT automatically after pairing
+without a hand-maintained device list, but **no production rollout is active**.
+
+For a controlled, *future* rollout only:
+- Keep `MQTT_FLEET_ENABLED=false` (that older switch includes **every** paired
+  frame, regardless of when it was paired).
+- Configure `MQTT_FLEET_PROVIDER=ably_jwt_v1` and the existing server-only
+  `MQTT_ABLY_API_KEY` and public `MQTT_ABLY_ROOT_CA_PEM`.
+- Set `MQTT_ABLY_AUTO_PAIRED_SINCE` to an explicitly approved UTC cutoff such
+  as `2026-12-01T00:00:00.000Z`, **not** just a local date. The code requires
+  exact ISO 8601 UTC milliseconds and rejects invalid values.
+- Set `MQTT_ABLY_AUTO_ENABLED=true` only after the two-frame broker isolation,
+  reconnect, battery/latency tests, and secure pairing-v2 enrollment are passed.
+  With this gate enabled, only frames with `devices.paired_at` at/after the
+  cutoff **and** at least one current `device_members` membership qualify.
+  Incorrect, missing or unavailable database state is a deny.
+- The existing EMQX prototype and explicit Ably canary/5-device allowlist
+  remain independent. No reflash is required for a device with the standard
+  MQTT-capable firmware. The backend returns an individually scoped JWT over
+  authenticated frame HTTPS when eligible; the app publishes updates and
+  activity hints only after the same eligibility check.
+
+**Removal:** The existing app's `POST /api/frame/delete` endpoint requires the
+owner role to delete a frame for everyone. It first deletes memberships and
+resets the physical device token, then calls Ably's scoped
+`POST /keys/{apiKeyName}/revokeTokens` with `clientId:{deviceId}`. Deleting a
+*shared member's* access does **not** revoke the owner's MQTT connection.
+If the Ably call fails, local deletion remains complete and the API records
+a `revoke_ably_mqtt` warning. The HTTP credential path rejects future
+requests because the frame is no longer paired.
+
+**Important Ably prerequisite:** In Ably dashboard, enable **Revocable tokens**
+on the *signing API key* **before issuing JWTs**. Older non-revocable tokens
+cannot be retrospectively revoked. An Ably revocation call does not block
+re-issuance by itself: the removed `devices` and `device_members` records
+do that. Without broker revocation, outstanding JWTs may remain usable
+until their one-hour expiry. Alert an operator to review warnings and manually
+remediate failed revocations before selling. Direct database edits or
+ownership-transfer paths that bypass the owner's deletion endpoint are **not**
+broker-revoked by this integration; all future removal paths must call the same
+revocation service.
+
+**Not yet a commercial release:** The legacy public pairing/status token
+delivery path described in `docs/pairing-v2-security-design.md` needs
+authenticated physical enrollment, token rotation and v2-only enforcement
+before broad automatic MQTT access. Do not enable the automatic gate merely
+because tests pass. The five-device loaned pilot may continue with existing
+HTTPS fallback and explicit canary while hardware validation is pending.
+
+Rollback: unset `MQTT_ABLY_AUTO_ENABLED` and redeploy; frames already
+connected with a valid JWT may remain connected until token expiration unless
+Ably revocation is issued. This is **not** an emergency token-revocation
+mechanism; use Ably's revocation API for that.
