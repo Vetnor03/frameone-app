@@ -37,7 +37,7 @@ export function ablyAutoConfigured(env: MqttRolloutEnv): boolean {
       env.ablyRootCaPem.length > 4096 ||
       !env.ablyRootCaPem.includes('-----BEGIN CERTIFICATE-----') ||
       !env.ablyRootCaPem.includes('-----END CERTIFICATE-----') ||
-      !since || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\\.\d{3}Z$/.test(since)) return false
+      !since || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(since)) return false
   const timestamp = Date.parse(since)
   return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === since
 }
