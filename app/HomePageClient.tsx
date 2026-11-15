@@ -9592,7 +9592,7 @@ function FrameSetupFlow({
   onComplete: (selection: FrameSetupSelection) => Promise<void>
 }) {
   // Resume the same weather/Connect page after OAuth redirects or a reload.
-  // Legacy Normal/Custom drafts enter the new streamlined flow safely.
+  // Older onboarding drafts enter the new streamlined flow safely.
   const savedDraft = typeof window === 'undefined' ? null : (() => {
     try { return JSON.parse(sessionStorage.getItem(`remind:onboarding:${activeDeviceId}`) || 'null') }
     catch { return null }
@@ -9600,7 +9600,10 @@ function FrameSetupFlow({
   const [step, setStep] = useState<'weather' | 'connect'>(() =>
     savedDraft?.step === 'connect' && hasChosenWeatherLocation(savedDraft?.modules?.weather?.[0]) ? 'connect' : 'weather',
   )
-  const [modules, setModules] = useState<Record<string, any>>({
+  const [modules, setModules] = useState<Record<string, unknown> & {
+    weather?: WeatherLocationCfg[]
+    integrations?: Record<string, Record<string, unknown>>
+  }>({
     ...(savedDraft?.modules || {}),
     integration_selection_explicit: true,
     integrations: { ...(savedDraft?.modules?.integrations || {}) },
