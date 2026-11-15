@@ -9963,12 +9963,21 @@ function MyFramesSection({
       })
       const payload = await resp.json().catch(() => null)
       if (!resp.ok || payload?.ok !== true) throw new Error(payload?.error || 'delete_failed')
+      const mqttRevocationFailed = Array.isArray(payload?.warnings) &&
+        payload.warnings.some((warning: unknown) =>
+          Boolean(warning && typeof warning === 'object' &&
+            (warning as { step?: unknown }).step === 'revoke_ably_mqtt'))
 
       const nextFrames = frames.filter((item) => item.device_id !== frame.device_id)
       onFramesChanged(nextFrames)
       if (activeDeviceId === frame.device_id && nextFrames.length > 0) onSelectDevice(nextFrames[0].device_id)
       if (nextFrames.length === 0) setEditingFrames(false)
       setDeleteTarget(null)
+      if (mqttRevocationFailed) {
+        alert(language === 'no'
+          ? 'Rammen er fjernet, men MQTT-tilgangen kunne ikke trekkes tilbake hos Ably. En eksisterende tilkobling kan vare opptil én time. Kontakt support ved mistanke om uautorisert tilgang.'
+          : 'Frame removed, but MQTT access could not be revoked at Ably. An existing connection may remain active for up to one hour. Contact support if unauthorized access is suspected.')
+      }
     } catch (e: unknown) {
       setDeleteError(errorMessage(e))
     } finally {
