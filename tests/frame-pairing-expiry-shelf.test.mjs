@@ -36,3 +36,13 @@ test('pairing shelf does not immediately request a fresh code after unplug wake'
   assert.ok(passiveWakeIndex >= 0 && nextPairStartIndex > passiveWakeIndex)
   assert.ok(frameLoop.slice(passiveWakeIndex, nextPairStartIndex).includes('showPairingShelfAndSleep(pwrEarly.usbPresent)'))
 })
+
+test('pairing code screen keeps the scan and login directions but omits charger restart hint', () => {
+  const start = pairingScreen.indexOf('static void drawPairCode(void* vctx)')
+  const end = pairingScreen.indexOf('void showPairCode(', start)
+  assert.ok(start >= 0 && end > start)
+  const screen = pairingScreen.slice(start, end)
+  assert.match(screen, /Pair your frame/)
+  assert.match(screen, /Scan QR, login and enter code in app/)
+  assert.doesNotMatch(screen, /Reconnect charger to restart pairing/)
+})
