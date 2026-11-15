@@ -1,4 +1,3 @@
-import { createServiceClient } from '../supabase/serviceClient'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ablyAutoConfigured, ablyAutoForPairedDevice, type MqttRolloutEnv } from './mqttRollout.ts'
 
@@ -22,7 +21,8 @@ export async function isAblyAutoEligibleForDevice(
 ): Promise<boolean> {
   if (!ablyAutoConfigured(env) || !/^[A-Za-z0-9_-]{1,128}$/.test(deviceId)) return false
   try {
-    const db = database ?? createServiceClient()
+    // Avoid opening a service-role connection unless this rollout is enabled.
+    const db = database ?? (await import('../supabase/serviceClient')).createServiceClient()
     const { data: device, error: deviceError } = await db
       .from('devices').select('paired_at').eq('device_id', deviceId).maybeSingle()
     if (deviceError || !device || !ablyAutoForPairedDevice(deviceId, device.paired_at, true, env)) return false
