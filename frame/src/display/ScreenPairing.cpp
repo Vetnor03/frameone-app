@@ -128,7 +128,6 @@ static void drawPairCode(void* vctx) {
   drawCenteredInFrame("re-mind.no", qrY + PairingQrBitmap::HEIGHT + 28, &FreeMonoBold12pt7b);
   drawCenteredInFrame(ctx->code, qrY + PairingQrBitmap::HEIGHT + 74, &FreeMonoBold18pt7b);
   drawCenteredInFrame("Scan QR, login and enter code in app", FRAME_Y + 386, &FreeMonoBold9pt7b);
-  drawCenteredInFrame("Reconnect charger to restart pairing", FRAME_Y + 414, &FreeMonoBold9pt7b);
 }
 
 void showPairCode(const char* code, int expiresInSec, const char* appUrl) {
