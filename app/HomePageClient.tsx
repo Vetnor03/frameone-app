@@ -1294,7 +1294,7 @@ export default function HomePage() {
   // Experimental Smart Instant: send best-effort foreground activity only for
   // the explicitly allowlisted prototype. No extra requests for customer
   // frames, no background traffic, and no new Update/revision is requested.
-  // After ~2 minutes without interaction the frame returns to low-power mode
+  // After hints stop, the frame returns to low-power mode within 75 seconds
   // independently, even if the browser is killed without an unload event.
   useEffect(() => {
     if (!userId || !activeDeviceId || powerSaver) return
@@ -1309,8 +1309,8 @@ export default function HomePage() {
     async function signalActivity() {
       if (cancelled || disabledOnServer || inFlight ||
           document.visibilityState !== 'visible' ||
-          Date.now() - lastInteractionAt > 90_000 ||
-          Date.now() - lastSentAt < 50_000) return
+          Date.now() - lastInteractionAt >= 60_000 ||
+          Date.now() - lastSentAt < 30_000) return
 
       lastSentAt = Date.now()
       inFlight = true
@@ -1340,7 +1340,7 @@ export default function HomePage() {
 
     function noteInteraction() {
       const now = Date.now()
-      const wasInactive = now - lastInteractionAt > 90_000
+      const wasInactive = now - lastInteractionAt >= 60_000
       lastInteractionAt = now
       if (wasInactive) lastSentAt = 0
       if (wasInactive) void signalActivity()
@@ -1359,7 +1359,7 @@ export default function HomePage() {
     window.addEventListener('focus', onVisibility)
     document.addEventListener('pointerdown', noteInteraction, { passive: true })
     document.addEventListener('keydown', noteInteraction)
-    const interval = window.setInterval(() => { void signalActivity() }, 45_000)
+    const interval = window.setInterval(() => { void signalActivity() }, 15_000)
 
     return () => {
       cancelled = true
