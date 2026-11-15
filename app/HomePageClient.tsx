@@ -1291,9 +1291,9 @@ export default function HomePage() {
     return persisted
   }
 
-  // Experimental Smart Instant: send best-effort foreground activity only for
-  // the explicitly allowlisted prototype. No extra requests for customer
-  // frames, no background traffic, and no new Update/revision is requested.
+  // Smart Instant sends best-effort foreground hints only for frames explicitly
+  // allowlisted by the backend. No traffic for unapproved frames or background
+  // tabs, and no new Update/revision is requested.
   // After hints stop, the frame returns to low-power mode within 75 seconds
   // independently, even if the browser is killed without an unload event.
   useEffect(() => {
