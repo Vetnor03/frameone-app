@@ -83,3 +83,21 @@ test('connect apps dialogs and OAuth routes remain wired to the onboarding flow'
   assert.match(connect, /changeFrameIntegration\('teams', \{ enabled: true \}\)/)
   assert.match(connect, /changeFrameIntegration\('google-calendar', \{ enabled: true \}\)/)
 })
+
+test('new frame Connect Apps is opt-in even with previously authorized account integrations', () => {
+  const connect = source.slice(source.indexOf('function ConnectAppsScreen('), source.indexOf('function FrameSetupFlow('))
+  const repairStart = connect.indexOf('// Credential connection is now the only on/off control.')
+  const repair = connect.slice(repairStart, connect.indexOf('const apps = INTEGRATION_CATALOGUE', repairStart))
+  assert.match(repair, /if \(startup \|\| !frameSettingsReady \|\| !activeDeviceId/)
+  const status = connect.slice(connect.indexOf('function getAppConnected('), connect.indexOf('const sortedApps ='))
+  assert.match(status, /if \(startup && !frameUsesIntegration\(modulesJson, app\.key\)\) return false/)
+  // The user explicitly selects which connected accounts to reuse.
+  assert.match(connect, /if \(teamsAccountConnected\) \{ setTeamsConnected\(true\); changeFrameIntegration\('teams', \{ enabled: true \}\)/)
+  assert.match(connect, /if \(googleAccountConnected\) \{ setGoogleConnected\(true\); changeFrameIntegration\('google-calendar', \{ enabled: true \}\)/)
+  assert.match(connect, /if \(spondAccountConnected\) \{ setSpondConnected\(true\); changeFrameIntegration\('spond', \{ enabled: true \}\)/)
+  // Removing a provider from a setup draft must not revoke global account credentials.
+  assert.match(connect, /startup && credentialProvider \? \(/)
+  assert.match(connect, /onClick=\{\(\) => changeFrameIntegration\(app\.key, \{ enabled: false \}\)\}/)
+  assert.match(connect, /\{language === 'no' \? 'FJERN' : 'REMOVE'\}/)
+  assert.match(onboarding, /integration_selection_explicit: true/)
+})
