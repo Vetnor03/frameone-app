@@ -12,14 +12,16 @@ function setupSource() {
   return home.slice(home.indexOf('function FrameSetupFlow({'), home.indexOf('function FirstFrameOnboarding({'))
 }
 
-test('first setup guides Reminders, Weather, Countdown and excludes AI Follow', () => {
-  assert.match(setupSource(), /guidedModules = \['reminders', 'weather', 'countdown'\] as const/)
-  assert.doesNotMatch(setupSource(), /AI Follow|assistant|ai-intro|plans/)
+test('first setup goes immediately to weather and then optional app connections', () => {
+  assert.match(setupSource(), /useState<'weather' \| 'connect'>/)
+  assert.match(setupSource(), /if \(step === 'weather'\) return shell/)
+  assert.match(setupSource(), /setStep\('connect'\)/)
+  assert.doesNotMatch(setupSource(), /setupPurposes|AI Follow|create_ai_assistant_watch|<FrameLayoutRenderer/)
   assert.match(setupSource(), /isNo \? 'Neste' : 'Next'/)
 })
 
 test('completion uses canonical weather and an atomic idempotent transaction', () => {
-  assert.match(home, /nextModules\.weather = \[\{ \.\.\.OSLO_WEATHER \}\]/)
+  assert.match(home, /if \(!hasChosenWeatherLocation\(nextModules\.weather\?\.\[0\]\)\)/)
   assert.match(home, /complete_initial_device_onboarding/)
   assert.match(home, /pinned_tabs: nextPinnedTabs/)
   assert.match(home, /let nextPinnedTabs: ModuleKey\[\] = \[\]/)
