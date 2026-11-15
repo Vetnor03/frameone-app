@@ -32,17 +32,18 @@ test('tips are curated, limited, persisted and dismissible without AI', () => {
   assert.match(ui, /Dismiss assistant tip/)
 })
 
-test('proactive tips load persisted progress before selecting one tip per session', () => {
-  assert.equal(nextAssistantTip([], 'en')?.index, 0, 'orientation is first for a new user')
-  assert.equal(nextAssistantTip([0], 'en')?.index, 1, 'loaded persisted progress advances to groceries')
-  assert.equal(nextAssistantTip([0, 1], 'en')?.index, 2, 'a reopened app does not repeat its previous tip')
+test('new customers see frame-cell customization first while past tip indexes remain stable', () => {
+  assert.equal(nextAssistantTip([], 'en')?.id, 'customize-frame-cells')
+  assert.equal(nextAssistantTip([], 'en')?.index, 5)
+  assert.equal(nextAssistantTip([5], 'en')?.index, 0, 'existing landscape tip remains next')
+  assert.equal(nextAssistantTip([5, 0], 'en')?.index, 1, 'groceries remains at its historical index')
+  assert.equal(nextAssistantTip([5, 0, 1], 'en')?.index, 2)
   assert.match(ui, /if \(!tipsLoaded \|\| !tipsEnabled \|\| !canSelectTip \|\| tipSelected\.current\) return/)
   assert.match(ui, /tipSelected\.current = true/)
   assert.match(home, /canSelectTip=\{!assistantTipPresentedThisSession\}/)
   assert.match(home, /setAssistantTipsShown\(\(current\) => current\.includes\(index\) \? current : \[\.\.\.current, index\]\)/)
   assert.match(home, /supabase\.rpc\('mark_assistant_tip_shown'/)
 })
-
 test('a genuine background to foreground transition starts one new assistant visit', () => {
   assert.match(home, /document\.addEventListener\('visibilitychange', onVisibilityChange\)/)
   assert.match(home, /document\.visibilityState === 'hidden'\) wasHidden = true/)
@@ -70,30 +71,27 @@ test('exhausted tips remain exhausted and mark failures are diagnosed safely', (
   assert.doesNotMatch(home, /mark-shown-failed[^\n]*error\.message/)
 })
 
-test('legacy persisted indexes migrate without hiding landscape or repeating groceries', () => {
+test('legacy persisted tip indexes retain meaning and get the new customization tip', () => {
   const migratedGroceries = [1]
-  assert.equal(nextAssistantTip(migratedGroceries, 'en')?.index, 0, 'legacy [0] becomes [1], leaving landscape unseen')
-  assert.equal(nextAssistantTip([...migratedGroceries, 0], 'en')?.index, 2, 'after landscape, the next launch advances to reminder')
+  assert.equal(nextAssistantTip(migratedGroceries, 'en')?.index, 5)
+  assert.equal(nextAssistantTip([...migratedGroceries, 5], 'en')?.index, 0)
+  assert.equal(nextAssistantTip([...migratedGroceries, 5, 0], 'en')?.index, 2)
   assert.match(tipProgressionMigration, /when 0 then 1[\s\S]*when 1 then 2[\s\S]*when 2 then 3/)
   assert.match(tipProgressionMigration, /where assistant_tip_indexes_v2 is null/)
   assert.match(tipProgressionMigration, /group by case legacy_index[\s\S]*when 0 then 1/)
   assert.match(home, /setAssistantTipPresentedThisSession\(false\)[\s\S]*if \(!userId\) return/)
 })
-
-test('proactive tip copy is exact in English and Norwegian and remains free', () => {
-  assert.deepEqual(ASSISTANT_TIPS.map(({ en, no }) => ({ en, no })), [
-    { en: 'Turn your phone sideways to preview your frame.', no: 'Snu telefonen sidelengs for å se hva som vises på rammen.' },
-    { en: 'You can ask me to add groceries.', no: 'Du kan be meg legge til dagligvarer.' },
-    { en: 'Try: “Remind me to call Mum tomorrow.”', no: 'Prøv: «Minn meg på å ringe mamma i morgen.»' },
-    { en: 'I can help you find settings too.', no: 'Jeg kan også hjelpe deg å finne innstillinger.' },
-    { en: 'Want longer battery life? Turn on Power Save in Settings.', no: 'Vil du ha lengre batteritid? Slå på Strømsparing i Innstillinger.' },
+test('customization tip is localized and prior assistant tip IDs remain stable', () => {
+  assert.deepEqual(ASSISTANT_TIPS.map(({ id }) => id), [
+    'landscape-frame-preview', 'add-groceries', 'reminder-example', 'settings-help', 'power-save', 'customize-frame-cells',
   ])
-  assert.deepEqual(ASSISTANT_TIPS.map(({ id }) => id), ['landscape-frame-preview', 'add-groceries', 'reminder-example', 'settings-help', 'power-save'])
+  assert.equal(ASSISTANT_TIPS[5].en, 'Tap any cell in your frame preview to choose its module. You can change this anytime.')
+  assert.equal(ASSISTANT_TIPS[5].no, 'Trykk på et felt i rammevisningen for å velge modul. Du kan endre det når som helst.')
+  assert.equal(ASSISTANT_TIPS[0].en, 'Turn your phone sideways to preview your frame.')
   assert.doesNotMatch(tips, /fetch\(|openai|aiIntent/i)
 })
-
 test('assistant placeholder follows command tips and is neutral for informational tips', () => {
-  const reminderTip = nextAssistantTip([0, 1], 'en')
+  const reminderTip = nextAssistantTip([5, 0, 1], 'en')
   assert.equal(reminderTip?.id, 'reminder-example')
   assert.equal(assistantPlaceholder(reminderTip?.id, 'en'), 'Remind me to call Mum tomorrow')
   assert.notEqual(assistantPlaceholder(reminderTip?.id, 'en'), 'Add milk, eggs and bread')
