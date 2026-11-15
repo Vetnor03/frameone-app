@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { isAblyApiKey, revokeAblyFrameTokens } from '@/app/lib/device/mqttAbly'
 
 export const runtime = 'nodejs'
 
@@ -111,6 +112,18 @@ export async function POST(req: Request) {
     const reset = await resetDevicePairingState(supabase, deviceId, errors)
     if (!reset) {
       return NextResponse.json({ ok: false, error: 'device_reset_failed', details: errors }, { status: 500 })
+    }
+
+    // Revoke MQTT JWTs AFTER resetting the physical token and deleting all
+    // memberships. This closes the window for issuing any new credentials.
+    // Non-owner "leave shared frame" above does NOT revoke the owner's MQTT.
+    // Broker downtime must not roll back a locally completed frame removal.
+    if (isAblyApiKey(process.env.MQTT_ABLY_API_KEY)) {
+      const revoked = await revokeAblyFrameTokens(deviceId)
+      if (revoked !== 'revoked') {
+        errors.push({ step: 'revoke_ably_mqtt', error: 'broker_revocation_failed' })
+        console.warn('[frame/delete] MQTT revocation unavailable', { device_id: deviceId })
+      }
     }
 
     return NextResponse.json({ ok: true, reset: true, warnings: errors })

@@ -22,7 +22,39 @@ export type MqttRolloutEnv = {
   ablyCanaryDeviceId?: string
   ablyPilotEnabled?: string
   ablyPilotDeviceIds?: string
+  ablyAutoEnabled?: string
+  ablyAutoPairedSince?: string
 }
+/**
+ * Dormant until deliberately enabled after hardware and pairing-v2 checks.
+ * Only frames FIRST paired at/after this UTC cutoff become automatically
+ * eligible. Never silently include every old paired frame.
+ */
+export function ablyAutoConfigured(env: MqttRolloutEnv): boolean {
+  const since = env.ablyAutoPairedSince
+  if (env.ablyAutoEnabled !== 'true' || env.fleetProvider !== 'ably_jwt_v1' ||
+      !isAblyApiKey(env.ablyApiKey) || !env.ablyRootCaPem ||
+      env.ablyRootCaPem.length > 4096 ||
+      !env.ablyRootCaPem.includes('-----BEGIN CERTIFICATE-----') ||
+      !env.ablyRootCaPem.includes('-----END CERTIFICATE-----') ||
+      !since || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(since)) return false
+  const timestamp = Date.parse(since)
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === since
+}
+
+export function ablyAutoForPairedDevice(
+  deviceId: string,
+  pairedAt: unknown,
+  hasCurrentMember: boolean,
+  env: MqttRolloutEnv,
+): boolean {
+  if (!ablyAutoConfigured(env) || !/^[A-Za-z0-9_-]{1,128}$/.test(deviceId) ||
+      !hasCurrentMember || typeof pairedAt !== 'string') return false
+  const pairedTimestamp = Date.parse(pairedAt)
+  return Number.isFinite(pairedTimestamp) &&
+    pairedTimestamp >= Date.parse(env.ablyAutoPairedSince!)
+}
+
 // An explicit five-frame pilot is separate from both the canary and fleet.
 // Reject malformed, duplicated and oversized lists rather than broadening scope.
 export function ablyPilotForDevice(deviceId: string, env: MqttRolloutEnv): boolean {
