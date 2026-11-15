@@ -113,3 +113,45 @@ export async function getAblyFrameSubscribers(
     return null
   }
 }
+
+/**
+ * Invalidate already-issued Ably JWTs for a deleted frame. Ably requires the
+ * signing API key to have "Revocable tokens" enabled BEFORE those tokens were
+ * minted. Failures are reported to the owner-delete endpoint as warnings,
+ * never as a reason to restore a removed pairing.
+ */
+export async function revokeAblyFrameTokens(
+  deviceId: string,
+  apiKey: string | undefined = process.env.MQTT_ABLY_API_KEY,
+  request: typeof fetch = fetch,
+  issuedBeforeMs = Date.now(),
+): Promise<'revoked' | 'not_configured' | 'failed'> {
+  if (!isAblyApiKey(apiKey)) return 'not_configured'
+  if (!pilotRevisionTopic(deviceId) || !Number.isSafeInteger(issuedBeforeMs) ||
+      issuedBeforeMs <= 0) return 'failed'
+
+  const keyName = apiKey!.slice(0, apiKey!.indexOf(':'))
+  try {
+    const response = await request(
+      ABLY_REST_PUBLISH_ORIGIN + '/keys/' + encodeURIComponent(keyName) + '/revokeTokens',
+      {
+        method: 'POST',
+        redirect: 'error',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(4500),
+        headers: {
+          authorization: 'Basic ' + Buffer.from(apiKey!).toString('base64'),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          targets: ['clientId:' + deviceId],
+          issuedBefore: issuedBeforeMs,
+          allowReauthMargin: false,
+        }),
+      },
+    )
+    return response.ok ? 'revoked' : 'failed'
+  } catch {
+    return 'failed'
+  }
+}
