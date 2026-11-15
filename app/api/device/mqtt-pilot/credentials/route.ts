@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { authenticatePhysicalDevice, deviceIdFrom } from '@/app/lib/device/updateStateAuth'
 import { pilotCredentialPayload } from '@/app/lib/device/mqttPilotCredentials'
-import { ablyCanaryForDevice, mqttEnabledForDevice } from '@/app/lib/device/mqttRollout'
+import { ablyCanaryForDevice, ablyPilotForDevice, mqttEnabledForDevice } from '@/app/lib/device/mqttRollout'
 import { provisionFrameMqtt } from '@/app/lib/device/mqttFleetProvisioning'
 import { ABLY_MQTT_HOST, ABLY_MQTT_PORT, makeAblyFrameCredentials } from '@/app/lib/device/mqttAbly'
 
@@ -80,10 +80,16 @@ export async function GET(req: Request) {
     ablyApiKey: process.env.MQTT_ABLY_API_KEY,
     ablyRootCaPem: process.env.MQTT_ABLY_ROOT_CA_PEM,
   })
-  if (!ablyCanary && process.env.MQTT_FLEET_ENABLED !== 'true') {
+  const ablyPilot = ablyPilotForDevice(deviceId, {
+    ablyPilotEnabled: process.env.MQTT_ABLY_PILOT_ENABLED,
+    ablyPilotDeviceIds: process.env.MQTT_ABLY_PILOT_DEVICE_IDS,
+    ablyApiKey: process.env.MQTT_ABLY_API_KEY,
+    ablyRootCaPem: process.env.MQTT_ABLY_ROOT_CA_PEM,
+  })
+  if (!ablyCanary && !ablyPilot && process.env.MQTT_FLEET_ENABLED !== 'true') {
     return NextResponse.json({ error: 'not_enabled' }, { status: 404, headers: NO_STORE })
   }
-  if (ablyCanary || process.env.MQTT_FLEET_PROVIDER === 'ably_jwt_v1') {
+  if (ablyCanary || ablyPilot || process.env.MQTT_FLEET_PROVIDER === 'ably_jwt_v1') {
     // A channel-scoped, short-lived JWT replaces broker-side account creation.
     // Firmware will supply the JWT as its MQTT username, never the device token.
     const credentials = makeAblyFrameCredentials(deviceId, process.env.MQTT_ABLY_API_KEY)
