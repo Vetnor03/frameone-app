@@ -2451,7 +2451,8 @@ export default function HomePage() {
       nextCellsByLayout = { ...makeEmptyCellsByLayout(), pyramid: presetCells }
       // Normal setup uses curated NRK Toppsaker unless Latest News was chosen.
       const savedNews = nextModules.news && typeof nextModules.news === 'object' && !Array.isArray(nextModules.news) ? nextModules.news : {}
-      nextModules.news = { ...savedNews, feed: savedNews.feed === 'latest' ? 'latest' : 'top' }
+      // Start Normal frames with NRK Top Stories; users can change this from News settings later.
+      nextModules.news = { ...savedNews, feed: 'top' }
     }
 
     if (selection.purpose === 'normal' && (!Array.isArray(nextModules.weather) || !nextModules.weather.length)) {
@@ -9607,7 +9608,7 @@ function FrameSetupFlow({
   activeDeviceId: string
   onComplete: (selection: FrameSetupSelection) => Promise<void>
 }) {
-  const guidedModules = ['weather', 'news'] as const
+  const guidedModules = ['weather'] as const
   const savedDraft = typeof window === 'undefined' ? null : (() => { try { return JSON.parse(sessionStorage.getItem(`remind:onboarding:${activeDeviceId}`) || 'null') } catch { return null } })()
   const [step, setStep] = useState<'purpose' | 'guided' | 'custom' | 'connect'>(
     savedDraft?.step === 'guided' || savedDraft?.step === 'custom' || savedDraft?.step === 'connect' ? savedDraft.step : 'purpose',
@@ -9825,13 +9826,7 @@ function FrameSetupFlow({
   </>, true)
 
   return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">{current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nyheter' : 'News')}</h1>
-    {current === 'weather' && <div className="mt-6"><div className="mb-3 text-sm text-[color:var(--fg-65)]">{isNo ? 'Velg stedet der rammen skal stå.' : 'Choose the location where your frame will be used.'}</div><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Velg sted' : 'Select location')} cfg={modules.weather?.[0] || null} onPicked={(picked) => { setError(null); setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] })) }} />{!weatherLocationChosen && <p className="mt-3 text-xs leading-5 text-[color:var(--fg-60)]">{isNo ? 'Velg et sted for å få riktig værmelding. Dette kan endres senere.' : 'Choose a location for an accurate forecast. You can change it later.'}</p>}</div>}
-    {current === 'news' && <div className="mt-4 h-[min(450px,52vh)]"><NewsModuleSettingsTab
-      hideHeading
-      language={language}
-      feed={modules.news?.feed === 'latest' ? 'latest' : 'top'}
-      onFeedChange={(feed) => setModules(value => ({ ...value, news: { ...(value.news || {}), feed } }))}
-    /></div>}
+    {current === 'weather' && <div className="mt-6"><div className="mb-3 text-sm text-[color:var(--fg-65)]">{isNo ? 'Velg stedet der rammen skal stå.' : 'Choose the location where your frame will be used.'}</div><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Velg sted' : 'Select location')} cfg={modules.weather?.[0] || null} showDetails={false} onPicked={(picked) => { setError(null); setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] })) }} />{!weatherLocationChosen && <p className="mt-3 text-xs leading-5 text-[color:var(--fg-60)]">{isNo ? 'Velg et sted for å få riktig værmelding. Dette kan endres senere.' : 'Choose a location for an accurate forecast. You can change it later.'}</p>}</div>}
     {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={advance} disabled={saving || (current === 'weather' && !weatherLocationChosen)} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : (isNo ? 'Neste' : 'Next')}</button>
   </>, true)
 }
@@ -20047,24 +20042,25 @@ function WeatherLocationSheet({
     }
 
     setLoading(true)
+    const controller = new AbortController()
 
     const handle = window.setTimeout(async () => {
       try {
         const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=10&language=${language === 'no' ? 'no' : 'en'}&format=json`
 
-        const resp = await fetch(url)
+        const resp = await fetch(url, { signal: controller.signal })
         if (!resp.ok) throw new Error('Search failed')
 
         const data = await resp.json()
-        setResults(Array.isArray(data?.results) ? data.results : [])
+        if (!controller.signal.aborted) setResults(Array.isArray(data?.results) ? data.results : [])
       } catch {
-        setResults([])
+        if (!controller.signal.aborted) setResults([])
       } finally {
-        setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       }
     }, 250)
 
-    return () => window.clearTimeout(handle)
+    return () => { window.clearTimeout(handle); controller.abort() }
   }, [query, language])
 
   function pick(r: any) {

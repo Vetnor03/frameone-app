@@ -16,16 +16,19 @@ test('first screen restores Normal and Custom with current recommended preset', 
   assert.match(setup, /Choose your own modules and layout\./)
 })
 
-test('guided Normal setup is Reminders, Weather, News only', () => {
-  assert.match(setup, /guidedModules = \['reminders', 'weather', 'news'\] as const/)
+test('guided Normal setup is two pages: Weather and optional Connect Apps', () => {
+  assert.match(setup, /const guidedModules = \['weather'\] as const/)
+  assert.match(setup, /progressTotal = purpose === 'normal' \? guidedModules\.length \+ 1 : 2/)
+  assert.match(setup, /setStep\('connect'\)/)
+  assert.match(setup, /showDetails=\{false\} onPicked=/)
+  assert.doesNotMatch(setup, /<NewsModuleSettingsTab/)
   assert.doesNotMatch(setup, /current === 'date'/)
-  assert.match(setup, /moduleIndex \+ 1} \/ {guidedModules\.length}/)
   assert.doesNotMatch(setup, /AI Follow|create_ai_assistant_watch|get_ai_subscription_entitlements/)
 })
 
 test('normal completion creates all four unpinned modules while custom stays custom', () => {
   assert.match(home, /0: 'date', 1: 'reminders', 2: 'weather', 3: 'news'/)
-  assert.match(home, /nextModules\.news = \{ \.\.\.savedNews, feed: savedNews\.feed === 'latest' \? 'latest' : 'top' \}/)
+  assert.match(home, /nextModules\.news = \{ \.\.\.savedNews, feed: 'top' \}/)
   assert.match(home, /const starterCountdowns = norwegianStarterCountdowns\(language\)/)
   assert.match(home, /let nextPinnedTabs: ModuleKey\[\] = \[\]/)
   assert.match(setup, /finish\('custom'\)/)
