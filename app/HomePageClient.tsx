@@ -3795,7 +3795,8 @@ function ConnectAppsScreen({
   // per-frame provider must become active once its saved frame settings are loaded.
   // Repair one provider per render so each change uses the latest modules snapshot.
   useEffect(() => {
-    if ((!frameSettingsReady && !startup) || !activeDeviceId || modulesJson?.integration_selection_explicit !== true) return
+    // During first-time setup, existing account credentials must never opt a new frame in automatically.
+    if (startup || !frameSettingsReady || !activeDeviceId || modulesJson?.integration_selection_explicit !== true) return
     if (pendingTeamsEnableAfterOAuth || pendingGoogleEnableAfterOAuth) return
 
     const legacyDisabledProvider = ([
@@ -3862,6 +3863,8 @@ function ConnectAppsScreen({
   function getAppConnected(app: { key: ConnectAppKey; connectable: boolean }) {
     if (!app.connectable) return false
     if (locallyDisconnectedApps[app.key]) return false
+    // Existing account authorization is not an explicit selection for this new frame.
+    if (startup && !frameUsesIntegration(modulesJson, app.key)) return false
     if (app.key === 'spond') return spondAccountConnected
     if (app.key === 'teams') return teamsAccountConnected
     if (app.key === 'google-calendar') return googleAccountConnected
@@ -3977,7 +3980,15 @@ function ConnectAppsScreen({
                       {integrationStatusLabel(app.status, language)}
                     </span>
                   ) : connected ? (
-                    app.key === 'local-events' ? (
+                    startup && credentialProvider ? (
+                      <button
+                        type="button"
+                        onClick={() => changeFrameIntegration(app.key, { enabled: false })}
+                        className="shrink-0 h-8 rounded-xl border border-[color:var(--bd-20)] px-3 text-[11px] tracking-widest text-[color:var(--fg-70)]"
+                      >
+                        {language === 'no' ? 'FJERN' : 'REMOVE'}
+                      </button>
+                    ) : app.key === 'local-events' ? (
                       <div className="shrink-0 flex flex-col items-stretch gap-1.5">
                         <button type="button" onClick={disconnectLocalEvents} disabled={localEventsLoading || !localEventsCanManage} className="h-8 rounded-xl border border-[#d94b4b]/45 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
                           {localEventsLoading ? (language === 'no' ? 'KOBLER FRA…' : 'DISCONNECTING…') : (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')}
