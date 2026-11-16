@@ -12,7 +12,9 @@ function sanitizeCells(value) {
   if (!Array.isArray(value) || value.length > 64) return []
   return value.flatMap(cell => {
     if (!cell || typeof cell !== 'object' || !safeInteger(cell.slot, 0, 128)) return []
-    const module = cell.module === null || cell.module === '' ? null : cell.module
+    const rawModule = cell.module === null || cell.module === '' ? null : cell.module
+    // Settings encode repeated modules as weather:1, surf:2, etc.
+    const module = typeof rawModule === 'string' ? rawModule.split(':')[0] : rawModule
     if (module !== null && !modules.has(module)) return []
     const entry = { slot: cell.slot, module }
     if (safeInteger(cell.col, 0, 8) && safeInteger(cell.row, 0, 8)
