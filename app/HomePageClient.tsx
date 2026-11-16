@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { readLaunchPreview, writeLaunchPreview, clearLaunchPreview } from './lib/launchPreviewCache.mjs'
+import { appendCachedModuleTab, planModuleTabWarmup, tabCacheScope, type WarmModuleKey } from './lib/tabWarmup.mjs'
 import { fetchSurfScore } from './lib/fetchSurfScore'
 import { findSpotByLabel } from './lib/surf/spots'
 import { formatAppDate, formatAppNumericDate } from './lib/dateDisplay'
@@ -29,7 +30,7 @@ import { localEventGroupKeyFromRaw, groupSkipId } from './lib/integrations/local
 import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
 const WasteSetupModal = dynamic(() => import('./components/WasteSetupModal'))
 const IntegrationRequestCard = dynamic(() => import('./components/IntegrationRequestCard'))
-import AppSheet from './components/AppSheet'
+import AppSheet, { AppSheetVisibilityContext } from './components/AppSheet'
 const NewsModuleSettingsTab = dynamic(() => import('./components/NewsModuleSettingsTab'))
 import { wasteCollectionDisplayTitle } from './lib/integrations/waste/display'
 import { hasChosenWeatherLocation, norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders } from './lib/onboardingDefaults'
@@ -1243,6 +1244,9 @@ export default function HomePage() {
   }, [isPhoneLandscapeMirror])
 
   const [activeTab, setActiveTab] = useState<TabKey>('frame')
+  // Module content is retained only in authenticated in-memory React state,
+  // never persisted to the browser's long-term storage.
+  const [moduleTabCache, setModuleTabCache] = useState<{ scope: string; keys: WarmModuleKey[] }>({ scope: '', keys: [] })
   const [assistantDeepLink, setAssistantDeepLink] = useState<{ watchId: string; updateId: string | null } | null>(null)
   const [dirty, setDirty] = useState(false)
 
@@ -1727,6 +1731,44 @@ export default function HomePage() {
       { key: 'settings' as const, label: tx(language).settings },
     ]
   }, [dynamicTabs, language])
+
+  const moduleTabScope = tabCacheScope(userId, activeDeviceId)
+  const verifiedModuleTabsReady = !!moduleTabScope && framesLoaded && loadedSettingsDeviceId === activeDeviceId
+  const cachedModuleKeys = moduleTabCache.scope === moduleTabScope ? moduleTabCache.keys : []
+  const configuredModuleKeys = useMemo(() => dynamicTabs.map((tab) => tab.key), [dynamicTabs])
+
+  useEffect(() => {
+    if (!verifiedModuleTabsReady) return
+    setModuleTabCache((cache) => appendCachedModuleTab(cache, moduleTabScope, activeTab))
+  }, [activeTab, moduleTabScope, verifiedModuleTabsReady])
+
+  useEffect(() => {
+    if (!verifiedModuleTabsReady) return
+    // Warm configured module tabs progressively after the frame is ready.
+    // Avoid starting all Supabase requests at once during initial launch.
+    const pending = planModuleTabWarmup(configuredModuleKeys, [], activeTab)
+    let timers: number[] = []
+    const schedule = () => {
+      timers.forEach((timer) => window.clearTimeout(timer))
+      timers = []
+      if (document.visibilityState !== 'visible') return
+      timers = pending.map((key, index) => window.setTimeout(() => {
+        setModuleTabCache((cache) => appendCachedModuleTab(cache, moduleTabScope, key))
+      }, 550 + index * 450))
+    }
+    schedule()
+    document.addEventListener('visibilitychange', schedule)
+    return () => {
+      document.removeEventListener('visibilitychange', schedule)
+      timers.forEach((timer) => window.clearTimeout(timer))
+    }
+    // A warmed tab entering cache must not restart the entire queue.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moduleTabScope, verifiedModuleTabsReady, configuredModuleKeys])
+
+  const renderedModuleKeys = verifiedModuleTabsReady
+    ? configuredModuleKeys.filter((key) => key === activeTab || cachedModuleKeys.includes(key as WarmModuleKey))
+    : []
 
   const remindersShownOnFrame = Object.values(
     activeCustomLayoutId ? (customAssignments[activeCustomLayoutId] || {}) : (cellsByLayout[layoutKey] || {}),
@@ -3181,10 +3223,12 @@ async function handleSelectTab(k: TabKey) {
                 />
               )}
 
-              {activeTab !== 'frame' && activeTab !== 'connect' && activeTab !== 'settings' && (
-                <div className="relative h-full">
+              {(activeTab === 'assistant' ? ['assistant' as ModuleKey] : renderedModuleKeys).map((moduleKey) => {
+                const isActive = activeTab === moduleKey
+                return (
+                <div key={`${moduleTabScope}:${moduleKey}`} className={isActive ? 'relative h-full' : 'hidden'} aria-hidden={!isActive} inert={!isActive}>
                   <div className="absolute right-0 -top-4 z-20 flex items-center gap-2">
-                    {activeTab === 'reminders' && (
+                    {moduleKey === 'reminders' && (
                       <button
                         type="button"
                         onClick={() => void handleSelectTab('connect')}
@@ -3196,21 +3240,21 @@ async function handleSelectTab(k: TabKey) {
 
                     <button
                       onClick={() => {
-                        const module = activeTab as ModuleKey
+                        const selectedModule = moduleKey
                         setPinnedModuleTabs((prev) => {
-                          const exists = prev.includes(module)
-                          const nextPinned = exists ? prev.filter((m) => m !== module) : [...prev, module]
+                          const exists = prev.includes(selectedModule)
+                          const nextPinned = exists ? prev.filter((m) => m !== selectedModule) : [...prev, selectedModule]
                           markDirty({ pinnedModuleTabs: nextPinned })
                           return nextPinned
                         })
                       }}
                       className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-[color:var(--bd-20)] text-[color:var(--fg-70)]"
-                      title={pinnedModuleTabs.includes(activeTab as ModuleKey) ? 'Unpin tab' : 'Pin tab'}
+                      title={pinnedModuleTabs.includes(moduleKey as ModuleKey) ? 'Unpin tab' : 'Pin tab'}
                     >
                       <svg
                         viewBox="0 0 24 24"
-                        className={`w-4 h-4 ${pinnedModuleTabs.includes(activeTab as ModuleKey) ? 'fill-[#2aa3ff]' : 'fill-none'}`}
-                        stroke={pinnedModuleTabs.includes(activeTab as ModuleKey) ? '#2aa3ff' : 'currentColor'}
+                        className={`w-4 h-4 ${pinnedModuleTabs.includes(moduleKey as ModuleKey) ? 'fill-[#2aa3ff]' : 'fill-none'}`}
+                        stroke={pinnedModuleTabs.includes(moduleKey as ModuleKey) ? '#2aa3ff' : 'currentColor'}
                         strokeWidth="2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -3222,22 +3266,26 @@ async function handleSelectTab(k: TabKey) {
                     </button>
                   </div>
 
-                  {activeTab === 'assistant' ? (
+                  {moduleKey === 'assistant' ? (
                     <AIAssistantTab language={language} activeDeviceId={activeDeviceId} deepLink={assistantDeepLink} onDeepLinkHandled={finishAssistantDeepLink} onOpenPlans={() => { stickySettingsRef.current = true; preferInstantScrollRef.current = true; setSettingsSubpage('subscription'); setActiveTab('settings') }} />
                   ) : (
-                    <ModuleSettingsTab
-                      language={language}
-                      module={activeTab as ModuleKey}
-                      layoutKey={layoutKey}
-                      cells={cellsByLayout[layoutKey]}
-                      modulesJson={modulesJson}
-                      setModulesJson={setModulesJson}
-                      markDirty={markDirty}
-                      activeDeviceId={activeDeviceId}
-                    />
+                    <AppSheetVisibilityContext.Provider value={isActive}>
+                      <ModuleSettingsTab
+                        language={language}
+                        module={moduleKey as ModuleKey}
+                        isActive={isActive}
+                        layoutKey={layoutKey}
+                        cells={cellsByLayout[layoutKey]}
+                        modulesJson={modulesJson}
+                        setModulesJson={setModulesJson}
+                        markDirty={markDirty}
+                        activeDeviceId={activeDeviceId}
+                      />
+                    </AppSheetVisibilityContext.Provider>
                   )}
                 </div>
-              )}
+                )
+              })}
             </div>
 
             {activeTab === 'frame' && (
@@ -11119,6 +11167,7 @@ function filterCompletedOccurrences<
 function ModuleSettingsTab({
   language,
   module,
+  isActive,
   layoutKey,
   cells,
   modulesJson,
@@ -11128,6 +11177,7 @@ function ModuleSettingsTab({
 }: {
   language: AppLanguage
   module: ModuleKey
+  isActive: boolean
   layoutKey: LayoutKey
   cells: Record<number, ModuleKey | null>
   modulesJson: Record<string, any>
@@ -11173,7 +11223,7 @@ function ModuleSettingsTab({
   }
 
   if (module === 'reminders') {
-    return <RemindersModuleSettingsTab language={language} activeDeviceId={activeDeviceId} />
+    return <RemindersModuleSettingsTab language={language} activeDeviceId={activeDeviceId} isActive={isActive} />
   }
 
   if (module === 'news') {
@@ -11198,6 +11248,7 @@ function ModuleSettingsTab({
       <CountdownModuleSettingsTab
         language={language}
         activeDeviceId={activeDeviceId}
+        isActive={isActive}
       />
     )
   }
@@ -11229,7 +11280,7 @@ function ModuleSettingsTab({
   }
 
   if (module === 'groceries') {
-    return <GroceriesModuleSettingsTab language={language} activeDeviceId={activeDeviceId} />
+    return <GroceriesModuleSettingsTab language={language} activeDeviceId={activeDeviceId} isActive={isActive} />
   }
 
   return (
@@ -11678,10 +11729,13 @@ type CountdownItem = {
 function CountdownModuleSettingsTab({
   language,
   activeDeviceId,
+  isActive,
 }: {
   language: AppLanguage
   activeDeviceId: string | null
+  isActive: boolean
 }) {
+  const wasActiveRef = useRef(isActive)
   const [items, setItems] = useState<CountdownItem[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -11693,14 +11747,14 @@ function CountdownModuleSettingsTab({
   const [showBottomFade, setShowBottomFade] = useState(false)
   const t = tx(language)
 
-  async function loadItems() {
+  async function loadItems({ silent = false }: { silent?: boolean } = {}) {
     if (!activeDeviceId) {
       setItems([])
       return
     }
 
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
 
       const { data, error } = await supabase
         .from('countdown_events')
@@ -11710,8 +11764,10 @@ function CountdownModuleSettingsTab({
         .order('title', { ascending: true })
 
       if (error) {
-        alert(error.message)
-        setItems([])
+        if (!silent) {
+          alert(error.message)
+          setItems([])
+        }
         return
       }
 
@@ -11726,7 +11782,7 @@ function CountdownModuleSettingsTab({
 
       setItems(parsed)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -11761,8 +11817,17 @@ function CountdownModuleSettingsTab({
   }
 
   useEffect(() => {
-    loadItems()
+    loadItems({ silent: !isActive })
+    // Initial fetch is intentionally keyed to the frame; visibility revalidates separately.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDeviceId])
+
+  useEffect(() => {
+    const reentered = isActive && !wasActiveRef.current
+    wasActiveRef.current = isActive
+    if (reentered) void loadItems({ silent: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive])
 
   function updateFadeState() {
     const el = listRef.current
@@ -13024,11 +13089,14 @@ function groceryUndoHint(language: AppLanguage, checkedAt: string | null, nowMs:
 function GroceriesModuleSettingsTab({
   language,
   activeDeviceId,
+  isActive,
 }: {
   language: AppLanguage
   activeDeviceId: string | null
+  isActive: boolean
 }) {
   const t = tx(language)
+  const wasActiveRef = useRef(isActive)
   const [items, setItems] = useState<GroceryItem[]>([])
   const [loading, setLoading] = useState(false)
   const [suggestions, setSuggestions] = useState<GrocerySuggestion[]>([])
@@ -13047,6 +13115,8 @@ function GroceriesModuleSettingsTab({
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null)
   const dinnerRealtimeChannelRef = useRef<RealtimeChannel | null>(null)
   const dinnerLockChannelRef = useRef<RealtimeChannel | null>(null)
+  const dinnerPlanOpenRef = useRef(false)
+  dinnerPlanOpenRef.current = dinnerPlanOpen
   const dinnerLockClientIdRef = useRef(`dinner-lock-${Math.random().toString(36).slice(2)}`)
   const reloadTimerRef = useRef<number | null>(null)
   const suppressRealtimeUntilRef = useRef(0)
@@ -13158,16 +13228,20 @@ function GroceriesModuleSettingsTab({
 
     if (!silent) setLoading(true)
     try {
-      const cleanupCutoffIso = groceryCheckedExpiryCutoffIso()
-      const { error: cleanupError } = await supabase
-        .from('grocery_items')
-        .delete()
-        .eq('device_id', activeDeviceId)
-        .eq('is_checked', true)
-        .lte('checked_at', cleanupCutoffIso)
+      // Prewarming a hidden tab is strictly read-only. Expired-item cleanup
+      // retains its existing behavior when the user actually opens Groceries.
+      if (isActive) {
+        const cleanupCutoffIso = groceryCheckedExpiryCutoffIso()
+        const { error: cleanupError } = await supabase
+          .from('grocery_items')
+          .delete()
+          .eq('device_id', activeDeviceId)
+          .eq('is_checked', true)
+          .lte('checked_at', cleanupCutoffIso)
 
-      if (cleanupError) {
-        console.error('Failed to cleanup expired checked grocery items before loading', { error: cleanupError })
+        if (cleanupError) {
+          console.error('Failed to cleanup expired checked grocery items before loading', { error: cleanupError })
+        }
       }
 
       const { data, error } = await supabase
@@ -13177,7 +13251,7 @@ function GroceriesModuleSettingsTab({
         .order('updated_at', { ascending: false })
 
       if (error) {
-        alert(error.message)
+        if (!silent) alert(error.message)
         return
       }
 
@@ -13227,12 +13301,17 @@ function GroceriesModuleSettingsTab({
   }
 
   useEffect(() => {
-    loadGroceries()
+    loadGroceries({ silent: !isActive })
     loadHistory()
+    // Separate activation effect silently refreshes mounted tab state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDeviceId])
 
+  // A prewarmed tab fetches data once; background realtime subscriptions are
+  // established only while someone is actively viewing the grocery list.
+
   useEffect(() => {
-    if (!activeDeviceId) return
+    if (!isActive || !activeDeviceId) return
 
     const removeItemFromState = (itemId: string | null | undefined) => {
       if (!itemId) return
@@ -13352,7 +13431,9 @@ function GroceriesModuleSettingsTab({
         realtimeChannelRef.current = null
       }
     }
-  }, [activeDeviceId, groceryItemFromRow, upsertItemInState])
+    // The realtime subscription is deliberately scoped to frame and visibility.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDeviceId, isActive, groceryItemFromRow, upsertItemInState])
 
   useEffect(() => {
     return () => {
@@ -13402,7 +13483,7 @@ function GroceriesModuleSettingsTab({
   }, [items, dinnerPlanDays])
 
   useEffect(() => {
-    if (!activeDeviceId) return
+    if (!isActive || !activeDeviceId) return
 
     const expiredMainIds = items
       .filter((item) => groceryCheckedItemIsExpired(item, nowMs))
@@ -13426,10 +13507,10 @@ function GroceriesModuleSettingsTab({
         })
     }
 
-  }, [activeDeviceId, items, nowMs, loadGroceries])
+  }, [activeDeviceId, isActive, items, nowMs, loadGroceries])
 
   useEffect(() => {
-    if (!activeDeviceId) return
+    if (!isActive || !activeDeviceId) return
 
     const cleanedDinnerPlanDays = stripExpiredDinnerPlanItems(dinnerPlanDays, nowMs)
     const beforeCount = dinnerPlanDays.reduce((count, day) => count + day.items.length, 0)
@@ -13463,7 +13544,7 @@ function GroceriesModuleSettingsTab({
       const { error } = await supabase.from('dinner_plan_days').upsert(payload, { onConflict: 'device_id,date' })
       if (error) console.error('Failed to persist expired checked dinner plan cleanup', { error })
     })()
-  }, [activeDeviceId, dinnerPlanDays, dinnerPlanWeekOffset, nowMs])
+  }, [activeDeviceId, isActive, dinnerPlanDays, dinnerPlanWeekOffset, nowMs])
 
 
   const fetchDinnerPlanDays = useCallback(async (weekOffset: DinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
@@ -13499,7 +13580,20 @@ function GroceriesModuleSettingsTab({
   }, [loadDinnerPlan])
 
   useEffect(() => {
-    if (!activeDeviceId) return
+    const reentered = isActive && !wasActiveRef.current
+    wasActiveRef.current = isActive
+    if (reentered) {
+      // Show the retained content immediately; silently fetch any updates
+      // made on another device while this tab was hidden.
+      void loadGroceries({ silent: true, preserveScroll: true })
+      void loadDinnerPlan()
+    }
+    // Load functions intentionally use the current device's component closure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive])
+
+  useEffect(() => {
+    if (!isActive || !activeDeviceId) return
     if (dinnerRealtimeChannelRef.current) {
       supabase.removeChannel(dinnerRealtimeChannelRef.current)
       dinnerRealtimeChannelRef.current = null
@@ -13516,10 +13610,10 @@ function GroceriesModuleSettingsTab({
       supabase.removeChannel(channel)
       if (dinnerRealtimeChannelRef.current === channel) dinnerRealtimeChannelRef.current = null
     }
-  }, [activeDeviceId, dinnerPlanOpen, loadDinnerPlan])
+  }, [activeDeviceId, isActive, dinnerPlanOpen, loadDinnerPlan])
 
   useEffect(() => {
-    if (!activeDeviceId) {
+    if (!activeDeviceId || !isActive) {
       setDinnerPlanLockedByOtherUser(false)
       return
     }
@@ -13541,7 +13635,7 @@ function GroceriesModuleSettingsTab({
         if (status !== 'SUBSCRIBED') return
         await channel.track({
           clientId: dinnerLockClientIdRef.current,
-          isEditingDinnerPlan: false,
+          isEditingDinnerPlan: dinnerPlanOpenRef.current,
         })
         updateLockedState()
       })
@@ -13550,7 +13644,7 @@ function GroceriesModuleSettingsTab({
       supabase.removeChannel(channel)
       if (dinnerLockChannelRef.current === channel) dinnerLockChannelRef.current = null
     }
-  }, [activeDeviceId])
+  }, [activeDeviceId, isActive])
 
   useEffect(() => {
     const channel = dinnerLockChannelRef.current
@@ -14954,10 +15048,13 @@ function GrocerySuggestionSwipeRow({
 function RemindersModuleSettingsTab({
   language,
   activeDeviceId,
+  isActive,
 }: {
   language: AppLanguage
   activeDeviceId: string | null
+  isActive: boolean
 }) {
+  const wasActiveRef = useRef(isActive)
   const [reminders, setReminders] = useState<ReminderUiItem[]>([])
   const [completedOccurrences, setCompletedOccurrences] = useState<ReminderCompletionItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -15005,8 +15102,8 @@ function RemindersModuleSettingsTab({
         .order('title', { ascending: true })
 
       if (error) {
-        alert(error.message)
         if (!silent) {
+          alert(error.message)
           setReminders([])
           setCompletedOccurrences([])
         }
@@ -15018,8 +15115,10 @@ function RemindersModuleSettingsTab({
         .eq('device_id', activeDeviceId)
 
       if (completionsError) {
-        alert(completionsError.message)
-        if (!silent) setCompletedOccurrences([])
+        if (!silent) {
+          alert(completionsError.message)
+          setCompletedOccurrences([])
+        }
       } else {
         setCompletedOccurrences(
           (completionsData || [])
@@ -15069,7 +15168,7 @@ const manualItems: ReminderUiItem[] = (data || [])
         }
         setAvailableSources(['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[])
 
-        if (connectedSources.has('teams')) {
+        if (isActive && connectedSources.has('teams')) {
           try {
             const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
             if (accessToken) {
@@ -15088,7 +15187,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           }
         }
 
-        if (connectedSources.has('google-calendar')) {
+        if (isActive && connectedSources.has('google-calendar')) {
           try {
             const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
             if (accessToken) {
@@ -15193,8 +15292,18 @@ const manualItems: ReminderUiItem[] = (data || [])
   }
 
   useEffect(() => {
-    loadReminders()
+    loadReminders({ silent: !isActive })
+    // Returning to the tab performs a separate background revalidation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDeviceId])
+
+  useEffect(() => {
+    const reentered = isActive && !wasActiveRef.current
+    wasActiveRef.current = isActive
+    if (reentered) void loadReminders({ silent: true })
+    // Retained reminder data appears immediately; revalidate when visible.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive])
 
   useEffect(() => {
     if (!availableSources.includes(sourceFilter)) setSourceFilter('remind')

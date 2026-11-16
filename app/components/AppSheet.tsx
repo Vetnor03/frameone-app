@@ -1,7 +1,10 @@
 'use client'
 
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useId, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+
+// Portaled sheets must respect the visibility of a cached but hidden tab.
+export const AppSheetVisibilityContext = createContext(true)
 
 type Viewport = { top: number; left: number; width: number; height: number; keyboardOpen: boolean }
 
@@ -39,6 +42,7 @@ export default function AppSheet({
   className?: string
 }) {
   const labelId = useId()
+  const parentTabVisible = useContext(AppSheetVisibilityContext)
   const [viewport, setViewport] = useState<Viewport | null>(null)
 
   useEffect(() => {
@@ -60,7 +64,7 @@ export default function AppSheet({
     }
   }, [dismissible, onClose])
 
-  if (!viewport) return null
+  if (!viewport || !parentTabVisible) return null
 
   return createPortal(
     <div
