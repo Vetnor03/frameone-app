@@ -50,7 +50,7 @@ import { saveFrameSettings } from './lib/device/saveFrameSettings.mjs'
 import { reconcilePersistedDesiredState } from './lib/device/desiredStateReconciliation.mjs'
 import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, geometryWithAssignments, supportsPhysicalCustomLayout, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
 import { projectSlotMemoryIntoBuiltInLayout, sanitizeLayoutModuleMemory as sanitizeCanonicalLayoutModuleMemory, serializeBuiltInLayoutCells } from './lib/frameLayoutTransition'
-import { editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
+import { editorCells, initialEditorCells, withSlots } from './lib/customLayoutEditorState'
 const AddLayoutCard = dynamic(() => import('./components/CustomLayoutLibrary').then((mod) => mod.AddLayoutCard))
 const CustomLayoutPreview = dynamic(() => import('./components/CustomLayoutLibrary').then((mod) => mod.CustomLayoutPreview))
 const InlineCustomLayoutEditor = dynamic(() => import('./components/CustomLayoutLibrary').then((mod) => mod.InlineCustomLayoutEditor))
@@ -2510,6 +2510,9 @@ export default function HomePage() {
       cancelled = true
       if (unsub) unsub.unsubscribe()
     }
+    // Bootstrap must run once per route, not whenever these render-scoped
+    // settings/hydration helpers are recreated by a state update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disableLaunchSplash, router])
 
   async function selectDevice(id: string) {
