@@ -2413,8 +2413,9 @@ export default function HomePage() {
         setFrames([])
         setActiveDeviceId(null)
         isLoadedRef.current = false
-        setBooting(false)
-        setShowSplash(false)
+        // Keep the branded screen visible while Next navigates to sign-in.
+        setBooting(true)
+        setShowSplash(true)
         setShouldRenderApp(false)
         router.replace('/login')
         return
@@ -2467,8 +2468,8 @@ export default function HomePage() {
           sessionStorage.removeItem('remind:teams-oauth-device')
           sessionStorage.removeItem('remind:teams-oauth-result')
           setShouldRenderApp(false)
-          setShowSplash(false)
-          setBooting(false)
+          setShowSplash(true)
+          setBooting(true)
           router.replace('/login')
         } else if (nextSession.user.id !== session.user.id) {
           // Switching accounts should remount with the other account's cache.
@@ -3417,7 +3418,7 @@ async function handleSelectTab(k: TabKey) {
             <button type="button" onClick={() => window.location.reload()} className="rounded-xl border border-[color:var(--bd-30)] px-6 py-3 text-sm tracking-widest">{language === 'no' ? 'PRØV IGJEN' : 'RETRY'}</button>
           </div>
         )}
-        {showSplash && (shouldRenderApp || !authReady) && (
+        {showSplash && (
           <div
             className={`remind-splash-overlay ${booting ? '' : 'remind-splash-overlay-hiding'}`}
             aria-hidden={!booting}
