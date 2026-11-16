@@ -1747,11 +1747,21 @@ export default function HomePage() {
     // Warm configured module tabs progressively after the frame is ready.
     // Avoid starting all Supabase requests at once during initial launch.
     const pending = planModuleTabWarmup(configuredModuleKeys, [], activeTab)
-    const timers = pending.map((key, index) => window.setTimeout(() => {
+    let timers: number[] = []
+    const schedule = () => {
+      timers.forEach((timer) => window.clearTimeout(timer))
+      timers = []
       if (document.visibilityState !== 'visible') return
-      setModuleTabCache((cache) => appendCachedModuleTab(cache, moduleTabScope, key))
-    }, 550 + index * 450))
-    return () => timers.forEach((timer) => window.clearTimeout(timer))
+      timers = pending.map((key, index) => window.setTimeout(() => {
+        setModuleTabCache((cache) => appendCachedModuleTab(cache, moduleTabScope, key))
+      }, 550 + index * 450))
+    }
+    schedule()
+    document.addEventListener('visibilitychange', schedule)
+    return () => {
+      document.removeEventListener('visibilitychange', schedule)
+      timers.forEach((timer) => window.clearTimeout(timer))
+    }
     // A warmed tab entering cache must not restart the entire queue.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moduleTabScope, verifiedModuleTabsReady, configuredModuleKeys])
@@ -13105,6 +13115,8 @@ function GroceriesModuleSettingsTab({
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null)
   const dinnerRealtimeChannelRef = useRef<RealtimeChannel | null>(null)
   const dinnerLockChannelRef = useRef<RealtimeChannel | null>(null)
+  const dinnerPlanOpenRef = useRef(false)
+  dinnerPlanOpenRef.current = dinnerPlanOpen
   const dinnerLockClientIdRef = useRef(`dinner-lock-${Math.random().toString(36).slice(2)}`)
   const reloadTimerRef = useRef<number | null>(null)
   const suppressRealtimeUntilRef = useRef(0)
@@ -13623,7 +13635,7 @@ function GroceriesModuleSettingsTab({
         if (status !== 'SUBSCRIBED') return
         await channel.track({
           clientId: dinnerLockClientIdRef.current,
-          isEditingDinnerPlan: false,
+          isEditingDinnerPlan: dinnerPlanOpenRef.current,
         })
         updateLockedState()
       })
