@@ -13132,14 +13132,22 @@ function GroceriesModuleSettingsTab({
   language,
   activeDeviceId,
   isActive,
+  userId,
 }: {
   language: AppLanguage
   activeDeviceId: string | null
   isActive: boolean
+  userId: string | null
 }) {
   const t = tx(language)
   const wasActiveRef = useRef(isActive)
-  const [items, setItems] = useState<GroceryItem[]>([])
+  const groceryRequestGenerationRef = useRef(0)
+  const dinnerRequestGenerationRef = useRef(0)
+  const [firstGrocerySnapshot] = useState(() => readTabSnapshot<{kind:'list';items:GroceryItem[]}>(
+    typeof window === 'undefined' ? null : window.localStorage, userId, activeDeviceId, 'groceries', 'list'
+  ))
+  const [items, setItems] = useState<GroceryItem[]>(firstGrocerySnapshot?.data.items ?? [])
+  const [showingSavedGroceries, setShowingSavedGroceries] = useState(!!firstGrocerySnapshot)
   const [loading, setLoading] = useState(false)
   const [suggestions, setSuggestions] = useState<GrocerySuggestion[]>([])
   const [nowMs, setNowMs] = useState(() => Date.now())
@@ -13150,7 +13158,12 @@ function GroceriesModuleSettingsTab({
   const [dinnerPlanOpen, setDinnerPlanOpen] = useState(false)
   const [dinnerPlanLockedByOtherUser, setDinnerPlanLockedByOtherUser] = useState(false)
   const [dinnerPlanWeekOffset, setDinnerPlanWeekOffset] = useState<DinnerPlanWeekOffset>(() => defaultDinnerPlanWeekOffset())
-  const [dinnerPlanDays, setDinnerPlanDays] = useState<DinnerPlanDay[]>(defaultDinnerPlanDays())
+  const [firstDinnerSnapshot] = useState(() => readTabSnapshot<{kind:'dinner';days:DinnerPlanDay[]}>(
+    typeof window === 'undefined' ? null : window.localStorage, userId, activeDeviceId, 'groceries', `dinner-${defaultDinnerPlanWeekOffset()}`
+  ))
+  const [dinnerPlanDays, setDinnerPlanDays] = useState<DinnerPlanDay[]>(() =>
+    firstDinnerSnapshot?.data.days.length === 7 ? firstDinnerSnapshot.data.days : defaultDinnerPlanDays()
+  )
   const [dinnerPlanMainEditTarget, setDinnerPlanMainEditTarget] = useState<{ day: DinnerPlanDay['day']; idx: number } | null>(null)
   const listScrollRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollTopRef = useRef<number | null>(null)
@@ -13258,6 +13271,7 @@ function GroceriesModuleSettingsTab({
   }, [])
 
   async function loadGroceries(options?: { silent?: boolean; preserveScroll?: boolean; keepAnchorUnlessUserScrolled?: boolean }) {
+    const generation = ++groceryRequestGenerationRef.current
     const silent = !!options?.silent || !!options?.preserveScroll
     if (options?.preserveScroll || (options?.keepAnchorUnlessUserScrolled && !userHasScrolledListRef.current)) {
       pendingScrollTopRef.current = listScrollRef.current?.scrollTop ?? null
@@ -13268,7 +13282,7 @@ function GroceriesModuleSettingsTab({
       return
     }
 
-    if (!silent) setLoading(true)
+    if (!silent && !firstGrocerySnapshot) setLoading(true)
     try {
       // Prewarming a hidden tab is strictly read-only. Expired-item cleanup
       // retains its existing behavior when the user actually opens Groceries.
@@ -13292,8 +13306,10 @@ function GroceriesModuleSettingsTab({
         .eq('device_id', activeDeviceId)
         .order('updated_at', { ascending: false })
 
+      if (generation !== groceryRequestGenerationRef.current) return
       if (error) {
-        if (!silent) alert(error.message)
+        if (!silent && !firstGrocerySnapshot) alert(error.message)
+        // Keep saved groceries visible when offline or a fetch fails.
         return
       }
 
@@ -13301,8 +13317,10 @@ function GroceriesModuleSettingsTab({
         .map((row: any) => groceryItemFromRow(row))
         .filter((item): item is GroceryItem => !!item && !groceryCheckedItemIsExpired(item, Date.now()))
       setItems(parsed)
+      setShowingSavedGroceries(false)
+      writeTabSnapshot(window.localStorage, userId, activeDeviceId, 'groceries', 'list', {kind:'list',items:parsed})
     } finally {
-      if (!silent) setLoading(false)
+      if (generation === groceryRequestGenerationRef.current && !silent) setLoading(false)
     }
   }
 
@@ -13611,11 +13629,16 @@ function GroceriesModuleSettingsTab({
   }, [activeDeviceId])
 
   const loadDinnerPlan = useCallback(async (weekOffset: DinnerPlanWeekOffset = dinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
+    const generation = ++dinnerRequestGenerationRef.current
     const normalizedDays = await fetchDinnerPlanDays(weekOffset)
+    if (generation !== dinnerRequestGenerationRef.current) return normalizedDays
     setDinnerPlanWeekOffset(weekOffset)
     setDinnerPlanDays(normalizedDays)
+    if (activeDeviceId && userId) {
+      writeTabSnapshot(window.localStorage, userId, activeDeviceId, 'groceries', `dinner-${weekOffset}`, {kind:'dinner',days:normalizedDays})
+    }
     return normalizedDays
-  }, [dinnerPlanWeekOffset, fetchDinnerPlanDays])
+  }, [activeDeviceId, userId, dinnerPlanWeekOffset, fetchDinnerPlanDays])
 
   useEffect(() => {
     loadDinnerPlan()
@@ -14282,7 +14305,10 @@ function GroceriesModuleSettingsTab({
 
   return (
     <>
-    <div className="h-full flex flex-col min-h-0">
+    {showingSavedGroceries && (
+      <div role="status" className="text-[11px] text-[color:var(--fg-45)]">{language === 'no' ? 'Lagret handleliste · oppdateres' : 'Saved grocery list · refreshing'}</div>
+    )}
+    <div className="h-full flex flex-col min-h-0" inert={showingSavedGroceries}>
       <div ref={listScrollRef} className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
           <div className="p-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
