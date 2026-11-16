@@ -3302,16 +3302,16 @@ async function handleSelectTab(k: TabKey) {
                         <div role="status" className="py-5 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Laster fanen…' : 'Loading tab…'}</div>
                       ) : null}>
                         <ModuleSettingsTab
-                        language={language}
-                        module={moduleKey as ModuleKey}
-                        isActive={isActive}
-                        userId={userId}
-                        layoutKey={layoutKey}
-                        cells={cellsByLayout[layoutKey]}
-                        modulesJson={modulesJson}
-                        setModulesJson={setModulesJson}
-                        markDirty={markDirty}
-                        activeDeviceId={activeDeviceId}
+                          language={language}
+                          module={moduleKey as ModuleKey}
+                          isActive={isActive}
+                          userId={userId}
+                          layoutKey={layoutKey}
+                          cells={cellsByLayout[layoutKey]}
+                          modulesJson={modulesJson}
+                          setModulesJson={setModulesJson}
+                          markDirty={markDirty}
+                          activeDeviceId={activeDeviceId}
                         />
                       </React.Suspense>
                     </AppSheetVisibilityContext.Provider>
