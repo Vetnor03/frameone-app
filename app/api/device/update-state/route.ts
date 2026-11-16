@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { pilotEndedForDevice } from '@/app/lib/device/pilotLifecycle'
 import { authenticatePhysicalDevice, deviceIdFrom } from '@/app/lib/device/updateStateAuth'
 
 export const runtime = 'nodejs'
@@ -29,6 +30,7 @@ export async function GET(req: Request) {
 
   return NextResponse.json(
     {
+      pilot_ended: pilotEndedForDevice(deviceId),
       requested_revision: requestedRevision,
       displayed_revision: displayedRevision,
     },

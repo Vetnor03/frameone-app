@@ -449,6 +449,51 @@ static void goToShelfSleep(bool usbPresent) {
   esp_deep_sleep_start();
 }
 
+// Persist independently of RTC memory: unplugging/resetting must not resume a pilot.
+static bool g_pilotResumed = false;
+
+static bool pilotEndedLocally() {
+  Preferences prefs;
+  prefs.begin("frame", true);
+  const bool ended = prefs.getBool("pilot_end", false);
+  prefs.end();
+  return ended;
+}
+
+static void enterPilotEndedShelf(bool usbPresent) {
+  Preferences prefs;
+  prefs.begin("frame", false);
+  // Latch before drawing; retry an interrupted draw on the next physical wake.
+  prefs.putBool("pilot_end", true);
+  prefs.putBool("pilot_resume", true);
+  const bool drawn = prefs.getBool("pilot_drawn", false);
+  prefs.end();
+  if (!drawn) {
+    // The panel no longer contains the dashboard represented by cached hashes.
+    Preferences displayPrefs;
+    displayPrefs.begin("smart_refresh", false);
+    displayPrefs.remove("layout");
+    displayPrefs.end();
+    ensureDisplay();
+    DisplayCore::drawPilotEndedScreen();
+    shutdownDisplay();
+    prefs.begin("frame", false);
+    prefs.putBool("pilot_drawn", true);
+    prefs.end();
+  }
+  WiFi.disconnect(true, false);
+  WiFi.mode(WIFI_OFF);
+  goToShelfSleep(usbPresent);
+}
+
+static bool probeWithPilotControl(const String& token, LiveUpdateState& state, bool forceNetwork = false) {
+  if (!LiveUpdate::probe(token, state, forceNetwork)) return false;
+  if (state.hasPilotState && state.pilotEnded) {
+    enterPilotEndedShelf(readPowerSenseDebug().usbPresent);
+  }
+  return true;
+}
+
 static void goToRechargeSleep(bool usbPresent) {
   Serial.println("Battery empty: timer disabled, waiting for USB power-sense wake...");
 
@@ -1056,7 +1101,16 @@ static bool renderSmartDashboard(const BatteryState& batt, const PowerSenseDebug
   // and refetches module caches a second time (notably Reminders).
   if (plan.type == SmartDisplayPlan::FULL) {
     const bool success = renderLoadedDashboard(batt, pwr);
-    if (success) SmartRefresh::commitSuccessfulDisplay(desired, plan);
+    if (success) {
+      SmartRefresh::commitSuccessfulDisplay(desired, plan);
+      if (g_pilotResumed) {
+        Preferences prefs;
+        prefs.begin("frame", false);
+        prefs.remove("pilot_resume");
+        prefs.end();
+        g_pilotResumed = false;
+      }
+    }
     return success;
   }
 
@@ -1492,7 +1546,7 @@ static InteractiveModeResult runInteractiveMode(
       Serial.println("LiveUpdate: scheduled module deadline became due while interactive");
       // Preserve manual update priority if a command coincides with a module deadline.
       LiveUpdateState deadlineState{};
-      if (LiveUpdate::probe(DeviceIdentity::getToken(), deadlineState)) {
+      if (probeWithPilotControl(DeviceIdentity::getToken(), deadlineState)) {
         state = deadlineState;
       }
       return INTERACTIVE_NORMAL_SYNC_DUE;
@@ -1614,7 +1668,7 @@ static InteractiveModeResult runInteractiveMode(
 
     LiveUpdateState next{};
     const uint32_t probeStartedAtMs = millis();
-    if (!LiveUpdate::probe(DeviceIdentity::getToken(), next,
+    if (!probeWithPilotControl(DeviceIdentity::getToken(), next,
                           pushHint || subscriptionResync)) {
       if (pushHint) MqttPushPilot::restoreNotification();
       if (subscriptionResync) MqttPushPilot::restoreSubscriptionResync();
@@ -1679,6 +1733,32 @@ void setup() {
   BatteryManager::begin();
 
   PowerSenseDebug pwrEarly = readPowerSenseDebug();
+  {
+    Preferences prefs;
+    prefs.begin("frame", true);
+    g_pilotResumed = prefs.getBool("pilot_resume", false);
+    prefs.end();
+  }
+  if (pilotEndedLocally()) {
+    // Only a USB-powered wake may contact the server to request reactivation.
+    // A failure/missing field keeps the latch and the existing closing screen.
+    LiveUpdateState pilotState{};
+    const bool resume = pwrEarly.usbPresent &&
+      WiFiManagerV2::connectSaved(12000) &&
+      LiveUpdate::probe(DeviceIdentity::getToken(), pilotState, true) &&
+      pilotState.hasPilotState && !pilotState.pilotEnded;
+    if (!resume) {
+      enterPilotEndedShelf(pwrEarly.usbPresent);
+      return;
+    }
+    Preferences prefs;
+    prefs.begin("frame", false);
+    prefs.remove("pilot_end");
+    prefs.remove("pilot_drawn");
+    prefs.end();
+    // Force a fresh dashboard after reactivation, even if revisions match.
+    g_pilotResumed = true;
+  }
   BatteryState battEarly = BatteryManager::readAndUpdate(pwrEarly.usbPresent);
   BatteryManager::logState("early", battEarly);
   const bool hadPreviousUsbState = UpdateChecker::hasLastUsbPresent();
@@ -1723,7 +1803,7 @@ void setup() {
   // Cold boot initializes content; thereafter only module deadlines trigger
   // automatic source work. Manual probes and charger edges do not.
   bool normalSyncDue =
-    wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED ||
+    g_pilotResumed || wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED ||
     (g_nextScheduledWake > 0 && time(nullptr) >= g_nextScheduledWake);
   if (normalSyncDue) Serial.println("SmartRefresh: cold boot or module deadline due");
 
@@ -1953,6 +2033,11 @@ void setup() {
 
   activeSetupStep = SETUP_STEP_NONE;
 
+  // Include Power Saver frames: discover lifecycle control on every normal wake,
+  // before maintenance, onboarding or dashboard rendering can replace the screen.
+  LiveUpdateState lifecycleState{};
+  probeWithPilotControl(DeviceIdentity::getToken(), lifecycleState, true);
+
   // A claimed frame deliberately has no dashboard until onboarding commits its
   // canonical settings. Keep the pairing result useful rather than rendering
   // the frame-config endpoint's former arbitrary fallback dashboard.
@@ -2008,7 +2093,7 @@ void setup() {
   bool liveProbeOk = false;
   if (interactiveModeEnabled(pwrEarly.usbPresent)) {
     const uint32_t liveProbeStartedAtMs = millis();
-    liveProbeOk = LiveUpdate::probe(DeviceIdentity::getToken(), liveState);
+    liveProbeOk = probeWithPilotControl(DeviceIdentity::getToken(), liveState);
     if (liveProbeOk) {
       if (liveState.requestedRevision > liveState.displayedRevision) {
         explicitRevisionObservedAtMs = liveProbeStartedAtMs;
@@ -2099,7 +2184,7 @@ run_normal_sync:
   ContentRevisionState revisionState;
   const uint64_t knownRevision = SmartRefresh::displayedRevision();
   String scheduledModules = SmartRefresh::dueModuleCsv(g_smartState, time(nullptr));
-  if (wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED && !scheduledModules.length()) scheduledModules = "all";
+  if (g_pilotResumed || (wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED && !scheduledModules.length())) scheduledModules = "all";
   if (!SmartRefresh::probeRevision(DeviceIdentity::getToken(), knownRevision, revisionState)) {
     deferFailedScheduledRefresh("revision probe unavailable");
     Serial.println("Scheduled revision check unavailable; preserving display and sources");

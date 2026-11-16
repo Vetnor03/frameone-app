@@ -82,6 +82,8 @@ bool LiveUpdate::probe(const String& deviceToken, LiveUpdateState& out, bool for
     return false;
   }
 
+  g_cachedProbeState.hasPilotState = doc["pilot_ended"].is<bool>();
+  g_cachedProbeState.pilotEnded = g_cachedProbeState.hasPilotState && doc["pilot_ended"].as<bool>();
   g_cachedProbeState.requestedRevision = requested;
   g_cachedProbeState.displayedRevision = displayed;
   g_haveCachedProbeState = true;
