@@ -2324,6 +2324,7 @@ export default function HomePage() {
 
       const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
         if (!nextSession) {
+          cancelled = true
           setAuthReady(true)
           setUserId(null)
           setFramesLoaded(false)
@@ -2354,9 +2355,11 @@ export default function HomePage() {
         setActiveDeviceId(null)
         isLoadedRef.current = false
         setBooting(false)
+        setShowSplash(false)
         setFramesLoaded(false)
         return
       }
+      if (cancelled) return
       setFrames(list)
       setFramesLoaded(true)
       setIsFirstFramePairingComplete(list.length > 0)
