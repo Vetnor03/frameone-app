@@ -13187,6 +13187,10 @@ function GroceriesModuleSettingsTab({
   const [dinnerPlanDays, setDinnerPlanDays] = useState<DinnerPlanDay[]>(() =>
     firstDinnerSnapshot?.data.days.length === 7 ? firstDinnerSnapshot.data.days : defaultDinnerPlanDays()
   )
+  // Async fallback must read the latest plan without putting mutable plan data
+  // in loadDinnerPlan's dependency list (that would refetch on every response).
+  const dinnerPlanDaysRef = useRef(dinnerPlanDays)
+  dinnerPlanDaysRef.current = dinnerPlanDays
   const [dinnerPlanMainEditTarget, setDinnerPlanMainEditTarget] = useState<{ day: DinnerPlanDay['day']; idx: number } | null>(null)
   const listScrollRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollTopRef = useRef<number | null>(null)
@@ -13664,9 +13668,9 @@ function GroceriesModuleSettingsTab({
       return normalizedDays
     } catch {
       // A disconnected device should keep displaying the saved dinner plan.
-      return dinnerPlanDays
+      return dinnerPlanDaysRef.current
     }
-  }, [activeDeviceId, userId, dinnerPlanWeekOffset, dinnerPlanDays, fetchDinnerPlanDays])
+  }, [activeDeviceId, userId, dinnerPlanWeekOffset, fetchDinnerPlanDays])
 
   useEffect(() => {
     loadDinnerPlan()
