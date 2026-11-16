@@ -11717,10 +11717,13 @@ type CountdownItem = {
 function CountdownModuleSettingsTab({
   language,
   activeDeviceId,
+  isActive,
 }: {
   language: AppLanguage
   activeDeviceId: string | null
+  isActive: boolean
 }) {
+  const wasActiveRef = useRef(isActive)
   const [items, setItems] = useState<CountdownItem[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -11732,14 +11735,14 @@ function CountdownModuleSettingsTab({
   const [showBottomFade, setShowBottomFade] = useState(false)
   const t = tx(language)
 
-  async function loadItems() {
+  async function loadItems({ silent = false }: { silent?: boolean } = {}) {
     if (!activeDeviceId) {
       setItems([])
       return
     }
 
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
 
       const { data, error } = await supabase
         .from('countdown_events')
@@ -11749,8 +11752,10 @@ function CountdownModuleSettingsTab({
         .order('title', { ascending: true })
 
       if (error) {
-        alert(error.message)
-        setItems([])
+        if (!silent) {
+          alert(error.message)
+          setItems([])
+        }
         return
       }
 
@@ -11765,7 +11770,7 @@ function CountdownModuleSettingsTab({
 
       setItems(parsed)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -11802,6 +11807,13 @@ function CountdownModuleSettingsTab({
   useEffect(() => {
     loadItems()
   }, [activeDeviceId])
+
+  useEffect(() => {
+    const reentered = isActive && !wasActiveRef.current
+    wasActiveRef.current = isActive
+    if (reentered) void loadItems({ silent: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive])
 
   function updateFadeState() {
     const el = listRef.current
@@ -13063,11 +13075,14 @@ function groceryUndoHint(language: AppLanguage, checkedAt: string | null, nowMs:
 function GroceriesModuleSettingsTab({
   language,
   activeDeviceId,
+  isActive,
 }: {
   language: AppLanguage
   activeDeviceId: string | null
+  isActive: boolean
 }) {
   const t = tx(language)
+  const wasActiveRef = useRef(isActive)
   const [items, setItems] = useState<GroceryItem[]>([])
   const [loading, setLoading] = useState(false)
   const [suggestions, setSuggestions] = useState<GrocerySuggestion[]>([])
@@ -13270,8 +13285,11 @@ function GroceriesModuleSettingsTab({
     loadHistory()
   }, [activeDeviceId])
 
+  // A prewarmed tab fetches data once; background realtime subscriptions are
+  // established only while someone is actively viewing the grocery list.
+
   useEffect(() => {
-    if (!activeDeviceId) return
+    if (!isActive || !activeDeviceId) return
 
     const removeItemFromState = (itemId: string | null | undefined) => {
       if (!itemId) return
@@ -13391,7 +13409,7 @@ function GroceriesModuleSettingsTab({
         realtimeChannelRef.current = null
       }
     }
-  }, [activeDeviceId, groceryItemFromRow, upsertItemInState])
+  }, [activeDeviceId, isActive, groceryItemFromRow, upsertItemInState])
 
   useEffect(() => {
     return () => {
@@ -13538,7 +13556,20 @@ function GroceriesModuleSettingsTab({
   }, [loadDinnerPlan])
 
   useEffect(() => {
-    if (!activeDeviceId) return
+    const reentered = isActive && !wasActiveRef.current
+    wasActiveRef.current = isActive
+    if (reentered) {
+      // Show the retained content immediately; silently fetch any updates
+      // made on another device while this tab was hidden.
+      void loadGroceries({ silent: true, preserveScroll: true })
+      void loadDinnerPlan()
+    }
+    // Load functions intentionally use the current device's component closure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive])
+
+  useEffect(() => {
+    if (!isActive || !activeDeviceId) return
     if (dinnerRealtimeChannelRef.current) {
       supabase.removeChannel(dinnerRealtimeChannelRef.current)
       dinnerRealtimeChannelRef.current = null
@@ -13555,10 +13586,10 @@ function GroceriesModuleSettingsTab({
       supabase.removeChannel(channel)
       if (dinnerRealtimeChannelRef.current === channel) dinnerRealtimeChannelRef.current = null
     }
-  }, [activeDeviceId, dinnerPlanOpen, loadDinnerPlan])
+  }, [activeDeviceId, isActive, dinnerPlanOpen, loadDinnerPlan])
 
   useEffect(() => {
-    if (!activeDeviceId) {
+    if (!activeDeviceId || !isActive) {
       setDinnerPlanLockedByOtherUser(false)
       return
     }
@@ -13589,7 +13620,7 @@ function GroceriesModuleSettingsTab({
       supabase.removeChannel(channel)
       if (dinnerLockChannelRef.current === channel) dinnerLockChannelRef.current = null
     }
-  }, [activeDeviceId])
+  }, [activeDeviceId, isActive])
 
   useEffect(() => {
     const channel = dinnerLockChannelRef.current
@@ -14993,10 +15024,13 @@ function GrocerySuggestionSwipeRow({
 function RemindersModuleSettingsTab({
   language,
   activeDeviceId,
+  isActive,
 }: {
   language: AppLanguage
   activeDeviceId: string | null
+  isActive: boolean
 }) {
+  const wasActiveRef = useRef(isActive)
   const [reminders, setReminders] = useState<ReminderUiItem[]>([])
   const [completedOccurrences, setCompletedOccurrences] = useState<ReminderCompletionItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -15234,6 +15268,14 @@ const manualItems: ReminderUiItem[] = (data || [])
   useEffect(() => {
     loadReminders()
   }, [activeDeviceId])
+
+  useEffect(() => {
+    const reentered = isActive && !wasActiveRef.current
+    wasActiveRef.current = isActive
+    if (reentered) void loadReminders({ silent: true })
+    // Retained reminder data appears immediately; revalidate when visible.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive])
 
   useEffect(() => {
     if (!availableSources.includes(sourceFilter)) setSourceFilter('remind')
