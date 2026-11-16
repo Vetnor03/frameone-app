@@ -214,9 +214,12 @@ test('connected manual detection remains ten seconds while true deep sleep is dy
   assert.match(firmware, /enablePowerSenseWakeForNextSleep\(usbPresent\)/)
 })
 
-test('idle ten-second live probe cannot invoke smart content or display paths', () => {
+test('idle ten-second probe skips dashboard work; pilot control is handled separately', () => {
   const idle = firmware.slice(firmware.indexOf('// Exactly one cheap revision probe'), firmware.indexOf('// --------------------------------------\n// Setup'))
-  assert.match(idle, /LiveUpdate::probe/)
+  assert.match(idle, /probeWithPilotControl/)
+  const control = firmware.slice(firmware.indexOf('static bool probeWithPilotControl'), firmware.indexOf('static void goToRechargeSleep'))
+  assert.match(control, /if \(state.hasPilotState && state.pilotEnded\)/)
+  assert.match(control, /enterPilotEndedShelf/)
   assert.doesNotMatch(idle, /probeRevision|fetchRenderState|content-revision|render-state|ensureDisplay|renderSmartDashboard/)
 })
 
