@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { readLaunchPreview, writeLaunchPreview, clearLaunchPreview } from './lib/launchPreviewCache.mjs'
+import { readTabSnapshot, writeTabSnapshot, clearTabSnapshotsForUser } from './lib/tabSnapshotCache.mjs'
 import { appendCachedModuleTab, planModuleTabWarmup, tabCacheScope, type WarmModuleKey } from './lib/tabWarmup.mjs'
 import { fetchSurfScore } from './lib/fetchSurfScore'
 import { findSpotByLabel } from './lib/surf/spots'
@@ -1258,8 +1259,11 @@ export default function HomePage() {
   const [notificationState, setNotificationState] = useState<NotificationState>(loadingNotificationState)
   const [framesLoaded, setFramesLoaded] = useState(false)
   const [isFirstFramePairingComplete, setIsFirstFramePairingComplete] = useState(false)
-  const [booting, setBooting] = useState(false)
-  const [showSplash, setShowSplash] = useState(false)
+  // Server-render the splash before hydration; it stays until an authenticated
+  // cached preview has a verified frame membership or live settings are ready.
+  const [booting, setBooting] = useState(true)
+  const [showSplash, setShowSplash] = useState(true)
+  const [startupLoadError, setStartupLoadError] = useState(false)
   const [shouldRenderApp, setShouldRenderApp] = useState(false)
   const [setupDeviceId, setSetupDeviceId] = useState<string | null>(null)
   const [cachedPreviewDeviceId, setCachedPreviewDeviceId] = useState<string | null>(null)
@@ -2191,6 +2195,7 @@ export default function HomePage() {
   async function loadDeviceSettings(deviceId: string, ownerId: string | null = userId, knownDeviceIds: string[] = frames.map((frame) => frame.device_id)) {
     setLoadedSettingsDeviceId(null)
     let fetchedCustomLayouts: CustomLayout[] = []
+    let customLayoutsFetched = false
     // Start the settings lookup while the custom-layout endpoint is in flight.
     const settingsPromise = Promise.resolve(supabase
       .from('device_settings')
@@ -2203,14 +2208,16 @@ export default function HomePage() {
         const token = session.data.session?.access_token
         if (token) {
           const response = await fetch(`/api/custom-layouts?device_id=${encodeURIComponent(deviceId)}`, { headers: { Authorization: `Bearer ${token}` } })
-          if (response.ok) fetchedCustomLayouts = (await response.json()).layouts || []
+          if (response.ok) {
+            fetchedCustomLayouts = (await response.json()).layouts || []
+            customLayoutsFetched = true
+          }
         }
       } catch {
         // The initial screen and its cached preview must survive a layout API outage.
       }
     }
     if (activeDeviceIdRef.current !== deviceId) return
-    setCustomLayouts(fetchedCustomLayouts)
     const { data, error } = await settingsPromise
 
     if (activeDeviceIdRef.current !== deviceId) return
@@ -2258,6 +2265,9 @@ export default function HomePage() {
       ? ((json as any).pinned_tabs as unknown[]).filter((m): m is ModuleKey => isModuleKey(m) && m !== 'date')
       : []
 
+    // Commit layouts and settings in one React update after every fetch settles.
+    // A failed custom-layout endpoint must not blank an already shown preview.
+    if (customLayoutsFetched || !SHOW_CUSTOM_LAYOUT_UI) setCustomLayouts(fetchedCustomLayouts)
     setFrameTheme(nextFrameTheme)
     setPowerSaver(nextPowerSaver)
     setLanguage(nextLanguage)
@@ -2369,8 +2379,8 @@ export default function HomePage() {
     layoutModuleMemoryRef.current = mergeCellsIntoSlotMemory([], nextLayout, nextCells)
     setCachedPreviewDeviceId(cached.deviceId)
     setCachedPreviewSyncFailed(false)
-    setBooting(false)
-    setShowSplash(false)
+    // Keep the splash while the membership query verifies this cached frame.
+    // Otherwise we briefly expose a stale shell before knowing whose frame it is.
     performance.mark('remind:startup:preview-ready')
     performance.measure('remind:startup:preview', 'remind:startup:start', 'remind:startup:preview-ready')
   }
@@ -2385,8 +2395,9 @@ export default function HomePage() {
       setUserId(null)
       setFramesLoaded(false)
       setIsFirstFramePairingComplete(false)
-      setBooting(false)
-      setShowSplash(false)
+      setBooting(true)
+      setShowSplash(!disableLaunchSplash)
+      setStartupLoadError(false)
       setShouldRenderApp(false)
       setCachedPreviewDeviceId(null)
       setCachedPreviewSyncFailed(false)
@@ -2402,8 +2413,9 @@ export default function HomePage() {
         setFrames([])
         setActiveDeviceId(null)
         isLoadedRef.current = false
-        setBooting(false)
-        setShowSplash(false)
+        // Keep the branded screen visible while Next navigates to sign-in.
+        setBooting(true)
+        setShowSplash(true)
         setShouldRenderApp(false)
         router.replace('/login')
         return
@@ -2438,6 +2450,7 @@ export default function HomePage() {
         if (!nextSession) {
           cancelled = true
           clearLaunchPreview(window.localStorage, session.user.id)
+          clearTabSnapshotsForUser(window.localStorage, session.user.id)
           window.localStorage.removeItem('activeDeviceId')
           setCachedPreviewDeviceId(null)
           setAuthReady(true)
@@ -2455,8 +2468,8 @@ export default function HomePage() {
           sessionStorage.removeItem('remind:teams-oauth-device')
           sessionStorage.removeItem('remind:teams-oauth-result')
           setShouldRenderApp(false)
-          setShowSplash(false)
-          setBooting(false)
+          setShowSplash(true)
+          setBooting(true)
           router.replace('/login')
         } else if (nextSession.user.id !== session.user.id) {
           // Switching accounts should remount with the other account's cache.
@@ -2474,7 +2487,9 @@ export default function HomePage() {
         if (!cached) {
           setFrames([])
           setActiveDeviceId(null)
+          setStartupLoadError(true)
         }
+        // A stored preview is useful offline, but it remains read-only.
         isLoadedRef.current = false
         setBooting(false)
         setShowSplash(false)
@@ -2513,6 +2528,12 @@ export default function HomePage() {
       const savedExists = saved && list.some((x) => x.device_id === saved)
       const cachedExists = cached && list.some((x) => x.device_id === cached.deviceId)
       const selected = savedExists ? saved! : (cachedExists ? cached.deviceId : (list[0]?.device_id ?? null))
+      if (cached && cached.deviceId === selected) {
+        // The cached layout is now tied to a frame this account can access.
+        // Show it while settings refresh without a blank frame or large fade.
+        setBooting(false)
+        setShowSplash(false)
+      }
       if (cached && cached.deviceId !== selected) {
         // Never show a previously paired frame after access was revoked or
         // a different device is selected.
@@ -3036,7 +3057,10 @@ export default function HomePage() {
       console.warn('[notifications:logout-cleanup-failed]', { message: errorMessage(error) })
     }
     await supabase.auth.signOut()
-    if (userId) clearLaunchPreview(window.localStorage, userId)
+    if (userId) {
+      clearLaunchPreview(window.localStorage, userId)
+      clearTabSnapshotsForUser(window.localStorage, userId)
+    }
     router.replace('/login')
   }
 
@@ -3274,6 +3298,7 @@ async function handleSelectTab(k: TabKey) {
                         language={language}
                         module={moduleKey as ModuleKey}
                         isActive={isActive}
+                        userId={userId}
                         layoutKey={layoutKey}
                         cells={cellsByLayout[layoutKey]}
                         modulesJson={modulesJson}
@@ -3386,7 +3411,14 @@ async function handleSelectTab(k: TabKey) {
             {cachedPreviewSyncFailed ? 'OFFLINE PREVIEW' : 'SYNCING…'}
           </div>
         )}
-        {shouldRenderApp && showSplash && (
+        {startupLoadError && (
+          <div role="alert" className="remind-splash-overlay flex flex-col gap-5 px-8 text-center">
+            <div className="text-lg tracking-[0.14em] font-semibold">RE:MIND</div>
+            <p className="text-sm text-[color:var(--fg-60)]">{language === 'no' ? 'Kunne ikke laste rammene. Kontroller tilkoblingen og prøv igjen.' : 'Could not load your frames. Check your connection and try again.'}</p>
+            <button type="button" onClick={() => window.location.reload()} className="rounded-xl border border-[color:var(--bd-30)] px-6 py-3 text-sm tracking-widest">{language === 'no' ? 'PRØV IGJEN' : 'RETRY'}</button>
+          </div>
+        )}
+        {showSplash && (
           <div
             className={`remind-splash-overlay ${booting ? '' : 'remind-splash-overlay-hiding'}`}
             aria-hidden={!booting}
@@ -11168,6 +11200,7 @@ function ModuleSettingsTab({
   language,
   module,
   isActive,
+  userId,
   layoutKey,
   cells,
   modulesJson,
@@ -11178,6 +11211,7 @@ function ModuleSettingsTab({
   language: AppLanguage
   module: ModuleKey
   isActive: boolean
+  userId: string | null
   layoutKey: LayoutKey
   cells: Record<number, ModuleKey | null>
   modulesJson: Record<string, any>
@@ -11215,6 +11249,8 @@ function ModuleSettingsTab({
     return (
       <SkiModuleSettingsTab
         language={language}
+        userId={userId}
+        activeDeviceId={activeDeviceId}
         modulesJson={modulesJson}
         setModulesJson={setModulesJson}
         markDirty={markDirty}
@@ -11223,7 +11259,7 @@ function ModuleSettingsTab({
   }
 
   if (module === 'reminders') {
-    return <RemindersModuleSettingsTab language={language} activeDeviceId={activeDeviceId} isActive={isActive} />
+    return <RemindersModuleSettingsTab language={language} activeDeviceId={activeDeviceId} isActive={isActive} userId={userId} />
   }
 
   if (module === 'news') {
@@ -11234,6 +11270,8 @@ function ModuleSettingsTab({
     return <NewsModuleSettingsTab
       language={language}
       feed={feed}
+      userId={userId}
+      activeDeviceId={activeDeviceId}
       onFeedChange={(nextFeed) => {
         if (nextFeed === feed) return
         const nextModules = { ...modulesJson, news: { ...savedFeed, feed: nextFeed } }
@@ -11249,6 +11287,7 @@ function ModuleSettingsTab({
         language={language}
         activeDeviceId={activeDeviceId}
         isActive={isActive}
+        userId={userId}
       />
     )
   }
@@ -11280,7 +11319,7 @@ function ModuleSettingsTab({
   }
 
   if (module === 'groceries') {
-    return <GroceriesModuleSettingsTab language={language} activeDeviceId={activeDeviceId} isActive={isActive} />
+    return <GroceriesModuleSettingsTab language={language} activeDeviceId={activeDeviceId} isActive={isActive} userId={userId} />
   }
 
   return (
@@ -11413,11 +11452,15 @@ function skiForecastConditionLabel(symbolCode: string | null | undefined, isNo: 
 
 function SkiModuleSettingsTab({
   language,
+  userId,
+  activeDeviceId,
   modulesJson,
   setModulesJson,
   markDirty,
 }: {
   language: AppLanguage
+  userId: string | null
+  activeDeviceId: string | null
   modulesJson: Record<string, any>
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
   markDirty: (next?: { modulesJson?: Record<string, any> }) => void
@@ -11428,7 +11471,12 @@ function SkiModuleSettingsTab({
   const lat = Number(cfg?.lat ?? cfg?.latitude)
   const lon = Number(cfg?.lon ?? cfg?.longitude)
   const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lon)
-  const [summary, setSummary] = useState<SkiMetSummary | null>(null)
+  const skiVariant = hasCoordinates ? `loc-${Math.round(lat * 10000)}-${Math.round(lon * 10000)}` : 'none'
+  const [firstSkiSnapshot] = useState(() => readTabSnapshot<{summary:SkiMetSummary}>(
+    typeof window === 'undefined' ? null : window.localStorage, userId, activeDeviceId, 'ski', skiVariant
+  ))
+  const [summary, setSummary] = useState<SkiMetSummary | null>(firstSkiSnapshot?.data.summary ?? null)
+  const [showingSavedSki, setShowingSavedSki] = useState(!!firstSkiSnapshot)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState(false)
 
@@ -11444,11 +11492,15 @@ function SkiModuleSettingsTab({
   useEffect(() => {
     if (!hasCoordinates) {
       setSummary(null)
+      setShowingSavedSki(false)
       setLoading(false)
       setLoadError(false)
       return
     }
 
+    const cached = readTabSnapshot<{summary:SkiMetSummary}>(window.localStorage, userId, activeDeviceId, 'ski', skiVariant)
+    setSummary(cached?.data.summary ?? null)
+    setShowingSavedSki(!!cached)
     const controller = new AbortController()
     const params = new URLSearchParams({
       lat: String(lat),
@@ -11457,7 +11509,7 @@ function SkiModuleSettingsTab({
       lang: language,
     })
 
-    setLoading(true)
+    setLoading(!cached)
     setLoadError(false)
 
     fetch(`/api/ski/summary?${params.toString()}`, { signal: controller.signal })
@@ -11466,18 +11518,27 @@ function SkiModuleSettingsTab({
         if (!response.ok || !json?.current) throw new Error('ski_summary_failed')
         return json as SkiMetSummary
       })
-      .then((nextSummary) => setSummary(nextSummary))
+      .then((nextSummary) => {
+        if (controller.signal.aborted) return
+        setSummary(nextSummary)
+        setShowingSavedSki(false)
+        setLoadError(false)
+        writeTabSnapshot(window.localStorage, userId, activeDeviceId, 'ski', skiVariant, {summary:nextSummary})
+      })
       .catch((error) => {
         if (error?.name === 'AbortError') return
-        setSummary(null)
-        setLoadError(true)
+        // Keep older conditions visible and clearly marked until a fresh reply.
+        if (!cached) {
+          setSummary(null)
+          setLoadError(true)
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false)
       })
 
     return () => controller.abort()
-  }, [hasCoordinates, lat, lon, locationLabel, language])
+  }, [hasCoordinates, lat, lon, locationLabel, language, userId, activeDeviceId, skiVariant])
 
   const current = summary?.current ?? null
   const snow = summary?.snow ?? null
@@ -11505,7 +11566,8 @@ function SkiModuleSettingsTab({
 
   return (
     <div className="h-full min-h-0 overflow-y-auto overscroll-y-contain pb-10 pr-1">
-      <div className="space-y-6">
+      {showingSavedSki && <div role="status" className="mb-2 text-[11px] text-[color:var(--fg-45)]">{isNo ? 'Lagret skivær · oppdateres' : 'Saved ski conditions · refreshing'}</div>}
+      <div className={`space-y-6 ${showingSavedSki ? 'pointer-events-none' : ''}`}>
         <WeatherLocationRow
           language={language}
           id={1}
@@ -11730,13 +11792,20 @@ function CountdownModuleSettingsTab({
   language,
   activeDeviceId,
   isActive,
+  userId,
 }: {
   language: AppLanguage
   activeDeviceId: string | null
   isActive: boolean
+  userId: string | null
 }) {
   const wasActiveRef = useRef(isActive)
-  const [items, setItems] = useState<CountdownItem[]>([])
+  const requestGenerationRef = useRef(0)
+  const [firstSnapshot] = useState(() => readTabSnapshot<{items:CountdownItem[]}>(
+    typeof window === 'undefined' ? null : window.localStorage, userId, activeDeviceId, 'countdown'
+  ))
+  const [items, setItems] = useState<CountdownItem[]>(firstSnapshot?.data.items ?? [])
+  const [showingSaved, setShowingSaved] = useState(!!firstSnapshot)
   const [loading, setLoading] = useState(false)
 
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -11748,13 +11817,14 @@ function CountdownModuleSettingsTab({
   const t = tx(language)
 
   async function loadItems({ silent = false }: { silent?: boolean } = {}) {
+    const generation = ++requestGenerationRef.current
     if (!activeDeviceId) {
       setItems([])
       return
     }
 
     try {
-      if (!silent) setLoading(true)
+      if (!silent && !firstSnapshot) setLoading(true)
 
       const { data, error } = await supabase
         .from('countdown_events')
@@ -11763,11 +11833,10 @@ function CountdownModuleSettingsTab({
         .order('target_date', { ascending: true })
         .order('title', { ascending: true })
 
+      if (generation !== requestGenerationRef.current) return
       if (error) {
-        if (!silent) {
-          alert(error.message)
-          setItems([])
-        }
+        // Preserve the last known display when offline, never flash an empty list.
+        if (!silent && !firstSnapshot) alert(error.message)
         return
       }
 
@@ -11781,8 +11850,10 @@ function CountdownModuleSettingsTab({
         .filter((x) => x.title && x.date)
 
       setItems(parsed)
+      setShowingSaved(false)
+      writeTabSnapshot(window.localStorage, userId, activeDeviceId, 'countdown', '', { items: parsed })
     } finally {
-      if (!silent) setLoading(false)
+      if (generation === requestGenerationRef.current && !silent) setLoading(false)
     }
   }
 
@@ -11873,7 +11944,8 @@ function CountdownModuleSettingsTab({
 
   return (
     <>
-      <div className="h-full flex flex-col min-h-0">
+      {showingSaved && <div role="status" className="text-[11px] text-[color:var(--fg-45)]">{language === 'no' ? 'Lagrede nedtellinger · oppdateres' : 'Saved countdowns · refreshing'}</div>}
+      <div className={`h-full flex flex-col min-h-0 ${showingSaved ? 'pointer-events-none' : ''}`}>
         <div className="mt-4 flex-1 min-h-0 flex flex-col">
           {!activeDeviceId ? (
             <div className="text-sm text-[color:var(--fg-50)]">{t.selectFrameFirst}</div>
@@ -13090,14 +13162,22 @@ function GroceriesModuleSettingsTab({
   language,
   activeDeviceId,
   isActive,
+  userId,
 }: {
   language: AppLanguage
   activeDeviceId: string | null
   isActive: boolean
+  userId: string | null
 }) {
   const t = tx(language)
   const wasActiveRef = useRef(isActive)
-  const [items, setItems] = useState<GroceryItem[]>([])
+  const groceryRequestGenerationRef = useRef(0)
+  const dinnerRequestGenerationRef = useRef(0)
+  const [firstGrocerySnapshot] = useState(() => readTabSnapshot<{kind:'list';items:GroceryItem[]}>(
+    typeof window === 'undefined' ? null : window.localStorage, userId, activeDeviceId, 'groceries', 'list'
+  ))
+  const [items, setItems] = useState<GroceryItem[]>(firstGrocerySnapshot?.data.items ?? [])
+  const [showingSavedGroceries, setShowingSavedGroceries] = useState(!!firstGrocerySnapshot)
   const [loading, setLoading] = useState(false)
   const [suggestions, setSuggestions] = useState<GrocerySuggestion[]>([])
   const [nowMs, setNowMs] = useState(() => Date.now())
@@ -13108,7 +13188,16 @@ function GroceriesModuleSettingsTab({
   const [dinnerPlanOpen, setDinnerPlanOpen] = useState(false)
   const [dinnerPlanLockedByOtherUser, setDinnerPlanLockedByOtherUser] = useState(false)
   const [dinnerPlanWeekOffset, setDinnerPlanWeekOffset] = useState<DinnerPlanWeekOffset>(() => defaultDinnerPlanWeekOffset())
-  const [dinnerPlanDays, setDinnerPlanDays] = useState<DinnerPlanDay[]>(defaultDinnerPlanDays())
+  const [firstDinnerSnapshot] = useState(() => readTabSnapshot<{kind:'dinner';days:DinnerPlanDay[]}>(
+    typeof window === 'undefined' ? null : window.localStorage, userId, activeDeviceId, 'groceries', `dinner-${defaultDinnerPlanWeekOffset()}`
+  ))
+  const [dinnerPlanDays, setDinnerPlanDays] = useState<DinnerPlanDay[]>(() =>
+    firstDinnerSnapshot?.data.days.length === 7 ? firstDinnerSnapshot.data.days : defaultDinnerPlanDays()
+  )
+  // Async fallback must read the latest plan without putting mutable plan data
+  // in loadDinnerPlan's dependency list (that would refetch on every response).
+  const dinnerPlanDaysRef = useRef(dinnerPlanDays)
+  dinnerPlanDaysRef.current = dinnerPlanDays
   const [dinnerPlanMainEditTarget, setDinnerPlanMainEditTarget] = useState<{ day: DinnerPlanDay['day']; idx: number } | null>(null)
   const listScrollRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollTopRef = useRef<number | null>(null)
@@ -13216,6 +13305,7 @@ function GroceriesModuleSettingsTab({
   }, [])
 
   async function loadGroceries(options?: { silent?: boolean; preserveScroll?: boolean; keepAnchorUnlessUserScrolled?: boolean }) {
+    const generation = ++groceryRequestGenerationRef.current
     const silent = !!options?.silent || !!options?.preserveScroll
     if (options?.preserveScroll || (options?.keepAnchorUnlessUserScrolled && !userHasScrolledListRef.current)) {
       pendingScrollTopRef.current = listScrollRef.current?.scrollTop ?? null
@@ -13226,11 +13316,11 @@ function GroceriesModuleSettingsTab({
       return
     }
 
-    if (!silent) setLoading(true)
+    if (!silent && !firstGrocerySnapshot) setLoading(true)
     try {
       // Prewarming a hidden tab is strictly read-only. Expired-item cleanup
       // retains its existing behavior when the user actually opens Groceries.
-      if (isActive) {
+      if (isActive && !showingSavedGroceries) {
         const cleanupCutoffIso = groceryCheckedExpiryCutoffIso()
         const { error: cleanupError } = await supabase
           .from('grocery_items')
@@ -13250,8 +13340,10 @@ function GroceriesModuleSettingsTab({
         .eq('device_id', activeDeviceId)
         .order('updated_at', { ascending: false })
 
+      if (generation !== groceryRequestGenerationRef.current) return
       if (error) {
-        if (!silent) alert(error.message)
+        if (!silent && !firstGrocerySnapshot) alert(error.message)
+        // Keep saved groceries visible when offline or a fetch fails.
         return
       }
 
@@ -13259,8 +13351,10 @@ function GroceriesModuleSettingsTab({
         .map((row: any) => groceryItemFromRow(row))
         .filter((item): item is GroceryItem => !!item && !groceryCheckedItemIsExpired(item, Date.now()))
       setItems(parsed)
+      setShowingSavedGroceries(false)
+      writeTabSnapshot(window.localStorage, userId, activeDeviceId, 'groceries', 'list', {kind:'list',items:parsed})
     } finally {
-      if (!silent) setLoading(false)
+      if (generation === groceryRequestGenerationRef.current && !silent) setLoading(false)
     }
   }
 
@@ -13483,7 +13577,7 @@ function GroceriesModuleSettingsTab({
   }, [items, dinnerPlanDays])
 
   useEffect(() => {
-    if (!isActive || !activeDeviceId) return
+    if (!isActive || showingSavedGroceries || !activeDeviceId) return
 
     const expiredMainIds = items
       .filter((item) => groceryCheckedItemIsExpired(item, nowMs))
@@ -13507,10 +13601,10 @@ function GroceriesModuleSettingsTab({
         })
     }
 
-  }, [activeDeviceId, isActive, items, nowMs, loadGroceries])
+  }, [activeDeviceId, isActive, showingSavedGroceries, items, nowMs, loadGroceries])
 
   useEffect(() => {
-    if (!isActive || !activeDeviceId) return
+    if (!isActive || showingSavedGroceries || !activeDeviceId) return
 
     const cleanedDinnerPlanDays = stripExpiredDinnerPlanItems(dinnerPlanDays, nowMs)
     const beforeCount = dinnerPlanDays.reduce((count, day) => count + day.items.length, 0)
@@ -13544,7 +13638,7 @@ function GroceriesModuleSettingsTab({
       const { error } = await supabase.from('dinner_plan_days').upsert(payload, { onConflict: 'device_id,date' })
       if (error) console.error('Failed to persist expired checked dinner plan cleanup', { error })
     })()
-  }, [activeDeviceId, isActive, dinnerPlanDays, dinnerPlanWeekOffset, nowMs])
+  }, [activeDeviceId, isActive, showingSavedGroceries, dinnerPlanDays, dinnerPlanWeekOffset, nowMs])
 
 
   const fetchDinnerPlanDays = useCallback(async (weekOffset: DinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
@@ -13554,7 +13648,7 @@ function GroceriesModuleSettingsTab({
       .select('date,title,note')
       .eq('device_id', activeDeviceId)
       .in('date', DINNER_PLAN_DAY_ORDER.map((day) => isoDateForDinnerDay(day, weekOffset)))
-    if (error) return defaultDinnerPlanDays()
+    if (error) throw error
     const byDay = new Map<DinnerPlanDay['day'], { title: string; items: DinnerPlanDay['items'] }>()
     for (const row of data ?? []) {
       const day = dinnerDayFromIsoDate(String(row.date))
@@ -13569,11 +13663,21 @@ function GroceriesModuleSettingsTab({
   }, [activeDeviceId])
 
   const loadDinnerPlan = useCallback(async (weekOffset: DinnerPlanWeekOffset = dinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
-    const normalizedDays = await fetchDinnerPlanDays(weekOffset)
-    setDinnerPlanWeekOffset(weekOffset)
-    setDinnerPlanDays(normalizedDays)
-    return normalizedDays
-  }, [dinnerPlanWeekOffset, fetchDinnerPlanDays])
+    const generation = ++dinnerRequestGenerationRef.current
+    try {
+      const normalizedDays = await fetchDinnerPlanDays(weekOffset)
+      if (generation !== dinnerRequestGenerationRef.current) return normalizedDays
+      setDinnerPlanWeekOffset(weekOffset)
+      setDinnerPlanDays(normalizedDays)
+      if (activeDeviceId && userId) {
+        writeTabSnapshot(window.localStorage, userId, activeDeviceId, 'groceries', `dinner-${weekOffset}`, {kind:'dinner',days:normalizedDays})
+      }
+      return normalizedDays
+    } catch {
+      // A disconnected device should keep displaying the saved dinner plan.
+      return dinnerPlanDaysRef.current
+    }
+  }, [activeDeviceId, userId, dinnerPlanWeekOffset, fetchDinnerPlanDays])
 
   useEffect(() => {
     loadDinnerPlan()
@@ -14240,7 +14344,10 @@ function GroceriesModuleSettingsTab({
 
   return (
     <>
-    <div className="h-full flex flex-col min-h-0">
+    {showingSavedGroceries && (
+      <div role="status" className="text-[11px] text-[color:var(--fg-45)]">{language === 'no' ? 'Lagret handleliste · oppdateres' : 'Saved grocery list · refreshing'}</div>
+    )}
+    <div className="h-full flex flex-col min-h-0" inert={showingSavedGroceries}>
       <div ref={listScrollRef} className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
           <div className="p-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
@@ -15049,14 +15156,21 @@ function RemindersModuleSettingsTab({
   language,
   activeDeviceId,
   isActive,
+  userId,
 }: {
   language: AppLanguage
   activeDeviceId: string | null
   isActive: boolean
+  userId: string | null
 }) {
   const wasActiveRef = useRef(isActive)
-  const [reminders, setReminders] = useState<ReminderUiItem[]>([])
-  const [completedOccurrences, setCompletedOccurrences] = useState<ReminderCompletionItem[]>([])
+  const requestGenerationRef = useRef(0)
+  const [firstReminderSnapshot] = useState(() => readTabSnapshot<{
+    items:ReminderUiItem[];completedOccurrences:ReminderCompletionItem[];availableSources:ReminderSourceFilter[]
+  }>(typeof window === 'undefined' ? null : window.localStorage,userId,activeDeviceId,'reminders'))
+  const [reminders, setReminders] = useState<ReminderUiItem[]>(firstReminderSnapshot?.data.items ?? [])
+  const [completedOccurrences, setCompletedOccurrences] = useState<ReminderCompletionItem[]>(firstReminderSnapshot?.data.completedOccurrences ?? [])
+  const [showingSavedReminders, setShowingSavedReminders] = useState(!!firstReminderSnapshot)
   const [loading, setLoading] = useState(false)
   const [skipToggleError, setSkipToggleError] = useState<string | null>(null)
   const [expandedEventGroup, setExpandedEventGroup] = useState<string | null>(null)
@@ -15069,7 +15183,9 @@ function RemindersModuleSettingsTab({
   const [editingReminder, setEditingReminder] = useState<ReminderUiItem | null>(null)
   const [sourceFilter, setSourceFilter] = useState<ReminderSourceFilter>('remind')
   const [eventNowMs, setEventNowMs] = useState(() => Date.now())
-  const [availableSources, setAvailableSources] = useState<ReminderSourceFilter[]>(['remind'])
+  const [availableSources, setAvailableSources] = useState<ReminderSourceFilter[]>(
+    firstReminderSnapshot?.data.availableSources?.length ? firstReminderSnapshot.data.availableSources : ['remind']
+  )
 
   const [selectedDayYmd, setSelectedDayYmd] = useState<string | null>(null)
 
@@ -15083,6 +15199,7 @@ function RemindersModuleSettingsTab({
 
   const todayYmd = toLocalYmd(new Date())
   async function loadReminders({ silent = false }: { silent?: boolean } = {}) {
+    const generation = ++requestGenerationRef.current
     if (!activeDeviceId) {
       setReminders([])
       setAvailableSources(['remind'])
@@ -15090,7 +15207,7 @@ function RemindersModuleSettingsTab({
     }
 
     try {
-      if (!silent) setLoading(true)
+      if (!silent && !firstReminderSnapshot) setLoading(true)
 
       const { data, error } = await supabase
         .from('reminders')
@@ -15101,12 +15218,10 @@ function RemindersModuleSettingsTab({
         .order('due_time', { ascending: true, nullsFirst: false })
         .order('title', { ascending: true })
 
+      if (generation !== requestGenerationRef.current) return
       if (error) {
-        if (!silent) {
-          alert(error.message)
-          setReminders([])
-          setCompletedOccurrences([])
-        }
+        // Preserve the stored calendar rather than replacing it with empty cells.
+        if (!silent && !firstReminderSnapshot) console.warn('[reminders] Failed to refresh',error.message)
         return
       }
       const { data: completionsData, error: completionsError } = await supabase
@@ -15114,21 +15229,17 @@ function RemindersModuleSettingsTab({
         .select('reminder_id, occurrence_date')
         .eq('device_id', activeDeviceId)
 
+      if (generation !== requestGenerationRef.current) return
       if (completionsError) {
-        if (!silent) {
-          alert(completionsError.message)
-          setCompletedOccurrences([])
-        }
-      } else {
-        setCompletedOccurrences(
-          (completionsData || [])
-            .map((row: any) => ({
-              reminderId: String(row.reminder_id ?? ''),
-              occurrenceDate: String(row.occurrence_date ?? ''),
-            }))
-            .filter((x) => x.reminderId && x.occurrenceDate)
-        )
+        if (!silent && !firstReminderSnapshot) console.warn('[reminders] Could not refresh completions',completionsError.message)
+        return
       }
+      const nextCompletions: ReminderCompletionItem[] = (completionsData || [])
+        .map((row: any) => ({
+          reminderId: String(row.reminder_id ?? ''),
+          occurrenceDate: String(row.occurrence_date ?? ''),
+        }))
+        .filter((x) => x.reminderId && x.occurrenceDate)
 
 const manualItems: ReminderUiItem[] = (data || [])
   .map((row: any) => ({
@@ -15154,8 +15265,11 @@ const manualItems: ReminderUiItem[] = (data || [])
   .filter((x) => x.title && x.date)
 
       let integrationItems: ReminderUiItem[] = []
-      const userId = (await supabase.auth.getUser())?.data?.user?.id
-      if (userId) {
+      let nextAvailableSources: ReminderSourceFilter[] = ['remind']
+      const sessionUserId = (await supabase.auth.getUser())?.data?.user?.id
+      if (generation !== requestGenerationRef.current) return
+      if (!sessionUserId || sessionUserId !== userId) return
+      if (sessionUserId && sessionUserId === userId) {
         const { data: connectionData } = await supabase
           .from('user_integrations')
           .select('provider, status, device_id')
@@ -15166,7 +15280,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           const source = integrationProviderToReminderSource(connection.provider)
           if (source) connectedSources.add(source)
         }
-        setAvailableSources(['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[])
+        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
 
         if (isActive && connectedSources.has('teams')) {
           try {
@@ -15207,12 +15321,14 @@ const manualItems: ReminderUiItem[] = (data || [])
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
           .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway'])
-          .or(activeDeviceId ? `user_id.eq.${userId},device_id.eq.${activeDeviceId}` : `user_id.eq.${userId}`)
+          .or(activeDeviceId ? `user_id.eq.${sessionUserId},device_id.eq.${activeDeviceId}` : `user_id.eq.${sessionUserId}`)
           .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso}`)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (integrationError) {
-          alert(integrationError.message)
+          // Do not replace cached integrated events with a partial manual-only list.
+          if (!silent && !firstReminderSnapshot) console.warn('[reminders] Integration read failed',integrationError.message)
+          return
         } else {
           const { data: localEventsIntegrationData } = activeDeviceId
             ? await supabase
@@ -15285,9 +15401,17 @@ const manualItems: ReminderUiItem[] = (data || [])
         }
       }
 
-      setReminders([...manualItems, ...integrationItems])
+      if (generation !== requestGenerationRef.current) return
+      const nextReminders = [...manualItems, ...integrationItems]
+      setReminders(nextReminders)
+      setCompletedOccurrences(nextCompletions)
+      setAvailableSources(nextAvailableSources)
+      setShowingSavedReminders(false)
+      writeTabSnapshot(window.localStorage, userId, activeDeviceId, 'reminders', '', {
+        items:nextReminders, completedOccurrences:nextCompletions, availableSources:nextAvailableSources,
+      })
     } finally {
-      if (!silent) setLoading(false)
+      if (generation === requestGenerationRef.current && !silent) setLoading(false)
     }
   }
 
@@ -15679,7 +15803,8 @@ const ungroupedSortedReminders = useMemo(() => {
         }
       `}</style>
 
-      <div className="absolute inset-0 overflow-y-auto no-scrollbar">
+      <div className="absolute inset-0 overflow-y-auto no-scrollbar" inert={showingSavedReminders}>
+        {showingSavedReminders && <div role="status" className="px-1 text-[11px] text-[color:var(--fg-45)]">{language === 'no' ? 'Lagrede påminnelser · oppdateres' : 'Saved reminders · refreshing'}</div>}
         <div className="box-border flex min-h-full flex-col pt-4 max-[420px]:pt-3">
           <div className="shrink-0">
             <div className="flex items-center justify-between px-1">

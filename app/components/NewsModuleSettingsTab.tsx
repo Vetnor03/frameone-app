@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { readTabSnapshot, writeTabSnapshot } from '../lib/tabSnapshotCache.mjs'
 
 type NewsRow = {
   id: string
@@ -16,24 +17,44 @@ export default function NewsModuleSettingsTab({
   feed,
   onFeedChange,
   hideHeading = false,
+  userId,
+  activeDeviceId,
 }: {
   language: 'en' | 'no'
   feed: NewsFeed
   onFeedChange: (feed: NewsFeed) => void
   hideHeading?: boolean
+  userId?: string | null
+  activeDeviceId?: string | null
 }) {
   const isNo = language === 'no'
-  const [items, setItems] = useState<NewsRow[]>([])
-  const [loading, setLoading] = useState(true)
+  // The tab mounts only after auth and frame membership have been verified.
+  const [firstSnapshot] = useState(() => readTabSnapshot<{items:NewsRow[];stale:boolean}>(
+    typeof window === 'undefined' ? null : window.localStorage, userId ?? null, activeDeviceId ?? null, 'news', feed
+  ))
+  const [items, setItems] = useState<NewsRow[]>(firstSnapshot?.data.items ?? [])
+  const [loading, setLoading] = useState(!firstSnapshot)
   const [failed, setFailed] = useState(false)
-  const [stale, setStale] = useState(false)
+  const [stale, setStale] = useState(firstSnapshot?.data.stale === true)
+  const [showingSaved, setShowingSaved] = useState(!!firstSnapshot)
 
   useEffect(() => {
     let alive = true
-    setItems([])
-    setLoading(true)
+    const previous = readTabSnapshot<{items:NewsRow[];stale:boolean}>(
+      window.localStorage, userId ?? null, activeDeviceId ?? null, 'news', feed
+    )
+    if (previous) {
+      setItems(previous.data.items)
+      setShowingSaved(true)
+      setStale(previous.data.stale)
+    } else {
+      setItems([])
+      setShowingSaved(false)
+      setStale(false)
+    }
+    setLoading(!previous)
     setFailed(false)
-    setStale(false)
+
     const load = async () => {
       try {
         const response = await fetch(`/api/news?feed=${feed}&limit=20&links=1&raw_titles=1`, { cache: 'no-store' })
@@ -41,30 +62,32 @@ export default function NewsModuleSettingsTab({
         const payload = await response.json()
         if (!alive) return
         if (payload?.ok !== true) {
-          setItems([])
-          setFailed(true)
-          setStale(false)
+          if (!previous) setFailed(true)
         } else {
-          setItems(Array.isArray(payload?.items) ? payload.items : [])
+          const nextItems: NewsRow[] = Array.isArray(payload?.items) ? payload.items : []
+          setItems(nextItems)
+          setShowingSaved(false)
           setStale(payload?.stale === true)
           setFailed(false)
+          writeTabSnapshot(window.localStorage, userId ?? null, activeDeviceId ?? null, 'news', feed, {
+            items: nextItems, stale: payload?.stale === true,
+          })
         }
       } catch {
-        if (alive) {
-          setItems([])
-          setFailed(true)
-        }
+        if (alive && !previous) setFailed(true)
       } finally {
         if (alive) setLoading(false)
       }
     }
     void load()
-    const timer = window.setInterval(load, 30 * 60 * 1000)
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void load()
+    }, 30 * 60 * 1000)
     return () => {
       alive = false
       window.clearInterval(timer)
     }
-  }, [feed])
+  }, [feed, userId, activeDeviceId])
 
   return (
     <div className="h-full min-h-0 flex flex-col">
@@ -92,6 +115,12 @@ export default function NewsModuleSettingsTab({
           ? (isNo ? 'NRKs utvalgte hovedsaker, i NRKs rekkefølge.' : 'NRK’s selected top stories, in NRK’s order.')
           : (isNo ? 'De siste nyhetsoppdateringene fra NRK.' : 'The latest news updates from NRK.')}
       </div>
+
+      {showingSaved && (
+        <div role="status" className="mt-2 text-[11px] text-[color:var(--fg-45)]">
+          {isNo ? 'Viser lagrede nyheter mens vi oppdaterer' : 'Showing saved headlines while refreshing'}
+        </div>
+      )}
 
       {stale && !loading && !failed && (
         <div className="mt-2 text-xs text-[color:var(--fg-60)]">

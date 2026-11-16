@@ -352,20 +352,14 @@ a {
 
 /* Short app launch splash */
 .remind-app-shell {
-  /* Keep the ready app shell free of transform/filter stacking contexts so fixed modal backdrops stay viewport-sized. */
+  /* An animated 720ms blur/translation looked like a white flash when the
+     splash was removed. Keep layout stable and reveal it in the same paint. */
   opacity: 1;
-  transition:
-    opacity 720ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 720ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter 720ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .remind-app-shell-booting {
   opacity: 0;
-  transform: translateY(14px) scale(0.985);
-  filter: blur(10px);
   pointer-events: none;
-  will-change: opacity, transform, filter;
 }
 
 .remind-app-shell-ready {
@@ -383,7 +377,7 @@ a {
   justify-content: center;
   background: var(--app-bg);
   opacity: 1;
-  transition: opacity 720ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 120ms ease-out;
   will-change: opacity;
 }
 
