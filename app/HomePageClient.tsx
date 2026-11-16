@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { readLaunchPreview, writeLaunchPreview, clearLaunchPreview } from './lib/launchPreviewCache.mjs'
+import { appendCachedModuleTab, planModuleTabWarmup, tabCacheScope, type WarmModuleKey } from './lib/tabWarmup.mjs'
 import { fetchSurfScore } from './lib/fetchSurfScore'
 import { findSpotByLabel } from './lib/surf/spots'
 import { formatAppDate, formatAppNumericDate } from './lib/dateDisplay'
@@ -1243,6 +1244,9 @@ export default function HomePage() {
   }, [isPhoneLandscapeMirror])
 
   const [activeTab, setActiveTab] = useState<TabKey>('frame')
+  // Module content is retained only in authenticated in-memory React state,
+  // never persisted to the browser's long-term storage.
+  const [moduleTabCache, setModuleTabCache] = useState<{ scope: string; keys: WarmModuleKey[] }>({ scope: '', keys: [] })
   const [assistantDeepLink, setAssistantDeepLink] = useState<{ watchId: string; updateId: string | null } | null>(null)
   const [dirty, setDirty] = useState(false)
 
@@ -1727,6 +1731,34 @@ export default function HomePage() {
       { key: 'settings' as const, label: tx(language).settings },
     ]
   }, [dynamicTabs, language])
+
+  const moduleTabScope = tabCacheScope(userId, activeDeviceId)
+  const verifiedModuleTabsReady = !!moduleTabScope && framesLoaded && loadedSettingsDeviceId === activeDeviceId
+  const cachedModuleKeys = moduleTabCache.scope === moduleTabScope ? moduleTabCache.keys : []
+  const configuredModuleKeys = useMemo(() => dynamicTabs.map((tab) => tab.key), [dynamicTabs])
+
+  useEffect(() => {
+    if (!verifiedModuleTabsReady) return
+    setModuleTabCache((cache) => appendCachedModuleTab(cache, moduleTabScope, activeTab))
+  }, [activeTab, moduleTabScope, verifiedModuleTabsReady])
+
+  useEffect(() => {
+    if (!verifiedModuleTabsReady) return
+    // Warm configured module tabs progressively after the frame is ready.
+    // Avoid starting all Supabase requests at once during initial launch.
+    const pending = planModuleTabWarmup(configuredModuleKeys, [], activeTab)
+    const timers = pending.map((key, index) => window.setTimeout(() => {
+      if (document.visibilityState !== 'visible') return
+      setModuleTabCache((cache) => appendCachedModuleTab(cache, moduleTabScope, key))
+    }, 550 + index * 450))
+    return () => timers.forEach((timer) => window.clearTimeout(timer))
+    // A warmed tab entering cache must not restart the entire queue.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moduleTabScope, verifiedModuleTabsReady, configuredModuleKeys])
+
+  const renderedModuleKeys = verifiedModuleTabsReady
+    ? configuredModuleKeys.filter((key) => key === activeTab || cachedModuleKeys.includes(key as WarmModuleKey))
+    : []
 
   const remindersShownOnFrame = Object.values(
     activeCustomLayoutId ? (customAssignments[activeCustomLayoutId] || {}) : (cellsByLayout[layoutKey] || {}),
