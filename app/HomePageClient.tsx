@@ -3213,10 +3213,12 @@ async function handleSelectTab(k: TabKey) {
                 />
               )}
 
-              {activeTab !== 'frame' && activeTab !== 'connect' && activeTab !== 'settings' && (
-                <div className="relative h-full">
+              {(activeTab === 'assistant' ? ['assistant' as ModuleKey] : renderedModuleKeys).map((moduleKey) => {
+                const isActive = activeTab === moduleKey
+                return (
+                <div key={`${moduleTabScope}:${moduleKey}`} className={isActive ? 'relative h-full' : 'hidden'} aria-hidden={!isActive} inert={!isActive}>
                   <div className="absolute right-0 -top-4 z-20 flex items-center gap-2">
-                    {activeTab === 'reminders' && (
+                    {moduleKey === 'reminders' && (
                       <button
                         type="button"
                         onClick={() => void handleSelectTab('connect')}
@@ -3228,7 +3230,7 @@ async function handleSelectTab(k: TabKey) {
 
                     <button
                       onClick={() => {
-                        const module = activeTab as ModuleKey
+                        const module = moduleKey as ModuleKey
                         setPinnedModuleTabs((prev) => {
                           const exists = prev.includes(module)
                           const nextPinned = exists ? prev.filter((m) => m !== module) : [...prev, module]
@@ -3237,12 +3239,12 @@ async function handleSelectTab(k: TabKey) {
                         })
                       }}
                       className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-[color:var(--bd-20)] text-[color:var(--fg-70)]"
-                      title={pinnedModuleTabs.includes(activeTab as ModuleKey) ? 'Unpin tab' : 'Pin tab'}
+                      title={pinnedModuleTabs.includes(moduleKey as ModuleKey) ? 'Unpin tab' : 'Pin tab'}
                     >
                       <svg
                         viewBox="0 0 24 24"
-                        className={`w-4 h-4 ${pinnedModuleTabs.includes(activeTab as ModuleKey) ? 'fill-[#2aa3ff]' : 'fill-none'}`}
-                        stroke={pinnedModuleTabs.includes(activeTab as ModuleKey) ? '#2aa3ff' : 'currentColor'}
+                        className={`w-4 h-4 ${pinnedModuleTabs.includes(moduleKey as ModuleKey) ? 'fill-[#2aa3ff]' : 'fill-none'}`}
+                        stroke={pinnedModuleTabs.includes(moduleKey as ModuleKey) ? '#2aa3ff' : 'currentColor'}
                         strokeWidth="2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -3254,12 +3256,13 @@ async function handleSelectTab(k: TabKey) {
                     </button>
                   </div>
 
-                  {activeTab === 'assistant' ? (
+                  {moduleKey === 'assistant' ? (
                     <AIAssistantTab language={language} activeDeviceId={activeDeviceId} deepLink={assistantDeepLink} onDeepLinkHandled={finishAssistantDeepLink} onOpenPlans={() => { stickySettingsRef.current = true; preferInstantScrollRef.current = true; setSettingsSubpage('subscription'); setActiveTab('settings') }} />
                   ) : (
                     <ModuleSettingsTab
                       language={language}
-                      module={activeTab as ModuleKey}
+                      module={moduleKey as ModuleKey}
+                      isActive={isActive}
                       layoutKey={layoutKey}
                       cells={cellsByLayout[layoutKey]}
                       modulesJson={modulesJson}
@@ -3269,7 +3272,8 @@ async function handleSelectTab(k: TabKey) {
                     />
                   )}
                 </div>
-              )}
+                )
+              })}
             </div>
 
             {activeTab === 'frame' && (
