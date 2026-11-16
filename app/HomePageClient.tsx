@@ -11445,11 +11445,15 @@ function skiForecastConditionLabel(symbolCode: string | null | undefined, isNo: 
 
 function SkiModuleSettingsTab({
   language,
+  userId,
+  activeDeviceId,
   modulesJson,
   setModulesJson,
   markDirty,
 }: {
   language: AppLanguage
+  userId: string | null
+  activeDeviceId: string | null
   modulesJson: Record<string, any>
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
   markDirty: (next?: { modulesJson?: Record<string, any> }) => void
@@ -11460,7 +11464,12 @@ function SkiModuleSettingsTab({
   const lat = Number(cfg?.lat ?? cfg?.latitude)
   const lon = Number(cfg?.lon ?? cfg?.longitude)
   const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lon)
-  const [summary, setSummary] = useState<SkiMetSummary | null>(null)
+  const skiVariant = hasCoordinates ? `loc-${Math.round(lat * 10000)}-${Math.round(lon * 10000)}` : 'none'
+  const [firstSkiSnapshot] = useState(() => readTabSnapshot<{summary:SkiMetSummary}>(
+    typeof window === 'undefined' ? null : window.localStorage, userId, activeDeviceId, 'ski', skiVariant
+  ))
+  const [summary, setSummary] = useState<SkiMetSummary | null>(firstSkiSnapshot?.data.summary ?? null)
+  const [showingSavedSki, setShowingSavedSki] = useState(!!firstSkiSnapshot)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState(false)
 
@@ -11476,11 +11485,15 @@ function SkiModuleSettingsTab({
   useEffect(() => {
     if (!hasCoordinates) {
       setSummary(null)
+      setShowingSavedSki(false)
       setLoading(false)
       setLoadError(false)
       return
     }
 
+    const cached = readTabSnapshot<{summary:SkiMetSummary}>(window.localStorage, userId, activeDeviceId, 'ski', skiVariant)
+    setSummary(cached?.data.summary ?? null)
+    setShowingSavedSki(!!cached)
     const controller = new AbortController()
     const params = new URLSearchParams({
       lat: String(lat),
@@ -11489,7 +11502,7 @@ function SkiModuleSettingsTab({
       lang: language,
     })
 
-    setLoading(true)
+    setLoading(!cached)
     setLoadError(false)
 
     fetch(`/api/ski/summary?${params.toString()}`, { signal: controller.signal })
@@ -11498,18 +11511,27 @@ function SkiModuleSettingsTab({
         if (!response.ok || !json?.current) throw new Error('ski_summary_failed')
         return json as SkiMetSummary
       })
-      .then((nextSummary) => setSummary(nextSummary))
+      .then((nextSummary) => {
+        if (controller.signal.aborted) return
+        setSummary(nextSummary)
+        setShowingSavedSki(false)
+        setLoadError(false)
+        writeTabSnapshot(window.localStorage, userId, activeDeviceId, 'ski', skiVariant, {summary:nextSummary})
+      })
       .catch((error) => {
         if (error?.name === 'AbortError') return
-        setSummary(null)
-        setLoadError(true)
+        // Keep older conditions visible and clearly marked until a fresh reply.
+        if (!cached) {
+          setSummary(null)
+          setLoadError(true)
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false)
       })
 
     return () => controller.abort()
-  }, [hasCoordinates, lat, lon, locationLabel, language])
+  }, [hasCoordinates, lat, lon, locationLabel, language, userId, activeDeviceId, skiVariant])
 
   const current = summary?.current ?? null
   const snow = summary?.snow ?? null
@@ -11537,7 +11559,8 @@ function SkiModuleSettingsTab({
 
   return (
     <div className="h-full min-h-0 overflow-y-auto overscroll-y-contain pb-10 pr-1">
-      <div className="space-y-6">
+      {showingSavedSki && <div role="status" className="mb-2 text-[11px] text-[color:var(--fg-45)]">{isNo ? 'Lagret skivær · oppdateres' : 'Saved ski conditions · refreshing'}</div>}
+      <div className={`space-y-6 ${showingSavedSki ? 'pointer-events-none' : ''}`}>
         <WeatherLocationRow
           language={language}
           id={1}
