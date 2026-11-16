@@ -11155,6 +11155,7 @@ function filterCompletedOccurrences<
 function ModuleSettingsTab({
   language,
   module,
+  isActive,
   layoutKey,
   cells,
   modulesJson,
@@ -11164,6 +11165,7 @@ function ModuleSettingsTab({
 }: {
   language: AppLanguage
   module: ModuleKey
+  isActive: boolean
   layoutKey: LayoutKey
   cells: Record<number, ModuleKey | null>
   modulesJson: Record<string, any>
@@ -11209,7 +11211,7 @@ function ModuleSettingsTab({
   }
 
   if (module === 'reminders') {
-    return <RemindersModuleSettingsTab language={language} activeDeviceId={activeDeviceId} />
+    return <RemindersModuleSettingsTab language={language} activeDeviceId={activeDeviceId} isActive={isActive} />
   }
 
   if (module === 'news') {
@@ -11234,6 +11236,7 @@ function ModuleSettingsTab({
       <CountdownModuleSettingsTab
         language={language}
         activeDeviceId={activeDeviceId}
+        isActive={isActive}
       />
     )
   }
@@ -11265,7 +11268,7 @@ function ModuleSettingsTab({
   }
 
   if (module === 'groceries') {
-    return <GroceriesModuleSettingsTab language={language} activeDeviceId={activeDeviceId} />
+    return <GroceriesModuleSettingsTab language={language} activeDeviceId={activeDeviceId} isActive={isActive} />
   }
 
   return (
