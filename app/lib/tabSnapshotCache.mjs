@@ -125,7 +125,8 @@ function sanitizeSki(data) {
       .filter(key => Object.prototype.hasOwnProperty.call(source,key))
       .map(key => [key, key === 'today_hours' && isPlain(source[key])
         ? Object.fromEntries(['closed','from','to'].map(k => [k, source[key][k] == null ? null : typeof source[key][k] === 'string' ? text(source[key][k], 30) : source[key][k] === true]))
-        : typeof source[key] === 'string' ? text(source[key], 160) :
+        : (key === 'url' || key === 'full_warning_url') ? httpsUrl(source[key]) :
+          typeof source[key] === 'string' ? text(source[key], 160) :
           typeof source[key] === 'number' && Number.isFinite(source[key]) ? source[key] :
           typeof source[key] === 'boolean' ? source[key] : null]))
   }
@@ -158,7 +159,7 @@ function sanitizeSki(data) {
     symbol_code: optionalText(day?.symbol_code,100),
     wind_mps: day?.wind_mps == null ? null : quantity(day.wind_mps),
     wind_dir_deg: day?.wind_dir_deg == null ? null : quantity(day.wind_dir_deg),
-  })).filter(day => /^\\d{4}-\\d{2}-\\d{2}$/.test(day.date))
+  })).filter(day => /^\d{4}-\d{2}-\d{2}$/.test(day.date))
   return {summary}
 }
 
