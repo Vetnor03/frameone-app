@@ -1,11 +1,9 @@
 'use client'
 import React, { useRef, useState } from 'react'
-import { MIN_STROKE_PX, clampPointToViewport, finalizeDividerStroke, internalDividerSegments, previewDividerStroke, resolveDividerStrokeLock, sortCells, type DividerStrokeLock, type DividerStrokePreview, type EditorCell, type Point } from '../lib/frameLayoutEditor.mjs'
+import { MIN_STROKE_PX, clampPointToViewport, finalizeDividerStroke, internalDividerSegments, previewDividerStroke, resolveDividerStrokeLock, type DividerStrokeLock, type DividerStrokePreview, type EditorCell, type Point } from '../lib/frameLayoutEditor.mjs'
 import { type CustomLayoutCell } from '../lib/customLayouts'
-
-export const initialEditorCells = (): EditorCell[] => [{ id:'whole', col:0, row:0, colSpan:4, rowSpan:4, moduleId:'empty' }]
-export const withSlots = (cells: EditorCell[]): CustomLayoutCell[] => sortCells(cells).map((cell, slot) => ({slot,col:cell.col,row:cell.row,colSpan:cell.colSpan,rowSpan:cell.rowSpan}))
-export const editorCells = (cells: CustomLayoutCell[]): EditorCell[] => cells.map(({slot,col,row,colSpan,rowSpan})=>({id:`saved:${slot}`,col,row,colSpan,rowSpan,moduleId:'empty'}))
+import { withSlots } from '../lib/customLayoutEditorState'
+export { initialEditorCells, withSlots, editorCells } from '../lib/customLayoutEditorState'
 
 export function CustomLayoutPreview({ cells, onCellTap, assignments = {}, unsupportedSlots = [], editorGuide = false, renderCellLabel }: {cells:CustomLayoutCell[]; onCellTap?:(slot:number)=>void; assignments?:Record<number,string|null>; unsupportedSlots?:number[];editorGuide?:boolean;renderCellLabel?:(assignment:string|null,cell:CustomLayoutCell)=>React.ReactNode}) {
   const dividers=internalDividerSegments(cells.map(cell=>({...cell,id:`preview:${cell.slot}`,moduleId:'empty'})))
