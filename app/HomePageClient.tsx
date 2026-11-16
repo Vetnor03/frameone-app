@@ -3,6 +3,7 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { fetchSurfScore } from './lib/fetchSurfScore'
@@ -10,12 +11,12 @@ import { findSpotByLabel } from './lib/surf/spots'
 import { formatAppDate, formatAppNumericDate } from './lib/dateDisplay'
 import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/customSpotMath'
 import { normalizeSurfRating1to6, surfRatingColor, surfRatingIsExperienceBased, surfRatingLabel } from './lib/surf/ratings'
-import SoccerTeamSheet from './components/SoccerTeamSheet'
-import AIAssistantTab from './components/AIAssistantTab'
-import SensitiveInformationHelper from './components/SensitiveInformationHelper'
+const SoccerTeamSheet = dynamic(() => import('./components/SoccerTeamSheet'))
+const AIAssistantTab = dynamic(() => import('./components/AIAssistantTab'))
+const SensitiveInformationHelper = dynamic(() => import('./components/SensitiveInformationHelper'))
 import FrameAssistant from './components/FrameAssistant'
 import type { AssistantDestination } from './lib/assistant/types'
-import SubscriptionSettingsPage from './components/SubscriptionSettingsPage'
+const SubscriptionSettingsPage = dynamic(() => import('./components/SubscriptionSettingsPage'))
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey, rankGrocerySuggestionsForInput } from './lib/groceries/suggestions'
 import { addGroceryItemsCanonical } from './lib/groceries/actions'
 import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, recipeSourceLink, scaleRecipeQuantity, selectedRecipeGroceries, type GroceryRecipeItem, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes.mjs'
@@ -25,10 +26,10 @@ import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAss
 import { DEFAULT_LOCAL_EVENT_AREA, getLocalEventPlace, normalizeLocalEventAreaPreference, nationwideLocalEventArea, type LocalEventAreaPreference } from './lib/integrations/local-events/places'
 import { localEventGroupKeyFromRaw, groupSkipId } from './lib/integrations/local-events/grouping'
 import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
-import WasteSetupModal from './components/WasteSetupModal'
-import IntegrationRequestCard from './components/IntegrationRequestCard'
+const WasteSetupModal = dynamic(() => import('./components/WasteSetupModal'))
+const IntegrationRequestCard = dynamic(() => import('./components/IntegrationRequestCard'))
 import AppSheet from './components/AppSheet'
-import NewsModuleSettingsTab from './components/NewsModuleSettingsTab'
+const NewsModuleSettingsTab = dynamic(() => import('./components/NewsModuleSettingsTab'))
 import { wasteCollectionDisplayTitle } from './lib/integrations/waste/display'
 import { hasChosenWeatherLocation, norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders } from './lib/onboardingDefaults'
 import { firstReminderOccurrenceDate, nextReminderOccurrenceDate as nextReminderOccurrenceDateShared, normalizeRepeatWeekdays } from './lib/reminders/recurrence'
@@ -752,7 +753,9 @@ async function fetchDeviceStatusMap(deviceIds: string[]): Promise<Map<string, De
   return directMap
 }
 
-async function fetchCurrentUserFrames(userId: string): Promise<MemberRow[]> {
+// Membership is the only frame query required before the first screen. Names
+// and physical status are supplementary and can arrive after the UI is usable.
+async function fetchCurrentUserFrameMembership(userId: string): Promise<MemberRow[]> {
   const { data: members, error } = await supabase
     .from('device_members')
     .select('device_id, role')
@@ -761,18 +764,34 @@ async function fetchCurrentUserFrames(userId: string): Promise<MemberRow[]> {
 
   if (error) throw error
 
-  const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
+  return ((members || []) as Array<{ device_id: string; role: string | null }>).map((member) => ({
+    device_id: member.device_id,
+    role: member.role,
+    display_name: null,
+    current_version: null,
+    battery_percent: null,
+    battery_voltage: null,
+    is_charging: null,
+    is_usb_present: null,
+    last_seen_at: null,
+    last_render_at: null,
+  }))
+}
+
+async function enrichFrameMetadata(memberRows: MemberRow[]): Promise<MemberRow[]> {
   const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
-  const statusMap = await fetchDeviceStatusMap(deviceIds)
+  if (deviceIds.length === 0) return memberRows
+
+  // Previously these requests ran one after another, delaying frame loading.
+  const [statusMap, nameRows] = await Promise.all([
+    fetchDeviceStatusMap(deviceIds),
+    supabase.rpc('get_accessible_frame_names').then(({ data }) => data || []),
+  ])
   const nameMap = new Map<string, string | null>()
-  if (deviceIds.length > 0) {
-    const { data: devices } = await supabase.rpc('get_accessible_frame_names')
-    for (const device of devices || []) nameMap.set(device.device_id, device.display_name)
-  }
+  for (const device of nameRows) nameMap.set(device.device_id, device.display_name)
 
   return memberRows.map((m) => ({
-    device_id: m.device_id,
-    role: m.role,
+    ...m,
     display_name: nameMap.get(m.device_id) ?? null,
     current_version: statusMap.get(m.device_id)?.current_version ?? null,
     battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
@@ -782,6 +801,10 @@ async function fetchCurrentUserFrames(userId: string): Promise<MemberRow[]> {
     last_seen_at: statusMap.get(m.device_id)?.last_seen_at ?? null,
     last_render_at: statusMap.get(m.device_id)?.last_render_at ?? null,
   }))
+}
+
+async function fetchCurrentUserFrames(userId: string): Promise<MemberRow[]> {
+  return enrichFrameMetadata(await fetchCurrentUserFrameMembership(userId))
 }
 
 async function claimPairCodeAndLoadFrames(code: string, currentFrames: MemberRow[]) {
@@ -1967,6 +1990,7 @@ export default function HomePage() {
       }
 
       const data = await resp.json()
+      if (activeDeviceIdRef.current !== deviceId) return null
       const renderIso = data?.last_render_at ? String(data.last_render_at) : ''
       const status: Omit<MemberRow, 'device_id' | 'role'> = {
         current_version: data?.current_version ?? null,
@@ -2118,6 +2142,12 @@ export default function HomePage() {
 
   async function loadDeviceSettings(deviceId: string) {
     setLoadedSettingsDeviceId(null)
+    // Start the settings lookup while the custom-layout endpoint is in flight.
+    const settingsPromise = Promise.resolve(supabase
+      .from('device_settings')
+      .select('settings_json, updated_at')
+      .eq('device_id', deviceId)
+      .maybeSingle())
     if (SHOW_CUSTOM_LAYOUT_UI) {
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
@@ -2128,11 +2158,7 @@ export default function HomePage() {
     } else {
       setCustomLayouts([])
     }
-    const { data, error } = await supabase
-      .from('device_settings')
-      .select('settings_json, updated_at')
-      .eq('device_id', deviceId)
-      .maybeSingle()
+    const { data, error } = await settingsPromise
 
     if (error) return defaultDinnerPlanDays()
 
@@ -2167,6 +2193,7 @@ export default function HomePage() {
         ? (json.modules as Record<string, any>)
         : ({} as Record<string, any>)
 
+    // Settings are sufficient to render the app; physical status is optional.
     const reusableModules = await loadReusableUserModules(frames.map((frame) => frame.device_id), deviceId).catch(() => ({}))
     const normalizedModules = normalizeModulesForSave(mergeReusableUserModules(rawModules, reusableModules))
     const nextPinnedTabs = Array.isArray((json as any).pinned_tabs)
@@ -2207,7 +2234,7 @@ export default function HomePage() {
     }
 
     setDirty(false)
-    const renderAt = await loadDeviceStatus(deviceId)
+    const renderAt = frames.find((frame) => frame.device_id === deviceId)?.last_render_at ?? null
     const settingsUpdatedAt = hasSavedSettings && data?.updated_at ? String(data.updated_at) : null
     rememberPendingFrameUpdate(settingsUpdatedAt, renderAt)
     // Restore status from backend timestamps after reload or frame switching.
@@ -2231,6 +2258,9 @@ export default function HomePage() {
 
     isLoadedRef.current = true
     setLoadedSettingsDeviceId(deviceId)
+    // Update battery/online/render acknowledgements after the first usable
+    // frame screen; a slow or offline frame must not block the app launch.
+    void loadDeviceStatus(deviceId)
   }
 
   // This is the only policy exception to manual Update: a newly paired frame
@@ -2248,16 +2278,7 @@ export default function HomePage() {
   useEffect(() => {
     let unsub: { unsubscribe: () => void } | null = null
     let cancelled = false
-    const bootStartedAt = performance.now()
-
-    async function finishBoot() {
-      const minimumSplashMs = 1350
-      const remaining = minimumSplashMs - (performance.now() - bootStartedAt)
-      if (remaining > 0) {
-        await new Promise((resolve) => window.setTimeout(resolve, remaining))
-      }
-      if (!cancelled) setBooting(false)
-    }
+    performance.mark('remind:startup:start')
 
     ;(async () => {
       setAuthReady(false)
@@ -2306,6 +2327,7 @@ export default function HomePage() {
 
       const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
         if (!nextSession) {
+          cancelled = true
           setAuthReady(true)
           setUserId(null)
           setFramesLoaded(false)
@@ -2330,18 +2352,42 @@ export default function HomePage() {
 
       let list: MemberRow[] = []
       try {
-        list = await fetchCurrentUserFrames(session.user.id)
+        list = await fetchCurrentUserFrameMembership(session.user.id)
       } catch {
         setFrames([])
         setActiveDeviceId(null)
         isLoadedRef.current = false
         setBooting(false)
+        setShowSplash(false)
         setFramesLoaded(false)
         return
       }
+      if (cancelled) return
       setFrames(list)
       setFramesLoaded(true)
       setIsFirstFramePairingComplete(list.length > 0)
+
+      // Enrich only devices that still belong to the current account. Never
+      // overwrite newer live status or newly paired/renamed frame information.
+      void enrichFrameMetadata(list).then((enriched) => {
+        if (cancelled) return
+        const metadata = new Map(enriched.map((item) => [item.device_id, item]))
+        setFrames((current) => current.map((frame) => {
+          const info = metadata.get(frame.device_id)
+          if (!info) return frame
+          return {
+            ...frame,
+            display_name: frame.display_name ?? info.display_name,
+            current_version: frame.current_version ?? info.current_version,
+            battery_percent: frame.battery_percent ?? info.battery_percent,
+            battery_voltage: frame.battery_voltage ?? info.battery_voltage,
+            is_charging: frame.is_charging ?? info.is_charging,
+            is_usb_present: frame.is_usb_present ?? info.is_usb_present,
+            last_seen_at: frame.last_seen_at ?? info.last_seen_at,
+            last_render_at: frame.last_render_at ?? info.last_render_at,
+          }
+        }))
+      }).catch(() => { /* Status/name data must never block the app. */ })
 
       const saved = typeof window !== 'undefined' ? localStorage.getItem('activeDeviceId') : null
       const savedExists = saved && list.some((x) => x.device_id === saved)
@@ -2358,10 +2404,11 @@ export default function HomePage() {
         await loadDeviceSettings(selected)
       }
 
-      if (disableLaunchSplash) {
+      if (!cancelled) {
         setBooting(false)
-      } else {
-        await finishBoot()
+        setShowSplash(false)
+        performance.mark('remind:startup:ready')
+        performance.measure('remind:startup:total', 'remind:startup:start', 'remind:startup:ready')
       }
     })()
 
@@ -2370,16 +2417,6 @@ export default function HomePage() {
       if (unsub) unsub.unsubscribe()
     }
   }, [disableLaunchSplash, router])
-
-  useEffect(() => {
-    if (booting) {
-      setShowSplash(true)
-      return
-    }
-
-    const splashFadeTimer = window.setTimeout(() => setShowSplash(false), 720)
-    return () => window.clearTimeout(splashFadeTimer)
-  }, [booting])
 
   async function selectDevice(id: string) {
     isLoadedRef.current = false
