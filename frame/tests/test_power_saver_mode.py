@@ -36,7 +36,7 @@ def test_power_saver_skips_live_probe_and_interactive_listening():
 
     assert "Power Saver: live update probe skipped" in setup
     assert "if (interactiveModeEnabled(pwrEarly.usbPresent)) {" in setup
-    assert "liveProbeOk = LiveUpdate::probe" in setup
+    assert "liveProbeOk = probeWithPilotControl" in setup
     assert setup.count("runInteractiveMode(batt, pwr, liveState)") == 2
     assert setup.count("interactiveModeEnabled(pwrEarly.usbPresent)") >= 4
 
@@ -77,7 +77,7 @@ def test_instant_only_checks_manual_requests_until_a_module_deadline_is_due():
     assert "revisionSafetyDue" not in instant
     assert "if (scheduledSyncDueNow())" in instant
     assert "const uint32_t probeCadenceMs = MANUAL_UPDATE_POLL_MS;" in instant
-    assert "LiveUpdate::probe(DeviceIdentity::getToken(), next," in instant
+    assert "probeWithPilotControl(DeviceIdentity::getToken(), next," in instant
 
 def test_power_saver_news_piggybacks_on_another_module_wake():
     header = read("src/core/SmartRefresh.h")

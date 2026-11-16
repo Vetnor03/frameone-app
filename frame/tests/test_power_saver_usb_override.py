@@ -14,7 +14,7 @@ def test_power_saver_usb_wake_starts_realtime_and_refreshes_overlay():
     setup = SOURCE.split("void setup()", 1)[1]
     assert "const bool startupOperationalPolicyReady = interactiveModeEnabled(pwrEarly.usbPresent)" in setup
     assert "if (interactiveModeEnabled(pwrEarly.usbPresent)) {" in setup
-    assert "liveProbeOk = LiveUpdate::probe(DeviceIdentity::getToken(), liveState);" in setup
+    assert "liveProbeOk = probeWithPilotControl(DeviceIdentity::getToken(), liveState);" in setup
     assert "if (interactiveModeEnabled(pwrEarly.usbPresent) &&\n      !explicitRevisionPending" in setup
     assert "refreshPowerOverlayIfNeeded(overlayBatt, overlayPwr);" in setup
     assert setup.count("interactiveModeEnabled(pwr.usbPresent) &&\n") == 2

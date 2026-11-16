@@ -3,6 +3,8 @@
 #include <Arduino.h>
 
 struct LiveUpdateState {
+  bool hasPilotState = false;
+  bool pilotEnded = false;
   uint64_t requestedRevision;
   uint64_t displayedRevision;
 };

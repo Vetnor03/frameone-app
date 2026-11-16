@@ -403,6 +403,46 @@ void drawChargingRecoveryScreen() {
   } while (display.nextPage());
 }
 
+void drawPilotEndedScreen() {
+  display.setFullWindow();
+  display.firstPage();
+  do {
+    fillThemeBackground();
+    display.setTextColor(Theme::ink());
+
+    const char* line1 = "RE:MIND";
+    const char* line2 = "Pilot test ended";
+    const char* line3 = "Thank you for helping shape RE:MIND";
+
+    int16_t x1, y1;
+    uint16_t w, h;
+
+    // Treat the logo and welcome as one vertically centered group.
+    display.setFont(&FreeMonoBold18pt7b);
+    display.getTextBounds(line1, 0, 0, &x1, &y1, &w, &h);
+    int titleX = FRAME_X + (FRAME_W - (int)w) / 2 - x1;
+    int titleY = FRAME_Y + FRAME_H / 2 - 22;
+    display.setCursor(titleX, titleY);
+    display.print(line1);
+
+    display.setFont(&FreeMonoBold12pt7b);
+    display.getTextBounds(line2, 0, 0, &x1, &y1, &w, &h);
+    int welcomeX = FRAME_X + (FRAME_W - (int)w) / 2 - x1;
+    int welcomeY = titleY + 56;
+    display.setCursor(welcomeX, welcomeY);
+    display.print(line2);
+
+    // Keep only the first-use instruction near the bottom; never expose
+    // manufacturing identifiers or setup internals on the customer screen.
+    display.setFont(&FreeMonoBold9pt7b);
+    display.getTextBounds(line3, 0, 0, &x1, &y1, &w, &h);
+    int infoX = FRAME_X + (FRAME_W - (int)w) / 2 - x1;
+    int infoY = FRAME_Y + FRAME_H - 42;
+    display.setCursor(infoX, infoY);
+    display.print(line3);
+  } while (display.nextPage());
+}
+
 void drawShelfScreen() {
   display.setFullWindow();
   display.firstPage();
