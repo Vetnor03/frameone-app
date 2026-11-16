@@ -13309,7 +13309,7 @@ function GroceriesModuleSettingsTab({
     try {
       // Prewarming a hidden tab is strictly read-only. Expired-item cleanup
       // retains its existing behavior when the user actually opens Groceries.
-      if (isActive) {
+      if (isActive && !showingSavedGroceries) {
         const cleanupCutoffIso = groceryCheckedExpiryCutoffIso()
         const { error: cleanupError } = await supabase
           .from('grocery_items')
@@ -13566,7 +13566,7 @@ function GroceriesModuleSettingsTab({
   }, [items, dinnerPlanDays])
 
   useEffect(() => {
-    if (!isActive || !activeDeviceId) return
+    if (!isActive || showingSavedGroceries || !activeDeviceId) return
 
     const expiredMainIds = items
       .filter((item) => groceryCheckedItemIsExpired(item, nowMs))
@@ -13590,10 +13590,10 @@ function GroceriesModuleSettingsTab({
         })
     }
 
-  }, [activeDeviceId, isActive, items, nowMs, loadGroceries])
+  }, [activeDeviceId, isActive, showingSavedGroceries, items, nowMs, loadGroceries])
 
   useEffect(() => {
-    if (!isActive || !activeDeviceId) return
+    if (!isActive || showingSavedGroceries || !activeDeviceId) return
 
     const cleanedDinnerPlanDays = stripExpiredDinnerPlanItems(dinnerPlanDays, nowMs)
     const beforeCount = dinnerPlanDays.reduce((count, day) => count + day.items.length, 0)
@@ -13627,7 +13627,7 @@ function GroceriesModuleSettingsTab({
       const { error } = await supabase.from('dinner_plan_days').upsert(payload, { onConflict: 'device_id,date' })
       if (error) console.error('Failed to persist expired checked dinner plan cleanup', { error })
     })()
-  }, [activeDeviceId, isActive, dinnerPlanDays, dinnerPlanWeekOffset, nowMs])
+  }, [activeDeviceId, isActive, showingSavedGroceries, dinnerPlanDays, dinnerPlanWeekOffset, nowMs])
 
 
   const fetchDinnerPlanDays = useCallback(async (weekOffset: DinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
@@ -13637,7 +13637,7 @@ function GroceriesModuleSettingsTab({
       .select('date,title,note')
       .eq('device_id', activeDeviceId)
       .in('date', DINNER_PLAN_DAY_ORDER.map((day) => isoDateForDinnerDay(day, weekOffset)))
-    if (error) return defaultDinnerPlanDays()
+    if (error) throw error
     const byDay = new Map<DinnerPlanDay['day'], { title: string; items: DinnerPlanDay['items'] }>()
     for (const row of data ?? []) {
       const day = dinnerDayFromIsoDate(String(row.date))
@@ -13653,15 +13653,20 @@ function GroceriesModuleSettingsTab({
 
   const loadDinnerPlan = useCallback(async (weekOffset: DinnerPlanWeekOffset = dinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
     const generation = ++dinnerRequestGenerationRef.current
-    const normalizedDays = await fetchDinnerPlanDays(weekOffset)
-    if (generation !== dinnerRequestGenerationRef.current) return normalizedDays
-    setDinnerPlanWeekOffset(weekOffset)
-    setDinnerPlanDays(normalizedDays)
-    if (activeDeviceId && userId) {
-      writeTabSnapshot(window.localStorage, userId, activeDeviceId, 'groceries', `dinner-${weekOffset}`, {kind:'dinner',days:normalizedDays})
+    try {
+      const normalizedDays = await fetchDinnerPlanDays(weekOffset)
+      if (generation !== dinnerRequestGenerationRef.current) return normalizedDays
+      setDinnerPlanWeekOffset(weekOffset)
+      setDinnerPlanDays(normalizedDays)
+      if (activeDeviceId && userId) {
+        writeTabSnapshot(window.localStorage, userId, activeDeviceId, 'groceries', `dinner-${weekOffset}`, {kind:'dinner',days:normalizedDays})
+      }
+      return normalizedDays
+    } catch {
+      // A disconnected device should keep displaying the saved dinner plan.
+      return dinnerPlanDays
     }
-    return normalizedDays
-  }, [activeDeviceId, userId, dinnerPlanWeekOffset, fetchDinnerPlanDays])
+  }, [activeDeviceId, userId, dinnerPlanWeekOffset, dinnerPlanDays, fetchDinnerPlanDays])
 
   useEffect(() => {
     loadDinnerPlan()
@@ -15252,6 +15257,7 @@ const manualItems: ReminderUiItem[] = (data || [])
       let nextAvailableSources: ReminderSourceFilter[] = ['remind']
       const sessionUserId = (await supabase.auth.getUser())?.data?.user?.id
       if (generation !== requestGenerationRef.current) return
+      if (!sessionUserId || sessionUserId !== userId) return
       if (sessionUserId && sessionUserId === userId) {
         const { data: connectionData } = await supabase
           .from('user_integrations')
