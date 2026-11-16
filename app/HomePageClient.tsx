@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
+import { readLaunchPreview, writeLaunchPreview, clearLaunchPreview } from './lib/launchPreviewCache.mjs'
 import { fetchSurfScore } from './lib/fetchSurfScore'
 import { findSpotByLabel } from './lib/surf/spots'
 import { formatAppDate, formatAppNumericDate } from './lib/dateDisplay'
@@ -14,7 +15,7 @@ import { normalizeSurfRating1to6, surfRatingColor, surfRatingIsExperienceBased, 
 const SoccerTeamSheet = dynamic(() => import('./components/SoccerTeamSheet'))
 const AIAssistantTab = dynamic(() => import('./components/AIAssistantTab'))
 const SensitiveInformationHelper = dynamic(() => import('./components/SensitiveInformationHelper'))
-import FrameAssistant from './components/FrameAssistant'
+const FrameAssistant = dynamic(() => import('./components/FrameAssistant'))
 import type { AssistantDestination } from './lib/assistant/types'
 const SubscriptionSettingsPage = dynamic(() => import('./components/SubscriptionSettingsPage'))
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey, rankGrocerySuggestionsForInput } from './lib/groceries/suggestions'
@@ -49,7 +50,10 @@ import { saveFrameSettings } from './lib/device/saveFrameSettings.mjs'
 import { reconcilePersistedDesiredState } from './lib/device/desiredStateReconciliation.mjs'
 import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, geometryWithAssignments, supportsPhysicalCustomLayout, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
 import { projectSlotMemoryIntoBuiltInLayout, sanitizeLayoutModuleMemory as sanitizeCanonicalLayoutModuleMemory, serializeBuiltInLayoutCells } from './lib/frameLayoutTransition'
-import { AddLayoutCard, CustomLayoutPreview, InlineCustomLayoutEditor, editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
+import { editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
+const AddLayoutCard = dynamic(() => import('./components/CustomLayoutLibrary').then((mod) => mod.AddLayoutCard))
+const CustomLayoutPreview = dynamic(() => import('./components/CustomLayoutLibrary').then((mod) => mod.CustomLayoutPreview))
+const InlineCustomLayoutEditor = dynamic(() => import('./components/CustomLayoutLibrary').then((mod) => mod.InlineCustomLayoutEditor))
 import type { EditorCell } from './lib/frameLayoutEditor.mjs'
 import { MAX_FRAME_NAME_LENGTH, normalizeFrameName } from './lib/frameName.mjs'
 import { recommendedModuleKeys, additionalModuleGroups, isVisibleAppModule } from './lib/modulePickerCatalog.mjs'
@@ -1254,6 +1258,8 @@ export default function HomePage() {
   const [showSplash, setShowSplash] = useState(false)
   const [shouldRenderApp, setShouldRenderApp] = useState(false)
   const [setupDeviceId, setSetupDeviceId] = useState<string | null>(null)
+  const [cachedPreviewDeviceId, setCachedPreviewDeviceId] = useState<string | null>(null)
+  const [cachedPreviewSyncFailed, setCachedPreviewSyncFailed] = useState(false)
 
   const [appTheme, setAppTheme] = useState<AppTheme>(initialTheme)
   const [appThemePickerOpen, setAppThemePickerOpen] = useState(false)
@@ -2140,8 +2146,9 @@ export default function HomePage() {
     }
   }
 
-  async function loadDeviceSettings(deviceId: string) {
+  async function loadDeviceSettings(deviceId: string, ownerId: string | null = userId, knownDeviceIds: string[] = frames.map((frame) => frame.device_id)) {
     setLoadedSettingsDeviceId(null)
+    let fetchedCustomLayouts: CustomLayout[] = []
     // Start the settings lookup while the custom-layout endpoint is in flight.
     const settingsPromise = Promise.resolve(supabase
       .from('device_settings')
@@ -2149,18 +2156,26 @@ export default function HomePage() {
       .eq('device_id', deviceId)
       .maybeSingle())
     if (SHOW_CUSTOM_LAYOUT_UI) {
-      const session = await supabase.auth.getSession()
-      const token = session.data.session?.access_token
-      if (token) {
-        const response = await fetch(`/api/custom-layouts?device_id=${encodeURIComponent(deviceId)}`, { headers: { Authorization: `Bearer ${token}` } })
-        if (response.ok) setCustomLayouts((await response.json()).layouts || [])
+      try {
+        const session = await supabase.auth.getSession()
+        const token = session.data.session?.access_token
+        if (token) {
+          const response = await fetch(`/api/custom-layouts?device_id=${encodeURIComponent(deviceId)}`, { headers: { Authorization: `Bearer ${token}` } })
+          if (response.ok) fetchedCustomLayouts = (await response.json()).layouts || []
+        }
+      } catch {
+        // The initial screen and its cached preview must survive a layout API outage.
       }
-    } else {
-      setCustomLayouts([])
     }
+    if (activeDeviceIdRef.current !== deviceId) return
+    setCustomLayouts(fetchedCustomLayouts)
     const { data, error } = await settingsPromise
 
-    if (error) return defaultDinnerPlanDays()
+    if (activeDeviceIdRef.current !== deviceId) return
+    if (error) {
+      setCachedPreviewSyncFailed(true)
+      return
+    }
 
     const json = (data?.settings_json || {}) as SettingsJson
     const hasSavedSettings =
@@ -2194,7 +2209,8 @@ export default function HomePage() {
         : ({} as Record<string, any>)
 
     // Settings are sufficient to render the app; physical status is optional.
-    const reusableModules = await loadReusableUserModules(frames.map((frame) => frame.device_id), deviceId).catch(() => ({}))
+    const reusableModules = await loadReusableUserModules(knownDeviceIds, deviceId).catch(() => ({}))
+    if (activeDeviceIdRef.current !== deviceId) return
     const normalizedModules = normalizeModulesForSave(mergeReusableUserModules(rawModules, reusableModules))
     const nextPinnedTabs = Array.isArray((json as any).pinned_tabs)
       ? ((json as any).pinned_tabs as unknown[]).filter((m): m is ModuleKey => isModuleKey(m) && m !== 'date')
@@ -2258,6 +2274,16 @@ export default function HomePage() {
 
     isLoadedRef.current = true
     setLoadedSettingsDeviceId(deviceId)
+    setCachedPreviewDeviceId(null)
+    setCachedPreviewSyncFailed(false)
+    // Only cache the visual structure; never write modulesJson, private module
+    // content, access tokens, or live status into local browser storage.
+    if (ownerId && typeof window !== 'undefined') {
+      const matchingCustom = storedCustomId
+        ? fetchedCustomLayouts.find((item) => item.id === storedCustomId)
+        : null
+      writeLaunchPreview(window.localStorage, ownerId, deviceId, json, matchingCustom)
+    }
     // Update battery/online/render acknowledgements after the first usable
     // frame screen; a slow or offline frame must not block the app launch.
     void loadDeviceStatus(deviceId)
@@ -2275,6 +2301,38 @@ export default function HomePage() {
     if (data !== true) throw new Error('Not allowed to initialize this frame.')
   }
 
+  function applyCachedLaunchPreview(cached: NonNullable<ReturnType<typeof readLaunchPreview>>) {
+    const { preview } = cached
+    const nextLayout = preview.layout === 'custom' ? 'default' : preview.layout
+    const nextCells = cellsArrayToMap(nextLayout, preview.cells.map((cell) => ({
+      slot: cell.slot,
+      module: cell.module ?? '',
+    })))
+    setFrameTheme(preview.theme)
+    setPowerSaver(preview.powerSaver)
+    setLanguage(preview.language)
+    setFontSize(preview.fontSize)
+    setCellsByLayout({ ...makeEmptyCellsByLayout(), [nextLayout]: nextCells })
+    setLayoutKey(nextLayout)
+    setPinnedModuleTabs(preview.pinned_tabs.filter((key): key is ModuleKey => isModuleKey(key)))
+    const custom = preview.customLayout
+    setCustomLayouts(custom ? [custom] : [])
+    setActiveCustomLayoutId(custom?.id ?? null)
+    setCarouselItemId(custom?.id ?? `built-in:${nextLayout}`)
+    if (custom) {
+      setCustomAssignments({ [custom.id]: Object.fromEntries(
+        preview.cells.map((cell) => [cell.slot, baseModuleKeyFromStored(cell.module ?? '')])
+      ) })
+    }
+    layoutModuleMemoryRef.current = mergeCellsIntoSlotMemory([], nextLayout, nextCells)
+    setCachedPreviewDeviceId(cached.deviceId)
+    setCachedPreviewSyncFailed(false)
+    setBooting(false)
+    setShowSplash(false)
+    performance.mark('remind:startup:preview-ready')
+    performance.measure('remind:startup:preview', 'remind:startup:start', 'remind:startup:preview-ready')
+  }
+
   useEffect(() => {
     let unsub: { unsubscribe: () => void } | null = null
     let cancelled = false
@@ -2288,6 +2346,8 @@ export default function HomePage() {
       setBooting(false)
       setShowSplash(false)
       setShouldRenderApp(false)
+      setCachedPreviewDeviceId(null)
+      setCachedPreviewSyncFailed(false)
       isLoadedRef.current = false
 
       const { data: sessionData } = await supabase.auth.getSession()
@@ -2321,13 +2381,23 @@ export default function HomePage() {
       sessionStorage.setItem('remind:onboarding-user', session.user.id)
       setAuthReady(true)
       setUserId(session.user.id)
+      const cached = readLaunchPreview(window.localStorage, session.user.id)
       setShouldRenderApp(true)
-      setShowSplash(!disableLaunchSplash)
-      setBooting(!disableLaunchSplash)
+      if (cached) {
+        // Preview is visible immediately, but all controls are inert until
+        // membership and the authoritative device settings are validated.
+        applyCachedLaunchPreview(cached)
+      } else {
+        setShowSplash(!disableLaunchSplash)
+        setBooting(!disableLaunchSplash)
+      }
 
       const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
         if (!nextSession) {
           cancelled = true
+          clearLaunchPreview(window.localStorage, session.user.id)
+          window.localStorage.removeItem('activeDeviceId')
+          setCachedPreviewDeviceId(null)
           setAuthReady(true)
           setUserId(null)
           setFramesLoaded(false)
@@ -2346,6 +2416,11 @@ export default function HomePage() {
           setShowSplash(false)
           setBooting(false)
           router.replace('/login')
+        } else if (nextSession.user.id !== session.user.id) {
+          // Switching accounts should remount with the other account's cache.
+          cancelled = true
+          setShouldRenderApp(false)
+          window.location.reload()
         }
       })
       unsub = data.subscription
@@ -2354,11 +2429,14 @@ export default function HomePage() {
       try {
         list = await fetchCurrentUserFrameMembership(session.user.id)
       } catch {
-        setFrames([])
-        setActiveDeviceId(null)
+        if (!cached) {
+          setFrames([])
+          setActiveDeviceId(null)
+        }
         isLoadedRef.current = false
         setBooting(false)
         setShowSplash(false)
+        setCachedPreviewSyncFailed(true)
         setFramesLoaded(false)
         return
       }
@@ -2389,11 +2467,27 @@ export default function HomePage() {
         }))
       }).catch(() => { /* Status/name data must never block the app. */ })
 
-      const saved = typeof window !== 'undefined' ? localStorage.getItem('activeDeviceId') : null
+      const saved = window.localStorage.getItem('activeDeviceId')
       const savedExists = saved && list.some((x) => x.device_id === saved)
-      const selected = savedExists ? saved! : (list[0]?.device_id ?? null)
+      const cachedExists = cached && list.some((x) => x.device_id === cached.deviceId)
+      const selected = savedExists ? saved! : (cachedExists ? cached.deviceId : (list[0]?.device_id ?? null))
+      if (cached && cached.deviceId !== selected) {
+        // Never show a previously paired frame after access was revoked or
+        // a different device is selected.
+        setCachedPreviewDeviceId(null)
+        setCachedPreviewSyncFailed(false)
+        setCellsByLayout(makeEmptyCellsByLayout())
+        setLayoutKey('default')
+        setActiveCustomLayoutId(null)
+        setCustomLayouts([])
+        setPinnedModuleTabs([])
+        setShowSplash(!disableLaunchSplash)
+        setBooting(!disableLaunchSplash)
+        clearLaunchPreview(window.localStorage, session.user.id)
+      }
 
       restoreManualUpdateState(selected)
+      activeDeviceIdRef.current = selected
       setActiveDeviceId(selected)
       setLastPhysicalDisplayUpdatedAt(null)
       setPhysicalFrameSnapshot(null)
@@ -2401,7 +2495,7 @@ export default function HomePage() {
       physicalFrameRenderAtRef.current = null
 
       if (selected) {
-        await loadDeviceSettings(selected)
+        await loadDeviceSettings(selected, session.user.id, list.map((item) => item.device_id))
       }
 
       if (!cancelled) {
@@ -2420,7 +2514,10 @@ export default function HomePage() {
 
   async function selectDevice(id: string) {
     isLoadedRef.current = false
+    setCachedPreviewDeviceId(null)
+    setLoadedSettingsDeviceId(null)
     restoreManualUpdateState(id)
+    activeDeviceIdRef.current = id
     setActiveDeviceId(id)
     setLastPhysicalDisplayUpdatedAt(null)
     setPhysicalFrameSnapshot(null)
@@ -2695,6 +2792,12 @@ export default function HomePage() {
         setModulesJson(draftModules)
       }
       savedStateRef.current = persistedSignature
+      if (userId && typeof window !== 'undefined') {
+        const matchingCustom = settingsJson.layout === 'custom'
+          ? customLayouts.find((item) => item.id === activeCustomLayoutId)
+          : null
+        writeLaunchPreview(window.localStorage, userId, deviceId, settingsJson, matchingCustom)
+      }
       savedFrameStateRef.current = {
         frameTheme: draftTheme,
         powerSaver: draftPowerSaver,
@@ -2888,6 +2991,7 @@ export default function HomePage() {
       console.warn('[notifications:logout-cleanup-failed]', { message: errorMessage(error) })
     }
     await supabase.auth.signOut()
+    if (userId) clearLaunchPreview(window.localStorage, userId)
     router.replace('/login')
   }
 
@@ -2943,6 +3047,12 @@ async function handleSelectTab(k: TabKey) {
     }
   }
 
+  const isCachedLaunchPreview = cachedPreviewDeviceId !== null && (
+    !framesLoaded || loadedSettingsDeviceId !== cachedPreviewDeviceId
+  )
+  const configurationNotReady = !!activeDeviceId && loadedSettingsDeviceId !== activeDeviceId
+  const appControlsLocked = isCachedLaunchPreview || configurationNotReady
+
   const isPlainFrameAssistantSurface = activeTab === 'frame'
     && !layoutFlow && !pickerOpen && !languagePickerOpen
     && shouldRenderApp && !booting && !showSplash && !shouldShowFirstFrameOnboarding && !setupDeviceId
@@ -2978,7 +3088,8 @@ async function handleSelectTab(k: TabKey) {
         )}
         <div
           className={`remind-app-shell ${!shouldRenderApp || shouldShowFirstFrameOnboarding || setupDeviceId ? 'hidden' : ''} ${booting ? 'remind-app-shell-booting' : 'remind-app-shell-ready'} flex flex-col flex-1 min-h-0`}
-          aria-hidden={!shouldRenderApp || booting || shouldShowFirstFrameOnboarding || !!setupDeviceId}
+          inert={appControlsLocked}
+          aria-hidden={!shouldRenderApp || booting || shouldShowFirstFrameOnboarding || !!setupDeviceId || appControlsLocked}
         >
           <>
             <TabBar
@@ -3219,6 +3330,11 @@ async function handleSelectTab(k: TabKey) {
           </>
         </div>
 
+        {isCachedLaunchPreview && (
+          <div role="status" className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-[10px] tracking-[0.12em] text-[color:var(--fg-45)]">
+            {cachedPreviewSyncFailed ? 'OFFLINE PREVIEW' : 'SYNCING…'}
+          </div>
+        )}
         {shouldRenderApp && showSplash && (
           <div
             className={`remind-splash-overlay ${booting ? '' : 'remind-splash-overlay-hiding'}`}
