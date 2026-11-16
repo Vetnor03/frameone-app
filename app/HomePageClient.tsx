@@ -2195,6 +2195,7 @@ export default function HomePage() {
   async function loadDeviceSettings(deviceId: string, ownerId: string | null = userId, knownDeviceIds: string[] = frames.map((frame) => frame.device_id)) {
     setLoadedSettingsDeviceId(null)
     let fetchedCustomLayouts: CustomLayout[] = []
+    let customLayoutsFetched = false
     // Start the settings lookup while the custom-layout endpoint is in flight.
     const settingsPromise = Promise.resolve(supabase
       .from('device_settings')
@@ -2207,14 +2208,16 @@ export default function HomePage() {
         const token = session.data.session?.access_token
         if (token) {
           const response = await fetch(`/api/custom-layouts?device_id=${encodeURIComponent(deviceId)}`, { headers: { Authorization: `Bearer ${token}` } })
-          if (response.ok) fetchedCustomLayouts = (await response.json()).layouts || []
+          if (response.ok) {
+            fetchedCustomLayouts = (await response.json()).layouts || []
+            customLayoutsFetched = true
+          }
         }
       } catch {
         // The initial screen and its cached preview must survive a layout API outage.
       }
     }
     if (activeDeviceIdRef.current !== deviceId) return
-    setCustomLayouts(fetchedCustomLayouts)
     const { data, error } = await settingsPromise
 
     if (activeDeviceIdRef.current !== deviceId) return
@@ -2262,6 +2265,9 @@ export default function HomePage() {
       ? ((json as any).pinned_tabs as unknown[]).filter((m): m is ModuleKey => isModuleKey(m) && m !== 'date')
       : []
 
+    // Commit layouts and settings in one React update after every fetch settles.
+    // A failed custom-layout endpoint must not blank an already shown preview.
+    if (customLayoutsFetched || !SHOW_CUSTOM_LAYOUT_UI) setCustomLayouts(fetchedCustomLayouts)
     setFrameTheme(nextFrameTheme)
     setPowerSaver(nextPowerSaver)
     setLanguage(nextLanguage)
