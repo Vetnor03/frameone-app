@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import HomePageClient from './HomePageClient'
+import { StartupSplashScreen } from './components/StartupSplash'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +25,7 @@ export default async function Page() {
   }
 
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<StartupSplashScreen />}>
       <HomePageClient />
     </Suspense>
   )
