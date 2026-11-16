@@ -1235,7 +1235,6 @@ export default function HomePage() {
   const [appTheme, setAppTheme] = useState<AppTheme>(initialTheme)
   const [appThemePickerOpen, setAppThemePickerOpen] = useState(false)
   const [frameTheme, setFrameTheme] = useState<AppTheme>('dark')
-  const [frameLanguageDraft, setFrameLanguageDraft] = useState<AppLanguage>('en')
   const [powerSaver, setPowerSaver] = useState(DEFAULT_POWER_SAVER)
   const [powerSaverSaving, setPowerSaverSaving] = useState(false)
   const [language, setLanguage] = useState<AppLanguage>('en')
@@ -2175,7 +2174,6 @@ export default function HomePage() {
       : []
 
     setFrameTheme(nextFrameTheme)
-    setFrameLanguageDraft(nextLanguage)
     setPowerSaver(nextPowerSaver)
     setLanguage(nextLanguage)
     setFontSize(nextFontSize)
@@ -2966,8 +2964,6 @@ async function handleSelectTab(k: TabKey) {
                     setFrameTheme(next)
                     markDirty({ frameTheme: next })
                   }}
-                  frameLanguage={frameLanguageDraft}
-                  onFrameLanguageToggle={() => setFrameLanguageDraft((current) => current === 'no' ? 'en' : 'no')}
                   layoutKey={layoutKey}
                   cells={cellsByLayout[layoutKey]}
                   onPrev={prevLayout}
@@ -4353,8 +4349,6 @@ function FrameTab(props: {
   frameTheme: AppTheme
   canChangeFrameTheme: boolean
   onFrameThemeToggle: () => void
-  frameLanguage: AppLanguage
-  onFrameLanguageToggle: () => void
   layoutKey: LayoutKey
   cells: Record<number, ModuleKey | null>
   onPrev: () => void
@@ -4374,7 +4368,7 @@ function FrameTab(props: {
   onAdd:()=>void
   onEdit:(layout:CustomLayout)=>void
 }) {
-  const { title, subtitle, frameTheme, canChangeFrameTheme, onFrameThemeToggle, frameLanguage, onFrameLanguageToggle, layoutKey, cells, onPrev, onNext, onCellTap, language,editorMode,editorName,editorCells,editorUnsupportedSlots,onEditorNameChange,onEditorCellsChange,onCancelEditor,customLayout,customAssignments,isAddCard,onAdd,onEdit } = props
+  const { title, subtitle, frameTheme, canChangeFrameTheme, onFrameThemeToggle, layoutKey, cells, onPrev, onNext, onCellTap, language,editorMode,editorName,editorCells,editorUnsupportedSlots,onEditorNameChange,onEditorCellsChange,onCancelEditor,customLayout,customAssignments,isAddCard,onAdd,onEdit } = props
 
   return (
     <div id="frame-layout-controls" tabIndex={-1} className="h-full flex flex-col outline-none">
@@ -4401,20 +4395,6 @@ function FrameTab(props: {
                 <span>{frameTheme === 'light' ? 'LIGHT' : 'DARK'}</span>
                 <span aria-hidden="true" className={`relative h-[14px] w-[26px] rounded-full border transition-colors ${frameTheme === 'dark' ? 'border-[#354653] bg-[#263440]' : 'border-[#cbd5dc] bg-[#f4f6f8]'}`}>
                   <span className={`absolute left-[2px] top-[2px] h-2 w-2 rounded-full transition-[transform,background-color] ${frameTheme === 'dark' ? 'bg-[#f5f6f8]' : 'bg-[#586773] translate-x-3'}`} />
-                </span>
-              </button>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={frameLanguage === 'en'}
-                aria-label={language === 'no' ? 'Rammens språk: norsk eller engelsk' : 'Frame language: Norwegian or English'}
-                title={frameLanguage === 'no' ? 'Norsk' : 'English'}
-                onClick={onFrameLanguageToggle}
-                className="mt-1 inline-flex min-h-6 items-center justify-center gap-2 rounded-full px-2 text-[10px] tracking-[0.08em] text-[color:var(--fg-45)]"
-              >
-                <span>{frameLanguage === 'no' ? 'NORSK' : 'ENGLISH'}</span>
-                <span aria-hidden="true" className={`relative h-[14px] w-[26px] rounded-full border transition-colors ${frameLanguage === 'no' ? 'border-[#354653] bg-[#263440]' : 'border-[#cbd5dc] bg-[#f4f6f8]'}`}>
-                  <span className={`absolute left-[2px] top-[2px] h-2 w-2 rounded-full transition-[transform,background-color] ${frameLanguage === 'no' ? 'bg-[#f5f6f8]' : 'bg-[#586773] translate-x-3'}`} />
                 </span>
               </button>
             </div>
