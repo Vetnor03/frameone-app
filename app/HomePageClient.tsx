@@ -1990,6 +1990,7 @@ export default function HomePage() {
       }
 
       const data = await resp.json()
+      if (activeDeviceIdRef.current !== deviceId) return null
       const renderIso = data?.last_render_at ? String(data.last_render_at) : ''
       const status: Omit<MemberRow, 'device_id' | 'role'> = {
         current_version: data?.current_version ?? null,
@@ -2192,8 +2193,7 @@ export default function HomePage() {
         ? (json.modules as Record<string, any>)
         : ({} as Record<string, any>)
 
-    // Fetch the current hardware status concurrently with secondary module data.
-    const statusPromise = loadDeviceStatus(deviceId)
+    // Settings are sufficient to render the app; physical status is optional.
     const reusableModules = await loadReusableUserModules(frames.map((frame) => frame.device_id), deviceId).catch(() => ({}))
     const normalizedModules = normalizeModulesForSave(mergeReusableUserModules(rawModules, reusableModules))
     const nextPinnedTabs = Array.isArray((json as any).pinned_tabs)
@@ -2234,7 +2234,7 @@ export default function HomePage() {
     }
 
     setDirty(false)
-    const renderAt = await statusPromise
+    const renderAt = frames.find((frame) => frame.device_id === deviceId)?.last_render_at ?? null
     const settingsUpdatedAt = hasSavedSettings && data?.updated_at ? String(data.updated_at) : null
     rememberPendingFrameUpdate(settingsUpdatedAt, renderAt)
     // Restore status from backend timestamps after reload or frame switching.
@@ -2258,6 +2258,9 @@ export default function HomePage() {
 
     isLoadedRef.current = true
     setLoadedSettingsDeviceId(deviceId)
+    // Update battery/online/render acknowledgements after the first usable
+    // frame screen; a slow or offline frame must not block the app launch.
+    void loadDeviceStatus(deviceId)
   }
 
   // This is the only policy exception to manual Update: a newly paired frame
