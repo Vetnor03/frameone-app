@@ -111,9 +111,9 @@ function sanitizeNews(data) {
 const SKI_FIELDS = {
   current: ['temp_c','wind_mps','wind_dir_deg','gust_mps','precipitation_1h_mm'],
   snow: ['snow_depth_cm','fresh_24h_cm','fresh_72h_cm','altitude_m','source_date'],
-  avalanche: ['available','assessed','danger_level','danger_name','region_name'],
-  resort: ['ski_open','lift_only','resort_open','today_hours','open_lifts','total_lifts','name'],
-  next_powder_day: ['found','date','estimated_fresh_cm_low','estimated_fresh_cm_high','basis','elevation_m','confidence'],
+  avalanche: ['available','assessed','danger_level','danger_name','region_name','valid_from','main_text','full_warning_url','attribution'],
+  resort: ['available','id','name','distance_km','ski_open','lift_only','resort_open','today_hours','lifts_open','lifts_total','slopes_open','slopes_total','url','last_updated'],
+  next_powder_day: ['found','date','estimated_fresh_cm_low','estimated_fresh_cm_high','estimated_fresh_cm_mid','precipitation_mm','mean_snow_temp_c','peak_wind_mps','basis','elevation_m','confidence'],
 }
 function sanitizeSki(data) {
   if (!isPlain(data) || !isPlain(data.summary)) return null
@@ -129,6 +129,36 @@ function sanitizeSki(data) {
           typeof source[key] === 'number' && Number.isFinite(source[key]) ? source[key] :
           typeof source[key] === 'boolean' ? source[key] : null]))
   }
+  if (isPlain(data.summary.location)) {
+    summary.location = {
+      label: text(data.summary.location.label, 80),
+      lat: quantity(data.summary.location.lat),
+      lon: quantity(data.summary.location.lon),
+    }
+  }
+  if (isPlain(data.summary.snow) && isPlain(data.summary.snow.grid)) {
+    summary.snow = {...summary.snow, grid: {
+      x: quantity(data.summary.snow.grid.x), y: quantity(data.summary.snow.grid.y),
+    }}
+  }
+  if (isPlain(data.summary.avalanche)) {
+    summary.avalanche = {...summary.avalanche, problems: rows(data.summary.avalanche.problems, 8).map(problem => ({
+      name: optionalText(problem?.name, 120),
+      aspects: rows(problem?.aspects, 20).map(value => text(value,30)),
+      elevation: optionalText(problem?.elevation,80),
+      trigger: optionalText(problem?.trigger,100),
+      size: optionalText(problem?.size,60),
+    }))}
+  }
+  summary.forecast = rows(data.summary.forecast, 16).map(day => ({
+    date: text(day?.date,20),
+    min_temp_c: day?.min_temp_c == null ? null : quantity(day.min_temp_c),
+    max_temp_c: day?.max_temp_c == null ? null : quantity(day.max_temp_c),
+    precipitation_mm: day?.precipitation_mm == null ? null : quantity(day.precipitation_mm),
+    symbol_code: optionalText(day?.symbol_code,100),
+    wind_mps: day?.wind_mps == null ? null : quantity(day.wind_mps),
+    wind_dir_deg: day?.wind_dir_deg == null ? null : quantity(day.wind_dir_deg),
+  })).filter(day => /^\\d{4}-\\d{2}-\\d{2}$/.test(day.date))
   return {summary}
 }
 
