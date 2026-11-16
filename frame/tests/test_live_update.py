@@ -12,12 +12,12 @@ def test_revision_probe_uses_source_aware_idle_cadence_and_is_cheap():
     assert 'remainingProbeWaitMs' in loop
     assert 'waitForInteractiveCadence(pwr.usbPresent, remainingProbeWaitMs)' in loop
     assert 'LiveUpdate::lastNetworkProbeStartedAtMs()' in loop
-    assert 'LiveUpdate::probe' in loop
+    assert 'probeWithPilotControl' in loop
     assert 'FrameConfigApi::fetchWithStatus' not in loop.split('// Exactly one cheap revision probe')[1]
 
 def test_idle_manual_probe_is_separate_from_smart_content_scheduler():
     loop = MAIN[MAIN.index('// Exactly one cheap revision probe'):MAIN.index('// --------------------------------------\n// Setup')]
-    assert 'LiveUpdate::probe' in loop
+    assert 'probeWithPilotControl' in loop
     assert '/api/device/content-revision' not in loop
     assert '/api/device/render-state' not in loop
     assert 'SmartRefresh::probeRevision' not in loop
@@ -134,7 +134,8 @@ def test_firmware_version_change_redraws_once_and_success_persists_version():
     assert maintenance.index('renderLoadedDashboard') < maintenance.index('saveFirmwareVersion(FW_VER)')
     assert maintenance.count('saveFirmwareVersion(FW_VER)') == 1
     setup = MAIN[MAIN.index('void setup()'):]
-    assert setup.index('runFirmwareMaintenanceIfNeeded') < setup.index('LiveUpdate::probe')
+    assert setup.index('probeWithPilotControl(DeviceIdentity::getToken(), lifecycleState, true)') < setup.index('runFirmwareMaintenanceIfNeeded')
+    assert setup.index('runFirmwareMaintenanceIfNeeded') < setup.index('liveProbeOk = probeWithPilotControl')
     manual = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool refreshContentSignatureBestEffort')]
     assert manual.index('renderSmartDashboard') < manual.index('saveFirmwareVersion(FW_VER)')
 

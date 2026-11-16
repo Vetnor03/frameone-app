@@ -17,7 +17,7 @@ def test_alfred_standard_includes_mqtt_but_keeps_https_fallback():
     assert 'const bool pushConnected = MqttPushPilot::poll(' in source
     assert 'if (pushConnected && !pushHint && !subscriptionResync && !safetyProbeDue) continue;' in source
     assert 'MQTT_MISSED_HINT_RECOVERY_MS = 120000UL' in source
-    assert 'LiveUpdate::probe(DeviceIdentity::getToken(), next,' in source
+    assert 'probeWithPilotControl(DeviceIdentity::getToken(), next,' in source
 
 
 def test_standard_mqtt_firmware_backs_off_when_backend_says_disabled():
