@@ -1,5 +1,12 @@
-// Server-only operator control. Empty by default; never accepts wildcards.
-// Exact IDs prevent accidentally ending the pilot for the entire fleet.
-export function pilotEndedForDevice(deviceId: string, configuredIds = process.env.PILOT_ENDED_DEVICE_IDS ?? ''): boolean {
-  return configuredIds.split(',').some(id => id.trim() === deviceId && deviceId.length > 0)
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+// Read the operator-owned flag afresh for every authenticated device probe.
+// Never convert unavailable/malformed state to false: that could reactivate a frame.
+export async function pilotEndedForDevice(client: Pick<SupabaseClient, 'from'>, deviceId: string): Promise<boolean> {
+  const { data, error } = await client.from('devices')
+    .select('pilot_ended').eq('device_id', deviceId).maybeSingle()
+  if (error || typeof data?.pilot_ended !== 'boolean') {
+    throw new Error('pilot_state_unavailable')
+  }
+  return data.pilot_ended
 }

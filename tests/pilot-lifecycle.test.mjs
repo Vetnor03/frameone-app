@@ -3,15 +3,35 @@ import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import { pilotEndedForDevice } from '../app/lib/device/pilotLifecycle.ts'
 
-test('pilot control is opt-in and matches only exact selected device IDs', () => {
-  assert.equal(pilotEndedForDevice('frm_A', ''), false)
-  assert.equal(pilotEndedForDevice('frm_A', 'frm_AB'), false)
-  assert.equal(pilotEndedForDevice('frm_A', '*'), false)
-  assert.equal(pilotEndedForDevice('', ''), false)
-  assert.equal(pilotEndedForDevice('frm_A', ' frm_B, frm_A '), true)
-  assert.equal(pilotEndedForDevice('frm_B', ' frm_B, frm_A '), true)
-  assert.equal(pilotEndedForDevice('frm_C', ' frm_B, frm_A '), false)
-  assert.equal(pilotEndedForDevice('frm_a', 'frm_A'), false)
+function database(rows, error = null) {
+  return { from(table) {
+    assert.equal(table, 'devices')
+    return { select(columns) {
+      assert.equal(columns, 'pilot_ended')
+      return { eq(column, id) {
+        assert.equal(column, 'device_id')
+        return { async maybeSingle() { return { data: rows[id] ?? null, error } } }
+      } }
+    } }
+  } }
+}
+
+test('reads each frame independently and sees changes without a redeploy', async () => {
+  const rows = { frm_A: { pilot_ended: false }, frm_B: { pilot_ended: true } }
+  const db = database(rows)
+  assert.equal(await pilotEndedForDevice(db, 'frm_A'), false)
+  assert.equal(await pilotEndedForDevice(db, 'frm_B'), true)
+  rows.frm_A.pilot_ended = true
+  assert.equal(await pilotEndedForDevice(db, 'frm_A'), true)
+  rows.frm_B.pilot_ended = false
+  assert.equal(await pilotEndedForDevice(db, 'frm_B'), false)
+})
+
+test('missing/error/malformed state cannot silently reactivate a sleeping frame', async () => {
+  for (const data of [null, {}, { pilot_ended: null }, { pilot_ended: 'false' }, { pilot_ended: 0 }]) {
+    await assert.rejects(pilotEndedForDevice(database({ frm_A: data }), 'frm_A'), /pilot_state_unavailable/)
+  }
+  await assert.rejects(pilotEndedForDevice(database({ frm_A: { pilot_ended: false } }, { message: 'offline' }), 'frm_A'), /pilot_state_unavailable/)
 })
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
@@ -21,7 +41,7 @@ const route = read('app/api/device/update-state/route.ts')
 
 test('control is only returned after physical authentication and cannot be cached', () => {
   assert.ok(route.indexOf("if ('error' in auth)") < route.indexOf('pilot_ended:'))
-  assert.match(route, /pilot_ended: pilotEndedForDevice\(deviceId\)/)
+  assert.match(route, /await pilotEndedForDevice\(auth.supabase, deviceId\)/)
   assert.match(route, /private, no-store/)
 })
 

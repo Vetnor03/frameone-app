@@ -20,6 +20,13 @@ export async function GET(req: Request) {
     .maybeSingle()
   if (error) return NextResponse.json({ error: 'internal_error' }, { status: 500 })
 
+  let pilotEnded: boolean
+  try {
+    pilotEnded = await pilotEndedForDevice(auth.supabase, deviceId)
+  } catch {
+    return NextResponse.json({ error: 'pilot_state_unavailable' }, { status: 503 })
+  }
+
   const requestedRevision = data?.requested_revision ?? 0
   const displayedRevision = data?.displayed_revision ?? 0
   if (!Number.isSafeInteger(requestedRevision) || requestedRevision < 0 ||
@@ -30,7 +37,7 @@ export async function GET(req: Request) {
 
   return NextResponse.json(
     {
-      pilot_ended: pilotEndedForDevice(deviceId),
+      pilot_ended: pilotEnded,
       requested_revision: requestedRevision,
       displayed_revision: displayedRevision,
     },
