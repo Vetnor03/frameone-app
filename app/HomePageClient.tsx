@@ -1258,8 +1258,11 @@ export default function HomePage() {
   const [notificationState, setNotificationState] = useState<NotificationState>(loadingNotificationState)
   const [framesLoaded, setFramesLoaded] = useState(false)
   const [isFirstFramePairingComplete, setIsFirstFramePairingComplete] = useState(false)
-  const [booting, setBooting] = useState(false)
-  const [showSplash, setShowSplash] = useState(false)
+  // Server-render the splash before hydration; it stays until an authenticated
+  // cached preview has a verified frame membership or live settings are ready.
+  const [booting, setBooting] = useState(true)
+  const [showSplash, setShowSplash] = useState(true)
+  const [startupLoadError, setStartupLoadError] = useState(false)
   const [shouldRenderApp, setShouldRenderApp] = useState(false)
   const [setupDeviceId, setSetupDeviceId] = useState<string | null>(null)
   const [cachedPreviewDeviceId, setCachedPreviewDeviceId] = useState<string | null>(null)
@@ -2369,8 +2372,8 @@ export default function HomePage() {
     layoutModuleMemoryRef.current = mergeCellsIntoSlotMemory([], nextLayout, nextCells)
     setCachedPreviewDeviceId(cached.deviceId)
     setCachedPreviewSyncFailed(false)
-    setBooting(false)
-    setShowSplash(false)
+    // Keep the splash while the membership query verifies this cached frame.
+    // Otherwise we briefly expose a stale shell before knowing whose frame it is.
     performance.mark('remind:startup:preview-ready')
     performance.measure('remind:startup:preview', 'remind:startup:start', 'remind:startup:preview-ready')
   }
@@ -2385,8 +2388,9 @@ export default function HomePage() {
       setUserId(null)
       setFramesLoaded(false)
       setIsFirstFramePairingComplete(false)
-      setBooting(false)
-      setShowSplash(false)
+      setBooting(true)
+      setShowSplash(!disableLaunchSplash)
+      setStartupLoadError(false)
       setShouldRenderApp(false)
       setCachedPreviewDeviceId(null)
       setCachedPreviewSyncFailed(false)
@@ -2474,7 +2478,9 @@ export default function HomePage() {
         if (!cached) {
           setFrames([])
           setActiveDeviceId(null)
+          setStartupLoadError(true)
         }
+        // A stored preview is useful offline, but it remains read-only.
         isLoadedRef.current = false
         setBooting(false)
         setShowSplash(false)
@@ -2513,6 +2519,12 @@ export default function HomePage() {
       const savedExists = saved && list.some((x) => x.device_id === saved)
       const cachedExists = cached && list.some((x) => x.device_id === cached.deviceId)
       const selected = savedExists ? saved! : (cachedExists ? cached.deviceId : (list[0]?.device_id ?? null))
+      if (cached && cached.deviceId === selected) {
+        // The cached layout is now tied to a frame this account can access.
+        // Show it while settings refresh without a blank frame or large fade.
+        setBooting(false)
+        setShowSplash(false)
+      }
       if (cached && cached.deviceId !== selected) {
         // Never show a previously paired frame after access was revoked or
         // a different device is selected.
@@ -3386,7 +3398,14 @@ async function handleSelectTab(k: TabKey) {
             {cachedPreviewSyncFailed ? 'OFFLINE PREVIEW' : 'SYNCING…'}
           </div>
         )}
-        {shouldRenderApp && showSplash && (
+        {startupLoadError && (
+          <div role="alert" className="remind-splash-overlay flex flex-col gap-5 px-8 text-center">
+            <div className="text-lg tracking-[0.14em] font-semibold">RE:MIND</div>
+            <p className="text-sm text-[color:var(--fg-60)]">{language === 'no' ? 'Kunne ikke laste rammene. Kontroller tilkoblingen og prøv igjen.' : 'Could not load your frames. Check your connection and try again.'}</p>
+            <button type="button" onClick={() => window.location.reload()} className="rounded-xl border border-[color:var(--bd-30)] px-6 py-3 text-sm tracking-widest">{language === 'no' ? 'PRØV IGJEN' : 'RETRY'}</button>
+          </div>
+        )}
+        {showSplash && (shouldRenderApp || !authReady) && (
           <div
             className={`remind-splash-overlay ${booting ? '' : 'remind-splash-overlay-hiding'}`}
             aria-hidden={!booting}
