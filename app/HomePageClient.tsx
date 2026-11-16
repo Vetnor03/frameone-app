@@ -3230,10 +3230,10 @@ async function handleSelectTab(k: TabKey) {
 
                     <button
                       onClick={() => {
-                        const module = moduleKey as ModuleKey
+                        const selectedModule = moduleKey
                         setPinnedModuleTabs((prev) => {
-                          const exists = prev.includes(module)
-                          const nextPinned = exists ? prev.filter((m) => m !== module) : [...prev, module]
+                          const exists = prev.includes(selectedModule)
+                          const nextPinned = exists ? prev.filter((m) => m !== selectedModule) : [...prev, selectedModule]
                           markDirty({ pinnedModuleTabs: nextPinned })
                           return nextPinned
                         })
@@ -11808,6 +11808,8 @@ function CountdownModuleSettingsTab({
 
   useEffect(() => {
     loadItems({ silent: !isActive })
+    // Initial fetch is intentionally keyed to the frame; visibility revalidates separately.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDeviceId])
 
   useEffect(() => {
@@ -13289,6 +13291,8 @@ function GroceriesModuleSettingsTab({
   useEffect(() => {
     loadGroceries({ silent: !isActive })
     loadHistory()
+    // Separate activation effect silently refreshes mounted tab state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDeviceId])
 
   // A prewarmed tab fetches data once; background realtime subscriptions are
@@ -13415,6 +13419,8 @@ function GroceriesModuleSettingsTab({
         realtimeChannelRef.current = null
       }
     }
+    // The realtime subscription is deliberately scoped to frame and visibility.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDeviceId, isActive, groceryItemFromRow, upsertItemInState])
 
   useEffect(() => {
@@ -15275,6 +15281,8 @@ const manualItems: ReminderUiItem[] = (data || [])
 
   useEffect(() => {
     loadReminders({ silent: !isActive })
+    // Returning to the tab performs a separate background revalidation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDeviceId])
 
   useEffect(() => {
