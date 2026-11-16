@@ -27,6 +27,7 @@ import { localEventGroupKeyFromRaw, groupSkipId } from './lib/integrations/local
 import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
 import WasteSetupModal from './components/WasteSetupModal'
 import IntegrationRequestCard from './components/IntegrationRequestCard'
+import AppSheet from './components/AppSheet'
 import NewsModuleSettingsTab from './components/NewsModuleSettingsTab'
 import { wasteCollectionDisplayTitle } from './lib/integrations/waste/display'
 import { hasChosenWeatherLocation, norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders } from './lib/onboardingDefaults'
@@ -3857,8 +3858,17 @@ function ConnectAppsScreen({
     }
 
     return (
-      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-4 sm:items-center sm:pb-0">
-        <div className="w-full max-w-sm rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] p-5 shadow-2xl">
+      <AppSheet
+        title={language === 'no' ? 'Lokale arrangementer' : 'Local Events'}
+        onClose={() => setLocalEventsOpen(false)}
+        dismissible={!localEventsLoading}
+        footer={
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setLocalEventsOpen(false)} disabled={localEventsLoading} className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs tracking-widest text-[color:var(--fg-70)] disabled:opacity-60">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
+            <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading || (!startup && !localEventsCanManage) || !activeDeviceId || !area.latitude || !area.longitude} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]">{localEventsLoading ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'LAGRE' : 'SAVE')}</button>
+          </div>
+        }
+      >
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-base font-semibold text-[color:var(--fg-90)]">{language === 'no' ? 'Events i hele Norge' : 'Events across Norway'}</div>
@@ -3886,12 +3896,8 @@ function ConnectAppsScreen({
             {[10, 25, 50, 100].map((km) => <option key={km} value={km}>{km} km</option>)}
           </select>
           <div className="mt-3 text-[10px] leading-relaxed text-[color:var(--fg-45)]">{language === 'no' ? 'Planlagte kilder: Ticketmaster, Tikkio, Billetto, Friskus og TicketCo. Kilder aktiveres når tilgang er konfigurert.' : 'Planned: Ticketmaster, Tikkio, Billetto, Friskus and TicketCo. Sources are activated once access is configured.'}</div>
-          <div className="mt-5 flex gap-2">
-            <button type="button" onClick={() => setLocalEventsOpen(false)} disabled={localEventsLoading} className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs tracking-widest text-[color:var(--fg-70)] disabled:opacity-60">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
-            <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading || (!startup && !localEventsCanManage) || !activeDeviceId || !area.latitude || !area.longitude} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]">{localEventsLoading ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'LAGRE' : 'SAVE')}</button>
-          </div>
-        </div>
-      </div>
+
+</AppSheet>
     )
   }
 
@@ -4051,20 +4057,12 @@ function ConnectAppsScreen({
       </div>
 
       {disconnectConfirmApp && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-4 sm:items-center sm:pb-0">
-          <div className="w-full max-w-sm rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] p-5 shadow-2xl">
-            <div className="text-base font-semibold text-[color:var(--fg-90)]">
-              {language === 'no'
-                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : 'Spond'}?`
-                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : 'Spond'}?`}
-            </div>
-            <div className="mt-2 text-xs leading-snug text-[color:var(--fg-45)]">
-              {language === 'no'
-                ? 'Lagrede innlogginger og synkroniserte data fjernes fra denne integrasjonen.'
-                : 'Stored credentials and synced data will be removed for this integration.'}
-            </div>
-
-            <div className="mt-5 flex gap-2">
+        <AppSheet
+          title={language === 'no' ? 'Koble fra integrasjon' : 'Disconnect integration'}
+          onClose={() => setDisconnectConfirmApp(null)}
+          dismissible={disconnectingApp === null}
+          footer={
+            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setDisconnectConfirmApp(null)}
@@ -4084,8 +4082,21 @@ function ConnectAppsScreen({
                   : (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')}
               </button>
             </div>
-          </div>
-        </div>
+          }
+        >
+            <div className="text-base font-semibold text-[color:var(--fg-90)]">
+              {language === 'no'
+                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : 'Spond'}?`
+                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : 'Spond'}?`}
+            </div>
+            <div className="mt-2 text-xs leading-snug text-[color:var(--fg-45)]">
+              {language === 'no'
+                ? 'Lagrede innlogginger og synkroniserte data fjernes fra denne integrasjonen.'
+                : 'Stored credentials and synced data will be removed for this integration.'}
+            </div>
+
+
+        </AppSheet>
       )}
 
 
@@ -4093,8 +4104,30 @@ function ConnectAppsScreen({
       {wasteModalOpen && <WasteSetupModal language={language} onClose={() => setWasteModalOpen(false)} onSaved={(connected) => { setWasteConnected(connected); changeFrameIntegration('waste', { enabled: connected }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }} />}
 
       {spondModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-4 sm:items-center sm:pb-0">
-          <div className="w-full max-w-sm rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] p-5 shadow-2xl">
+        <AppSheet
+          title={language === 'no' ? 'Koble til Spond' : 'Connect Spond'}
+          onClose={() => setSpondModalOpen(false)}
+          dismissible={!spondLoading}
+          footer={
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSpondModalOpen(false)}
+                className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs tracking-widest text-[color:var(--fg-70)]"
+              >
+                {language === 'no' ? 'AVBRYT' : 'CANCEL'}
+              </button>
+              <button
+                type="button"
+                onClick={connectSpond}
+                disabled={spondLoading || !spondUsername.trim() || !spondPassword}
+                className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]"
+              >
+                {spondLoading ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
+              </button>
+            </div>
+          }
+        >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-base font-semibold text-[color:var(--fg-90)]">{language === 'no' ? 'Koble til Spond-kontoen din' : 'Connect your Spond account'}</div>
@@ -4135,25 +4168,8 @@ function ConnectAppsScreen({
               </label>
             </div>
 
-            <div className="mt-5 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setSpondModalOpen(false)}
-                className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs tracking-widest text-[color:var(--fg-70)]"
-              >
-                {language === 'no' ? 'AVBRYT' : 'CANCEL'}
-              </button>
-              <button
-                type="button"
-                onClick={connectSpond}
-                disabled={spondLoading || !spondUsername.trim() || !spondPassword}
-                className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]"
-              >
-                {spondLoading ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
-              </button>
-            </div>
-          </div>
-        </div>
+
+        </AppSheet>
       )}
     </div>
   )
