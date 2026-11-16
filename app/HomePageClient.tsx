@@ -30,7 +30,7 @@ import { localEventGroupKeyFromRaw, groupSkipId } from './lib/integrations/local
 import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
 const WasteSetupModal = dynamic(() => import('./components/WasteSetupModal'))
 const IntegrationRequestCard = dynamic(() => import('./components/IntegrationRequestCard'))
-import AppSheet from './components/AppSheet'
+import AppSheet, { AppSheetVisibilityContext } from './components/AppSheet'
 const NewsModuleSettingsTab = dynamic(() => import('./components/NewsModuleSettingsTab'))
 import { wasteCollectionDisplayTitle } from './lib/integrations/waste/display'
 import { hasChosenWeatherLocation, norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders } from './lib/onboardingDefaults'
@@ -3259,17 +3259,19 @@ async function handleSelectTab(k: TabKey) {
                   {moduleKey === 'assistant' ? (
                     <AIAssistantTab language={language} activeDeviceId={activeDeviceId} deepLink={assistantDeepLink} onDeepLinkHandled={finishAssistantDeepLink} onOpenPlans={() => { stickySettingsRef.current = true; preferInstantScrollRef.current = true; setSettingsSubpage('subscription'); setActiveTab('settings') }} />
                   ) : (
-                    <ModuleSettingsTab
-                      language={language}
-                      module={moduleKey as ModuleKey}
-                      isActive={isActive}
-                      layoutKey={layoutKey}
-                      cells={cellsByLayout[layoutKey]}
-                      modulesJson={modulesJson}
-                      setModulesJson={setModulesJson}
-                      markDirty={markDirty}
-                      activeDeviceId={activeDeviceId}
-                    />
+                    <AppSheetVisibilityContext.Provider value={isActive}>
+                      <ModuleSettingsTab
+                        language={language}
+                        module={moduleKey as ModuleKey}
+                        isActive={isActive}
+                        layoutKey={layoutKey}
+                        cells={cellsByLayout[layoutKey]}
+                        modulesJson={modulesJson}
+                        setModulesJson={setModulesJson}
+                        markDirty={markDirty}
+                        activeDeviceId={activeDeviceId}
+                      />
+                    </AppSheetVisibilityContext.Provider>
                   )}
                 </div>
                 )
@@ -11805,7 +11807,7 @@ function CountdownModuleSettingsTab({
   }
 
   useEffect(() => {
-    loadItems()
+    loadItems({ silent: !isActive })
   }, [activeDeviceId])
 
   useEffect(() => {
@@ -13235,7 +13237,7 @@ function GroceriesModuleSettingsTab({
         .order('updated_at', { ascending: false })
 
       if (error) {
-        alert(error.message)
+        if (!silent) alert(error.message)
         return
       }
 
@@ -13285,7 +13287,7 @@ function GroceriesModuleSettingsTab({
   }
 
   useEffect(() => {
-    loadGroceries()
+    loadGroceries({ silent: !isActive })
     loadHistory()
   }, [activeDeviceId])
 
@@ -13463,7 +13465,7 @@ function GroceriesModuleSettingsTab({
   }, [items, dinnerPlanDays])
 
   useEffect(() => {
-    if (!activeDeviceId) return
+    if (!isActive || !activeDeviceId) return
 
     const expiredMainIds = items
       .filter((item) => groceryCheckedItemIsExpired(item, nowMs))
@@ -13487,10 +13489,10 @@ function GroceriesModuleSettingsTab({
         })
     }
 
-  }, [activeDeviceId, items, nowMs, loadGroceries])
+  }, [activeDeviceId, isActive, items, nowMs, loadGroceries])
 
   useEffect(() => {
-    if (!activeDeviceId) return
+    if (!isActive || !activeDeviceId) return
 
     const cleanedDinnerPlanDays = stripExpiredDinnerPlanItems(dinnerPlanDays, nowMs)
     const beforeCount = dinnerPlanDays.reduce((count, day) => count + day.items.length, 0)
@@ -13524,7 +13526,7 @@ function GroceriesModuleSettingsTab({
       const { error } = await supabase.from('dinner_plan_days').upsert(payload, { onConflict: 'device_id,date' })
       if (error) console.error('Failed to persist expired checked dinner plan cleanup', { error })
     })()
-  }, [activeDeviceId, dinnerPlanDays, dinnerPlanWeekOffset, nowMs])
+  }, [activeDeviceId, isActive, dinnerPlanDays, dinnerPlanWeekOffset, nowMs])
 
 
   const fetchDinnerPlanDays = useCallback(async (weekOffset: DinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
@@ -15082,8 +15084,8 @@ function RemindersModuleSettingsTab({
         .order('title', { ascending: true })
 
       if (error) {
-        alert(error.message)
         if (!silent) {
+          alert(error.message)
           setReminders([])
           setCompletedOccurrences([])
         }
@@ -15095,8 +15097,10 @@ function RemindersModuleSettingsTab({
         .eq('device_id', activeDeviceId)
 
       if (completionsError) {
-        alert(completionsError.message)
-        if (!silent) setCompletedOccurrences([])
+        if (!silent) {
+          alert(completionsError.message)
+          setCompletedOccurrences([])
+        }
       } else {
         setCompletedOccurrences(
           (completionsData || [])
@@ -15146,7 +15150,7 @@ const manualItems: ReminderUiItem[] = (data || [])
         }
         setAvailableSources(['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[])
 
-        if (connectedSources.has('teams')) {
+        if (isActive && connectedSources.has('teams')) {
           try {
             const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
             if (accessToken) {
@@ -15165,7 +15169,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           }
         }
 
-        if (connectedSources.has('google-calendar')) {
+        if (isActive && connectedSources.has('google-calendar')) {
           try {
             const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
             if (accessToken) {
@@ -15270,7 +15274,7 @@ const manualItems: ReminderUiItem[] = (data || [])
   }
 
   useEffect(() => {
-    loadReminders()
+    loadReminders({ silent: !isActive })
   }, [activeDeviceId])
 
   useEffect(() => {
