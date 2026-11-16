@@ -13212,16 +13212,20 @@ function GroceriesModuleSettingsTab({
 
     if (!silent) setLoading(true)
     try {
-      const cleanupCutoffIso = groceryCheckedExpiryCutoffIso()
-      const { error: cleanupError } = await supabase
-        .from('grocery_items')
-        .delete()
-        .eq('device_id', activeDeviceId)
-        .eq('is_checked', true)
-        .lte('checked_at', cleanupCutoffIso)
+      // Prewarming a hidden tab is strictly read-only. Expired-item cleanup
+      // retains its existing behavior when the user actually opens Groceries.
+      if (isActive) {
+        const cleanupCutoffIso = groceryCheckedExpiryCutoffIso()
+        const { error: cleanupError } = await supabase
+          .from('grocery_items')
+          .delete()
+          .eq('device_id', activeDeviceId)
+          .eq('is_checked', true)
+          .lte('checked_at', cleanupCutoffIso)
 
-      if (cleanupError) {
-        console.error('Failed to cleanup expired checked grocery items before loading', { error: cleanupError })
+        if (cleanupError) {
+          console.error('Failed to cleanup expired checked grocery items before loading', { error: cleanupError })
+        }
       }
 
       const { data, error } = await supabase
