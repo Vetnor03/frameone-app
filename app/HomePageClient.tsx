@@ -3291,21 +3291,29 @@ async function handleSelectTab(k: TabKey) {
                   </div>
 
                   {moduleKey === 'assistant' ? (
-                    <AIAssistantTab language={language} activeDeviceId={activeDeviceId} deepLink={assistantDeepLink} onDeepLinkHandled={finishAssistantDeepLink} onOpenPlans={() => { stickySettingsRef.current = true; preferInstantScrollRef.current = true; setSettingsSubpage('subscription'); setActiveTab('settings') }} />
+                    <React.Suspense fallback={null}>
+                      <AIAssistantTab language={language} activeDeviceId={activeDeviceId} deepLink={assistantDeepLink} onDeepLinkHandled={finishAssistantDeepLink} onOpenPlans={() => { stickySettingsRef.current = true; preferInstantScrollRef.current = true; setSettingsSubpage('subscription'); setActiveTab('settings') }} />
+                    </React.Suspense>
                   ) : (
                     <AppSheetVisibilityContext.Provider value={isActive}>
-                      <ModuleSettingsTab
-                        language={language}
-                        module={moduleKey as ModuleKey}
-                        isActive={isActive}
-                        userId={userId}
-                        layoutKey={layoutKey}
-                        cells={cellsByLayout[layoutKey]}
-                        modulesJson={modulesJson}
-                        setModulesJson={setModulesJson}
-                        markDirty={markDirty}
-                        activeDeviceId={activeDeviceId}
-                      />
+                      {/* Prewarmed hidden tabs must never suspend the page-level splash.
+                          Their code/data may arrive later without replacing the active tab. */}
+                      <React.Suspense fallback={isActive ? (
+                        <div role="status" className="py-5 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Laster fanen…' : 'Loading tab…'}</div>
+                      ) : null}>
+                        <ModuleSettingsTab
+                          language={language}
+                          module={moduleKey as ModuleKey}
+                          isActive={isActive}
+                          userId={userId}
+                          layoutKey={layoutKey}
+                          cells={cellsByLayout[layoutKey]}
+                          modulesJson={modulesJson}
+                          setModulesJson={setModulesJson}
+                          markDirty={markDirty}
+                          activeDeviceId={activeDeviceId}
+                        />
+                      </React.Suspense>
                     </AppSheetVisibilityContext.Provider>
                   )}
                 </div>
@@ -3351,7 +3359,9 @@ async function handleSelectTab(k: TabKey) {
             )}
 
             {isPlainFrameAssistantSurface && showFrameAssistant && (
-              <FrameAssistant deviceId={activeDeviceId} language={language} tipsEnabled={proactiveAssistantTips} tipsShown={assistantTipsShown} tipsLoaded={assistantPreferencesLoaded} canSelectTip={!assistantTipPresentedThisSession} assistantVisitId={assistantVisitId} onTipShown={markAssistantTipShown} onNavigate={navigateFromAssistant} onAppThemeChange={(theme) => { applyDocumentTheme(theme); persistTheme(theme); setAppTheme(theme) }} />
+              <React.Suspense fallback={null}>
+                <FrameAssistant deviceId={activeDeviceId} language={language} tipsEnabled={proactiveAssistantTips} tipsShown={assistantTipsShown} tipsLoaded={assistantPreferencesLoaded} canSelectTip={!assistantTipPresentedThisSession} assistantVisitId={assistantVisitId} onTipShown={markAssistantTipShown} onNavigate={navigateFromAssistant} onAppThemeChange={(theme) => { applyDocumentTheme(theme); persistTheme(theme); setAppTheme(theme) }} />
+              </React.Suspense>
             )}
 
             {pickerOpen && (

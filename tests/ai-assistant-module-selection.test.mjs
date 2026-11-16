@@ -21,7 +21,7 @@ test('AI Follow tab stays hidden while the lightweight RE:MIND helper remains av
   assert.match(home, /deriveDynamicModuleKeys<ModuleKey>\(activeLayoutModules, pinnedModuleTabs\)/)
   assert.match(home, /setPinnedModuleTabs\(\(prev\) => \{[\s\S]*markDirty\(\{ pinnedModuleTabs: nextPinned \}\)/)
   assert.match(home, /activeTab === 'assistant' \? \['assistant' as ModuleKey\] : renderedModuleKeys/)
-  assert.match(home, /moduleKey === 'assistant' \? \(\s*<AIAssistantTab language=\{language\} activeDeviceId=\{activeDeviceId\}/)
+  assert.match(home, /moduleKey === 'assistant' \? \(\s*(?:<React\.Suspense fallback=\{null\}>\s*)?<AIAssistantTab language=\{language\} activeDeviceId=\{activeDeviceId\}/)
   assert.match(home, /isPlainFrameAssistantSurface && showFrameAssistant/)
   assert.doesNotMatch(home, /SHOW_AI_FOLLOW_UI && isPlainFrameAssistantSurface/)
   assert.match(home, /if \(tabs\.some\(\(tab\) => tab\.key === activeTab\)\) return/)
