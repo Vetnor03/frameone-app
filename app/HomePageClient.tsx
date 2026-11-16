@@ -15117,14 +15117,21 @@ function RemindersModuleSettingsTab({
   language,
   activeDeviceId,
   isActive,
+  userId,
 }: {
   language: AppLanguage
   activeDeviceId: string | null
   isActive: boolean
+  userId: string | null
 }) {
   const wasActiveRef = useRef(isActive)
-  const [reminders, setReminders] = useState<ReminderUiItem[]>([])
-  const [completedOccurrences, setCompletedOccurrences] = useState<ReminderCompletionItem[]>([])
+  const requestGenerationRef = useRef(0)
+  const [firstReminderSnapshot] = useState(() => readTabSnapshot<{
+    items:ReminderUiItem[];completedOccurrences:ReminderCompletionItem[];availableSources:ReminderSourceFilter[]
+  }>(typeof window === 'undefined' ? null : window.localStorage,userId,activeDeviceId,'reminders'))
+  const [reminders, setReminders] = useState<ReminderUiItem[]>(firstReminderSnapshot?.data.items ?? [])
+  const [completedOccurrences, setCompletedOccurrences] = useState<ReminderCompletionItem[]>(firstReminderSnapshot?.data.completedOccurrences ?? [])
+  const [showingSavedReminders, setShowingSavedReminders] = useState(!!firstReminderSnapshot)
   const [loading, setLoading] = useState(false)
   const [skipToggleError, setSkipToggleError] = useState<string | null>(null)
   const [expandedEventGroup, setExpandedEventGroup] = useState<string | null>(null)
@@ -15137,7 +15144,9 @@ function RemindersModuleSettingsTab({
   const [editingReminder, setEditingReminder] = useState<ReminderUiItem | null>(null)
   const [sourceFilter, setSourceFilter] = useState<ReminderSourceFilter>('remind')
   const [eventNowMs, setEventNowMs] = useState(() => Date.now())
-  const [availableSources, setAvailableSources] = useState<ReminderSourceFilter[]>(['remind'])
+  const [availableSources, setAvailableSources] = useState<ReminderSourceFilter[]>(
+    firstReminderSnapshot?.data.availableSources?.length ? firstReminderSnapshot.data.availableSources : ['remind']
+  )
 
   const [selectedDayYmd, setSelectedDayYmd] = useState<string | null>(null)
 
@@ -15151,6 +15160,7 @@ function RemindersModuleSettingsTab({
 
   const todayYmd = toLocalYmd(new Date())
   async function loadReminders({ silent = false }: { silent?: boolean } = {}) {
+    const generation = ++requestGenerationRef.current
     if (!activeDeviceId) {
       setReminders([])
       setAvailableSources(['remind'])
@@ -15158,7 +15168,7 @@ function RemindersModuleSettingsTab({
     }
 
     try {
-      if (!silent) setLoading(true)
+      if (!silent && !firstReminderSnapshot) setLoading(true)
 
       const { data, error } = await supabase
         .from('reminders')
@@ -15169,12 +15179,10 @@ function RemindersModuleSettingsTab({
         .order('due_time', { ascending: true, nullsFirst: false })
         .order('title', { ascending: true })
 
+      if (generation !== requestGenerationRef.current) return
       if (error) {
-        if (!silent) {
-          alert(error.message)
-          setReminders([])
-          setCompletedOccurrences([])
-        }
+        // Preserve the stored calendar rather than replacing it with empty cells.
+        if (!silent && !firstReminderSnapshot) console.warn('[reminders] Failed to refresh',error.message)
         return
       }
       const { data: completionsData, error: completionsError } = await supabase
@@ -15182,21 +15190,17 @@ function RemindersModuleSettingsTab({
         .select('reminder_id, occurrence_date')
         .eq('device_id', activeDeviceId)
 
+      if (generation !== requestGenerationRef.current) return
       if (completionsError) {
-        if (!silent) {
-          alert(completionsError.message)
-          setCompletedOccurrences([])
-        }
-      } else {
-        setCompletedOccurrences(
-          (completionsData || [])
-            .map((row: any) => ({
-              reminderId: String(row.reminder_id ?? ''),
-              occurrenceDate: String(row.occurrence_date ?? ''),
-            }))
-            .filter((x) => x.reminderId && x.occurrenceDate)
-        )
+        if (!silent && !firstReminderSnapshot) console.warn('[reminders] Could not refresh completions',completionsError.message)
+        return
       }
+      const nextCompletions: ReminderCompletionItem[] = (completionsData || [])
+        .map((row: any) => ({
+          reminderId: String(row.reminder_id ?? ''),
+          occurrenceDate: String(row.occurrence_date ?? ''),
+        }))
+        .filter((x) => x.reminderId && x.occurrenceDate)
 
 const manualItems: ReminderUiItem[] = (data || [])
   .map((row: any) => ({
@@ -15222,8 +15226,10 @@ const manualItems: ReminderUiItem[] = (data || [])
   .filter((x) => x.title && x.date)
 
       let integrationItems: ReminderUiItem[] = []
-      const userId = (await supabase.auth.getUser())?.data?.user?.id
-      if (userId) {
+      let nextAvailableSources: ReminderSourceFilter[] = ['remind']
+      const sessionUserId = (await supabase.auth.getUser())?.data?.user?.id
+      if (generation !== requestGenerationRef.current) return
+      if (sessionUserId && sessionUserId === userId) {
         const { data: connectionData } = await supabase
           .from('user_integrations')
           .select('provider, status, device_id')
@@ -15234,7 +15240,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           const source = integrationProviderToReminderSource(connection.provider)
           if (source) connectedSources.add(source)
         }
-        setAvailableSources(['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[])
+        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
 
         if (isActive && connectedSources.has('teams')) {
           try {
@@ -15275,12 +15281,14 @@ const manualItems: ReminderUiItem[] = (data || [])
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
           .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway'])
-          .or(activeDeviceId ? `user_id.eq.${userId},device_id.eq.${activeDeviceId}` : `user_id.eq.${userId}`)
+          .or(activeDeviceId ? `user_id.eq.${sessionUserId},device_id.eq.${activeDeviceId}` : `user_id.eq.${sessionUserId}`)
           .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso}`)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (integrationError) {
-          alert(integrationError.message)
+          // Do not replace cached integrated events with a partial manual-only list.
+          if (!silent && !firstReminderSnapshot) console.warn('[reminders] Integration read failed',integrationError.message)
+          return
         } else {
           const { data: localEventsIntegrationData } = activeDeviceId
             ? await supabase
@@ -15353,9 +15361,17 @@ const manualItems: ReminderUiItem[] = (data || [])
         }
       }
 
-      setReminders([...manualItems, ...integrationItems])
+      if (generation !== requestGenerationRef.current) return
+      const nextReminders = [...manualItems, ...integrationItems]
+      setReminders(nextReminders)
+      setCompletedOccurrences(nextCompletions)
+      setAvailableSources(nextAvailableSources)
+      setShowingSavedReminders(false)
+      writeTabSnapshot(window.localStorage, userId, activeDeviceId, 'reminders', '', {
+        items:nextReminders, completedOccurrences:nextCompletions, availableSources:nextAvailableSources,
+      })
     } finally {
-      if (!silent) setLoading(false)
+      if (generation === requestGenerationRef.current && !silent) setLoading(false)
     }
   }
 
@@ -15747,7 +15763,8 @@ const ungroupedSortedReminders = useMemo(() => {
         }
       `}</style>
 
-      <div className="absolute inset-0 overflow-y-auto no-scrollbar">
+      <div className="absolute inset-0 overflow-y-auto no-scrollbar" inert={showingSavedReminders}>
+        {showingSavedReminders && <div role="status" className="px-1 text-[11px] text-[color:var(--fg-45)]">{language === 'no' ? 'Lagrede påminnelser · oppdateres' : 'Saved reminders · refreshing'}</div>}
         <div className="box-border flex min-h-full flex-col pt-4 max-[420px]:pt-3">
           <div className="shrink-0">
             <div className="flex items-center justify-between px-1">
