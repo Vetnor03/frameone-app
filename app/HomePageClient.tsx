@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { readLaunchPreview, writeLaunchPreview, clearLaunchPreview } from './lib/launchPreviewCache.mjs'
+import { readTabSnapshot, writeTabSnapshot, clearTabSnapshotsForUser } from './lib/tabSnapshotCache.mjs'
 import { appendCachedModuleTab, planModuleTabWarmup, tabCacheScope, type WarmModuleKey } from './lib/tabWarmup.mjs'
 import { fetchSurfScore } from './lib/fetchSurfScore'
 import { findSpotByLabel } from './lib/surf/spots'
@@ -2442,6 +2443,7 @@ export default function HomePage() {
         if (!nextSession) {
           cancelled = true
           clearLaunchPreview(window.localStorage, session.user.id)
+          clearTabSnapshotsForUser(window.localStorage, session.user.id)
           window.localStorage.removeItem('activeDeviceId')
           setCachedPreviewDeviceId(null)
           setAuthReady(true)
@@ -3048,7 +3050,10 @@ export default function HomePage() {
       console.warn('[notifications:logout-cleanup-failed]', { message: errorMessage(error) })
     }
     await supabase.auth.signOut()
-    if (userId) clearLaunchPreview(window.localStorage, userId)
+    if (userId) {
+      clearLaunchPreview(window.localStorage, userId)
+      clearTabSnapshotsForUser(window.localStorage, userId)
+    }
     router.replace('/login')
   }
 
@@ -3286,6 +3291,7 @@ async function handleSelectTab(k: TabKey) {
                         language={language}
                         module={moduleKey as ModuleKey}
                         isActive={isActive}
+                        userId={userId}
                         layoutKey={layoutKey}
                         cells={cellsByLayout[layoutKey]}
                         modulesJson={modulesJson}
@@ -11187,6 +11193,7 @@ function ModuleSettingsTab({
   language,
   module,
   isActive,
+  userId,
   layoutKey,
   cells,
   modulesJson,
@@ -11197,6 +11204,7 @@ function ModuleSettingsTab({
   language: AppLanguage
   module: ModuleKey
   isActive: boolean
+  userId: string | null
   layoutKey: LayoutKey
   cells: Record<number, ModuleKey | null>
   modulesJson: Record<string, any>
@@ -11234,6 +11242,8 @@ function ModuleSettingsTab({
     return (
       <SkiModuleSettingsTab
         language={language}
+        userId={userId}
+        activeDeviceId={activeDeviceId}
         modulesJson={modulesJson}
         setModulesJson={setModulesJson}
         markDirty={markDirty}
@@ -11242,7 +11252,7 @@ function ModuleSettingsTab({
   }
 
   if (module === 'reminders') {
-    return <RemindersModuleSettingsTab language={language} activeDeviceId={activeDeviceId} isActive={isActive} />
+    return <RemindersModuleSettingsTab language={language} activeDeviceId={activeDeviceId} isActive={isActive} userId={userId} />
   }
 
   if (module === 'news') {
@@ -11253,6 +11263,8 @@ function ModuleSettingsTab({
     return <NewsModuleSettingsTab
       language={language}
       feed={feed}
+      userId={userId}
+      activeDeviceId={activeDeviceId}
       onFeedChange={(nextFeed) => {
         if (nextFeed === feed) return
         const nextModules = { ...modulesJson, news: { ...savedFeed, feed: nextFeed } }
@@ -11268,6 +11280,7 @@ function ModuleSettingsTab({
         language={language}
         activeDeviceId={activeDeviceId}
         isActive={isActive}
+        userId={userId}
       />
     )
   }
@@ -11299,7 +11312,7 @@ function ModuleSettingsTab({
   }
 
   if (module === 'groceries') {
-    return <GroceriesModuleSettingsTab language={language} activeDeviceId={activeDeviceId} isActive={isActive} />
+    return <GroceriesModuleSettingsTab language={language} activeDeviceId={activeDeviceId} isActive={isActive} userId={userId} />
   }
 
   return (
