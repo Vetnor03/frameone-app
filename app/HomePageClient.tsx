@@ -11762,13 +11762,20 @@ function CountdownModuleSettingsTab({
   language,
   activeDeviceId,
   isActive,
+  userId,
 }: {
   language: AppLanguage
   activeDeviceId: string | null
   isActive: boolean
+  userId: string | null
 }) {
   const wasActiveRef = useRef(isActive)
-  const [items, setItems] = useState<CountdownItem[]>([])
+  const requestGenerationRef = useRef(0)
+  const [firstSnapshot] = useState(() => readTabSnapshot<{items:CountdownItem[]}>(
+    typeof window === 'undefined' ? null : window.localStorage, userId, activeDeviceId, 'countdown'
+  ))
+  const [items, setItems] = useState<CountdownItem[]>(firstSnapshot?.data.items ?? [])
+  const [showingSaved, setShowingSaved] = useState(!!firstSnapshot)
   const [loading, setLoading] = useState(false)
 
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -11780,13 +11787,14 @@ function CountdownModuleSettingsTab({
   const t = tx(language)
 
   async function loadItems({ silent = false }: { silent?: boolean } = {}) {
+    const generation = ++requestGenerationRef.current
     if (!activeDeviceId) {
       setItems([])
       return
     }
 
     try {
-      if (!silent) setLoading(true)
+      if (!silent && !firstSnapshot) setLoading(true)
 
       const { data, error } = await supabase
         .from('countdown_events')
@@ -11795,11 +11803,10 @@ function CountdownModuleSettingsTab({
         .order('target_date', { ascending: true })
         .order('title', { ascending: true })
 
+      if (generation !== requestGenerationRef.current) return
       if (error) {
-        if (!silent) {
-          alert(error.message)
-          setItems([])
-        }
+        // Preserve the last known display when offline, never flash an empty list.
+        if (!silent && !firstSnapshot) alert(error.message)
         return
       }
 
@@ -11813,8 +11820,10 @@ function CountdownModuleSettingsTab({
         .filter((x) => x.title && x.date)
 
       setItems(parsed)
+      setShowingSaved(false)
+      writeTabSnapshot(window.localStorage, userId, activeDeviceId, 'countdown', '', { items: parsed })
     } finally {
-      if (!silent) setLoading(false)
+      if (generation === requestGenerationRef.current && !silent) setLoading(false)
     }
   }
 
@@ -11905,7 +11914,8 @@ function CountdownModuleSettingsTab({
 
   return (
     <>
-      <div className="h-full flex flex-col min-h-0">
+      {showingSaved && <div role="status" className="text-[11px] text-[color:var(--fg-45)]">{language === 'no' ? 'Lagrede nedtellinger · oppdateres' : 'Saved countdowns · refreshing'}</div>}
+      <div className={`h-full flex flex-col min-h-0 ${showingSaved ? 'pointer-events-none' : ''}`}>
         <div className="mt-4 flex-1 min-h-0 flex flex-col">
           {!activeDeviceId ? (
             <div className="text-sm text-[color:var(--fg-50)]">{t.selectFrameFirst}</div>
