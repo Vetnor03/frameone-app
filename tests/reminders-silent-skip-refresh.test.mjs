@@ -17,8 +17,9 @@ test('local event skip toggles revalidate reminders without showing global loadi
 
   const loader = homePage.slice(loadStart, toggleStart)
   assert.match(loader, /\{ silent = false \}: \{ silent\?: boolean \} = \{\}/)
-  assert.match(loader, /if \(!silent\) setLoading\(true\)/)
-  assert.match(loader, /if \(!silent\) setLoading\(false\)/)
+  // Never show a global loader when a saved calendar is already visible.
+  assert.match(loader, /if \(!silent && !firstReminderSnapshot\) setLoading\(true\)/)
+  assert.match(loader, /if \(generation === requestGenerationRef.current && !silent\) setLoading\(false\)/)
 
   const toggle = homePage.slice(toggleStart, toggleEnd)
   assert.match(toggle, /setReminders\(\(current\) => current\.map/)
