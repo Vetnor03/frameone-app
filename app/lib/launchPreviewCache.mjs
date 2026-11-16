@@ -14,9 +14,9 @@ function sanitizeCells(value) {
     if (!cell || typeof cell !== 'object' || !safeInteger(cell.slot, 0, 128)) return []
     const rawModule = cell.module === null || cell.module === '' ? null : cell.module
     // Settings encode repeated modules as weather:1, surf:2, etc.
-    const module = typeof rawModule === 'string' ? rawModule.split(':')[0] : rawModule
-    if (module !== null && !modules.has(module)) return []
-    const entry = { slot: cell.slot, module }
+    const moduleKey = typeof rawModule === 'string' ? rawModule.split(':')[0] : rawModule
+    if (moduleKey !== null && !modules.has(moduleKey)) return []
+    const entry = { slot: cell.slot, module: moduleKey }
     if (safeInteger(cell.col, 0, 8) && safeInteger(cell.row, 0, 8)
       && safeInteger(cell.colSpan, 1, 8) && safeInteger(cell.rowSpan, 1, 8)) {
       return [{ ...entry, col: cell.col, row: cell.row, colSpan: cell.colSpan, rowSpan: cell.rowSpan }]
@@ -66,7 +66,7 @@ function sanitizePreview(value, deviceId, userId) {
     custom_layout_id: resolvedLayout === 'custom' ? customId : null,
     cells: sanitizeCells(value.cells),
     pinned_tabs: Array.isArray(value.pinned_tabs)
-      ? value.pinned_tabs.filter(module => modules.has(module) && module !== 'date').slice(0, 16)
+      ? value.pinned_tabs.filter(key => modules.has(key) && key !== 'date').slice(0, 16)
       : [],
     customLayout,
   }
