@@ -26,6 +26,7 @@ import { DEFAULT_LOCAL_EVENT_AREA, getLocalEventPlace, normalizeLocalEventAreaPr
 import { localEventGroupKeyFromRaw, groupSkipId } from './lib/integrations/local-events/grouping'
 import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
 import WasteSetupModal from './components/WasteSetupModal'
+import IntegrationRequestCard from './components/IntegrationRequestCard'
 import NewsModuleSettingsTab from './components/NewsModuleSettingsTab'
 import { wasteCollectionDisplayTitle } from './lib/integrations/waste/display'
 import { hasChosenWeatherLocation, norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders } from './lib/onboardingDefaults'
@@ -4024,6 +4025,8 @@ function ConnectAppsScreen({
             )
           })}
         </div>
+
+        {!startup && <IntegrationRequestCard language={language} />}
 
         {providerDiscoveryFailed && (
           <div className="mt-3 rounded-2xl border border-[#d94b4b]/35 bg-[#d94b4b]/10 px-4 py-3 text-sm text-[#ff7a7a]">
