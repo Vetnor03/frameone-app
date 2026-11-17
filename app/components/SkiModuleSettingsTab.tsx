@@ -4,6 +4,16 @@ import React, { useEffect, useState } from 'react'
 import { readTabSnapshot, writeTabSnapshot } from '../lib/tabSnapshotCache.mjs'
 
 type AppLanguage = 'en' | 'no'
+type WeatherLocationCfg = {
+  id?: number | string
+  label?: string
+  lat?: number | string
+  lon?: number | string
+  units?: string
+  refresh?: number
+  hiLo?: boolean
+  cond?: boolean
+}
 
 type SkiMetSummary = {
   location: { label: string; lat: number; lon: number }
@@ -132,6 +142,7 @@ export default function SkiModuleSettingsTab({
   modulesJson,
   setModulesJson,
   markDirty,
+  WeatherLocationRow,
 }: {
   language: AppLanguage
   userId: string | null
@@ -139,6 +150,15 @@ export default function SkiModuleSettingsTab({
   modulesJson: Record<string, any>
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
   markDirty: (next?: { modulesJson?: Record<string, any> }) => void
+  WeatherLocationRow: React.ComponentType<{
+    language: AppLanguage
+    id: number
+    title: string
+    label: string
+    cfg: WeatherLocationCfg | null
+    showDetails?: boolean
+    onPicked: (cfgPatch: any) => void
+  }>
 }) {
   const isNo = language === 'no'
   const cfg = Array.isArray(modulesJson?.ski) ? modulesJson.ski[0] ?? null : null
