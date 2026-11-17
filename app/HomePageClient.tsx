@@ -4274,6 +4274,14 @@ function ConnectAppsScreen({
                           {language === 'no' ? 'ENDRE' : 'EDIT'}
                         </button>
                       </div>
+                    ) : app.key === 'waste' ? (
+                      <button
+                        type="button"
+                        onClick={() => setWasteModalOpen(true)}
+                        className="shrink-0 h-8 rounded-xl border border-[color:var(--bd-20)] px-3 text-[11px] tracking-widest text-[color:var(--fg-70)]"
+                      >
+                        {language === 'no' ? 'ENDRE' : 'EDIT'}
+                      </button>
                     ) : credentialProvider ? (
                       <button
                         type="button"
