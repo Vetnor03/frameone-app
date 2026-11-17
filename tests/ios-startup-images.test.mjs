@@ -9,7 +9,7 @@ test('every iOS PWA media query has its own physical-pixel launch PNG', () => {
   assert.equal(new Set(iosLaunchStartupImages.map((image) => image.media)).size, iosLaunchStartupImages.length)
   for (const [index, [cssWidth, cssHeight, dpr]] of iosPortraitLaunchSizes.entries()) {
     const asset = iosLaunchStartupImages[index]
-    assert.equal(asset.url, `/ios-startup/${cssWidth * dpr}x${cssHeight * dpr}.png`)
+    assert.equal(asset.url, `/ios-startup/${cssWidth * dpr}x${cssHeight * dpr}-v2.png`)
     assert.match(asset.media, new RegExp(`device-width: ${cssWidth}px`))
     assert.match(asset.media, new RegExp(`device-height: ${cssHeight}px`))
     assert.match(asset.media, /orientation: portrait/)
@@ -32,11 +32,22 @@ test('generated iOS launch images are correctly sized, valid and branded', () =>
     assert.equal(rgb.length, stride * height)
     assert.deepEqual([...rgb.subarray(1, 4)], [245, 246, 248])
     let brandedPixels = 0
-    for (let y = Math.floor(height / 3); y < Math.floor(height * 2 / 3); y++) {
-      for (let x = Math.floor(width / 5); x < Math.floor(width * 4 / 5); x++) {
-        if (rgb[y * stride + 1 + x * 3] < 245) brandedPixels++
+    let antialiasedPixels = 0
+    let minX = width, maxX = 0
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const red = rgb[y * stride + 1 + x * 3]
+        if (red < 245) {
+          brandedPixels++
+          minX = Math.min(minX, x)
+          maxX = Math.max(maxX, x)
+          if (red > 29) antialiasedPixels++
+        }
       }
     }
     assert.ok(brandedPixels > 200, 'expected the centered RE:MIND wordmark, not a blank image')
+    assert.ok(maxX - minX < width * 0.56, 'launch logo should not dominate the viewport')
+    assert.ok(Math.abs((minX + maxX) / 2 - width / 2) < 3, 'launch logo should be horizontally centered')
+    assert.ok(antialiasedPixels > 50, 'diagonals and curves should have subpixel antialiasing')
   }
 })

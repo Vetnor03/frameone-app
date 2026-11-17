@@ -16,6 +16,6 @@ export const iosPortraitLaunchSizes = [
   [420, 912, 3],  // newer Pro-sized iPhones
 ]
 export const iosLaunchStartupImages = iosPortraitLaunchSizes.map(([width, height, scale]) => ({
-  url: `/ios-startup/${width * scale}x${height * scale}.png`,
+  url: `/ios-startup/${width * scale}x${height * scale}-v2.png`,
   media: `(device-width: ${width}px) and (device-height: ${height}px) and (-webkit-device-pixel-ratio: ${scale}) and (orientation: portrait)`,
 }))

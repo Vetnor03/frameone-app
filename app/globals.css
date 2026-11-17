@@ -382,9 +382,9 @@ a {
   pointer-events: none;
 }
 
-/* Match the native startup image: 300 logo units at min(77vw, 336px). */
+/* Keep the opening wordmark compact and centered. The native iOS launch\n   image uses exactly the same 300-unit vector proportions and 52vw cap. */
 .remind-splash {
-  width: min(77vw, 336px);
+  width: min(52vw, 220px);
   display: flex;
   align-items: center;
   justify-content: center;
