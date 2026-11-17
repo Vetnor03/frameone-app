@@ -25,8 +25,8 @@ test('cached frame remains hidden behind splash until membership verification',(
   assert.ok(start>=0 && end>start)
   const hydrate=home.slice(start,end)
   assert.doesNotMatch(hydrate,/setShowSplash\(false\)/)
-  assert.match(home,/if \(cached && cached\.deviceId === selected\) \{[\s\S]*setShowSplash\(false\)/)
-  assert.match(home,/inert=\{appControlsLocked\}/)
+  assert.match(home,/if \(cached && cached\.deviceId === selected\) \{[\s\S]*setBooting\(false\)/)
+  assert.match(home,/inert=\{appControlsLocked \|\| booting \|\| showSplash\}/)
 })
 
 test('tab snapshot renders while refreshing but is inert until fresh data is verified',()=>{
@@ -37,4 +37,23 @@ test('tab snapshot renders while refreshing but is inert until fresh data is ver
   assert.match(home,/writeTabSnapshot\(window\.localStorage, userId, activeDeviceId, 'reminders'/)
   assert.match(home,/writeTabSnapshot\(window\.localStorage, userId, activeDeviceId, 'groceries'/)
   assert.match(home,/clearTabSnapshotsForUser\(window\.localStorage, session\.user\.id\)/)
+})
+
+test('ready app appears via a real opacity crossfade without stale overlays',()=>{
+  assert.match(styles,/transition: opacity 220ms/)
+  assert.match(styles,/\.remind-splash-overlay-hiding\s*\{\s*opacity: 0/)
+  assert.match(home,/window\.setTimeout\(\(\) => setShowSplash\(false\), reducedMotion \? 0 : 240\)/)
+  assert.match(home,/\[booting, showSplash\]/)
+  assert.match(home,/aria-hidden=\{!shouldRenderApp \|\| booting \|\| showSplash/)
+  assert.match(styles,/@media \(prefers-reduced-motion: reduce\)/)
+  assert.equal((home.match(/setShowSplash\(false\)/g)||[]).length, 1)
+})
+
+test('native launch and web splash use the same static monoline wordmark',()=>{
+  assert.match(splash,/viewBox="0 0 300 60"/)
+  assert.match(splash,/strokeWidth="1\.7"/)
+  assert.match(splash,/M261 0V60H277/)
+  assert.match(styles,/width: min\(77vw, 336px\)/)
+  assert.match(home,/return <StartupSplash language=\{language\} \/>/)
+  assert.doesNotMatch(styles,/remind-wordmark-expand/)
 })
