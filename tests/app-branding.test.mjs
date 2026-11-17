@@ -42,21 +42,21 @@ test('web install metadata consistently uses the RE:MIND brand and canonical log
   }
 })
 
-test('custom splash retains the animated RE:MIND wordmark independently of the app icon', async () => {
-  const [splash, styles] = await Promise.all([
+test('custom launch splash is distinct from the app icon and matches native startup artwork', async () => {
+  const [home, splash, styles] = await Promise.all([
     read('app/HomePageClient.tsx'),
+    read('app/components/StartupSplash.tsx'),
     read('app/globals.css'),
   ])
 
-  assert.doesNotMatch(splash, /src="\/r_Logo\.png"/)
-  assert.match(splash, /remind-logo-wordmark/)
-  assert.match(splash, />R<\/text>/)
-  assert.match(splash, />E<\/text>/)
-  assert.match(splash, />MIND<\/text>/)
-  assert.match(styles, /@keyframes remind-wordmark-expand/)
-  assert.match(styles, /@keyframes remind-colon-shift/)
-  assert.match(styles, /@keyframes remind-letter-reveal/)
-  assert.match(styles, /@keyframes remind-clip-open/)
+  assert.doesNotMatch(home, /src="\/r_Logo\.png"/)
+  assert.match(home, /<StartupSplash language=\{language\} \/>/)
+  assert.match(splash, /remind-splash-logo/)
+  assert.match(splash, /viewBox="0 0 300 60"/)
+  assert.match(splash, /strokeWidth="1\.7"/)
+  assert.match(splash, /M261 0V60H277/)
+  assert.match(styles, /transition: opacity 220ms/)
+  assert.doesNotMatch(styles, /@keyframes remind-wordmark-expand/)
 })
 
 test('iOS app icon catalog references the required 1024px derivative', async () => {
