@@ -1239,12 +1239,13 @@ export default function HomePage() {
   // cached preview has a verified frame membership or live settings are ready.
   const [booting, setBooting] = useState(true)
   const [showSplash, setShowSplash] = useState(true)
-  // Reveal the ready app behind the splash. Remove the overlay only after
-  // its 220ms fade, rather than removing both layers in the same React paint.
+  // Reveal the ready app behind the splash in two stages: fade the wordmark
+  // against the opaque canvas, then fade the canvas. Leave a small margin
+  // after both CSS transitions before unmounting the overlay.
   useEffect(() => {
     if (booting || !showSplash) return
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const timeout = window.setTimeout(() => setShowSplash(false), reducedMotion ? 0 : 240)
+    const timeout = window.setTimeout(() => setShowSplash(false), reducedMotion ? 0 : 320)
     return () => window.clearTimeout(timeout)
   }, [booting, showSplash])
   const [startupLoadError, setStartupLoadError] = useState(false)
