@@ -98,3 +98,15 @@ test('new frame Connect Apps is opt-in even with previously authorized account i
   assert.match(connect, /\{language === 'no' \? 'FJERN' : 'REMOVE'\}/)
   assert.match(onboarding, /integration_selection_explicit: true/)
 })
+
+test('Connect page supports live searching and clear/no-results states without changing setup', () => {
+  const connect = source.slice(source.indexOf('function ConnectAppsScreen('), source.indexOf('function FrameSetupFlow('))
+  assert.match(connect, /const \[connectSearch, setConnectSearch\] = useState\(''\)/)
+  assert.match(connect, /\.filter\(definition => startup \|\| integrationMatchesSearch\(definition, connectSearch\)\)/)
+  assert.match(connect, /\{!startup && \(\s*<div role="search"/)
+  assert.match(connect, /value=\{connectSearch\}/)
+  assert.match(connect, /onChange=\{\(event\) => setConnectSearch\(event\.target\.value\)\}/)
+  assert.match(connect, /onClick=\{\(\) => setConnectSearch\(''\)\}/)
+  assert.match(connect, /No matching apps/)
+  assert.match(connect, /role="status"/)
+})
