@@ -449,6 +449,31 @@ a {
   animation: remind-clip-open 450ms cubic-bezier(0.22, 1, 0.36, 1) 430ms forwards;
 }
 
+/* Installed PWAs already show a static native launch image. Keep the web
+   handoff in the final wordmark pose instead of visibly restarting the logo. */
+@media (display-mode: standalone) {
+  .remind-splash,
+  .remind-logo-wordmark,
+  .remind-logo-e,
+  .remind-logo-mind,
+  .remind-logo-colon,
+  .remind-logo-e-clip,
+  .remind-logo-mind-clip {
+    animation: none;
+  }
+  .remind-logo-wordmark,
+  .remind-logo-e,
+  .remind-logo-mind,
+  .remind-logo-e-clip,
+  .remind-logo-mind-clip {
+    transform: none;
+    opacity: 1;
+  }
+  .remind-logo-colon {
+    transform: translateX(145px);
+  }
+}
+
 @keyframes remind-wordmark-expand { to { transform: translateX(0); } }
 @keyframes remind-colon-shift { to { transform: translateX(145px); } }
 @keyframes remind-letter-reveal { to { opacity: 1; transform: translateX(0); } }
