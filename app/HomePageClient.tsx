@@ -3346,11 +3346,14 @@ async function handleSelectTab(k: TabKey) {
                   </div>
                 )}
                 {!layoutFlow && (
-                  <div role="status" aria-live="polite" className={`${frameUpdateError ? 'mt-2' : 'mt-6'} min-h-[16px] max-w-[360px] text-center text-xs leading-5 text-[color:var(--fg-60)]`}>
-                    <div>{updateStatusText}</div>
-                    {visibleSaveFeedback && lastPhysicalDisplayUpdatedAt && (
-                      <div className="mt-1 text-[11px] text-[color:var(--fg-40)]">{formatRelative(lastPhysicalDisplayUpdatedAt)}</div>
-                    )}
+                  // The layout preview flexes above this footer. Keep both status rows
+                  // mounted from the first paint so async frame feedback cannot push
+                  // the preview upward as messages arrive after the splash.
+                  <div role="status" aria-live="polite" className={`${frameUpdateError ? 'mt-2' : 'mt-6'} h-[44px] w-full max-w-[360px] text-center text-xs leading-5 text-[color:var(--fg-60)]`}>
+                    <div className="h-5 truncate">{updateStatusText}</div>
+                    <div className="mt-1 h-5 truncate text-[11px] text-[color:var(--fg-40)]">
+                      {visibleSaveFeedback && lastPhysicalDisplayUpdatedAt ? formatRelative(lastPhysicalDisplayUpdatedAt) : ''}
+                    </div>
                   </div>
                 )}
               </div>
