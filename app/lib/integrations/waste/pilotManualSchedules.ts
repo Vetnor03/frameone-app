@@ -9,10 +9,12 @@
  * Never import this module into client-side components: manual pilot data must be
  * delivered to the intended frame only.
  */
-export type PilotWasteFraction = 'restavfall' | 'matavfall' | 'papir' | 'plast' | 'glass_metall'
+export type PilotWasteFraction = 'restavfall' | 'matavfall' | 'papir' | 'plast' | 'glass_metall' | 'hazardous'
 export type PilotWastePickup = {
   date: string
   fractions: readonly PilotWasteFraction[]
+  /** Starred in the source table; the explanatory footnote was not visible. */
+  starred?: true
 }
 
 export type PilotWasteSchedule = {
@@ -48,6 +50,36 @@ export const PILOT_WASTE_SCHEDULES: readonly PilotWasteSchedule[] = [
       { date: '2026-12-08', fractions: ['plast', 'glass_metall'] },
       { date: '2026-12-15', fractions: ['matavfall', 'papir'] },
       { date: '2027-01-04', fractions: ['restavfall', 'matavfall'] },
+    ],
+  },
+  {
+    key: 'fredrikstad-rodsmyraskogen-21',
+    address: {
+      streetName: 'Rødsmyraskogen',
+      houseNumber: '21',
+      postalCode: '1671',
+      postalPlace: 'Kråkerøy',
+    },
+    source: 'Fredrikstad kommune – renovasjonskalender 2026 (fredrikstad.kommune.no), screenshot page 2 of 2',
+    transcribedOn: '2026-11-17',
+    lastProvidedPickup: '2026-12-23',
+    // Only November–December dates are needed for this pilot snapshot.
+    // Starred hazardous/small-electronics days require the source footnote
+    // before they are treated as ordinary kerbside collection reminders.
+    pickups: [
+      { date: '2026-11-04', fractions: ['restavfall'] },
+      { date: '2026-11-09', fractions: ['papir', 'plast'] },
+      { date: '2026-11-10', fractions: ['hazardous'], starred: true },
+      { date: '2026-11-11', fractions: ['matavfall'] },
+      { date: '2026-11-18', fractions: ['restavfall'] },
+      { date: '2026-11-24', fractions: ['hazardous'], starred: true },
+      { date: '2026-11-25', fractions: ['matavfall'] },
+      { date: '2026-12-02', fractions: ['restavfall'] },
+      { date: '2026-12-07', fractions: ['papir', 'plast', 'glass_metall'] },
+      { date: '2026-12-08', fractions: ['hazardous'], starred: true },
+      { date: '2026-12-09', fractions: ['matavfall'] },
+      { date: '2026-12-16', fractions: ['restavfall'] },
+      { date: '2026-12-23', fractions: ['matavfall'] },
     ],
   },
 ]
