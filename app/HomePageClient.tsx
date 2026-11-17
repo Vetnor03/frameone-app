@@ -11261,6 +11261,7 @@ function ModuleSettingsTab({
   if (module === 'ski') {
     return (
       <SkiModuleSettingsTab
+        WeatherLocationRow={WeatherLocationRow}
         language={language}
         userId={userId}
         activeDeviceId={activeDeviceId}
