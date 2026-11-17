@@ -60,7 +60,7 @@ test('Waste items are visible in app and physical frame after connection is enab
   const ui = read('../app/HomePageClient.tsx')
   const device = read('../app/api/device/reminders/route.ts')
   assert.match(ui, /source !== 'waste' \|\| integrationActiveForPilot\('waste'\)/)
-  assert.match(ui, /String\(row\.provider \|\| ''\) !== 'waste' \|\| integrationActiveForPilot\('waste'\)/)
+  assert.match(ui, /String\(row\.provider \|\| ''\) !== 'waste' \|\| \(integrationActiveForPilot\('waste'\)/)
   assert.match(device, /if \(!integrationActiveForPilot\('waste'\) \|\| !providerEnabled\('waste'\)\) return/)
   assert.match(ui, /provider\.eq\.waste/)
   assert.match(ui, /String\(row\.raw\?\.collection_date \|\| row\.raw\?\.date \|\| ''\) >= todayYmd/)
