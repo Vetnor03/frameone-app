@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     title: "RE:MIND",
     // iOS does not use manifest.background_color for Home Screen launch.
     // Exact physical-pixel images fill the native pre-webview interval.
-    startupImage: iosLaunchStartupImages,
+    startupImage: [...iosLaunchStartupImages],
   },
 };
 
