@@ -1757,6 +1757,11 @@ export default function HomePage() {
   const renderedModuleKeys = verifiedModuleTabsReady
     ? configuredModuleKeys.filter((key) => key === activeTab || cachedModuleKeys.includes(key as WarmModuleKey))
     : []
+  // Opening Assistant must not tear down prewarmed module panels: their scroll
+  // positions, pending revalidations and in-memory state belong to this frame.
+  const mountedModuleKeys = activeTab === 'assistant'
+    ? Array.from(new Set([...renderedModuleKeys, 'assistant' as ModuleKey]))
+    : renderedModuleKeys
 
   const remindersShownOnFrame = Object.values(
     activeCustomLayoutId ? (customAssignments[activeCustomLayoutId] || {}) : (cellsByLayout[layoutKey] || {}),
@@ -3245,7 +3250,7 @@ async function handleSelectTab(k: TabKey) {
                 />
               )}
 
-              {(activeTab === 'assistant' ? ['assistant' as ModuleKey] : renderedModuleKeys).map((moduleKey) => {
+              {mountedModuleKeys.map((moduleKey) => {
                 const isActive = activeTab === moduleKey
                 return (
                 <div key={`${moduleTabScope}:${moduleKey}`} className={isActive ? 'relative h-full' : 'hidden'} aria-hidden={!isActive} inert={!isActive}>
@@ -3340,20 +3345,26 @@ async function handleSelectTab(k: TabKey) {
 
                 {layoutFlow?.mode==='edit'&&<button type="button" onClick={()=>deleteCustom(layoutFlow.layout)} className="mt-4 text-xs tracking-[.16em] text-red-400">DELETE LAYOUT</button>}
 
-                {(layoutFlow ? layoutDraftError : frameUpdateError) && (
+                {layoutFlow && layoutDraftError && (
                   <div role="alert" className="mt-6 max-w-[360px] text-center text-xs tracking-widest text-[color:var(--fg-40)]">
-                    {layoutFlow ? layoutDraftError : frameUpdateError}
+                    {layoutDraftError}
                   </div>
                 )}
                 {!layoutFlow && (
-                  // The layout preview flexes above this footer. Keep both status rows
-                  // mounted from the first paint so async frame feedback cannot push
-                  // the preview upward as messages arrive after the splash.
-                  <div role="status" aria-live="polite" className={`${frameUpdateError ? 'mt-2' : 'mt-6'} h-[44px] w-full max-w-[360px] text-center text-xs leading-5 text-[color:var(--fg-60)]`}>
-                    <div className="h-5 truncate">{updateStatusText}</div>
-                    <div className="mt-1 h-5 truncate text-[11px] text-[color:var(--fg-40)]">
-                      {visibleSaveFeedback && lastPhysicalDisplayUpdatedAt ? formatRelative(lastPhysicalDisplayUpdatedAt) : ''}
-                    </div>
+                  // Reserve exactly the same footer geometry during background
+                  // status updates AND temporary errors. Never insert an alert
+                  // above it or change its margin and shift the Frame preview.
+                  <div className="mt-6 h-[44px] w-full max-w-[360px] text-center text-xs leading-5 text-[color:var(--fg-60)]">
+                    {frameUpdateError ? (
+                      <div role="alert" className="line-clamp-2 max-h-[44px] text-[color:var(--danger)]">{frameUpdateError}</div>
+                    ) : (
+                      <div role="status" aria-live="polite">
+                        <div className="h-5 truncate">{updateStatusText}</div>
+                        <div className="mt-1 h-5 truncate text-[11px] text-[color:var(--fg-40)]">
+                          {visibleSaveFeedback && lastPhysicalDisplayUpdatedAt ? formatRelative(lastPhysicalDisplayUpdatedAt) : ''}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
