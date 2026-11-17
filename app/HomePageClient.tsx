@@ -4425,9 +4425,13 @@ function ConnectAppsScreen({
                 : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? (language === 'no' ? 'Renovasjon' : 'Waste collection') : 'Spond'}?`}
             </div>
             <div className="mt-2 text-xs leading-snug text-[color:var(--fg-45)]">
-              {language === 'no'
-                ? 'Lagrede innlogginger og synkroniserte data fjernes fra denne integrasjonen.'
-                : 'Stored credentials and synced data will be removed for this integration.'}
+              {disconnectConfirmApp === 'waste'
+                ? (language === 'no'
+                  ? 'Den valgte adressen og tilhørende tømmedatoer fjernes fra Påminnelser.'
+                  : 'The selected address and its collection dates will be removed from Reminders.')
+                : (language === 'no'
+                  ? 'Lagrede innlogginger og synkroniserte data fjernes fra denne integrasjonen.'
+                  : 'Stored credentials and synced data will be removed for this integration.')}
             </div>
 
 
