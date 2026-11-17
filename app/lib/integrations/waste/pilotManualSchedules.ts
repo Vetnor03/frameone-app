@@ -82,6 +82,41 @@ export const PILOT_WASTE_SCHEDULES: readonly PilotWasteSchedule[] = [
       { date: '2026-12-23', fractions: ['matavfall'] },
     ],
   },
+  {
+    key: 'alesund-hatlen-55b',
+    address: {
+      streetName: 'Hatlen',
+      houseNumber: '55B',
+      postalCode: '6016',
+      postalPlace: 'Ålesund',
+    },
+    source: 'Renovasjonstømmekalender for Hatlen 55B – screenshot supplied during pilot (November 2026–February 2027)',
+    transcribedOn: '2026-11-17',
+    lastProvidedPickup: '2027-02-24',
+    // Dates are transcribed exactly from the supplied timetable.
+    // Do not extrapolate schedules from the observed fortnightly pattern.
+    pickups: [
+      { date: '2026-11-18', fractions: ['matavfall'] },
+      { date: '2026-11-25', fractions: ['restavfall'] },
+      { date: '2026-11-30', fractions: ['papir', 'plast'] },
+      { date: '2026-12-02', fractions: ['matavfall'] },
+      { date: '2026-12-09', fractions: ['restavfall'] },
+      { date: '2026-12-16', fractions: ['matavfall'] },
+      { date: '2026-12-21', fractions: ['restavfall'] },
+      { date: '2026-12-30', fractions: ['matavfall'] },
+      { date: '2027-01-04', fractions: ['papir', 'plast'] },
+      { date: '2027-01-06', fractions: ['restavfall'] },
+      { date: '2027-01-11', fractions: ['glass_metall'] },
+      { date: '2027-01-13', fractions: ['matavfall'] },
+      { date: '2027-01-20', fractions: ['restavfall'] },
+      { date: '2027-01-27', fractions: ['matavfall'] },
+      { date: '2027-02-01', fractions: ['papir', 'plast'] },
+      { date: '2027-02-03', fractions: ['restavfall'] },
+      { date: '2027-02-10', fractions: ['matavfall'] },
+      { date: '2027-02-17', fractions: ['restavfall'] },
+      { date: '2027-02-24', fractions: ['matavfall'] },
+    ],
+  },
 ]
 
 /**
