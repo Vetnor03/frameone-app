@@ -16,7 +16,7 @@ export const INTEGRATION_CATALOGUE: readonly IntegrationDefinition[] = [
   { key: 'google-calendar', name: { en: 'Google Calendar', no: 'Google Calendar' }, description: { en: 'Show upcoming events from your Google calendars', no: 'Vis kommende avtaler fra Google-kalenderne dine' }, status: 'available', connectable: true },
   { key: 'local-events', name: { en: 'Local Events', no: 'Lokale arrangementer' }, description: { en: 'Choose your local area for nearby events', no: 'Velg nærområdet ditt for lokale arrangementer' }, status: 'available', connectable: true },
   { key: 'spond', name: { en: 'Spond', no: 'Spond' }, description: { en: 'Show Spond messages on your frame', no: 'Vis Spond-meldinger på framen din' }, status: 'experimental', connectable: true },
-  { key: 'waste', name: { en: 'Waste collection', no: 'Renovasjon' }, description: { en: 'Collection dates for six test addresses', no: 'Tømmedatoer for seks testadresser' }, status: 'experimental', connectable: true },
+  { key: 'waste', name: { en: 'Waste collection', no: 'Renovasjon' }, description: { en: 'Find your address and see upcoming waste collections', no: 'Finn adressen din og se kommende tømminger' }, status: 'experimental', connectable: true },
   { key: 'vigilo', name: { en: 'Vigilo', no: 'Vigilo' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },
   { key: 'transponder', name: { en: 'Transponder', no: 'Transponder' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },
   { key: 'planta', name: { en: 'PLANTA', no: 'PLANTA' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },
@@ -44,7 +44,7 @@ export function integrationMatchesSearch(definition: IntegrationDefinition, quer
 }
 
 /** Only integrations with a working Connect flow are enabled during the pilot.
- * Renovasjon uses six manual address calendars while provider APIs remain disabled.
+ * Renovasjon uses verified static collections where available, with provider support for other areas.
  */
 export function integrationActiveForPilot(key: ConnectAppKey): boolean {
   const definition = INTEGRATION_CATALOGUE.find(app => app.key === key)
