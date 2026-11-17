@@ -147,9 +147,9 @@ export default function SkiModuleSettingsTab({
   language: AppLanguage
   userId: string | null
   activeDeviceId: string | null
-  modulesJson: Record<string, any>
-  setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
-  markDirty: (next?: { modulesJson?: Record<string, any> }) => void
+  modulesJson: Record<string, unknown>
+  setModulesJson: (next: Record<string, unknown>) => void
+  markDirty: (next?: { modulesJson?: Record<string, unknown> }) => void
   WeatherLocationRow: React.ComponentType<{
     language: AppLanguage
     id: number
@@ -157,7 +157,7 @@ export default function SkiModuleSettingsTab({
     label: string
     cfg: WeatherLocationCfg | null
     showDetails?: boolean
-    onPicked: (cfgPatch: any) => void
+    onPicked: (cfgPatch: Record<string, unknown>) => void
   }>
 }) {
   const isNo = language === 'no'
