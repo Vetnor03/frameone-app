@@ -9,7 +9,7 @@
  * Never import this module into client-side components: manual pilot data must be
  * delivered to the intended frame only.
  */
-export type PilotWasteFraction = 'restavfall' | 'matavfall' | 'papir' | 'plast' | 'glass_metall' | 'hazardous'
+export type PilotWasteFraction = 'restavfall' | 'matavfall' | 'papir' | 'plast' | 'glass_metall' | 'hazardous' | 'hageavfall'
 export type PilotWastePickup = {
   date: string
   fractions: readonly PilotWasteFraction[]
@@ -115,6 +115,49 @@ export const PILOT_WASTE_SCHEDULES: readonly PilotWasteSchedule[] = [
       { date: '2027-02-10', fractions: ['matavfall'] },
       { date: '2027-02-17', fractions: ['restavfall'] },
       { date: '2027-02-24', fractions: ['matavfall'] },
+    ],
+  },
+  {
+    key: 'stavanger-bjorn-farmanns-gate-57b',
+    address: {
+      streetName: 'Bjørn Farmanns gate',
+      houseNumber: '57B',
+      postalCode: '4041',
+      postalPlace: 'Hafrsfjord',
+    },
+    source: 'Stavanger kommune – Tømmekalender Bjørn Farmanns Gate 57B, 2026; screenshot provided for this address',
+    transcribedOn: '2026-11-17',
+    lastProvidedPickup: '2026-12-30',
+    // Exact 2026 dates from the photographed July–December calendar;
+    // municipal holiday notices mean no later dates should be extrapolated.
+    pickups: [
+      { date: '2026-07-01', fractions: ['papir', 'restavfall'] },
+      { date: '2026-07-08', fractions: ['matavfall', 'hageavfall'] },
+      { date: '2026-07-15', fractions: ['restavfall'] },
+      { date: '2026-07-22', fractions: ['matavfall', 'hageavfall'] },
+      { date: '2026-07-29', fractions: ['papir', 'restavfall'] },
+      { date: '2026-08-05', fractions: ['matavfall', 'hageavfall'] },
+      { date: '2026-08-12', fractions: ['restavfall'] },
+      { date: '2026-08-19', fractions: ['matavfall', 'hageavfall'] },
+      { date: '2026-08-26', fractions: ['papir', 'restavfall'] },
+      { date: '2026-09-02', fractions: ['matavfall', 'hageavfall'] },
+      { date: '2026-09-09', fractions: ['restavfall'] },
+      { date: '2026-09-16', fractions: ['matavfall', 'hageavfall'] },
+      { date: '2026-09-23', fractions: ['papir', 'restavfall'] },
+      { date: '2026-09-30', fractions: ['matavfall', 'hageavfall'] },
+      { date: '2026-10-07', fractions: ['restavfall'] },
+      { date: '2026-10-14', fractions: ['matavfall', 'hageavfall'] },
+      { date: '2026-10-21', fractions: ['papir', 'restavfall'] },
+      { date: '2026-10-28', fractions: ['matavfall', 'hageavfall'] },
+      { date: '2026-11-04', fractions: ['restavfall'] },
+      { date: '2026-11-11', fractions: ['matavfall', 'hageavfall'] },
+      { date: '2026-11-18', fractions: ['papir', 'restavfall'] },
+      { date: '2026-11-25', fractions: ['matavfall', 'hageavfall'] },
+      { date: '2026-12-01', fractions: ['restavfall'] },
+      { date: '2026-12-09', fractions: ['matavfall', 'hageavfall'] },
+      { date: '2026-12-16', fractions: ['papir', 'restavfall'] },
+      { date: '2026-12-23', fractions: ['matavfall', 'hageavfall'] },
+      { date: '2026-12-30', fractions: ['restavfall'] },
     ],
   },
 ]
