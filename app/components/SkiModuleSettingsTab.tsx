@@ -184,6 +184,9 @@ export default function SkiModuleSettingsTab({
     markDirty({ modulesJson: next })
   }
 
+  // Restoring the location-scoped cached snapshot inside the effect is deliberate:
+  // a different selected frame must never display the previous ski conditions.
+  /* eslint-disable react-hooks/set-state-in-effect -- Reset old snapshot on location change. */
   useEffect(() => {
     if (!hasCoordinates) {
       setSummary(null)
@@ -234,6 +237,7 @@ export default function SkiModuleSettingsTab({
 
     return () => controller.abort()
   }, [hasCoordinates, lat, lon, locationLabel, language, userId, activeDeviceId, skiVariant])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const current = summary?.current ?? null
   const snow = summary?.snow ?? null
