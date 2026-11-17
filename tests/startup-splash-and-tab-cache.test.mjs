@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 const home=readFileSync(new URL('../app/HomePageClient.tsx',import.meta.url),'utf8')
 const page=readFileSync(new URL('../app/page.tsx',import.meta.url),'utf8')
 const loading=readFileSync(new URL('../app/loading.tsx',import.meta.url),'utf8')
+const layout=readFileSync(new URL('../app/layout.tsx',import.meta.url),'utf8')
 const splash=readFileSync(new URL('../app/components/StartupSplash.tsx',import.meta.url),'utf8')
 const styles=readFileSync(new URL('../app/globals.css',import.meta.url),'utf8')
 
@@ -43,6 +44,11 @@ test('ready app appears only after a two-phase splash handoff without logo ghost
   assert.match(styles,/transition: opacity 190ms cubic-bezier\(0\.22, 1, 0\.36, 1\) 100ms/)
   assert.match(styles,/\.remind-splash-overlay \.remind-splash\s*\{\s*opacity: 1;\s*transition: opacity 85ms ease-out;/)
   assert.match(styles,/\.remind-splash-overlay-hiding \.remind-splash\s*\{\s*opacity: 0;/)
+  assert.match(styles,/animation: remind-startup-logo-reveal 180ms ease-out 300ms both;/)
+  assert.match(styles,/\.remind-splash-overlay-hiding \.remind-splash-reveal\s*\{\s*animation-play-state: paused;/)
+  assert.match(splash,/className="remind-splash-reveal"/)
+  assert.match(styles,/\.remind-splash-reveal\s*\{\s*animation: none;/)
+  assert.doesNotMatch(layout,/startupImage:/)
   assert.match(styles,/\.remind-splash-overlay-hiding\s*\{\s*opacity: 0/)
   assert.match(home,/window\.setTimeout\(\(\) => setShowSplash\(false\), reducedMotion \? 0 : 320\)/)
   assert.match(home,/\[booting, showSplash\]/)
@@ -51,7 +57,7 @@ test('ready app appears only after a two-phase splash handoff without logo ghost
   assert.equal((home.match(/setShowSplash\(false\)/g)||[]).length, 1)
 })
 
-test('native launch and web splash use the same static monoline wordmark',()=>{
+test('web splash retains a crisp vector wordmark for sustained loads',()=>{
   assert.match(splash,/viewBox="0 0 300 60"/)
   assert.match(splash,/strokeWidth="2\.4"/)
   assert.match(splash,/M261 0V60H275/)
