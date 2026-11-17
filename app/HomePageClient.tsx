@@ -2194,31 +2194,35 @@ export default function HomePage() {
 
   async function loadDeviceSettings(deviceId: string, ownerId: string | null = userId, knownDeviceIds: string[] = frames.map((frame) => frame.device_id)) {
     setLoadedSettingsDeviceId(null)
-    let fetchedCustomLayouts: CustomLayout[] = []
-    let customLayoutsFetched = false
-    // Start the settings lookup while the custom-layout endpoint is in flight.
+    // These three independent requests previously serialized custom layouts,
+    // then the settings result, then reusable settings from other frames.
+    // Issue them together to shorten cold start without changing what is
+    // committed or allowing unverified cached controls to become editable.
     const settingsPromise = Promise.resolve(supabase
       .from('device_settings')
       .select('settings_json, updated_at')
       .eq('device_id', deviceId)
       .maybeSingle())
-    if (SHOW_CUSTOM_LAYOUT_UI) {
+    const customLayoutsPromise = (async (): Promise<{ layouts: CustomLayout[]; fetched: boolean }> => {
+      if (!SHOW_CUSTOM_LAYOUT_UI) return { layouts: [], fetched: false }
       try {
         const session = await supabase.auth.getSession()
         const token = session.data.session?.access_token
         if (token) {
           const response = await fetch(`/api/custom-layouts?device_id=${encodeURIComponent(deviceId)}`, { headers: { Authorization: `Bearer ${token}` } })
-          if (response.ok) {
-            fetchedCustomLayouts = (await response.json()).layouts || []
-            customLayoutsFetched = true
-          }
+          if (response.ok) return { layouts: (await response.json()).layouts || [], fetched: true }
         }
       } catch {
-        // The initial screen and its cached preview must survive a layout API outage.
+        // Keep a previously displayed preview when the optional API is unavailable.
       }
-    }
-    if (activeDeviceIdRef.current !== deviceId) return
-    const { data, error } = await settingsPromise
+      return { layouts: [], fetched: false }
+    })()
+    const reusableModulesPromise = loadReusableUserModules(knownDeviceIds, deviceId).catch(() => ({}))
+    const [{ data, error }, customLayoutsResult, reusableModules] = await Promise.all([
+      settingsPromise, customLayoutsPromise, reusableModulesPromise,
+    ])
+    const fetchedCustomLayouts = customLayoutsResult.layouts
+    const customLayoutsFetched = customLayoutsResult.fetched
 
     if (activeDeviceIdRef.current !== deviceId) return
     if (error) {
@@ -2257,9 +2261,7 @@ export default function HomePage() {
         ? (json.modules as Record<string, any>)
         : ({} as Record<string, any>)
 
-    // Settings are sufficient to render the app; physical status is optional.
-    const reusableModules = await loadReusableUserModules(knownDeviceIds, deviceId).catch(() => ({}))
-    if (activeDeviceIdRef.current !== deviceId) return
+    // Reusable modules were fetched in parallel with settings and layouts.
     const normalizedModules = normalizeModulesForSave(mergeReusableUserModules(rawModules, reusableModules))
     const nextPinnedTabs = Array.isArray((json as any).pinned_tabs)
       ? ((json as any).pinned_tabs as unknown[]).filter((m): m is ModuleKey => isModuleKey(m) && m !== 'date')
