@@ -1230,6 +1230,9 @@ export default function HomePage() {
   const searchParams = useSearchParams()
 
   const [lastPhysicalDisplayUpdatedAt, setLastPhysicalDisplayUpdatedAt] = useState<string | null>(null)
+  // A cached frame must not claim there was no confirmed update while the
+  // first live hardware status lookup is still in flight.
+  const [frameStatusLoad, setFrameStatusLoad] = useState<{ deviceId: string; loaded: boolean } | null>(null)
   const [, setNextUpdateTick] = useState(0)
   const [physicalFrameSnapshot, setPhysicalFrameSnapshot] = useState<PhysicalFrameSnapshot | null>(null)
   const physicalFrameSnapshotRef = useRef<PhysicalFrameSnapshot | null>(null)
@@ -2018,7 +2021,11 @@ export default function HomePage() {
         ? (language === 'no' ? 'Oppdatert på rammen' : 'Updated on the frame')
         : lastPhysicalDisplayUpdatedAt
           ? formatRelative(lastPhysicalDisplayUpdatedAt)
-          : (language === 'no' ? 'Ingen bekreftet rammeoppdatering ennå' : 'No confirmed frame update yet')
+          : !activeDeviceId || frameStatusLoad?.deviceId !== activeDeviceId
+            ? '' // Reserve the status line, but avoid a false message during cache-first boot.
+            : frameStatusLoad.loaded
+              ? (language === 'no' ? 'Ingen bekreftet rammeoppdatering ennå' : 'No confirmed frame update yet')
+              : (language === 'no' ? 'Rammestatus er ikke tilgjengelig' : 'Frame status unavailable')
 
   useEffect(() => {
     if (!frameUpdateError) return
@@ -2036,6 +2043,7 @@ export default function HomePage() {
   }, [activeDeviceId, activeTab])
 
   async function loadDeviceStatus(deviceId: string): Promise<string | null> {
+    let loaded = false
     try {
       const resp = await fetch(`/api/device/status?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
       if (!resp.ok) {
@@ -2044,6 +2052,7 @@ export default function HomePage() {
 
       const data = await resp.json()
       if (activeDeviceIdRef.current !== deviceId) return null
+      loaded = true
       const renderIso = data?.last_render_at ? String(data.last_render_at) : ''
       const status: Omit<MemberRow, 'device_id' | 'role'> = {
         current_version: data?.current_version ?? null,
@@ -2069,11 +2078,18 @@ export default function HomePage() {
       return renderIso || null
     } catch {
       return null
+    } finally {
+      if (activeDeviceIdRef.current === deviceId) {
+        // A failed later request must not replace an already verified status.
+        setFrameStatusLoad((current) => current?.deviceId === deviceId && current.loaded
+          ? current : { deviceId, loaded })
+      }
     }
   }
 
 
   function applyDeviceStatus(deviceId: string, data: Record<string, unknown>) {
+    if (activeDeviceIdRef.current === deviceId) setFrameStatusLoad({ deviceId, loaded: true })
     const renderIso = data?.last_render_at ? String(data.last_render_at) : ''
     const status: Omit<MemberRow, 'device_id' | 'role'> = {
       current_version: typeof data?.current_version === 'string' ? data.current_version : null,
@@ -2555,6 +2571,7 @@ export default function HomePage() {
       restoreManualUpdateState(selected)
       activeDeviceIdRef.current = selected
       setActiveDeviceId(selected)
+      setFrameStatusLoad(null)
       setLastPhysicalDisplayUpdatedAt(null)
       setPhysicalFrameSnapshot(null)
       physicalFrameSnapshotRef.current = null
@@ -2588,6 +2605,7 @@ export default function HomePage() {
     restoreManualUpdateState(id)
     activeDeviceIdRef.current = id
     setActiveDeviceId(id)
+    setFrameStatusLoad(null)
     setLastPhysicalDisplayUpdatedAt(null)
     setPhysicalFrameSnapshot(null)
     physicalFrameSnapshotRef.current = null
@@ -3419,9 +3437,11 @@ async function handleSelectTab(k: TabKey) {
           </>
         </div>
 
-        {isCachedLaunchPreview && (
-          <div role="status" className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-[10px] tracking-[0.12em] text-[color:var(--fg-45)]">
-            {cachedPreviewSyncFailed ? 'OFFLINE PREVIEW' : 'SYNCING…'}
+        {/* Cached data refreshes silently. Show a warning only if verification
+            fails; never put a progress label underneath the iOS home indicator. */}
+        {isCachedLaunchPreview && cachedPreviewSyncFailed && (
+          <div role="status" className="pointer-events-none absolute inset-x-0 top-36 text-center text-[10px] tracking-[0.12em] text-[color:var(--fg-45)]">
+            {language === 'no' ? 'OFFLINE FORHÅNDSVISNING' : 'OFFLINE PREVIEW'}
           </div>
         )}
         {startupLoadError && (
