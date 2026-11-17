@@ -56,7 +56,7 @@ export const PILOT_WASTE_SCHEDULES: readonly PilotWasteSchedule[] = [
  * Prefer a complete, exact street address; never use a fuzzy match or just
  * postal code/municipality to assign a family's collection calendar.
  */
-const normalized = (value: string) => value.normalize('NFKC').trim().toLocaleLowerCase('nb-NO').replace(/\\s+/g, ' ')
+const normalized = (value: string) => value.normalize('NFKC').trim().toLocaleLowerCase('nb-NO')
 
 export function pilotWasteScheduleForAddress(streetName: string, houseNumber: string, postalCode: string): PilotWasteSchedule | null {
   return PILOT_WASTE_SCHEDULES.find((schedule) =>
