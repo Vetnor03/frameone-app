@@ -28,6 +28,21 @@ export function integrationStatusLabel(status: IntegrationStatus, language: 'en'
   return null
 }
 
+/** Match integrations by name, key, description or availability in either app language. */
+export function integrationMatchesSearch(definition: IntegrationDefinition, query: string): boolean {
+  const term = query.trim().toLocaleLowerCase()
+  if (!term) return true
+  return [
+    definition.key,
+    definition.name.en,
+    definition.name.no,
+    definition.description.en,
+    definition.description.no,
+    integrationStatusLabel(definition.status, 'en') || '',
+    integrationStatusLabel(definition.status, 'no') || '',
+  ].some(value => value.toLocaleLowerCase().includes(term))
+}
+
 /** Temporarily disable unfinished integrations throughout the first pilot.
  * Retain their implementations and any existing connection data for reactivation.
  */
