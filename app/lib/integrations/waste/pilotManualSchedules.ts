@@ -160,6 +160,30 @@ export const PILOT_WASTE_SCHEDULES: readonly PilotWasteSchedule[] = [
       { date: '2026-12-30', fractions: ['restavfall'] },
     ],
   },
+  {
+    key: 'moss-goenveien-5a',
+    address: {
+      streetName: 'Goenveien',
+      houseNumber: '5A',
+      postalCode: '1580',
+      postalPlace: 'Rygge',
+    },
+    source: 'MOVAR – Hentekalender for Goenveien 5A (movar.no), two-page PDF dated 17 November 2026',
+    transcribedOn: '2026-11-17',
+    lastProvidedPickup: '2026-12-23',
+    // All seven dates are transcribed directly from the MOVAR PDF.
+    // The 9 December card crosses a page break: glass/metall and matavfall.
+    // Do not infer later dates from the stated collection frequencies.
+    pickups: [
+      { date: '2026-11-18', fractions: ['restavfall'] },
+      { date: '2026-11-25', fractions: ['matavfall', 'plast'] },
+      { date: '2026-12-02', fractions: ['restavfall'] },
+      { date: '2026-12-03', fractions: ['papir'] },
+      { date: '2026-12-09', fractions: ['glass_metall', 'matavfall'] },
+      { date: '2026-12-16', fractions: ['restavfall'] },
+      { date: '2026-12-23', fractions: ['matavfall', 'plast'] },
+    ],
+  },
 ]
 
 /**
