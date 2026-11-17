@@ -3456,7 +3456,7 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar'
+type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'waste'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -3559,6 +3559,30 @@ function ConnectAppsScreen({
   const [localEventsOpen, setLocalEventsOpen] = useState(false)
   const [wasteModalOpen, setWasteModalOpen] = useState(false)
   const [wasteConnected, setWasteConnected] = useState(() => connectAppIsConnected(modulesJson, 'waste'))
+  const [wasteStatusResolved, setWasteStatusResolved] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    setWasteStatusResolved(false)
+    void (async () => {
+      const token = (await supabase.auth.getSession()).data.session?.access_token || ''
+      if (!token) {
+        if (!cancelled) { setWasteConnected(false); setWasteStatusResolved(true) }
+        return
+      }
+      const response = await fetch('/api/integrations/waste/status', {
+        headers: { Authorization: 'Bearer ' + token },
+        cache: 'no-store',
+      })
+      if (!response.ok) throw new Error('Waste connection status failed')
+      const json = await response.json()
+      if (!cancelled) {
+        setWasteConnected(json.connected === true)
+        setLocallyDisconnectedApps(current => ({ ...current, waste: false }))
+        setWasteStatusResolved(true)
+      }
+    })().catch(() => { if (!cancelled) setWasteStatusResolved(true) })
+    return () => { cancelled = true }
+  }, [activeDeviceId])
   const [localEventsLoading, setLocalEventsLoading] = useState(false)
   const [localEventsSearch, setLocalEventsSearch] = useState('')
   const [localEventsPlaceResults, setLocalEventsPlaceResults] = useState<Array<{ id: string; label: string; latitude: number; longitude: number }>>([])
@@ -3920,8 +3944,8 @@ function ConnectAppsScreen({
   }
 
   async function disconnectIntegration(provider: DisconnectableConnectAppKey) {
-    const appName = provider === 'teams' ? 'Microsoft Calendar' : provider === 'google-calendar' ? 'Google Calendar' : 'Spond'
-    const setProviderLoading = provider === 'teams' ? setTeamsLoading : provider === 'google-calendar' ? setGoogleLoading : setSpondLoading
+    const appName = provider === 'teams' ? 'Microsoft Calendar' : provider === 'google-calendar' ? 'Google Calendar' : provider === 'waste' ? (language === 'no' ? 'Renovasjon' : 'Waste collection') : 'Spond'
+    const setProviderLoading = provider === 'teams' ? setTeamsLoading : provider === 'google-calendar' ? setGoogleLoading : provider === 'spond' ? setSpondLoading : null
     if (disconnectingApp === provider) return
     setProviderLoading?.(true)
     setDisconnectingApp(provider)
@@ -3951,6 +3975,10 @@ function ConnectAppsScreen({
         setSpondAccountConnected(false)
         changeFrameIntegration('spond', { enabled: false })
         setSpondAccount(null)
+      } else if (provider === 'waste') {
+        setWasteConnected(false)
+        changeFrameIntegration('waste', { enabled: false })
+        window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
       }
       setLocallyDisconnectedApps((current) => ({ ...current, [provider]: true }))
       setDisconnectConfirmApp(null)
@@ -4275,13 +4303,14 @@ function ConnectAppsScreen({
                         </button>
                       </div>
                     ) : app.key === 'waste' ? (
-                      <button
-                        type="button"
-                        onClick={() => setWasteModalOpen(true)}
-                        className="shrink-0 h-8 rounded-xl border border-[color:var(--bd-20)] px-3 text-[11px] tracking-widest text-[color:var(--fg-70)]"
-                      >
-                        {language === 'no' ? 'ENDRE' : 'EDIT'}
-                      </button>
+                      <div className="shrink-0 flex flex-col items-stretch gap-1.5">
+                        <button type="button" onClick={() => setDisconnectConfirmApp('waste')} disabled={disconnectingApp === 'waste'} className="h-8 rounded-xl border border-[#d94b4b]/40 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
+                          {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
+                        </button>
+                        <button type="button" onClick={() => setWasteModalOpen(true)} disabled={disconnectingApp === 'waste'} className="h-7 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)] disabled:opacity-60">
+                          {language === 'no' ? 'ENDRE ADRESSE' : 'EDIT ADDRESS'}
+                        </button>
+                      </div>
                     ) : credentialProvider ? (
                       <button
                         type="button"
@@ -4299,7 +4328,7 @@ function ConnectAppsScreen({
                   ) : (
                     <button
                       type="button"
-                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved))}
+                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved))}
                       onClick={() => {
                         if (app.key === 'spond') {
                           if (spondAccountConnected) { setSpondConnected(true); changeFrameIntegration('spond', { enabled: true }) }
@@ -4323,7 +4352,7 @@ function ConnectAppsScreen({
                     >
                       {app.key === 'local-events'
                         ? (language === 'no' ? 'KOBLE TIL' : 'CONNECT')
-                        : (app.key === 'google-calendar' && !googleStatusResolved) || (app.key === 'teams' && !teamsStatusResolved)
+                        : (app.key === 'google-calendar' && !googleStatusResolved) || (app.key === 'teams' && !teamsStatusResolved) || (app.key === 'waste' && !wasteStatusResolved)
                           ? (language === 'no' ? 'SJEKKER…' : 'CHECKING…')
                           : ((app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading))
                             ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…')
@@ -4392,8 +4421,8 @@ function ConnectAppsScreen({
         >
             <div className="text-base font-semibold text-[color:var(--fg-90)]">
               {language === 'no'
-                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : 'Spond'}?`
-                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : 'Spond'}?`}
+                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? (language === 'no' ? 'Renovasjon' : 'Waste collection') : 'Spond'}?`
+                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? (language === 'no' ? 'Renovasjon' : 'Waste collection') : 'Spond'}?`}
             </div>
             <div className="mt-2 text-xs leading-snug text-[color:var(--fg-45)]">
               {language === 'no'
@@ -4407,7 +4436,7 @@ function ConnectAppsScreen({
 
 
       {localEventsOpen && renderLocalEventsModal()}
-      {wasteModalOpen && <WasteSetupModal language={language} onClose={() => setWasteModalOpen(false)} onSaved={(connected) => { setWasteConnected(connected); changeFrameIntegration('waste', { enabled: connected }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }} />}
+      {wasteModalOpen && <WasteSetupModal language={language} onClose={() => setWasteModalOpen(false)} onSaved={(connected) => { setWasteConnected(connected); setLocallyDisconnectedApps(current => ({ ...current, waste: false })); changeFrameIntegration('waste', { enabled: connected }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }} />}
 
       {spondModalOpen && (
         <AppSheet
@@ -14954,7 +14983,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           .select('id, provider, external_id, title, starts_at, due_at, raw')
           .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway'])
           .or(activeDeviceId ? `user_id.eq.${sessionUserId},device_id.eq.${activeDeviceId}` : `user_id.eq.${sessionUserId}`)
-          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso}`)
+          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste`)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (integrationError) {
@@ -14972,7 +15001,7 @@ const manualItems: ReminderUiItem[] = (data || [])
             : { data: null }
           const selectedLocalEventArea = String(((localEventsIntegrationData?.encrypted_credentials as any)?.areaPreference?.primaryPlaceId) || '').trim()
           const visibleIntegrationData = (integrationData || []).filter((row) =>
-            (String(row.provider || '') !== 'waste' || integrationActiveForPilot('waste')) &&
+            (String(row.provider || '') !== 'waste' || (integrationActiveForPilot('waste') && String(row.raw?.collection_date || row.raw?.date || '') >= todayYmd)) &&
             (String(row.provider || '') !== 'edge-of-norway' || !selectedLocalEventArea || (Array.isArray(row.raw?.areaKeys) ? row.raw.areaKeys.includes(selectedLocalEventArea) : String(row.raw?.areaKey || row.raw?.primaryPlaceId || '').trim() === selectedLocalEventArea)))
           const localEventExternalIds = visibleIntegrationData
             .filter((row: any) => String(row.provider || '') === 'edge-of-norway')
