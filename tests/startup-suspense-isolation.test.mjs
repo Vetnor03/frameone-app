@@ -10,7 +10,7 @@ test('first startup still has a branded route fallback', () => {
 })
 
 test('background module prewarming cannot surface the route-wide splash', () => {
-  const begin = home.indexOf("(activeTab === 'assistant' ? ['assistant' as ModuleKey] : renderedModuleKeys).map")
+  const begin = home.indexOf('mountedModuleKeys.map((moduleKey) => {')
   assert.ok(begin >= 0, 'module tabs should be rendered within their retained scopes')
   const section = home.slice(begin, begin + 6000)
   const tabContainer = section.indexOf('key={`\$\{moduleTabScope\}:\$\{moduleKey\}`}')
@@ -25,4 +25,10 @@ test('background module prewarming cannot surface the route-wide splash', () => 
 
 test('lazy frame assistant cannot suspend the entire startup route', () => {
   assert.ok(home.includes('<React.Suspense fallback={null}>\n                <FrameAssistant'))
+})
+
+test('Assistant navigation retains already mounted module tabs', () => {
+  assert.match(home, /const mountedModuleKeys = activeTab === 'assistant'/)
+  assert.match(home, /new Set\(\[\.\.\.renderedModuleKeys, 'assistant' as ModuleKey\]\)/)
+  assert.doesNotMatch(home, /activeTab === 'assistant' \? \['assistant' as ModuleKey\] : renderedModuleKeys/)
 })
