@@ -411,7 +411,7 @@ a {
   pointer-events: none;
 }
 
-/* Keep the opening wordmark compact and centered. The native iOS launch\n   image uses exactly the same 300-unit vector proportions and 52vw cap. */
+/* Keep the optional web wordmark compact and centered. */
 .remind-splash {
   width: min(52vw, 220px);
   display: flex;
