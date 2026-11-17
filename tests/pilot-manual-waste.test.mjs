@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { PILOT_WASTE_SCHEDULES, pilotWasteScheduleForAddress } from '../app/lib/integrations/waste/pilotManualSchedules.ts'
+import { PILOT_WASTE_SCHEDULES, pilotWasteScheduleForAddress, searchPilotWasteAddresses, resolvePilotWasteAddress, pilotWasteCollections } from '../app/lib/integrations/waste/pilotManualSchedules.ts'
 
 test('Trondheim pilot schedule uses only the six exact dates and fractions supplied by Trondheim Renholdsverk', () => {
   const schedule = pilotWasteScheduleForAddress('Haldor Flatens veg', '27', '7081')
@@ -202,4 +202,47 @@ test('Boganesstraen calendar cannot match wrong house number, letter or postcode
   assert.equal(pilotWasteScheduleForAddress('Boganesstraen', '36A', '4020'), null)
   assert.equal(pilotWasteScheduleForAddress('Boganesstraen', '36B', '4021'), null)
   assert.equal(pilotWasteScheduleForAddress('BOGANESSTRAEN', '36b', '4020')?.key, 'stavanger-boganesstraen-36b')
+})
+
+test('Search returns the six shared addresses and exact identifiers without a provider API', () => {
+  const expected = [
+    ['Haldor Flatens veg 27', '5001', 'trondheim-haldor-flatens-veg-27'],
+    ['Rødsmyraskogen 21', '3107', 'fredrikstad-rodsmyraskogen-21'],
+    ['Hatlen 55B', '1508', 'alesund-hatlen-55b'],
+    ['Bjørn Farmanns gate 57B', '1103', 'stavanger-bjorn-farmanns-gate-57b'],
+    ['Goenveien 5A', '3103', 'moss-goenveien-5a'],
+    ['Boganesstraen 36B', '1103', 'stavanger-boganesstraen-36b'],
+  ]
+  for (const [input, municipality, key] of expected) {
+    const results = searchPilotWasteAddresses(input)
+    assert.equal(results.length, 1, input)
+    assert.equal(results[0].addressId, `pilot:${key}`)
+    assert.equal(results[0].municipalityNumber, municipality)
+    assert.equal(resolvePilotWasteAddress(results[0])?.schedule.key, key)
+  }
+  assert.equal(searchPilotWasteAddresses('Boganesstraen').length, 1)
+  assert.equal(searchPilotWasteAddresses('boganesstraen 36b').length, 1)
+  assert.equal(searchPilotWasteAddresses('Rodsmyraskogen 21').length, 1)
+  assert.equal(searchPilotWasteAddresses('Stavanger').length, 2)
+  assert.deepEqual(searchPilotWasteAddresses('boganestraen 99'), [])
+  assert.deepEqual(searchPilotWasteAddresses('bo'), [])
+})
+
+test('Server resolution ignores spoofed labels and rejects fabricated IDs or municipality numbers', () => {
+  const [address] = searchPilotWasteAddresses('Goenveien 5A')
+  assert.ok(address)
+  assert.equal(resolvePilotWasteAddress({ ...address, label: 'Unrelated address 1', streetName: 'Unrelated address', houseNumber: '1' })?.address.label, address.label)
+  assert.equal(resolvePilotWasteAddress({ ...address, municipalityNumber: '1103' }), null)
+  assert.equal(resolvePilotWasteAddress({ ...address, addressId: 'pilot:unregistered' }), null)
+})
+
+test('Preview collections exactly preserve dates and hide unverified starred hazardous-pickup rows', () => {
+  const address = resolvePilotWasteAddress(searchPilotWasteAddresses('Rødsmyraskogen')[0])
+  assert.ok(address)
+  const items = pilotWasteCollections(address.schedule)
+  assert.ok(items.length > 0)
+  assert.equal(items.some(item => item.normalizedType === 'hazardous'), false)
+  assert.ok(items.some(item => item.date === '2026-12-07' && item.normalizedType === 'glass_metall'))
+  assert.ok(items.every(item => item.providerEventId.startsWith(`pilot:${address.schedule.key}:`)))
+  assert.equal(items.some(item => item.date > address.schedule.lastProvidedPickup), false)
 })
