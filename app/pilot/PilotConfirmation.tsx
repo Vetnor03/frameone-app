@@ -1,5 +1,7 @@
 'use client'
 
+import { CONTACT_EMAIL } from '@/app/lib/contactEmail'
+
 import { useEffect, useState, type FormEvent } from 'react'
 
 type Invitation = { confirmed: boolean }
@@ -148,7 +150,7 @@ export default function PilotConfirmation({ inviteId }: { inviteId: string }) {
               <h1 className="mt-3 text-[31px] font-medium leading-tight tracking-[-.04em]">Denne lenken er ikke gyldig.</h1>
               <p role="alert" className="mt-4 text-[14px] leading-6 text-black/60">{invalidReason}</p>
               <p className="mt-4 text-[13px] leading-6 text-black/50">
-                Trenger du hjelp? Skriv til <a className="underline underline-offset-2" href="mailto:support@re-mind.no">support@re-mind.no</a>.
+                Trenger du hjelp? Skriv til <a className="underline underline-offset-2" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
               </p>
             </div>
           ) : view === 'done' ? (

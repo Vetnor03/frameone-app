@@ -1,5 +1,7 @@
 'use client'
 
+import { CONTACT_EMAIL } from '@/app/lib/contactEmail'
+
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
@@ -82,7 +84,7 @@ export default function ContactPage() {
             <div className="text-white/60 text-xs tracking-widest">
               {language === 'no' ? 'E-POST' : 'EMAIL'}
             </div>
-            <div className="mt-1 text-white/80">support@re-mind.no</div>
+            <div className="mt-1 text-white/80">{CONTACT_EMAIL}</div>
           </div>
         </div>
       </div>

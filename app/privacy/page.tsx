@@ -1,5 +1,7 @@
 'use client'
 
+import { CONTACT_EMAIL } from '@/app/lib/contactEmail'
+
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../lib/supabase'
@@ -125,7 +127,7 @@ function PrivacyPageContent() {
           },
           {
             title: 'GOOGLE CALENDAR – FRAKOBLING OG SLETTING',
-            text: 'Du kan når som helst koble fra Google Calendar i Connect. RE:MIND stanser da videre synkronisering og sletter lagrede Google-tilgangstokens og importerte kalenderhendelser fra den aktive integrasjonsdatabasen. Dette endrer ikke kalenderne dine hos Google. Du kan også trekke tilbake RE:MINDs tilgang fra sikkerhetsinnstillingene i Google-kontoen din. For andre forespørsler om sletting, kontakt support@re-mind.no.',
+            text: `Du kan når som helst koble fra Google Calendar i Connect. RE:MIND stanser da videre synkronisering og sletter lagrede Google-tilgangstokens og importerte kalenderhendelser fra den aktive integrasjonsdatabasen. Dette endrer ikke kalenderne dine hos Google. Du kan også trekke tilbake RE:MINDs tilgang fra sikkerhetsinnstillingene i Google-kontoen din. For andre forespørsler om sletting, kontakt ${CONTACT_EMAIL}.`,
           },
           {
             title: 'GOOGLE API-DATA OG BEGRENSET BRUK',
@@ -173,7 +175,7 @@ function PrivacyPageContent() {
             text: (
               <>
                 Har du spørsmål om personvern, kan du kontakte oss på{' '}
-                <a href="mailto:support@re-mind.no">support@re-mind.no</a>
+                <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
               </>
             ),
           },
@@ -203,7 +205,7 @@ function PrivacyPageContent() {
           },
           {
             title: 'GOOGLE CALENDAR – DISCONNECTING AND DELETION',
-            text: 'You may disconnect Google Calendar at any time in Connect. RE:MIND then stops future synchronization and deletes stored Google access tokens and imported calendar events from its active integration database. This does not change your calendars at Google. You may also revoke RE:MIND access in your Google Account security settings. For other data deletion requests, contact support@re-mind.no.',
+            text: `You may disconnect Google Calendar at any time in Connect. RE:MIND then stops future synchronization and deletes stored Google access tokens and imported calendar events from its active integration database. This does not change your calendars at Google. You may also revoke RE:MIND access in your Google Account security settings. For other data deletion requests, contact ${CONTACT_EMAIL}.`,
           },
           {
             title: 'GOOGLE API DATA AND LIMITED USE',
@@ -243,7 +245,7 @@ function PrivacyPageContent() {
           },
           {
             title: 'CONTACT',
-            text: <>For any privacy-related questions, contact <a href="mailto:support@re-mind.no">support@re-mind.no</a></>,
+            text: <>For any privacy-related questions, contact <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a></>,
           },
         ]
 

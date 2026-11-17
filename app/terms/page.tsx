@@ -1,5 +1,7 @@
 'use client'
 
+import { CONTACT_EMAIL } from '@/app/lib/contactEmail'
+
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../lib/supabase'
@@ -148,7 +150,7 @@ function TermsPageContent() {
             text: (
               <>
                 Har du spørsmål, kan du kontakte oss på{' '}
-                <a href="mailto:support@re-mind.no">support@re-mind.no</a>
+                <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
               </>
             ),
           },
@@ -198,7 +200,7 @@ function TermsPageContent() {
           },
           {
             title: 'CONTACT',
-            text: <>For any questions, contact us at <a href="mailto:support@re-mind.no">support@re-mind.no</a></>,
+            text: <>For any questions, contact us at <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a></>,
           },
         ]
 

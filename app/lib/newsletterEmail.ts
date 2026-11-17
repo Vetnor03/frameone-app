@@ -1,3 +1,4 @@
+import { CONTACT_EMAIL } from '@/app/lib/contactEmail'
 import { Resend } from 'resend'
 
 type NewsletterWelcome = {
@@ -47,7 +48,7 @@ export async function sendNewsletterWelcomeEmail({
     const result = await new Resend(apiKey).emails.send({
       from: NEWSLETTER_SENDER,
       to: [email],
-      replyTo: process.env.NEWSLETTER_REPLY_TO?.trim() || 'vetlecn@live.no',
+      replyTo: CONTACT_EMAIL,
       subject: 'Thank you for joining the RE:MIND newsletter',
       text,
       html,
