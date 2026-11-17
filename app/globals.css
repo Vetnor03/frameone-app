@@ -374,7 +374,19 @@ a {
   justify-content: center;
   background: var(--app-bg);
   opacity: 1;
-  transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  /* First fade the wordmark against an opaque canvas; only then reveal the
+     fully rendered app. Fading both layers together made the logo ghost over
+     the Frame content on iOS. Total visual handoff: 100ms + 190ms. */
+  transition: opacity 190ms cubic-bezier(0.22, 1, 0.36, 1) 100ms;
+}
+
+.remind-splash-overlay .remind-splash {
+  opacity: 1;
+  transition: opacity 85ms ease-out;
+}
+
+.remind-splash-overlay-hiding .remind-splash {
+  opacity: 0;
 }
 
 .remind-splash-overlay-hiding {
@@ -399,7 +411,8 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .remind-splash-overlay {
+  .remind-splash-overlay,
+  .remind-splash-overlay .remind-splash {
     transition: none;
   }
 }
