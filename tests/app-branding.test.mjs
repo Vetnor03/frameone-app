@@ -54,7 +54,7 @@ test('custom launch splash is distinct from the app icon and matches native star
   assert.match(splash, /remind-splash-logo/)
   assert.match(splash, /viewBox="0 0 300 60"/)
   assert.match(splash, /strokeWidth="2\.4"/)
-  assert.match(splash, /M261 0V60H277/)
+  assert.match(splash, /M261 0V60H275/)
   assert.match(styles, /transition: opacity 220ms/)
   assert.doesNotMatch(styles, /@keyframes remind-wordmark-expand/)
 })
