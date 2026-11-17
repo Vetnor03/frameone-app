@@ -1,13 +1,15 @@
+import type { WasteAddress, WasteCollection } from './providers.ts'
+
 /**
  * Manual pilot-only waste pickup schedules.
  *
  * These are EXACT dates taken from the named provider's timetable, not a repeating
  * prediction or an iCal integration. No live update occurs and no future dates
- * may be inferred. Associate with the matching pilot account/frame only once it
- * has been paired and its address has been verified.
+ * may be inferred. A user can select any of these shared test addresses
+ * in Connect. Never associate these dates with a particular tester or frame.
  *
- * Never import this module into client-side components: manual pilot data must be
- * delivered to the intended frame only.
+ * Keep this module server-side; return only public address search results and
+ * the chosen user's own collection items through authenticated endpoints.
  */
 export type PilotWasteFraction = 'restavfall' | 'matavfall' | 'papir' | 'plast' | 'glass_metall' | 'hazardous' | 'hageavfall'
 export type PilotWastePickup = {
@@ -239,4 +241,81 @@ export function pilotWasteScheduleForAddress(streetName: string, houseNumber: st
     normalized(schedule.address.houseNumber) === normalized(houseNumber) &&
     normalized(schedule.address.postalCode) === normalized(postalCode)
   ) || null
+}
+
+/** No live provider integration is used during the pilot. */
+const MUNICIPALITIES: Record<string, { number: string; name: string }> = {
+  'trondheim-haldor-flatens-veg-27': { number: '5001', name: 'Trondheim' },
+  'fredrikstad-rodsmyraskogen-21': { number: '3107', name: 'Fredrikstad' },
+  'alesund-hatlen-55b': { number: '1508', name: 'Ålesund' },
+  'stavanger-bjorn-farmanns-gate-57b': { number: '1103', name: 'Stavanger' },
+  'moss-goenveien-5a': { number: '3103', name: 'Moss' },
+  'stavanger-boganesstraen-36b': { number: '1103', name: 'Stavanger' },
+}
+
+function pilotAddress(schedule: PilotWasteSchedule): WasteAddress | null {
+  const municipality = MUNICIPALITIES[schedule.key]
+  if (!municipality) return null
+  const { streetName, houseNumber, postalCode, postalPlace } = schedule.address
+  return {
+    addressId: `pilot:${schedule.key}`,
+    label: `${streetName} ${houseNumber}, ${postalCode} ${postalPlace}`,
+    municipalityNumber: municipality.number,
+    municipalityName: municipality.name,
+    streetName,
+    houseNumber: houseNumber.replace(/[^0-9]/g, ''),
+    houseLetter: houseNumber.match(/[a-z]+$/i)?.[0] || undefined,
+    postalCode,
+    postalPlace,
+  }
+}
+
+const normalizeSearch = (input: string) => input
+  .normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/æ/gi, 'ae')
+  .replace(/ø/gi, 'o')
+  .toLocaleLowerCase('nb-NO')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim()
+
+/**
+ * Return only the six verified addresses. There is no external search or
+ * opportunistic fallback to unsupported municipal providers during the pilot.
+ */
+export function searchPilotWasteAddresses(query: string): WasteAddress[] {
+  if (query.trim().length < 3) return []
+  const tokens = normalizeSearch(query).split(/\s+/).filter(Boolean)
+  return PILOT_WASTE_SCHEDULES.flatMap((schedule) => {
+    const address = pilotAddress(schedule)
+    if (!address) return []
+    const searchText = normalizeSearch(`${address.label} ${address.municipalityName}`)
+    return tokens.every(token => searchText.includes(token)) ? [address] : []
+  })
+}
+
+/** Never trust caller-provided labels or address coordinates when connecting. */
+export function resolvePilotWasteAddress(selection: Pick<WasteAddress, 'addressId' | 'municipalityNumber'>): {
+  address: WasteAddress
+  schedule: PilotWasteSchedule
+} | null {
+  const schedule = PILOT_WASTE_SCHEDULES.find(item => `pilot:${item.key}` === selection.addressId)
+  if (!schedule) return null
+  const address = pilotAddress(schedule)
+  if (!address || address.municipalityNumber !== selection.municipalityNumber) return null
+  return { address, schedule }
+}
+
+/** Static collections from the source photographs; never generate recurring dates. */
+export function pilotWasteCollections(schedule: PilotWasteSchedule): WasteCollection[] {
+  return schedule.pickups.filter(pickup => !pickup.starred).flatMap(pickup =>
+    pickup.fractions.map(fraction => ({
+      date: pickup.date,
+      rawType: fraction,
+      normalizedType: fraction,
+      originalLabel: fraction,
+      semanticSource: 'visible_text' as const,
+      providerEventId: `pilot:${schedule.key}:${pickup.date}:${fraction}`,
+    }))
+  )
 }
