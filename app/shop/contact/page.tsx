@@ -1,3 +1,4 @@
+import { CONTACT_EMAIL } from '@/app/lib/contactEmail'
 import type { Metadata } from 'next'
 import CompanyPageShell from '../CompanyPageShell'
 import { shopMetadata } from '../seo'
@@ -26,10 +27,10 @@ export default async function ContactPage({ searchParams }: { searchParams?: Pro
         <div className="p-7 sm:p-10 md:p-14">
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-black/45">{isNorwegian ? 'KUNDESERVICE' : <>General &amp; customer care</>}</p>
           <a
-            href="mailto:support@re-mind.no"
+            href={`mailto:${CONTACT_EMAIL}`}
             className="mt-5 block break-all text-2xl font-medium tracking-[-0.025em] underline decoration-black/20 underline-offset-8 sm:text-3xl"
           >
-            support@re-mind.no
+            {CONTACT_EMAIL}
           </a>
           <p className="mt-7 max-w-[52ch] text-[15px] leading-7 text-black/60">
             {isNorwegian ? 'Gjelder det en bestilling, legg ved ordrenummeret. For produkthjelp kan du beskrive hva du opplever og gjerne legge ved et bilde dersom det gjør problemet lettere å forstå.' : 'For help with an order, include your order number. For product support, tell us what you are seeing and attach a photo if it helps explain the issue.'}

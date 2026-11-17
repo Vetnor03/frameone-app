@@ -1,5 +1,7 @@
 'use client'
 
+import { CONTACT_EMAIL } from '@/app/lib/contactEmail'
+
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ShopLegalPage from '../components/ShopLegalPage'
@@ -30,7 +32,7 @@ const englishSections = [
   },
   {
     title: 'Contact',
-    text: 'If you have questions about our use of cookies or similar browser storage, contact us at support@re-mind.no.',
+    text: `If you have questions about our use of cookies or similar browser storage, contact us at ${CONTACT_EMAIL}.`,
   },
 ]
 
@@ -60,7 +62,7 @@ const norwegianSections = [
     text: (
       <>
         Har du spørsmål om vår bruk av informasjonskapsler eller annen lagring i nettleseren, kan du kontakte oss på{' '}
-        <a href="mailto:support@re-mind.no">support@re-mind.no</a>.
+        <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
       </>
     ),
   },

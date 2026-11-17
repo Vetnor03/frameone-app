@@ -1,3 +1,4 @@
+import { CONTACT_EMAIL } from '@/app/lib/contactEmail'
 import { Resend } from 'resend'
 
 export type IntegrationRequestForNotification = {
@@ -11,15 +12,14 @@ const SENDER = 'RE:MIND <login@re-mind.no>'
 
 export async function sendIntegrationRequestNotification(request: IntegrationRequestForNotification): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY
-  const recipient = process.env.INTEGRATION_REQUEST_NOTIFY_EMAIL?.trim()
+  const recipient = CONTACT_EMAIL
 
   // This is an internal notification. Neither the recipient nor the email
   // delivery result is included in responses to users.
-  if (!apiKey || !recipient) {
-    console.error('[integration-requests] Notification email is not configured.', {
+  if (!apiKey) {
+    console.error('[integration-requests] Notification email cannot be sent: RESEND_API_KEY is missing.', {
       requestId: request.id,
       missingApiKey: !apiKey,
-      missingRecipient: !recipient,
     })
     return false
   }

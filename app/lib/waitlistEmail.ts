@@ -1,3 +1,4 @@
+import { CONTACT_EMAIL } from '@/app/lib/contactEmail'
 import { Resend } from 'resend'
 
 type WaitlistWelcomeSignup = {
@@ -24,7 +25,7 @@ const WAITLIST_SUBJECT = 'Thank you for joining the RE:MIND waitlist'
 const INTEREST_WAITLIST_SUBJECT = 'Tusen takk for at du meldte interesse for RE:MIND'
 const WAITLIST_NOTIFICATION_SUBJECT = 'New RE:MIND waitlist signup'
 const WAITLIST_SENDER = 'RE:MIND <login@re-mind.no>'
-const DEFAULT_REPLY_TO = 'vetlecn@live.no'
+const DEFAULT_REPLY_TO = CONTACT_EMAIL
 
 function escapeHtml(value: string) {
   return value
@@ -239,7 +240,7 @@ export async function sendWaitlistWelcomeEmail(signup: WaitlistWelcomeSignup) {
   const { text, html } = isInterestSignup
     ? buildInterestWaitlistWelcomeEmail(signup)
     : buildWaitlistWelcomeEmail(signup)
-  const replyTo = process.env.WAITLIST_REPLY_TO?.trim() || DEFAULT_REPLY_TO
+  const replyTo = DEFAULT_REPLY_TO
   const subject = isInterestSignup ? INTEREST_WAITLIST_SUBJECT : WAITLIST_SUBJECT
 
   try {
@@ -281,18 +282,10 @@ export async function sendWaitlistNotificationEmail(
   submittedFields: SubmittedWaitlistFields = {},
 ) {
   const apiKey = process.env.RESEND_API_KEY
-  const notifyEmail = process.env.WAITLIST_NOTIFY_EMAIL?.trim()
+  const notifyEmail = CONTACT_EMAIL
 
   // Internal/private notification only: the waitlist user is never included as a recipient,
   // CC, or BCC, and notification details are not returned to the frontend.
-  if (!notifyEmail) {
-    console.warn('[waitlist] Skipping internal notification because WAITLIST_NOTIFY_EMAIL is not configured.', {
-      emailDomain: signup.email.split('@')[1] || 'unknown',
-      waitlistNumber: signup.waitlist_number,
-    })
-    return
-  }
-
   if (!apiKey) {
     console.warn('[waitlist] Skipping internal notification because RESEND_API_KEY is not configured.', {
       emailDomain: signup.email.split('@')[1] || 'unknown',

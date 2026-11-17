@@ -1,8 +1,9 @@
+import { CONTACT_EMAIL } from '@/app/lib/contactEmail'
 import { Resend } from 'resend'
 import { PILOT_DEADLINE_LABEL } from '@/app/lib/pilotApplicationDeadline'
 
 const PILOT_EMAIL_FROM = 'RE:MIND <login@re-mind.no>'
-const PILOT_REPLY_TO = 'vetlecn@live.no'
+const PILOT_REPLY_TO = CONTACT_EMAIL
 const PILOT_EMAIL_SUBJECT = 'Takk for interessen for RE:MIND – vi har mottatt påmeldingen din'
 
 function escapeHtml(value: string) {

@@ -48,7 +48,7 @@ test('Press Room provides the requested Norwegian copy while retaining English',
 test('Press Room preserves navigation, contact and asset download behavior', () => {
   assert.match(page, /backLabel=\{isNorwegian \? 'TILBAKE TIL FORSIDEN' : 'Back to home'\}/)
   assert.match(shell, /href=\{`\/shop\?lang=\$\{language\}`\}/)
-  assert.match(page, /href="mailto:support@re-mind\.no\?subject=Press%20enquiry"/)
+  assert.match(page, /href=\{`mailto:\$\{CONTACT_EMAIL\}\?subject=Press%20enquiry`\}/)
   assert.match(page, /src: '\/AppLogo\.png'/)
   assert.match(page, /src: '\/Logo\.png'/)
   assert.doesNotMatch(page, /r_Logo\.png|R:-logo|R: logo/)

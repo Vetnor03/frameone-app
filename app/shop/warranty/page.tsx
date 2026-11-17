@@ -1,3 +1,4 @@
+import { CONTACT_EMAIL } from '@/app/lib/contactEmail'
 import type { Metadata } from 'next'
 import ShopLegalPage from '../../components/ShopLegalPage'
 import { pickShopLocale } from '../productData'
@@ -80,7 +81,7 @@ export default async function WarrantyPage({ searchParams }: { searchParams?: Pr
           title: isNorwegian ? 'TRENGER DU HJELP?' : 'Need help?',
           text: (
             <div className="space-y-4">
-              <p>{isNorwegian ? 'Dersom noe ikke fungerer som det skal, kan du kontakte oss på ' : <>If something isn&apos;t working as it should, contact us at </>}<a className="underline underline-offset-4" href="mailto:support@re-mind.no">support@re-mind.no</a>{isNorwegian ? '. Legg ved ordreinformasjonen din og en kort beskrivelse av problemet.' : ' with your order information and a short description of the problem.'}</p>
+              <p>{isNorwegian ? 'Dersom noe ikke fungerer som det skal, kan du kontakte oss på ' : <>If something isn&apos;t working as it should, contact us at </>}<a className="underline underline-offset-4" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>{isNorwegian ? '. Legg ved ordreinformasjonen din og en kort beskrivelse av problemet.' : ' with your order information and a short description of the problem.'}</p>
               <p>{isNorwegian ? 'Vi kan be om bilder eller ytterligere informasjon dersom det er nødvendig for å finne årsaken til problemet.' : 'Photos or additional information may be requested where useful to diagnose the issue.'}</p>
               <p>{isNorwegian ? 'Vi hjelper deg med å finne riktig løsning videre.' : <>We&apos;ll help determine the appropriate next step.</>}</p>
             </div>

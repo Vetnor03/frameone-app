@@ -1,3 +1,4 @@
+import { CONTACT_EMAIL } from '@/app/lib/contactEmail'
 import Image from 'next/image'
 import type { Metadata } from 'next'
 import CompanyPageShell from '../CompanyPageShell'
@@ -42,7 +43,7 @@ export default async function PressPage({ searchParams }: { searchParams?: Promi
             <div className="flex justify-between gap-6 py-4"><dt className="text-white/45">{isNorwegian ? 'Grunnlegger' : 'Founder'}</dt><dd>Vetle Norstad</dd></div>
             <div className="flex justify-between gap-6 py-4"><dt className="text-white/45">{isNorwegian ? 'Kategori' : 'Category'}</dt><dd>{isNorwegian ? 'Rolig teknologi' : 'Calm technology'}</dd></div>
           </dl>
-          <a href="mailto:support@re-mind.no?subject=Press%20enquiry" className="mt-9 inline-flex rounded-full bg-white px-6 py-3 text-sm font-medium text-black">
+          <a href={`mailto:${CONTACT_EMAIL}?subject=Press%20enquiry`} className="mt-9 inline-flex rounded-full bg-white px-6 py-3 text-sm font-medium text-black">
             {isNorwegian ? 'KONTAKT OSS' : 'Contact press team'}
           </a>
         </article>
