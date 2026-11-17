@@ -28,7 +28,7 @@ import { isUpcomingIntegratedCalendarItem } from './lib/device/calendarVisibilit
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, getLocalEventPlace, normalizeLocalEventAreaPreference, nationwideLocalEventArea, type LocalEventAreaPreference } from './lib/integrations/local-events/places'
 import { localEventGroupKeyFromRaw, groupSkipId } from './lib/integrations/local-events/grouping'
-import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
+import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationMatchesSearch, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
 const WasteSetupModal = dynamic(() => import('./components/WasteSetupModal'))
 const IntegrationRequestCard = dynamic(() => import('./components/IntegrationRequestCard'))
 import AppSheet, { AppSheetVisibilityContext } from './components/AppSheet'
@@ -3519,6 +3519,7 @@ function ConnectAppsScreen({
     if (initialTeamsOAuthStatus === 'error') return initialTeamsOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Teams' : 'Could not connect Teams')
     return null
   })
+  const [connectSearch, setConnectSearch] = useState('')
   const [, setSpondConnected] = useState(false)
   const [spondAccount, setSpondAccount] = useState<string | null>(null)
   const [spondAccountConnected, setSpondAccountConnected] = useState(false)
@@ -4085,7 +4086,9 @@ function ConnectAppsScreen({
       setLocalEventsStatusFailed(true)
     })
   }, [activeDeviceId])
-  const apps = INTEGRATION_CATALOGUE.filter(definition => !startup || (definition.connectable && (definition.status === 'available' || definition.key === 'spond'))).map(definition => ({
+  const apps = INTEGRATION_CATALOGUE.filter(definition => !startup || (definition.connectable && (definition.status === 'available' || definition.key === 'spond')))
+    .filter(definition => startup || integrationMatchesSearch(definition, connectSearch))
+    .map(definition => ({
     ...definition,
     name: definition.name[language],
     description: definition.description[language],
@@ -4176,6 +4179,37 @@ function ConnectAppsScreen({
           </div>
         </div>}
 
+
+        {!startup && (
+          <div role="search" className="relative mt-4">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-[color:var(--fg-45)]">
+              <circle cx="10.8" cy="10.8" r="6.4" />
+              <path d="m16 16 4 4" />
+            </svg>
+            <input
+              type="search"
+              value={connectSearch}
+              onChange={(event) => setConnectSearch(event.target.value)}
+              placeholder={language === 'no' ? 'Søk etter apper' : 'Search apps'}
+              aria-label={language === 'no' ? 'Søk etter apper' : 'Search apps'}
+              autoComplete="off"
+              className="h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] pl-10 pr-11 text-sm text-[color:var(--fg-90)] placeholder:text-[color:var(--fg-45)] outline-none focus:border-[#2aa3ff] [&::-webkit-search-cancel-button]:hidden"
+            />
+            {connectSearch.length > 0 && (
+              <button
+                type="button"
+                aria-label={language === 'no' ? 'Tøm søk' : 'Clear search'}
+                onClick={() => setConnectSearch('')}
+                className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-[color:var(--fg-45)] hover:text-[color:var(--fg-90)] focus-visible:outline-2 focus-visible:outline-[#2aa3ff]"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-4 w-4">
+                  <path d="m6 6 12 12M18 6 6 18" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
+
         {asTab && !remindersVisibleOnFrame && (
           <div role="note" className="mt-4 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 py-3 text-xs leading-snug text-[color:var(--fg-70)]">
             {language === 'no'
@@ -4185,6 +4219,13 @@ function ConnectAppsScreen({
         )}
 
         <div className={`${startup ? '' : 'mt-4'} space-y-2.5`}>
+
+          {!startup && connectSearch.trim() && sortedApps.length === 0 && (
+            <div role="status" className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-6 text-center">
+              <p className="text-sm font-medium text-[color:var(--fg-90)]">{language === 'no' ? 'Ingen apper funnet' : 'No matching apps'}</p>
+              <p className="mt-1 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Prøv et annet søk, eller foreslå en integrasjon nedenfor.' : 'Try another search, or request an integration below.'}</p>
+            </div>
+          )}
           {sortedApps.map(({ app, connected }) => {
             const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : app.key === 'google-calendar' ? integrationSetupErrors['google-calendar'] : null
             const localEventsSelectedName = localEventsSavedArea ? (localEventsSavedArea.placeLabel || getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || '') : null

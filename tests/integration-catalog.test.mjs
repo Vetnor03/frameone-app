@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { INTEGRATION_CATALOGUE, integrationStatusLabel } from '../app/lib/integrations/catalog.ts'
+import { INTEGRATION_CATALOGUE, integrationMatchesSearch, integrationStatusLabel } from '../app/lib/integrations/catalog.ts'
 
 test('shared integrations are ordered and expose lifecycle capabilities', () => {
   assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'google-calendar', 'local-events', 'spond', 'waste', 'vigilo', 'transponder', 'planta'])
@@ -16,4 +16,15 @@ test('shared integrations are ordered and expose lifecycle capabilities', () => 
   }
   assert.equal(integrationStatusLabel('experimental', 'en'), 'Experimental')
   assert.equal(integrationStatusLabel('under-evaluation', 'en'), 'Under evaluation')
+})
+
+test('Connect Apps search matches names, localizations and evaluation statuses', () => {
+  const keys = (query) => INTEGRATION_CATALOGUE.filter(item => integrationMatchesSearch(item, query)).map(item => item.key)
+  assert.deepEqual(keys(' PLanTa '), ['planta'])
+  assert.deepEqual(keys('Renovasjon'), ['waste'])
+  assert.deepEqual(keys('calendar'), ['google-calendar'])
+  assert.deepEqual(keys('under evaluation'), ['waste', 'vigilo', 'transponder', 'planta'])
+  assert.deepEqual(keys('under vurdering'), ['waste', 'vigilo', 'transponder', 'planta'])
+  assert.deepEqual(keys('not a real integration'), [])
+  assert.deepEqual(keys('  '), INTEGRATION_CATALOGUE.map(item => item.key))
 })
