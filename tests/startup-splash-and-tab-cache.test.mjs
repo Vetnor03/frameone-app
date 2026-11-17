@@ -47,6 +47,7 @@ test('ready app appears only after a two-phase splash handoff without logo ghost
   assert.match(styles,/animation: remind-startup-logo-reveal 180ms ease-out 300ms both;/)
   assert.match(styles,/\.remind-splash-overlay-hiding \.remind-splash-reveal\s*\{\s*animation-play-state: paused;/)
   assert.match(splash,/className="remind-splash-reveal"/)
+  assert.match(styles,/\.remind-splash-reveal\s*\{\s*animation: none;/)
   assert.doesNotMatch(layout,/startupImage:/)
   assert.match(styles,/\.remind-splash-overlay-hiding\s*\{\s*opacity: 0/)
   assert.match(home,/window\.setTimeout\(\(\) => setShowSplash\(false\), reducedMotion \? 0 : 320\)/)
