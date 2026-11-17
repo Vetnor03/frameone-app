@@ -51,9 +51,9 @@ test('ready app appears via a real opacity crossfade without stale overlays',()=
 
 test('native launch and web splash use the same static monoline wordmark',()=>{
   assert.match(splash,/viewBox="0 0 300 60"/)
-  assert.match(splash,/strokeWidth="1\.7"/)
+  assert.match(splash,/strokeWidth="2\.4"/)
   assert.match(splash,/M261 0V60H277/)
-  assert.match(styles,/width: min\(77vw, 336px\)/)
+  assert.match(styles,/width: min\(52vw, 220px\)/)
   assert.match(home,/return <StartupSplash language=\{language\} \/>/)
   assert.doesNotMatch(styles,/remind-wordmark-expand/)
 })
