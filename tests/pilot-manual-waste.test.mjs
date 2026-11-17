@@ -5,7 +5,7 @@ import { PILOT_WASTE_SCHEDULES, pilotWasteScheduleForAddress } from '../app/lib/
 test('Trondheim pilot schedule uses only the six exact dates and fractions supplied by Trondheim Renholdsverk', () => {
   const schedule = pilotWasteScheduleForAddress('Haldor Flatens veg', '27', '7081')
   assert.ok(schedule)
-  assert.equal(PILOT_WASTE_SCHEDULES.length, 4)
+  assert.equal(PILOT_WASTE_SCHEDULES.length, 5)
   assert.equal(schedule.source.includes('Trondheim Renholdsverk'), true)
   assert.deepEqual(schedule.pickups, [
     { date: '2026-11-03', fractions: ['restavfall', 'matavfall'] },
@@ -133,4 +133,28 @@ test('Stavanger pilot address lookup requires exact house letter and postcode', 
   assert.equal(pilotWasteScheduleForAddress('Bjørn Farmanns gate', '57A', '4041'), null)
   assert.equal(pilotWasteScheduleForAddress('Bjørn Farmanns gate', '57B', '4042'), null)
   assert.equal(pilotWasteScheduleForAddress('BJØRN FARMANNS GATE', '57b', '4041')?.key, 'stavanger-bjorn-farmanns-gate-57b')
+})
+
+test('MOVAR PDF for Goenveien 5A contains precisely seven dates through 23 December 2026', () => {
+  const schedule = pilotWasteScheduleForAddress('Goenveien', '5A', '1580')
+  assert.ok(schedule)
+  assert.equal(schedule.source.includes('MOVAR'), true)
+  assert.equal(schedule.lastProvidedPickup, '2026-12-23')
+  assert.deepEqual(schedule.pickups, [
+    { date: '2026-11-18', fractions: ['restavfall'] },
+    { date: '2026-11-25', fractions: ['matavfall', 'plast'] },
+    { date: '2026-12-02', fractions: ['restavfall'] },
+    { date: '2026-12-03', fractions: ['papir'] },
+    { date: '2026-12-09', fractions: ['glass_metall', 'matavfall'] },
+    { date: '2026-12-16', fractions: ['restavfall'] },
+    { date: '2026-12-23', fractions: ['matavfall', 'plast'] },
+  ])
+  assert.equal(schedule.pickups.some(item => item.date > '2026-12-23'), false)
+})
+
+test('MOVAR manual timetable applies only to exact Goenveien 5A address', () => {
+  assert.equal(pilotWasteScheduleForAddress('Goenveien', '5', '1580'), null)
+  assert.equal(pilotWasteScheduleForAddress('Goenveien', '5B', '1580'), null)
+  assert.equal(pilotWasteScheduleForAddress('Goenveien', '5A', '1581'), null)
+  assert.equal(pilotWasteScheduleForAddress('GOENVEIEN', '5a', '1580')?.key, 'moss-goenveien-5a')
 })
