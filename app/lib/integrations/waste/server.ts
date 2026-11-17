@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
 import { createHash } from 'node:crypto'
-import { providerForAddress, searchKartverketAddresses, WasteProviderError, wasteCollectionTitle, type ProviderFamily, type WasteAddress, type WasteCollection } from './providers'
+import { providerForAddress, WasteProviderError, wasteCollectionTitle, type ProviderFamily, type WasteAddress, type WasteCollection } from './providers'
+import { pilotWasteCollections, resolvePilotWasteAddress, searchPilotWasteAddresses } from './pilotManualSchedules'
 import { norwayLocalYmd } from './date'
 import { wasteCachePlan } from './cache'
 import { wasteCollectionDisplayTitle, type WasteDisplayLanguage } from './display.ts'
@@ -9,18 +10,20 @@ export { norwayLocalYmd } from './date'
 export const WASTE_PROVIDER = 'waste'
 export const WASTE_UNSUPPORTED_MESSAGE = 'Waste collection isn’t available for this address yet.'
 
-const collectionIdentity = (family: ProviderFamily, address: WasteAddress, item: WasteCollection) => item.providerEventId
+type WasteSourceFamily = ProviderFamily | 'pilot_manual'
+
+const collectionIdentity = (family: WasteSourceFamily, address: WasteAddress, item: WasteCollection) => item.providerEventId
   ? `event:${item.providerEventId}`
   : item.providerTypeId
     ? `fraction:${item.providerTypeId}:${item.date}`
     : `raw:${family}:${address.addressId}:${item.date}:${item.rawType.toLocaleLowerCase('nb-NO')}`
 
-const externalId = (family: ProviderFamily, address: WasteAddress, date: string, items: WasteCollection[]) => {
+const externalId = (family: WasteSourceFamily, address: WasteAddress, date: string, items: WasteCollection[]) => {
   const identities = items.map(item => collectionIdentity(family, address, item)).sort().join('|')
   return `${address.municipalityNumber}:${address.addressId}:${date}:${createHash('sha256').update(identities).digest('hex').slice(0, 24)}`
 }
 
-export function wasteRows(userId: string, address: WasteAddress, collections: WasteCollection[], boundaryDate = norwayLocalYmd(), family: ProviderFamily = providerForAddress(address).family) {
+export function wasteRows(userId: string, address: WasteAddress, collections: WasteCollection[], boundaryDate = norwayLocalYmd(), family: WasteSourceFamily = providerForAddress(address).family) {
   const grouped = new Map<string, WasteCollection[]>()
   for (const item of collections) {
     if (item.date < boundaryDate) continue
@@ -44,9 +47,11 @@ export function wasteRows(userId: string, address: WasteAddress, collections: Wa
 }
 
 async function fetchForAddress(address: WasteAddress) {
-  const provider = providerForAddress(address)
-  const resolved = await provider.resolveAddress(address)
-  return { resolved, family: provider.family, collections: provider.normalizeCollections(await provider.fetchCollections(resolved)) }
+  // During the pilot only the six manually verified addresses can connect.
+  // Resolve IDs on the server; ignore all client-supplied address fields.
+  const selected = resolvePilotWasteAddress(address)
+  if (!selected) throw new WasteProviderError('unsupported', 'Waste collection is only available for the six test addresses for now.', false)
+  return { resolved: selected.address, family: 'pilot_manual' as const, collections: pilotWasteCollections(selected.schedule) }
 }
 
 export async function refreshWasteForUser(userId: string, address?: WasteAddress) {
@@ -61,7 +66,8 @@ export async function refreshWasteForUser(userId: string, address?: WasteAddress
   try {
     const { resolved, family, collections } = await fetchForAddress(selected)
     const rows = wasteRows(userId, resolved, collections, norwayLocalYmd(), family)
-    if (!rows.length) throw new WasteProviderError('invalid_response', 'The provider returned no future waste collections.')
+    // A finite static pilot calendar can naturally expire. Keep the connection
+    // without predicting new dates or treating the exhausted calendar as an API failure.
     const boundaryDate = norwayLocalYmd()
     const { data: previous, error: previousError } = await db.from('integration_items').select('external_id').eq('user_id', userId).eq('provider', WASTE_PROVIDER).gte('raw->>date', boundaryDate)
     if (previousError) throw new Error(previousError.message)
@@ -88,7 +94,7 @@ export async function previewWasteAddress(address: WasteAddress, language: Waste
   return { status: 'preview' as const, resolvedAddress: resolved, previewItems: wasteRows('preview', resolved, collections, norwayLocalYmd(), family).slice(0, 3).map(row => ({ date: row.raw.date, title: wasteCollectionDisplayTitle(row.raw.normalized_type, language, row.raw.original_provider_label) })) }
 }
 
-export async function searchWasteAddresses(query: string) { return searchKartverketAddresses(query) }
+export async function searchWasteAddresses(query: string) { return searchPilotWasteAddresses(query) }
 export async function connectWasteForUser(userId: string, address: WasteAddress) { return refreshWasteForUser(userId, address) }
 
 export async function disconnectWasteForUser(userId: string) {
@@ -104,8 +110,11 @@ export async function getWasteStatus(userId: string) {
 }
 
 export async function syncAllWasteUsers() {
-  const { data, error } = await getSupabaseAdmin().from('user_integrations').select('user_id').eq('provider', WASTE_PROVIDER).eq('status', 'connected')
+  const { data, error } = await getSupabaseAdmin().from('user_integrations').select('user_id,encrypted_credentials').eq('provider', WASTE_PROVIDER).eq('status', 'connected')
   if (error) throw new Error(error.message)
-  const results = await Promise.allSettled((data || []).map(row => refreshWasteForUser(row.user_id)))
+  // Ignore any saved legacy/non-pilot connection instead of calling unstable
+  // external provider APIs after reopening the Connect card.
+  const manualUsers = (data || []).filter(row => resolvePilotWasteAddress(row.encrypted_credentials?.address || {}))
+  const results = await Promise.allSettled(manualUsers.map(row => refreshWasteForUser(row.user_id)))
   return { processed: results.length, succeeded: results.filter(x => x.status === 'fulfilled').length, failed: results.filter(x => x.status === 'rejected').length }
 }
