@@ -2,7 +2,8 @@
 // wordmark, optically centered against the same light-theme launch background.
 export function StartupWordmark() {
   return (
-    <div className="remind-splash text-[color:var(--fg)]">
+    <div className="remind-splash-reveal">
+      <div className="remind-splash text-[color:var(--fg)]">
       <svg className="remind-splash-logo" viewBox="0 0 300 60" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M0 60V0H17C37 0 38 31 17 31H0" />
         <path d="M17 31L34 60" />
@@ -14,6 +15,7 @@ export function StartupWordmark() {
         <path d="M205 60V0L245 60V0" />
         <path d="M261 0V60H275C293 60 300 47 300 30C300 13 293 0 275 0H261" />
       </svg>
+      </div>
     </div>
   )
 }
