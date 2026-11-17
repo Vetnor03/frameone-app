@@ -3,7 +3,7 @@
 // strokes to a PNG using Node's built-in zlib. These are build assets, not UI data.
 import { deflateSync } from 'node:zlib'
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { resolve, dirname, join } from 'node:path'
+import { resolve, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { iosPortraitLaunchSizes } from '../app/lib/iosStartupImages.mjs'
 
@@ -32,13 +32,12 @@ function chunk(type, payload) {
   return out
 }
 
-function paintLogo(raw, width, height) {
+function paintLogo(raw, width, height, dpr) {
   const rowBytes = width * 3 + 1
   // Use CSS-point proportions regardless of DPR.
-  const logicalWidth = width / 3
-  const logicalHeight = height / 3
+  const logicalWidth = width / dpr
   const factor = Math.min(1.12, logicalWidth * 0.77 / 300)
-  const scale = (width / logicalWidth) * factor
+  const scale = dpr * factor
   const ox = (width - 300 * scale) / 2
   const oy = (height - 60 * scale) / 2
   const stroke = 1.7 * scale
@@ -89,7 +88,7 @@ function paintLogo(raw, width, height) {
   path(261, [[0,0],[0,60],[16,60],[30,54],[38,42],[39,30],[38,18],[30,6],[16,0],[0,0]])
 }
 
-export function renderStartupPng(width, height) {
+export function renderStartupPng(width, height, dpr = 3) {
   if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1 || width > 3500 || height > 4000) {
     throw new Error('Invalid iOS startup PNG size')
   }
@@ -105,7 +104,7 @@ export function renderStartupPng(width, height) {
   }
   // All configured sizes are @3 except older @2 devices. The logo takes the
   // same share of the viewport whether the image is 2x or 3x.
-  paintLogo(raw, width, height)
+  paintLogo(raw, width, height, dpr)
   const ihdr = Buffer.alloc(13)
   ihdr.writeUInt32BE(width, 0)
   ihdr.writeUInt32BE(height, 4)
@@ -123,7 +122,7 @@ export function generateStartupImages(targetDir = resolve(process.cwd(), 'public
   mkdirSync(targetDir, { recursive: true })
   for (const [pointsWidth, pointsHeight, dpr] of iosPortraitLaunchSizes) {
     const width = pointsWidth * dpr, height = pointsHeight * dpr
-    writeFileSync(join(targetDir, `${width}x${height}.png`), renderStartupPng(width, height))
+    writeFileSync(join(targetDir, `${width}x${height}.png`), renderStartupPng(width, height, dpr))
   }
 }
 
