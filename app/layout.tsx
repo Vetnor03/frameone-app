@@ -3,6 +3,7 @@ import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { versionedIconPath } from "./lib/iconVersion";
 import { THEME_STORAGE_KEY } from "./lib/theme";
+import { iosLaunchStartupImages } from "./lib/iosStartupImages.mjs";
 
 const themeBootstrapScript = `
   (function () {
@@ -30,6 +31,9 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "RE:MIND",
+    // iOS does not use manifest.background_color for Home Screen launch.
+    // Exact physical-pixel images fill the native pre-webview interval.
+    startupImage: iosLaunchStartupImages,
   },
 };
 
