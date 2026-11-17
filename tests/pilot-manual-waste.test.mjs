@@ -5,7 +5,7 @@ import { PILOT_WASTE_SCHEDULES, pilotWasteScheduleForAddress } from '../app/lib/
 test('Trondheim pilot schedule uses only the six exact dates and fractions supplied by Trondheim Renholdsverk', () => {
   const schedule = pilotWasteScheduleForAddress('Haldor Flatens veg', '27', '7081')
   assert.ok(schedule)
-  assert.equal(PILOT_WASTE_SCHEDULES.length, 5)
+  assert.equal(PILOT_WASTE_SCHEDULES.length, 6)
   assert.equal(schedule.source.includes('Trondheim Renholdsverk'), true)
   assert.deepEqual(schedule.pickups, [
     { date: '2026-11-03', fractions: ['restavfall', 'matavfall'] },
@@ -157,4 +157,49 @@ test('MOVAR manual timetable applies only to exact Goenveien 5A address', () => 
   assert.equal(pilotWasteScheduleForAddress('Goenveien', '5B', '1580'), null)
   assert.equal(pilotWasteScheduleForAddress('Goenveien', '5A', '1581'), null)
   assert.equal(pilotWasteScheduleForAddress('GOENVEIEN', '5a', '1580')?.key, 'moss-goenveien-5a')
+})
+
+test('Boganesstraen 36B uses precisely the photographed July–December 2026 dates', () => {
+  const schedule = pilotWasteScheduleForAddress('Boganesstraen', '36B', '4020')
+  assert.ok(schedule)
+  assert.equal(schedule.source.includes('Stavanger kommune'), true)
+  assert.equal(schedule.lastProvidedPickup, '2026-12-29')
+  const documented = [
+    ['2026-07-07', 'matavfall,hageavfall'],
+    ['2026-07-14', 'papir,restavfall'],
+    ['2026-07-21', 'matavfall,hageavfall'],
+    ['2026-07-28', 'restavfall'],
+    ['2026-08-04', 'matavfall,hageavfall'],
+    ['2026-08-11', 'papir,restavfall'],
+    ['2026-08-18', 'matavfall,hageavfall'],
+    ['2026-08-25', 'restavfall'],
+    ['2026-09-01', 'matavfall,hageavfall'],
+    ['2026-09-08', 'papir,restavfall'],
+    ['2026-09-15', 'matavfall,hageavfall'],
+    ['2026-09-22', 'restavfall'],
+    ['2026-09-29', 'matavfall,hageavfall'],
+    ['2026-10-06', 'papir,restavfall'],
+    ['2026-10-13', 'matavfall,hageavfall'],
+    ['2026-10-20', 'restavfall'],
+    ['2026-10-27', 'matavfall,hageavfall'],
+    ['2026-11-03', 'papir,restavfall'],
+    ['2026-11-10', 'matavfall,hageavfall'],
+    ['2026-11-17', 'restavfall'],
+    ['2026-11-24', 'matavfall,hageavfall'],
+    ['2026-12-01', 'papir,restavfall'],
+    ['2026-12-08', 'matavfall,hageavfall'],
+    ['2026-12-15', 'restavfall'],
+    ['2026-12-22', 'matavfall,hageavfall'],
+    ['2026-12-29', 'papir,restavfall'],
+  ]
+  assert.equal(documented.length, 26)
+  assert.deepEqual(schedule.pickups, documented.map(([date, fractions]) => ({date, fractions: fractions.split(',')})))
+  assert.equal(schedule.pickups.some(pickup => pickup.date.startsWith('2027-')), false)
+})
+
+test('Boganesstraen calendar cannot match wrong house number, letter or postcode', () => {
+  assert.equal(pilotWasteScheduleForAddress('Boganesstraen', '36', '4020'), null)
+  assert.equal(pilotWasteScheduleForAddress('Boganesstraen', '36A', '4020'), null)
+  assert.equal(pilotWasteScheduleForAddress('Boganesstraen', '36B', '4021'), null)
+  assert.equal(pilotWasteScheduleForAddress('BOGANESSTRAEN', '36b', '4020')?.key, 'stavanger-boganesstraen-36b')
 })
