@@ -385,6 +385,23 @@ a {
   transition: opacity 85ms ease-out;
 }
 
+/* iOS may paint a white native canvas before the web view. Never pop the logo
+   in for a 100ms warm launch: only reveal it if loading is sustained. */
+@keyframes remind-startup-logo-reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.remind-splash-reveal {
+  animation: remind-startup-logo-reveal 180ms ease-out 300ms both;
+}
+
+/* Freeze the entrance when boot finishes so its delayed keyframe cannot
+   restart while the wordmark exits behind the opaque splash canvas. */
+.remind-splash-overlay-hiding .remind-splash-reveal {
+  animation-play-state: paused;
+}
+
 .remind-splash-overlay-hiding .remind-splash {
   opacity: 0;
 }
@@ -414,6 +431,9 @@ a {
   .remind-splash-overlay,
   .remind-splash-overlay .remind-splash {
     transition: none;
+  }
+  .remind-splash-reveal {
+    animation: none;
   }
 }
 
