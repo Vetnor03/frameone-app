@@ -32,6 +32,7 @@ import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationStatusLabe
 const WasteSetupModal = dynamic(() => import('./components/WasteSetupModal'))
 const IntegrationRequestCard = dynamic(() => import('./components/IntegrationRequestCard'))
 import AppSheet, { AppSheetVisibilityContext } from './components/AppSheet'
+import { StartupSplash } from './components/StartupSplash'
 const NewsModuleSettingsTab = dynamic(() => import('./components/NewsModuleSettingsTab'))
 const SkiModuleSettingsTab = dynamic(() => import('./components/SkiModuleSettingsTab'))
 import { wasteCollectionDisplayTitle } from './lib/integrations/waste/display'
@@ -1192,36 +1193,7 @@ function isSpotReadyForExperience(spotLabel: string, spotId: string) {
 }
 
 function ReMindSplash({ language }: { language: AppLanguage }) {
-  return (
-    <div
-      className="flex-1 flex items-center justify-center"
-      role="status"
-      aria-live="polite"
-      aria-label={tx(language).loadingFrame}
-    >
-      <div className="remind-splash text-[color:var(--fg)]">
-        <svg className="remind-splash-logo" viewBox="-29 0 400 100" aria-hidden="true">
-          <defs>
-            <clipPath id="remind-e-reveal">
-              <rect className="remind-logo-e-clip" x="72" y="12" width="58" height="76" />
-            </clipPath>
-            <clipPath id="remind-mind-reveal">
-              <rect className="remind-logo-mind-clip" x="166" y="12" width="218" height="76" />
-            </clipPath>
-          </defs>
-          <g className="remind-logo-wordmark">
-            <text className="remind-logo-letter remind-logo-r" x="18" y="72">R</text>
-            <text className="remind-logo-letter remind-logo-e" x="76" y="72" clipPath="url(#remind-e-reveal)">E</text>
-            <g className="remind-logo-colon">
-              <circle cx="0" cy="39" r="3.25" />
-              <circle cx="0" cy="62" r="3.25" />
-            </g>
-            <text className="remind-logo-letter remind-logo-mind" x="174" y="72" clipPath="url(#remind-mind-reveal)">MIND</text>
-          </g>
-        </svg>
-      </div>
-    </div>
-  )
+  return <StartupSplash language={language} />
 }
 
 export default function HomePage() {
@@ -1267,6 +1239,14 @@ export default function HomePage() {
   // cached preview has a verified frame membership or live settings are ready.
   const [booting, setBooting] = useState(true)
   const [showSplash, setShowSplash] = useState(true)
+  // Reveal the ready app behind the splash. Remove the overlay only after
+  // its 220ms fade, rather than removing both layers in the same React paint.
+  useEffect(() => {
+    if (booting || !showSplash) return
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const timeout = window.setTimeout(() => setShowSplash(false), reducedMotion ? 0 : 240)
+    return () => window.clearTimeout(timeout)
+  }, [booting, showSplash])
   const [startupLoadError, setStartupLoadError] = useState(false)
   const [shouldRenderApp, setShouldRenderApp] = useState(false)
   const [setupDeviceId, setSetupDeviceId] = useState<string | null>(null)
@@ -2511,7 +2491,6 @@ export default function HomePage() {
         // A stored preview is useful offline, but it remains read-only.
         isLoadedRef.current = false
         setBooting(false)
-        setShowSplash(false)
         setCachedPreviewSyncFailed(true)
         setFramesLoaded(false)
         return
@@ -2551,7 +2530,6 @@ export default function HomePage() {
         // The cached layout is now tied to a frame this account can access.
         // Show it while settings refresh without a blank frame or large fade.
         setBooting(false)
-        setShowSplash(false)
       }
       if (cached && cached.deviceId !== selected) {
         // Never show a previously paired frame after access was revoked or
@@ -2583,7 +2561,6 @@ export default function HomePage() {
 
       if (!cancelled) {
         setBooting(false)
-        setShowSplash(false)
         performance.mark('remind:startup:ready')
         performance.measure('remind:startup:total', 'remind:startup:start', 'remind:startup:ready')
       }
@@ -3145,7 +3122,7 @@ async function handleSelectTab(k: TabKey) {
 
   const isPlainFrameAssistantSurface = activeTab === 'frame'
     && !layoutFlow && !pickerOpen && !languagePickerOpen
-    && shouldRenderApp && !booting && !showSplash && !shouldShowFirstFrameOnboarding && !setupDeviceId
+    && shouldRenderApp && !booting && !shouldShowFirstFrameOnboarding && !setupDeviceId
 
   if (isPhoneLandscapeMirror) {
     return (
@@ -3178,8 +3155,8 @@ async function handleSelectTab(k: TabKey) {
         )}
         <div
           className={`remind-app-shell ${!shouldRenderApp || shouldShowFirstFrameOnboarding || setupDeviceId ? 'hidden' : ''} ${booting ? 'remind-app-shell-booting' : 'remind-app-shell-ready'} flex flex-col flex-1 min-h-0`}
-          inert={appControlsLocked}
-          aria-hidden={!shouldRenderApp || booting || shouldShowFirstFrameOnboarding || !!setupDeviceId || appControlsLocked}
+          inert={appControlsLocked || booting || showSplash}
+          aria-hidden={!shouldRenderApp || booting || showSplash || shouldShowFirstFrameOnboarding || !!setupDeviceId || appControlsLocked}
         >
           <>
             <TabBar
