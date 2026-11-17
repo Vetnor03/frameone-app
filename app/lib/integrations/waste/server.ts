@@ -1,7 +1,7 @@
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
 import { createHash } from 'node:crypto'
-import { providerForAddress, WasteProviderError, wasteCollectionTitle, type ProviderFamily, type WasteAddress, type WasteCollection } from './providers'
-import { pilotWasteCollections, resolvePilotWasteAddress, searchPilotWasteAddresses } from './pilotManualSchedules'
+import { providerForAddress, providerRegistrationFor, searchKartverketAddresses, WasteProviderError, wasteCollectionTitle, type ProviderFamily, type WasteAddress, type WasteCollection } from './providers'
+import { pilotWasteCollections, pilotWasteScheduleForAddress, resolvePilotWasteAddress, searchPilotWasteAddresses } from './pilotManualSchedules'
 import { norwayLocalYmd } from './date'
 import { wasteCachePlan } from './cache'
 import { wasteCollectionDisplayTitle, type WasteDisplayLanguage } from './display.ts'
@@ -46,12 +46,30 @@ export function wasteRows(userId: string, address: WasteAddress, collections: Wa
   })
 }
 
+function matchingManualSchedule(address: WasteAddress) {
+  const direct = resolvePilotWasteAddress(address)
+  if (direct) return direct
+  // Kartverket uses separate fields for the house number and letter.
+  // Never assign a timetable using a partial address or municipality alone.
+  const street = address.streetName || ''
+  const house = `${address.houseNumber || ''}${address.houseLetter || ''}`
+  const postal = address.postalCode || ''
+  const schedule = pilotWasteScheduleForAddress(street, house, postal)
+  return schedule ? { address, schedule } : null
+}
+
 async function fetchForAddress(address: WasteAddress) {
-  // During the pilot only the six manually verified addresses can connect.
-  // Resolve IDs on the server; ignore all client-supplied address fields.
-  const selected = resolvePilotWasteAddress(address)
-  if (!selected) throw new WasteProviderError('unsupported', 'Waste collection is only available for the six test addresses for now.', false)
-  return { resolved: selected.address, family: 'pilot_manual' as const, collections: pilotWasteCollections(selected.schedule) }
+  const manual = matchingManualSchedule(address)
+  if (manual) return {
+    resolved: manual.address,
+    family: 'pilot_manual' as const,
+    collections: pilotWasteCollections(manual.schedule),
+  }
+  // Existing official provider implementations remain available where the
+  // registry explicitly supports them. Unsupported municipalities fail clearly.
+  const provider = providerForAddress(address)
+  const resolved = await provider.resolveAddress(address)
+  return { resolved, family: provider.family, collections: provider.normalizeCollections(await provider.fetchCollections(resolved)) }
 }
 
 export async function refreshWasteForUser(userId: string, address?: WasteAddress) {
@@ -94,7 +112,22 @@ export async function previewWasteAddress(address: WasteAddress, language: Waste
   return { status: 'preview' as const, resolvedAddress: resolved, previewItems: wasteRows('preview', resolved, collections, norwayLocalYmd(), family).slice(0, 3).map(row => ({ date: row.raw.date, title: wasteCollectionDisplayTitle(row.raw.normalized_type, language, row.raw.original_provider_label) })) }
 }
 
-export async function searchWasteAddresses(query: string) { return searchPilotWasteAddresses(query) }
+export async function searchWasteAddresses(query: string) {
+  const manual = searchPilotWasteAddresses(query)
+  // Search Kartverket nationwide, not just locations with a collection feed.
+  // Keep exact manual matches at the top, but avoid duplicate suggestions.
+  try {
+    const national = await searchKartverketAddresses(query)
+    return [...manual, ...national.filter(address => {
+      const matching = matchingManualSchedule(address)
+      return !matching || !manual.some(item => item.addressId === `pilot:${matching.schedule.key}`)
+    })]
+  } catch (error) {
+    // Keep already documented addresses searchable during temporary outages.
+    if (manual.length) return manual
+    throw error
+  }
+}
 export async function connectWasteForUser(userId: string, address: WasteAddress) { return refreshWasteForUser(userId, address) }
 
 export async function disconnectWasteForUser(userId: string) {
@@ -112,9 +145,12 @@ export async function getWasteStatus(userId: string) {
 export async function syncAllWasteUsers() {
   const { data, error } = await getSupabaseAdmin().from('user_integrations').select('user_id,encrypted_credentials').eq('provider', WASTE_PROVIDER).eq('status', 'connected')
   if (error) throw new Error(error.message)
-  // Ignore any saved legacy/non-pilot connection instead of calling unstable
-  // external provider APIs after reopening the Connect card.
-  const manualUsers = (data || []).filter(row => resolvePilotWasteAddress(row.encrypted_credentials?.address || {}))
-  const results = await Promise.allSettled(manualUsers.map(row => refreshWasteForUser(row.user_id)))
+  // Refresh only addresses supported by a verified static calendar or an
+  // explicitly supported provider. Preview-only families remain excluded.
+  const supportedUsers = (data || []).filter(row => {
+    const address = row.encrypted_credentials?.address as WasteAddress | undefined
+    return !!address && (!!matchingManualSchedule(address) || providerRegistrationFor(address.municipalityNumber)?.status === 'supported')
+  })
+  const results = await Promise.allSettled(supportedUsers.map(row => refreshWasteForUser(row.user_id)))
   return { processed: results.length, succeeded: results.filter(x => x.status === 'fulfilled').length, failed: results.filter(x => x.status === 'rejected').length }
 }
