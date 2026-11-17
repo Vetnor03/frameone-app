@@ -1,29 +1,28 @@
-// Server-renderable fallback for Next.js streaming and the initial client boot.
-// Reuses the exact RE:MIND wordmark animation used by the normal app splash.
+// Match the generated iOS native startup image: one shared RE:MIND monoline
+// wordmark, exactly centered against the same light-theme launch background.
+export function StartupWordmark() {
+  return (
+    <div className="remind-splash text-[color:var(--fg)]">
+      <svg className="remind-splash-logo" viewBox="0 0 300 60" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M0 60V0H18L28 6L31 16L28 26L18 31H0" />
+        <path d="M17 31L34 60" />
+        <path d="M76 0H46V60H76 M46 30H73" />
+        <circle cx="99" cy="21" r="2.4" fill="currentColor" stroke="none" />
+        <circle cx="99" cy="43" r="2.4" fill="currentColor" stroke="none" />
+        <path d="M123 60V0L145 33L167 0V60" />
+        <path d="M184 0V60" />
+        <path d="M205 60V0L245 60V0" />
+        <path d="M261 0V60H277L291 54L299 42L300 30L299 18L291 6L277 0H261" />
+      </svg>
+    </div>
+  )
+}
+
+// Both the Next server fallback and authenticated boot render the same image.
 export function StartupSplash({ language = 'en' }: { language?: 'en' | 'no' }) {
   return (
     <div className="flex-1 flex items-center justify-center" role="status" aria-live="polite" aria-label={language === 'no' ? 'Laster RE:MIND' : 'Loading RE:MIND'}>
-      <div className="remind-splash text-[color:var(--fg)]">
-        <svg className="remind-splash-logo" viewBox="-29 0 400 100" aria-hidden="true">
-          <defs>
-            <clipPath id="remind-e-reveal">
-              <rect className="remind-logo-e-clip" x="72" y="12" width="58" height="76" />
-            </clipPath>
-            <clipPath id="remind-mind-reveal">
-              <rect className="remind-logo-mind-clip" x="166" y="12" width="218" height="76" />
-            </clipPath>
-          </defs>
-          <g className="remind-logo-wordmark">
-            <text className="remind-logo-letter remind-logo-r" x="18" y="72">R</text>
-            <text className="remind-logo-letter remind-logo-e" x="76" y="72" clipPath="url(#remind-e-reveal)">E</text>
-            <g className="remind-logo-colon">
-              <circle cx="0" cy="39" r="3.25" />
-              <circle cx="0" cy="62" r="3.25" />
-            </g>
-            <text className="remind-logo-letter remind-logo-mind" x="174" y="72" clipPath="url(#remind-mind-reveal)">MIND</text>
-          </g>
-        </svg>
-      </div>
+      <StartupWordmark />
     </div>
   )
 }
