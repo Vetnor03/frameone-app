@@ -39,10 +39,12 @@ test('tab snapshot renders while refreshing but is inert until fresh data is ver
   assert.match(home,/clearTabSnapshotsForUser\(window\.localStorage, session\.user\.id\)/)
 })
 
-test('ready app appears via a real opacity crossfade without stale overlays',()=>{
-  assert.match(styles,/transition: opacity 220ms/)
+test('ready app appears only after a two-phase splash handoff without logo ghosting',()=>{
+  assert.match(styles,/transition: opacity 190ms cubic-bezier\(0\.22, 1, 0\.36, 1\) 100ms/)
+  assert.match(styles,/\.remind-splash-overlay \.remind-splash\s*\{\s*opacity: 1;\s*transition: opacity 85ms ease-out;/)
+  assert.match(styles,/\.remind-splash-overlay-hiding \.remind-splash\s*\{\s*opacity: 0;/)
   assert.match(styles,/\.remind-splash-overlay-hiding\s*\{\s*opacity: 0/)
-  assert.match(home,/window\.setTimeout\(\(\) => setShowSplash\(false\), reducedMotion \? 0 : 240\)/)
+  assert.match(home,/window\.setTimeout\(\(\) => setShowSplash\(false\), reducedMotion \? 0 : 320\)/)
   assert.match(home,/\[booting, showSplash\]/)
   assert.match(home,/aria-hidden=\{!shouldRenderApp \|\| booting \|\| showSplash/)
   assert.match(styles,/@media \(prefers-reduced-motion: reduce\)/)
