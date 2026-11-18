@@ -12,7 +12,7 @@ const quantity = (value, fallback = 0) => Number.isFinite(Number(value)) ? Numbe
 const rows = (value, max) => Array.isArray(value) ? value.slice(0, max) : []
 const httpsUrl = value => typeof value === 'string' && /^https:\/\//i.test(value) ? value.slice(0, 500) : null
 const isPlain = value => value !== null && typeof value === 'object' && !Array.isArray(value)
-const SOURCE_KEYS = new Set(['remind','teams','google-calendar','spond','local-events','waste'])
+const SOURCE_KEYS = new Set(['remind','teams','google-calendar','spond','local-events','waste','aladhan'])
 
 function sanitizeReminders(data) {
   if (!isPlain(data)) return null
