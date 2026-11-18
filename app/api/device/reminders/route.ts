@@ -868,7 +868,7 @@ export async function GET(req: Request) {
         source: item.source,
         displayDate: item.display_date,
         displayTime: item.display_time,
-      })).filter(item => item.source !== 'bonnetid')
+      })).filter((item) => item.source !== 'bonnetid')
     const persistentCache = supabaseTitleCache(supabase)
     const optimizedByProfile = new Map(await Promise.all(displayProfiles.map(async displayProfile => {
       const titles = await optimizeFrameContent(optimizerItems, {
