@@ -77,15 +77,15 @@ export function providerRegistrationFor(municipalityNumber: string) { return WAS
 export function normalizeWasteType(label: unknown): WasteType {
   const value = string(label).toLocaleLowerCase('nb-NO').replace(/[_-]/g, ' ').replace(/\s*\/\s*/g, ' og ').replace(/\s+/g, ' ').trim()
   const aliases: Readonly<Record<WasteType, readonly string[]>> = {
-    restavfall: ['rest', 'restavfall', 'restavfall til forbrenning'],
-    matavfall: ['mat', 'matavfall', 'bio'],
-    papir: ['papir', 'papp', 'papp og papir', 'papir og papp'],
-    plast: ['plast', 'plastemballasje'],
-    glass_metall: ['glass', 'metall', 'glass og metall', 'glass og metallemballasje', 'glassemballasje', 'metallemballasje'],
-    hageavfall: ['hage', 'hageavfall'],
-    christmas_tree: ['juletre'],
-    hazardous: ['farlig avfall'],
-    textile: ['tekstil', 'klær'],
+    restavfall: ['rest', 'restavfall', 'restavfall til forbrenning', 'residual waste'],
+    matavfall: ['mat', 'matavfall', 'bio', 'food waste'],
+    papir: ['papir', 'papp', 'papp og papir', 'papir og papp', 'paper'],
+    plast: ['plast', 'plastemballasje', 'plastic', 'plastic packaging'],
+    glass_metall: ['glass', 'metall', 'glass og metall', 'glass og metallemballasje', 'glassemballasje', 'metallemballasje', 'glass and metal'],
+    hageavfall: ['hage', 'hageavfall', 'garden waste'],
+    christmas_tree: ['juletre', 'christmas tree'],
+    hazardous: ['farlig avfall', 'hazardous waste'],
+    textile: ['tekstil', 'klær', 'textiles'],
     other: [],
   }
   return (Object.entries(aliases).find(([, values]) => values.includes(value))?.[0] as WasteType | undefined) ?? 'other'

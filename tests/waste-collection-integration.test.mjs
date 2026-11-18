@@ -17,17 +17,23 @@ test('same-date grouped fractions stay one item while different dates remain sep
   assert.deepEqual(result.map(x => x.occurrence_date), ['2026-10-25', '2026-10-26'])
 })
 
-test('waste display labels are localized without changing normalized types', () => {
+test('waste display labels stay Norwegian without changing normalized types', () => {
   const types = ['restavfall', 'matavfall', 'papir', 'plast', 'glass_metall', 'hageavfall', 'christmas_tree', 'hazardous', 'textile']
-  assert.deepEqual(types.map(type => wasteCollectionDisplayTitle(type, 'en')), ['Residual waste', 'Food waste', 'Paper', 'Plastic', 'Glass and metal', 'Garden waste', 'Christmas tree', 'Hazardous waste', 'Textiles'])
+  assert.deepEqual(types.map(type => wasteCollectionDisplayTitle(type, 'en')), ['Restavfall', 'Matavfall', 'Papir', 'Plast', 'Glass og metall', 'Hageavfall', 'Juletre', 'Farlig avfall', 'Tekstil'])
   assert.deepEqual(types.map(type => wasteCollectionDisplayTitle(type, 'no')), ['Restavfall', 'Matavfall', 'Papir', 'Plast', 'Glass og metall', 'Hageavfall', 'Juletre', 'Farlig avfall', 'Tekstil'])
 })
 
-test('physical-frame same-date waste titles use the frame language', () => {
+test('physical-frame same-date waste titles stay Norwegian in either frame language', () => {
   const source = [row('2026-10-25')]
-  assert.equal(buildWasteCollectionItems(source, '2026-10-24', '2026-12-01', 'Europe/Oslo', false, 'en')[0].title, 'Food waste + paper')
+  assert.equal(buildWasteCollectionItems(source, '2026-10-24', '2026-12-01', 'Europe/Oslo', false, 'en')[0].title, 'Matavfall + papir')
   assert.equal(buildWasteCollectionItems(source, '2026-10-24', '2026-12-01', 'Europe/Oslo', false, 'no')[0].title, 'Matavfall + papir')
   assert.deepEqual(source[0].raw.normalized_type, ['matavfall', 'papir'])
+})
+
+test('cached English fraction names are translated without losing unknown provider semantics', () => {
+  assert.equal(wasteCollectionDisplayTitle(['other', 'other'], 'en', ['Residual waste', 'Food waste']), 'Restavfall + matavfall')
+  assert.equal(wasteCollectionDisplayTitle('other', 'no', 'Paper and plastic packaging'), 'Papir og plastemballasje')
+  assert.equal(wasteCollectionDisplayTitle('other', 'en', 'Mystisk fraksjon'), 'Mystisk fraksjon')
 })
 
 test('physical frame route is cache-only and imports no waste provider or sync', () => {

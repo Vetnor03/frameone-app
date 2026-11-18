@@ -132,11 +132,11 @@ test('evidence-backed provider aliases normalize exactly without losing compound
   for (const label of ['Papir og plastemballasje', 'Mystisk fraksjon', 'Plast og matavfall']) assert.equal(normalizeWasteType(label), 'other', label)
 })
 
-test('compound Fosen semantics survive as other and use the localized raw-label display fallback', () => {
+test('compound Fosen semantics survive as other and use the Norwegian raw-label display fallback', () => {
   assert.equal(wasteCollectionDisplayTitle('other', 'no', 'Papir og plastemballasje'), 'Papir og plastemballasje')
-  assert.equal(wasteCollectionDisplayTitle('other', 'en', 'Papir og plastemballasje'), 'Paper and plastic packaging')
+  assert.equal(wasteCollectionDisplayTitle('other', 'en', 'Papir og plastemballasje'), 'Papir og plastemballasje')
   assert.equal(wasteCollectionDisplayTitle('other', 'en', 'Mystisk fraksjon'), 'Mystisk fraksjon')
-  assert.equal(wasteCollectionDisplayTitle('other', 'en'), 'Other waste')
+  assert.equal(wasteCollectionDisplayTitle('other', 'en'), 'Annet avfall')
 })
 
 test('registry migration removes legacy Stavanger/Sandnes rows before validating the new provider check', async () => {
