@@ -3738,12 +3738,12 @@ function ConnectAppsScreen({
     setConnectionCacheHydrated(true)
   }, [userId, activeDeviceId, startup])
 
-  function updateConnectionDisplayStatus(provider: ConnectAppKey, connected: boolean, persist = true) {
+  const updateConnectionDisplayStatus = useCallback((provider: ConnectAppKey, connected: boolean, persist = true) => {
     setVerifiedConnectionStatus(current => ({ ...current, [provider]: connected }))
     if (persist && !startup && userId && activeDeviceId) {
       writeConnectStatusCache(window.localStorage, userId, activeDeviceId, provider, connected)
     }
-  }
+  }, [startup, userId, activeDeviceId])
 
   const [connectSearch, setConnectSearch] = useState('')
   const [, setSpondConnected] = useState(false)
@@ -3813,7 +3813,7 @@ function ConnectAppsScreen({
       }
     })().catch(() => { if (!cancelled) setBonnetidStatusResolved(true) })
     return () => { cancelled = true }
-  }, [activeDeviceId])
+  }, [activeDeviceId, updateConnectionDisplayStatus])
 
   const [wasteConnected, setWasteConnected] = useState(() => connectAppIsConnected(modulesJson, 'waste'))
   const [wasteStatusResolved, setWasteStatusResolved] = useState(false)
@@ -3840,7 +3840,7 @@ function ConnectAppsScreen({
       }
     })().catch(() => { if (!cancelled) setWasteStatusResolved(true) })
     return () => { cancelled = true }
-  }, [activeDeviceId])
+  }, [activeDeviceId, updateConnectionDisplayStatus])
   const [localEventsLoading, setLocalEventsLoading] = useState(false)
   const [localEventsSearch, setLocalEventsSearch] = useState('')
   const [localEventsPlaceResults, setLocalEventsPlaceResults] = useState<Array<{ id: string; label: string; latitude: number; longitude: number }>>([])
