@@ -15195,7 +15195,7 @@ function RemindersModuleSettingsTab({
   const calendarAnimTimerRef = useRef<number | null>(null)
 
   const todayYmd = toLocalYmd(new Date())
-  async function loadReminders({ silent = false, skipProviderSync = false }: { silent?: boolean; skipProviderSync?: boolean } = {}) {
+  async function loadReminders({ silent = false }: { silent?: boolean } = {}, skipProviderSync = false) {
     const generation = ++requestGenerationRef.current
     if (!activeDeviceId) {
       setReminders([])
@@ -15446,7 +15446,7 @@ const manualItems: ReminderUiItem[] = (data || [])
         // The follow-up read skips providers so it cannot cause a sync loop.
         void aladhanRefresh.then(refreshed => {
           if (refreshed && generation === requestGenerationRef.current) {
-            void loadReminders({ silent: true, skipProviderSync: true })
+            void loadReminders({ silent: true }, true)
           }
         })
       }
