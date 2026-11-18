@@ -30,6 +30,7 @@ import { DEFAULT_LOCAL_EVENT_AREA, getLocalEventPlace, normalizeLocalEventAreaPr
 import { localEventGroupKeyFromRaw, groupSkipId } from './lib/integrations/local-events/grouping'
 import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationMatchesSearch, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
 const WasteSetupModal = dynamic(() => import('./components/WasteSetupModal'))
+const BonnetidSetupModal = dynamic(() => import('./components/BonnetidSetupModal'))
 const IntegrationRequestCard = dynamic(() => import('./components/IntegrationRequestCard'))
 import AppSheet, { AppSheetVisibilityContext } from './components/AppSheet'
 import { StartupSplash } from './components/StartupSplash'
@@ -3654,7 +3655,7 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'waste'
+type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'bonnetid'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -3758,6 +3759,10 @@ function ConnectAppsScreen({
   const [wasteModalOpen, setWasteModalOpen] = useState(false)
   const [wasteConnected, setWasteConnected] = useState(() => connectAppIsConnected(modulesJson, 'waste'))
   const [wasteStatusResolved, setWasteStatusResolved] = useState(false)
+  const [bonnetidModalOpen, setBonnetidModalOpen] = useState(false)
+  const [bonnetidConnected, setBonnetidConnected] = useState(false)
+  const [bonnetidCity, setBonnetidCity] = useState<string | null>(null)
+  const [bonnetidStatusResolved, setBonnetidStatusResolved] = useState(false)
   useEffect(() => {
     let cancelled = false
     setWasteStatusResolved(false)
@@ -3781,6 +3786,28 @@ function ConnectAppsScreen({
     })().catch(() => { if (!cancelled) setWasteStatusResolved(true) })
     return () => { cancelled = true }
   }, [activeDeviceId])
+  useEffect(() => {
+    let cancelled = false
+    setBonnetidStatusResolved(false)
+    void (async () => {
+      const token = (await supabase.auth.getSession()).data.session?.access_token || ''
+      if (!token) {
+        if (!cancelled) { setBonnetidConnected(false); setBonnetidCity(null); setBonnetidStatusResolved(true) }
+        return
+      }
+      const response = await fetch('/api/integrations/bonnetid/status', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' })
+      if (!response.ok) throw new Error('Bønnetid status unavailable')
+      const json = await response.json()
+      if (!cancelled) {
+        setBonnetidConnected(json.connected === true)
+        setBonnetidCity(typeof json.city === 'string' ? json.city : null)
+        setLocallyDisconnectedApps(current => ({ ...current, bonnetid: false }))
+        setBonnetidStatusResolved(true)
+      }
+    })().catch(() => { if (!cancelled) setBonnetidStatusResolved(true) })
+    return () => { cancelled = true }
+  }, [activeDeviceId])
+
   const [localEventsLoading, setLocalEventsLoading] = useState(false)
   const [localEventsSearch, setLocalEventsSearch] = useState('')
   const [localEventsPlaceResults, setLocalEventsPlaceResults] = useState<Array<{ id: string; label: string; latitude: number; longitude: number }>>([])
@@ -4142,7 +4169,7 @@ function ConnectAppsScreen({
   }
 
   async function disconnectIntegration(provider: DisconnectableConnectAppKey) {
-    const appName = provider === 'teams' ? 'Microsoft Calendar' : provider === 'google-calendar' ? 'Google Calendar' : provider === 'waste' ? (language === 'no' ? 'Renovasjon' : 'Waste collection') : 'Spond'
+    const appName = provider === 'teams' ? 'Microsoft Calendar' : provider === 'google-calendar' ? 'Google Calendar' : provider === 'waste' ? (language === 'no' ? 'Renovasjon' : 'Waste collection') : provider === 'bonnetid' ? 'Bønnetid' : 'Spond'
     const setProviderLoading = provider === 'teams' ? setTeamsLoading : provider === 'google-calendar' ? setGoogleLoading : provider === 'spond' ? setSpondLoading : null
     if (disconnectingApp === provider) return
     setProviderLoading?.(true)
@@ -4176,6 +4203,11 @@ function ConnectAppsScreen({
       } else if (provider === 'waste') {
         setWasteConnected(false)
         changeFrameIntegration('waste', { enabled: false })
+        window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
+      } else if (provider === 'bonnetid') {
+        setBonnetidConnected(false)
+        setBonnetidCity(null)
+        changeFrameIntegration('bonnetid', { enabled: false })
         window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
       }
       setLocallyDisconnectedApps((current) => ({ ...current, [provider]: true }))
@@ -4330,6 +4362,7 @@ function ConnectAppsScreen({
     if (app.key === 'google-calendar') return googleAccountConnected
     if (app.key === 'local-events') return !!localEventsSavedArea
     if (app.key === 'waste') return wasteConnected
+    if (app.key === 'bonnetid') return bonnetidConnected
     return connectAppIsConnected(modulesJson, app.key)
   }
 
@@ -4459,6 +4492,8 @@ function ConnectAppsScreen({
               ? (language === 'no' ? `Events valgt, men ingen synkronisering ennå: ${localEventsSyncIssue}` : `Events selected but not synced yet: ${localEventsSyncIssue}`)
               : app.key === 'local-events' && localEventsSelectedName
               ? (language === 'no' ? `Arrangementer nær ${localEventsSelectedName}` : `Events near ${localEventsSelectedName}`)
+              : app.key === 'bonnetid' && bonnetidCity
+              ? (language === 'no' ? 'Bønnetider for ' : 'Prayer times for ') + bonnetidCity
               : app.description
             const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar'
             const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : null
@@ -4509,6 +4544,15 @@ function ConnectAppsScreen({
                           {language === 'no' ? 'ENDRE ADRESSE' : 'EDIT ADDRESS'}
                         </button>
                       </div>
+                    ) : app.key === 'bonnetid' ? (
+                      <div className="shrink-0 flex flex-col items-stretch gap-1.5">
+                        <button type="button" onClick={() => setDisconnectConfirmApp('bonnetid')} disabled={disconnectingApp === 'bonnetid'} className="h-8 rounded-xl border border-[#d94b4b]/40 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
+                          {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
+                        </button>
+                        <button type="button" onClick={() => setBonnetidModalOpen(true)} disabled={disconnectingApp === 'bonnetid'} className="h-7 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)] disabled:opacity-60">
+                          {language === 'no' ? 'ENDRE BY' : 'CHANGE CITY'}
+                        </button>
+                      </div>
                     ) : credentialProvider ? (
                       <button
                         type="button"
@@ -4526,7 +4570,7 @@ function ConnectAppsScreen({
                   ) : (
                     <button
                       type="button"
-                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved))}
+                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved) || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved))}
                       onClick={() => {
                         if (app.key === 'spond') {
                           if (spondAccountConnected) { setSpondConnected(true); changeFrameIntegration('spond', { enabled: true }) }
@@ -4544,13 +4588,15 @@ function ConnectAppsScreen({
                           setLocalEventsOpen(true)
                         } else if (app.key === 'waste') {
                           setWasteModalOpen(true)
+                        } else if (app.key === 'bonnetid') {
+                          setBonnetidModalOpen(true)
                         }
                       }}
                       className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-20)] text-[11px] tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
                     >
                       {app.key === 'local-events'
                         ? (language === 'no' ? 'KOBLE TIL' : 'CONNECT')
-                        : (app.key === 'google-calendar' && !googleStatusResolved) || (app.key === 'teams' && !teamsStatusResolved) || (app.key === 'waste' && !wasteStatusResolved)
+                        : (app.key === 'google-calendar' && !googleStatusResolved) || (app.key === 'teams' && !teamsStatusResolved) || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved)
                           ? (language === 'no' ? 'SJEKKER…' : 'CHECKING…')
                           : ((app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading))
                             ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…')
@@ -4619,14 +4665,16 @@ function ConnectAppsScreen({
         >
             <div className="text-base font-semibold text-[color:var(--fg-90)]">
               {language === 'no'
-                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? 'Renovasjon' : 'Spond'}?`
-                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? 'Waste collection' : 'Spond'}?`}
+                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? 'Renovasjon' : disconnectConfirmApp === 'bonnetid' ? 'Bønnetid' : 'Spond'}?`
+                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? 'Waste collection' : disconnectConfirmApp === 'bonnetid' ? 'Bønnetid' : 'Spond'}?`}
             </div>
             <div className="mt-2 text-xs leading-snug text-[color:var(--fg-45)]">
               {disconnectConfirmApp === 'waste'
                 ? (language === 'no'
                   ? 'Den valgte adressen og tilhørende tømmedatoer fjernes fra Påminnelser.'
                   : 'The selected address and its collection dates will be removed from Reminders.')
+                : disconnectConfirmApp === 'bonnetid'
+                ? (language === 'no' ? 'Den valgte byen og alle bønnetider fjernes fra Påminnelser.' : 'Your city and all prayer times will be removed from Reminders.')
                 : (language === 'no'
                   ? 'Lagrede innlogginger og synkroniserte data fjernes fra denne integrasjonen.'
                   : 'Stored credentials and synced data will be removed for this integration.')}
@@ -4639,6 +4687,7 @@ function ConnectAppsScreen({
 
       {localEventsOpen && renderLocalEventsModal()}
       {wasteModalOpen && <WasteSetupModal language={language} onClose={() => setWasteModalOpen(false)} onSaved={(connected) => { setWasteConnected(connected); setLocallyDisconnectedApps(current => ({ ...current, waste: false })); changeFrameIntegration('waste', { enabled: connected }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }} />}
+      {bonnetidModalOpen && <BonnetidSetupModal language={language} currentCity={bonnetidCity} onClose={() => setBonnetidModalOpen(false)} onSaved={(connected, city) => { setBonnetidConnected(connected); setBonnetidCity(city); setLocallyDisconnectedApps(current => ({ ...current, bonnetid: false })); changeFrameIntegration('bonnetid', { enabled: connected }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }} />}
 
       {spondModalOpen && (
         <AppSheet
@@ -11175,7 +11224,7 @@ type ReminderRepeatKey =
   | 'custom'
 
 type ReminderTag = 'work' | 'personal' | 'sports' | 'chores' | 'event'
-type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'waste' | 'local-events'
+type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'waste' | 'local-events' | 'bonnetid'
 type ReminderSourceFilter = ReminderSource
 
 type ReminderUiItem = {
@@ -11279,7 +11328,7 @@ function isReminderTag(v: any): v is ReminderTag {
 function integrationProviderToReminderSource(provider: any): ReminderSource | null {
   const value = String(provider ?? '').trim().toLowerCase()
   if (value === 'edge-of-norway') return 'local-events'
-  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'waste') return value
+  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'waste' || value === 'bonnetid') return value
   return null
 }
 
@@ -11318,6 +11367,7 @@ function integrationReminderSourceLabel(language: AppLanguage, source?: Reminder
   if (source === 'google-calendar') return 'Google Calendar'
   if (source === 'spond') return 'Spond'
   if (source === 'waste') return language === 'no' ? 'Renovasjon' : 'Waste'
+  if (source === 'bonnetid') return language === 'no' ? 'Bønn' : 'Prayer'
   if (source === 'local-events') return 'Events'
   return language === 'no' ? 'Påminnelse' : 'Reminder'
 }
@@ -15213,7 +15263,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           const source = integrationProviderToReminderSource(connection.provider)
           if (source) connectedSources.add(source)
         }
-        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
+        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste', 'bonnetid'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
 
         if (isActive && connectedSources.has('teams')) {
           try {
@@ -15248,12 +15298,24 @@ const manualItems: ReminderUiItem[] = (data || [])
           }
         }
 
+        if (isActive && connectedSources.has('bonnetid')) {
+          try {
+            const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+            if (accessToken) {
+              const response = await fetch('/api/integrations/bonnetid/sync', { method: 'POST', headers: { Authorization: 'Bearer ' + accessToken }, cache: 'no-store' })
+              if (!response.ok) console.warn('[reminders] Bønnetid refresh failed', response.status)
+            }
+          } catch (error) {
+            console.warn('[reminders] Bønnetid refresh failed', error)
+          }
+        }
+
         const nowIso = new Date().toISOString()
         let localEventSkippedIds = new Set<string>()
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
-          .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway'])
+          .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway', 'bonnetid'])
           .or(activeDeviceId ? `user_id.eq.${sessionUserId},device_id.eq.${activeDeviceId}` : `user_id.eq.${sessionUserId}`)
           .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste`)
           .order('starts_at', { ascending: true, nullsFirst: false })
