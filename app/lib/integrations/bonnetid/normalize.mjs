@@ -48,11 +48,14 @@ export function normalizeBonnetidDay(rawValue, date) {
 }
 
 function parseDate(value, year, month) {
+  if (value === null || value === undefined || value === '') return null
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.slice(0, 10))) return value.slice(0, 10)
-  const integer = Number(value)
+  const integer = typeof value === 'object' ? NaN : Number(value)
   if (Number.isInteger(integer) && integer >= 1 && integer <= 31) return year + '-' + pad(month) + '-' + pad(integer)
   const nested = record(value)
-  return parseDate(nested.gregorian_date ?? nested.date ?? nested.day ?? null, year, month)
+  const next = nested.gregorian_date ?? nested.date ?? nested.day ?? null
+  if (next === value) return null
+  return parseDate(next, year, month)
 }
 
 export function normalizeBonnetidMonth(payload, year, month) {
