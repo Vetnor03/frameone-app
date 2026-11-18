@@ -273,7 +273,7 @@ static bool scheduledSyncDueNow() {
 
 static uint32_t interactiveWaitMs(uint32_t maximumMs) {
   const time_t now = time(nullptr);
-  const time_t next = combinedScheduledWake();
+  const time_t next = g_dynamicTransitionAt > 0 ? combinedScheduledWake() : g_nextScheduledWake;
   if (next <= 0 || now < 1000000000 || next <= now) {
     return next > 0 && now >= next ? 0 : maximumMs;
   }
