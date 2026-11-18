@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { osloYmd, followingDays, osloWallClockToIso } from '../app/lib/integrations/aladhan/time.mjs'
 import { buildAladhanPrayerItems } from '../app/lib/device/remindersFeed.ts'
 import { isUpcomingIntegratedCalendarItem } from '../app/lib/device/calendarVisibility.ts'
+import { nextAladhanOccurrences } from '../app/lib/integrations/aladhan/nextOccurrence.mjs'
 import { physicalModuleDeadlines, physicalRenderDigest } from '../app/lib/device/contentSignature.mjs'
 
 const ymd = '2026-11-18'
@@ -68,4 +69,66 @@ test('AlAdhan is a real but experimental Connect source, with own storage lifecy
   assert.match(physical,/syncAladhanIfStale/)
   assert.match(physical,/item\.source !== 'aladhan'/)
   assert.doesNotMatch(backend,/BONNETID_API_TOKEN|api\.bonnetid\.no/)
+})
+
+
+test('one future instance of each prayer and solar event, sorted chronologically', () => {
+  const tomorrow = '2026-11-19'
+  const samples = [
+    row('Isha', '18:25', tomorrow),
+    row('Isha', '18:00'),
+    row('Fajr', '05:31'),
+    row('Fajr', '05:34', tomorrow),
+    row('Dhuhr', '12:15'),
+    row('Dhuhr', '12:21', tomorrow),
+    row('Soloppgang', '07:43'),
+    row('Soloppgang', '07:45', tomorrow),
+    row('Solnedgang', '16:31'),
+    row('Solnedgang', '16:30', tomorrow),
+    row('Maghrib', '16:32'),
+    row('Maghrib', '16:30', tomorrow),
+    row('Asr', '13:30'),
+    row('Asr', '13:35', tomorrow),
+  ]
+  const atOnePm = buildAladhanPrayerItems(samples, ymd, tomorrow, 'Europe/Oslo', new Date('2026-11-18T12:00:00Z'))
+  assert.equal(atOnePm.length, 7)
+  assert.deepEqual(atOnePm.map(x => x.title), [
+    'Asr', 'Solnedgang', 'Maghrib', 'Isha', 'Fajr', 'Soloppgang', 'Dhuhr'
+  ])
+  assert.equal(atOnePm.find(x => x.title === 'Isha').occurrence_date, ymd)
+  assert.equal(atOnePm.find(x => x.title === 'Fajr').occurrence_date, tomorrow)
+  assert.equal(atOnePm.find(x => x.title === 'Soloppgang').occurrence_date, tomorrow)
+  assert.equal(atOnePm.find(x => x.title === 'Solnedgang').occurrence_date, ymd)
+  const afterIsha = buildAladhanPrayerItems(samples, ymd, tomorrow, 'Europe/Oslo', new Date('2026-11-18T17:00:00Z'))
+  assert.equal(afterIsha.length, 7)
+  assert.equal(afterIsha.find(x => x.title === 'Isha').occurrence_date, tomorrow)
+  assert.equal(afterIsha.find(x => x.title === 'Isha').display_time, '18:25')
+  assert.equal(new Set(afterIsha.map(x => x.title)).size, 7)
+  assert.deepEqual(afterIsha.map(x => x.title), [
+    'Fajr', 'Soloppgang', 'Dhuhr', 'Asr', 'Solnedgang', 'Maghrib', 'Isha'
+  ])
+})
+
+test('phone AlAdhan filter chooses the nearest event independently of storage order', () => {
+  const examples = [
+    { title: 'Isha', date: '2026-11-20', time: '18:26', id: '3' },
+    { title: 'Maghrib', date: '2026-11-19', time: '16:08', id: '4' },
+    { title: 'Isha', date: '2026-11-18', time: '18:25', id: '1' },
+    { title: 'isha', date: '2026-11-19', time: '18:25', id: '2' },
+    { title: 'Solnedgang', date: '2026-11-19', time: '16:08', id: '5' },
+  ]
+  const grouped = nextAladhanOccurrences(examples, x => x.title,
+    x => x.date + 'T' + x.time)
+  assert.deepEqual(grouped.map(x => x.id), ['5', '4', '1'])
+  const afterIsha = examples.filter(x =>
+    isUpcomingIntegratedCalendarItem('aladhan', x.date, x.time, '2026-11-18', '18:25'))
+  assert.deepEqual(nextAladhanOccurrences(afterIsha, x => x.title, x => x.date + 'T' + x.time)
+    .map(x => x.id), ['5', '4', '2'])
+})
+
+test('upcoming-only AlAdhan filtering is shared by app and physical Reminders', () => {
+  const app = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  const feed = readFileSync(new URL('../app/lib/device/remindersFeed.ts', import.meta.url), 'utf8')
+  assert.match(app, /sourceFilter === 'aladhan'[\s\S]*?nextAladhanOccurrences\(upcoming/)
+  assert.match(feed, /return nextAladhanOccurrences\(upcoming/)
 })
