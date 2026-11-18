@@ -4914,6 +4914,12 @@ function FrameTab(props: {
           </div>
           <div className="relative mx-auto max-w-[360px]">
             <div aria-hidden="true" className="absolute left-[12.5%] right-[12.5%] top-[6px] h-px bg-[color:var(--fg-20)]" />
+            <input type="range" min={0} max={3} step={1}
+              value={(['morning','afternoon','evening','night'] as const).indexOf(dynamicPeriod)}
+              onChange={event => onDynamicPeriodChange((['morning','afternoon','evening','night'] as const)[Number(event.target.value)])}
+              aria-label={language === 'no' ? 'Velg tidspunkt for oppsett' : 'Select layout time of day'}
+              className="absolute left-[12.5%] top-0 z-10 h-4 w-3/4 cursor-pointer opacity-0"
+            />
             <div className="relative grid grid-cols-4">
               {(['morning','afternoon','evening','night'] as const).map(period => {
                 const selected = period === dynamicPeriod
