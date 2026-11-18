@@ -272,7 +272,7 @@ export function buildAladhanPrayerItems(
     const externalId = String(row.external_id || '').trim()
     const start = String(row.starts_at || '')
     const timestamp = Date.parse(start)
-    if (!title || !externalId || row.raw?.source !== 'aladhan' ||
+    if (!['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].includes(title) || !externalId || row.raw?.source !== 'aladhan' ||
         row.raw?.type !== 'prayer_time' || !Number.isFinite(timestamp) ||
         timestamp <= now.getTime()) return []
     const occurrenceDate = isoToYmdInTimeZone(start, timeZone)
@@ -293,10 +293,42 @@ export function buildAladhanPrayerItems(
       external_id: externalId,
     }]
   })
-  // Preserve each distinct prayer/solar event, but show only the closest
-  // upcoming occurrence. Do this before the physical 10-item display cap.
+  // Only the next occurrence of each of the five prayers is displayed.
+  // Exclude legacy stored sunrise/sunset rows before the physical display cap.
   return nextAladhanOccurrences(upcoming, item => item.title,
     item => item.occurrence_date + 'T' + (item.display_time || ''))
+}
+
+/** Calculated Islamic occasions are all-day calendar entries, not prayer deadlines. */
+export function buildAladhanHolidayItems(
+  rows: IntegrationItemRow[],
+  todayYmd: string,
+  horizonEndYmd: string
+): DeviceReminderItem[] {
+  return rows.flatMap(row => {
+    const raw = row.raw && typeof row.raw === 'object' ? row.raw : {}
+    const date = typeof raw.date === 'string' ? raw.date.slice(0, 10) : ''
+    const title = String(row.title || '').trim()
+    const externalId = String(row.external_id || '').trim()
+    if (row.provider !== 'aladhan' || raw.type !== 'islamic_holiday' ||
+        raw.all_day !== true || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+        date < todayYmd || date > horizonEndYmd || !title || !externalId) return []
+    return [{
+      reminder_id: 'aladhan:' + externalId,
+      title,
+      occurrence_date: date,
+      display_date: formatDisplayDate(date, todayYmd),
+      days_until: diffDaysFromYmd(todayYmd, date),
+      is_overdue: false,
+      is_all_day: true,
+      repeat: 'none' as ReminderRepeatKey,
+      due_time: null,
+      display_time: null,
+      source: 'aladhan' as const,
+      external_id: externalId,
+      raw: { ...raw },
+    }]
+  })
 }
 
 export function buildWasteCollectionItems(
