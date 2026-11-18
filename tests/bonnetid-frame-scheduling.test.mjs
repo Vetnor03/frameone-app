@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 import { normalizeBonnetidDay, bonnetidLocalToIso } from '../app/lib/integrations/bonnetid/normalize.mjs'
-import { buildBonnetidPrayerItems } from '../app/lib/device/remindersFeed.ts'
+import { buildBonnetidPrayerItems, buildIrnReminderItems } from '../app/lib/device/remindersFeed.ts'
 import { isUpcomingIntegratedCalendarItem } from '../app/lib/device/calendarVisibility.ts'
 import { physicalModuleDeadlines, physicalRenderDigest } from '../app/lib/device/contentSignature.mjs'
 
@@ -90,4 +90,37 @@ test('physical frame preserves exact official prayer names without AI rewriting'
   const route = readFileSync(new URL('../app/api/device/reminders/route.ts', import.meta.url), 'utf8')
   assert.match(route, /optimizerItems = selectedItems\.map\([\s\S]*?\.filter\(\(item\) => item\.source !== 'bonnetid'\)/)
   assert.match(route, /primaryTitles\.get\(index\) \|\| item\.title/)
+})
+
+test('IRN source accepts official holidays and retains all-day items until tomorrow', () => {
+  const holiday = {
+    id: 'h1', user_id: 'tester', provider: 'bonnetid', external_id: 'holiday:official-id',
+    title: 'Offisiell høytid', body: null, starts_at: null, due_at: null, priority: 5,
+    raw: { source: 'bonnetid', type: 'holiday', date: '2026-11-18', all_day: true },
+  }
+  const tonight = buildIrnReminderItems([holiday], date, date, 'Europe/Oslo', new Date('2026-11-18T21:00:00Z'))
+  assert.deepEqual(tonight.map(item => item.title), ['Offisiell høytid'])
+  assert.equal(tonight[0].is_all_day, true)
+  assert.equal(tonight[0].display_time, null)
+  assert.equal(tonight[0].source, 'bonnetid')
+  const tomorrow = buildIrnReminderItems([holiday], '2026-11-19', '2026-11-20', 'Europe/Oslo', new Date('2026-11-19T12:00:00Z'))
+  assert.deepEqual(tomorrow, [])
+})
+
+test('IRN events and prayers share their source but timed events expire precisely', () => {
+  const event = {
+    id: 'e1', user_id: 'tester', provider: 'bonnetid', external_id: 'event:official-id',
+    title: 'Arrangement', body: null, starts_at: '2026-11-18T17:15:00.000Z', due_at: null, priority: 5,
+    raw: { source: 'bonnetid', type: 'event', date: '2026-11-18' },
+  }
+  assert.deepEqual(buildIrnReminderItems([event], date, date, 'Europe/Oslo', new Date('2026-11-18T17:14:59Z')).map(item => item.display_time), ['18:15'])
+  assert.deepEqual(buildIrnReminderItems([event], date, date, 'Europe/Oslo', new Date('2026-11-18T17:15:00Z')), [])
+})
+
+test('calendar source label remains IRN and prayer refresh does not delete future IRN events', () => {
+  const server = readFileSync(new URL('../app/lib/integrations/bonnetid/server.ts', import.meta.url), 'utf8')
+  const ui = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  assert.match(server, /\.filter\(row => row\.raw\?\.type === 'prayer_time'\)/)
+  assert.match(ui, /if \(source === 'bonnetid'\) return 'IRN'/)
+  assert.match(ui, /provider\.eq\.bonnetid/)
 })

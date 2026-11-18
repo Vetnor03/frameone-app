@@ -255,7 +255,7 @@ export function buildGoogleCalendarItems(
   })
 }
 
-export function buildBonnetidPrayerItems(
+export function buildIrnReminderItems(
   rows: IntegrationItemRow[],
   todayYmd: string,
   horizonEndYmd: string,
@@ -265,13 +265,25 @@ export function buildBonnetidPrayerItems(
   return rows.flatMap(row => {
     const title = String(row.title || '').trim()
     const externalId = String(row.external_id || '').trim()
+    const raw = row.raw || {}
+    const kind = raw.type
+    if (!title || !externalId || raw.source !== 'bonnetid' ||
+        (kind !== 'prayer_time' && kind !== 'holiday' && kind !== 'event')) return []
+
+    // Official provider calendar items are shared with prayer times under IRN.
+    // This supports a future endpoint, but does not invent holiday dates.
+    const allDay = kind === 'holiday' || raw.all_day === true || raw.allDay === true
+    const rawDate = typeof raw.date === 'string' ? raw.date : ''
     const startsAt = String(row.starts_at || '')
-    if (!title || !externalId || !startsAt || row.raw?.source !== 'bonnetid' || row.raw?.type !== 'prayer_time') return []
     const timestamp = Date.parse(startsAt)
-    if (!Number.isFinite(timestamp) || timestamp <= now.getTime()) return []
-    const date = isoToYmdInTimeZone(startsAt, timeZone)
-    const time = isoToHmInTimeZone(startsAt, timeZone)
-    if (!date || !time || date > horizonEndYmd || date < todayYmd) return []
+    if (!allDay && (!Number.isFinite(timestamp) || timestamp <= now.getTime())) return []
+
+    const date = allDay
+      ? (/^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : Number.isFinite(timestamp) ? isoToYmdInTimeZone(startsAt, timeZone) : '')
+      : isoToYmdInTimeZone(startsAt, timeZone)
+    const time = allDay ? null : isoToHmInTimeZone(startsAt, timeZone)
+    if (!date || (!allDay && !time) || date > horizonEndYmd || date < todayYmd) return []
+
     return [{
       reminder_id: 'bonnetid:' + externalId,
       title,
@@ -283,10 +295,14 @@ export function buildBonnetidPrayerItems(
       due_time: time,
       display_time: time,
       source: 'bonnetid' as const,
+      is_all_day: allDay,
       external_id: externalId,
     }]
   })
 }
+
+/** @deprecated The IRN source also supports holidays and events. */
+export const buildBonnetidPrayerItems = buildIrnReminderItems
 
 export function buildWasteCollectionItems(
   rows: IntegrationItemRow[],

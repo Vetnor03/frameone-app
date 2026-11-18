@@ -127,12 +127,17 @@ export async function refreshBonnetidForUser(userId: string, chosenCity?: Bonnet
     updated_at: now,
   })).filter(row => row.starts_at !== null)
   if (rows.length < 5) throw new BonnetidError('no_times', 'Bønnetid returned invalid times.')
-  const previous = await db.from('integration_items').select('external_id').eq('user_id', userId).eq('provider', PROVIDER)
+  // Only replace IRN prayer times, preserving future official calendar records
+  // under the same connection and Reminders source.
+  const previous = await db.from('integration_items').select('external_id,raw').eq('user_id', userId).eq('provider', PROVIDER)
   if (previous.error) throw new Error(previous.error.message)
   const upsert = await db.from('integration_items').upsert(rows, { onConflict: 'user_id,provider,external_id' })
   if (upsert.error) throw new Error(upsert.error.message)
   const updatedIds = new Set(rows.map(row => row.external_id))
-  const staleIds = (previous.data || []).map(row => row.external_id).filter(id => !updatedIds.has(id))
+  const staleIds = (previous.data || [])
+    .filter(row => row.raw?.type === 'prayer_time')
+    .map(row => row.external_id)
+    .filter(id => !updatedIds.has(id))
   if (staleIds.length) {
     const removed = await db.from('integration_items').delete().eq('user_id', userId).eq('provider', PROVIDER).in('external_id', staleIds)
     if (removed.error) throw new Error(removed.error.message)

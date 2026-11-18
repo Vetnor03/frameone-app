@@ -11361,7 +11361,7 @@ function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
   if (source === 'google-calendar') return 'event'
   if (source === 'spond') return 'sports'
   if (source === 'waste') return 'chores'
-  if (source === 'local-events') return 'event'
+  if (source === 'local-events' || source === 'bonnetid') return 'event'
   return null
 }
 
@@ -11370,7 +11370,7 @@ function integrationReminderSourceLabel(language: AppLanguage, source?: Reminder
   if (source === 'google-calendar') return 'Google Calendar'
   if (source === 'spond') return 'Spond'
   if (source === 'waste') return language === 'no' ? 'Renovasjon' : 'Waste'
-  if (source === 'bonnetid') return language === 'no' ? 'Bønn' : 'Prayer'
+  if (source === 'bonnetid') return 'IRN'
   if (source === 'local-events') return 'Events'
   return language === 'no' ? 'Påminnelse' : 'Reminder'
 }
@@ -15320,7 +15320,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           .select('id, provider, external_id, title, starts_at, due_at, raw')
           .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway', 'bonnetid'])
           .or(activeDeviceId ? `user_id.eq.${sessionUserId},device_id.eq.${activeDeviceId}` : `user_id.eq.${sessionUserId}`)
-          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste`)
+          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.bonnetid`)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (integrationError) {
@@ -15339,6 +15339,8 @@ const manualItems: ReminderUiItem[] = (data || [])
           const selectedLocalEventArea = String(((localEventsIntegrationData?.encrypted_credentials as any)?.areaPreference?.primaryPlaceId) || '').trim()
           const visibleIntegrationData = (integrationData || []).filter((row) =>
             (String(row.provider || '') !== 'waste' || (integrationActiveForPilot('waste') && String(row.raw?.collection_date || row.raw?.date || '') >= todayYmd)) &&
+            // Keep all-day IRN holidays visible throughout their local date.
+            (String(row.provider || '') !== 'bonnetid' || (row.raw?.all_day === true || row.raw?.allDay === true || row.raw?.type === 'holiday' ? String(row.raw?.date || '') >= todayYmd : true)) &&
             (String(row.provider || '') !== 'edge-of-norway' || !selectedLocalEventArea || (Array.isArray(row.raw?.areaKeys) ? row.raw.areaKeys.includes(selectedLocalEventArea) : String(row.raw?.areaKey || row.raw?.primaryPlaceId || '').trim() === selectedLocalEventArea)))
           const localEventExternalIds = visibleIntegrationData
             .filter((row: any) => String(row.provider || '') === 'edge-of-norway')

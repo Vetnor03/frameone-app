@@ -2,7 +2,7 @@
 
 Bønnetid appears **last among connectable integrations**, immediately before apps under evaluation. A user selects an official city from IRN's provider list and an explicit Asr shadow method (**1x or 2x**), and the connection is shared at account level. After connection, the button becomes **Disconnect**; **Change city** remains available.
 
-Prayer times appear under a **Bønn / Prayer** source filter in Reminders, and as ordinary dated events on the physical frame when enabled for that frame. They are stored in `integration_items`, **not** in user-created `reminders` (the personal 20-item limit is unaffected). Only future times are displayed, with app time filtering updated at minute boundaries. Sunrise (IRN's `shuruq_sunrise`) is included when returned by the official API. Maghrib is used for sunset unless IRN returns a distinct sunset field. Disconnect removes every stored Bønnetid event.
+Prayer times and future official IRN calendar events share the **IRN** source filter in Reminders, and as ordinary dated events on the physical frame when enabled for that frame. They are stored in `integration_items`, **not** in user-created `reminders` (the personal 20-item limit is unaffected). Only future times are displayed, with app time filtering updated at minute boundaries. Sunrise (IRN's `shuruq_sunrise`) is included when returned by the official API. Maghrib is used for sunset unless IRN returns a distinct sunset field. Disconnect removes all stored IRN items.
 
 ## Deployment prerequisite
 
@@ -20,3 +20,11 @@ Times are normalized as Norway-local wall clock and converted to instants using 
 Server refresh is debounced to 12 hours and can be triggered by an active Reminders tab or deferred physical-frame refresh. The initial cache covers ten calendar days. No end-user credentials are requested.
 
 The physical Reminders integration uses its existing hard reminder-time scheduler. Each prayer event at an exact minute prompts the next scheduled frame wake in both modes, without adding another polling loop. IRN names are retained verbatim and excluded from AI title rewriting.
+
+## Future official calendar support
+
+Keep the internal provider ID `bonnetid` for existing connections, settings and saved events; only its user-facing Reminders source label becomes **IRN**. All IRN prayer times, holidays and provider events belong to that one filter.
+
+The feed accepts authoritative `raw.source = 'bonnetid'` records of `raw.type = 'prayer_time' | 'holiday' | 'event'`. A holiday with an official `raw.date = 'YYYY-MM-DD'` is all-day and persists through the entire date. Timed events with `starts_at` expire at the start minute. A prayer refresh only removes expired `prayer_time` records, preserving other official IRN calendar items. Disconnect removes all provider items.
+
+**Still pending:** IRN holiday/activities API permission, documented response schema and data import. Their public product has a Hijri calendar and events, but we have not verified a programmatic calendar endpoint. Never generate guessed religious dates or claim the holiday import is live. Future external IDs must be namespaced to avoid collisions with prayer IDs.
