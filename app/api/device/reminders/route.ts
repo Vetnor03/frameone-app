@@ -2,11 +2,12 @@
 
 import { after, NextResponse } from 'next/server'
 import { integrationActiveForPilot } from '@/app/lib/integrations/catalog'
+import { syncBonnetidIfStale } from '@/app/lib/integrations/bonnetid/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsIfStaleForUser } from '@/app/lib/integrations/teams/server'
 import { syncGoogleCalendarFromStoredConnection } from '@/app/lib/integrations/google-calendar/server'
-import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildWasteCollectionItems, preferTomorrowAfterSingleAllDayEvent, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
+import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildWasteCollectionItems, buildBonnetidPrayerItems, preferTomorrowAfterSingleAllDayEvent, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
 import { reminderClockBoundaryReached } from '@/app/lib/device/reminderClockBoundary'
@@ -649,6 +650,7 @@ export async function GET(req: Request) {
     let teamsItems: DeviceReminderItem[] = []
     let googleCalendarItems: DeviceReminderItem[] = []
     let wasteItems: DeviceReminderItem[] = []
+    let bonnetidItems: DeviceReminderItem[] = []
     let localEventItems: DeviceReminderItem[] = []
     const settingsJson = (deviceSettingsData?.settings_json || null) as {
       modules?: {
@@ -672,6 +674,7 @@ export async function GET(req: Request) {
             providerEnabled('spond') ? syncSpondIfStaleForUsers(memberUserIds) : Promise.resolve(),
             Promise.allSettled((providerEnabled('teams') ? memberUserIds : []).map((userId) => syncTeamsIfStaleForUser(userId, { horizonDays }))),
             Promise.allSettled((providerEnabled('google-calendar') ? memberUserIds : []).map((userId) => syncGoogleCalendarFromStoredConnection(userId))),
+            Promise.allSettled((providerEnabled('bonnetid') ? memberUserIds : []).map((userId) => syncBonnetidIfStale(userId))),
           ])
           syncResults.forEach((result) => {
             if (result.status === 'rejected') logOptionalReminderProviderFailure('integration-sync', result.reason)
@@ -758,6 +761,18 @@ export async function GET(req: Request) {
       } catch (error) {
         logOptionalReminderProviderFailure('waste', error)
       } })(), (async () => { try {
+        if (!integrationActiveForPilot('bonnetid') || !providerEnabled('bonnetid')) return
+        const { data, error } = await supabase.from('integration_items')
+          .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
+          .eq('provider', 'bonnetid').in('user_id', memberUserIds)
+          .order('starts_at', { ascending: true, nullsFirst: false })
+        if (error) throw error
+        bonnetidItems = buildBonnetidPrayerItems(
+          Array.isArray(data) ? data as IntegrationItemRow[] : [], todayYmd, horizonEndYmd, timeZone, now
+        )
+      } catch (error) {
+        logOptionalReminderProviderFailure('bonnetid', error)
+      } })(), (async () => { try {
         if (!providerEnabled('local-events')) return
 
         const localEventsStartedAt = Date.now()
@@ -819,6 +834,7 @@ export async function GET(req: Request) {
       ...teamsItems,
       ...googleCalendarItems,
       ...wasteItems,
+      ...bonnetidItems,
       ...localEventItems,
     ])
 

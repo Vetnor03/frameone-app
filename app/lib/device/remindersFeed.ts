@@ -15,7 +15,7 @@ export type ReminderRepeatKey =
   | '2years'
   | 'custom'
 
-export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events'
+export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events' | 'bonnetid'
 
 export type DeviceReminderItem = {
   reminder_id: string
@@ -250,6 +250,39 @@ export function buildGoogleCalendarItems(
       display_time: displayTime,
       source: 'google-calendar' as const,
       is_all_day: allDay,
+      external_id: externalId,
+    }]
+  })
+}
+
+export function buildBonnetidPrayerItems(
+  rows: IntegrationItemRow[],
+  todayYmd: string,
+  horizonEndYmd: string,
+  timeZone: string,
+  now = new Date()
+): DeviceReminderItem[] {
+  return rows.flatMap(row => {
+    const title = String(row.title || '').trim()
+    const externalId = String(row.external_id || '').trim()
+    const startsAt = String(row.starts_at || '')
+    if (!title || !externalId || !startsAt || row.raw?.source !== 'bonnetid' || row.raw?.type !== 'prayer_time') return []
+    const timestamp = Date.parse(startsAt)
+    if (!Number.isFinite(timestamp) || timestamp <= now.getTime()) return []
+    const date = isoToYmdInTimeZone(startsAt, timeZone)
+    const time = isoToHmInTimeZone(startsAt, timeZone)
+    if (!date || !time || date > horizonEndYmd || date < todayYmd) return []
+    return [{
+      reminder_id: 'bonnetid:' + externalId,
+      title,
+      occurrence_date: date,
+      display_date: formatDisplayDate(date, todayYmd),
+      days_until: diffDaysFromYmd(todayYmd, date),
+      is_overdue: false,
+      repeat: 'none' as ReminderRepeatKey,
+      due_time: time,
+      display_time: time,
+      source: 'bonnetid' as const,
       external_id: externalId,
     }]
   })
@@ -537,6 +570,7 @@ export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderIte
     if (item.source === 'teams') return 1
     if (item.source === 'spond') return 2
     if (item.source === 'waste') return 3
+    if (item.source === 'bonnetid') return 3
     if (item.source === 'local-events') return 4
     return 5
   }
