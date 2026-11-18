@@ -40,7 +40,7 @@ import { hasChosenWeatherLocation, norwegianStarterCountdowns, norwegianStarterR
 import { firstReminderOccurrenceDate, nextReminderOccurrenceDate as nextReminderOccurrenceDateShared, normalizeRepeatWeekdays } from './lib/reminders/recurrence'
 import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
 import { deriveDynamicModuleKeys } from './lib/dynamicModuleTabs.mjs'
-import { dynamicPeriodAt, normalizeDynamicLayout } from './lib/device/dynamicLayout.mjs'
+import { dynamicPeriodAt, normalizeDynamicLayout, resolveDynamicFrameSettings } from './lib/device/dynamicLayout.mjs'
 import type { DynamicChoice, DynamicConfig, DynamicPeriod } from './lib/device/dynamicLayout.mjs'
 import { initializeProductAnalytics, trackProductEvent } from './lib/productAnalytics.mjs'
 import {
@@ -3050,10 +3050,13 @@ export default function HomePage() {
       }
       savedStateRef.current = persistedSignature
       if (userId && typeof window !== 'undefined') {
-        const matchingCustom = settingsJson.layout === 'custom'
-          ? customLayouts.find((item) => item.id === activeCustomLayoutId)
+        // Save the currently effective daypart, not whichever daypart the
+        // user happened to be editing. Avoid a misleading launch preview.
+        const effectivePreviewSettings = resolveDynamicFrameSettings(settingsJson).settings
+        const matchingCustom = effectivePreviewSettings.layout === 'custom'
+          ? customLayouts.find((item) => item.id === effectivePreviewSettings.custom_layout_id)
           : null
-        writeLaunchPreview(window.localStorage, userId, deviceId, settingsJson, matchingCustom)
+        writeLaunchPreview(window.localStorage, userId, deviceId, effectivePreviewSettings, matchingCustom)
       }
       savedFrameStateRef.current = {
         frameTheme: draftTheme,
