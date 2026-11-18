@@ -25,13 +25,13 @@ import { addGroceryItemsCanonical } from './lib/groceries/actions'
 import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, recipeSourceLink, scaleRecipeQuantity, selectedRecipeGroceries, type GroceryRecipeItem, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes.mjs'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { isUpcomingIntegratedCalendarItem } from './lib/device/calendarVisibility'
-import { nextAladhanWithOccasions } from './lib/integrations/aladhan/nextOccurrence.mjs'
+import { nextBonnetidWithOccasions } from './lib/integrations/bonnetid/nextOccurrence.mjs'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, getLocalEventPlace, normalizeLocalEventAreaPreference, nationwideLocalEventArea, type LocalEventAreaPreference } from './lib/integrations/local-events/places'
 import { localEventGroupKeyFromRaw, groupSkipId } from './lib/integrations/local-events/grouping'
 import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationMatchesSearch, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
 const WasteSetupModal = dynamic(() => import('./components/WasteSetupModal'))
-const AladhanPreviewModal = dynamic(() => import('./components/AladhanPreviewModal'))
+const BonnetidSetupModal = dynamic(() => import('./components/BonnetidSetupModal'))
 const IntegrationRequestCard = dynamic(() => import('./components/IntegrationRequestCard'))
 import AppSheet, { AppSheetVisibilityContext } from './components/AppSheet'
 import { StartupSplash } from './components/StartupSplash'
@@ -3656,7 +3656,7 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'aladhan'
+type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'bonnetid'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -3758,39 +3758,36 @@ function ConnectAppsScreen({
   const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams' | 'google-calendar', string>>>({})
   const [localEventsOpen, setLocalEventsOpen] = useState(false)
   const [wasteModalOpen, setWasteModalOpen] = useState(false)
-  const [aladhanPreviewOpen, setAladhanPreviewOpen] = useState(false)
-  const [aladhanConnected, setAladhanConnected] = useState(false)
-  const [aladhanCity, setAladhanCity] = useState<string | null>(null)
-  const [aladhanAsrMethod, setAladhanAsrMethod] = useState<1 | 2>(1)
-  const [aladhanMethod, setAladhanMethod] = useState(3)
-  const [aladhanHighLatitude, setAladhanHighLatitude] = useState(3)
-  const [aladhanStatusResolved, setAladhanStatusResolved] = useState(false)
+  const [bonnetidModalOpen, setBonnetidModalOpen] = useState(false)
+  const [bonnetidConnected, setBonnetidConnected] = useState(false)
+  const [bonnetidCity, setBonnetidCity] = useState<string | null>(null)
+  const [bonnetidAsrMethod, setBonnetidAsrMethod] = useState<1 | 2>(2)
+  const [bonnetidStatusResolved, setBonnetidStatusResolved] = useState(false)
   useEffect(() => {
     let cancelled = false
-    setAladhanStatusResolved(false)
+    setBonnetidStatusResolved(false)
     void (async () => {
-      const token = (await supabase.auth.getSession()).data.session?.access_token
+      const token = (await supabase.auth.getSession()).data.session?.access_token || ''
       if (!token) {
-        if (!cancelled) { setAladhanConnected(false); setAladhanStatusResolved(true) }
+        if (!cancelled) { setBonnetidConnected(false); setBonnetidCity(null); setBonnetidStatusResolved(true) }
         return
       }
-      const response = await fetch('/api/integrations/aladhan/status', {
+      const response = await fetch('/api/integrations/bonnetid/status', {
         headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
       })
-      if (!response.ok) throw new Error('AlAdhan status unavailable')
+      if (!response.ok) throw new Error('IRN status unavailable')
       const json = await response.json()
       if (!cancelled) {
-        setAladhanConnected(json.connected === true)
-        setAladhanCity(typeof json.city === 'string' ? json.city : null)
-        setAladhanAsrMethod(json.asrMethod === 2 ? 2 : 1)
-        setAladhanMethod(typeof json.method === 'number' ? json.method : 3)
-        setAladhanHighLatitude(typeof json.highLatitude === 'number' ? json.highLatitude : 3)
-        setAladhanStatusResolved(true)
-        setLocallyDisconnectedApps(current => ({ ...current, aladhan: false }))
+        setBonnetidConnected(json.connected === true)
+        setBonnetidCity(typeof json.city === 'string' ? json.city : null)
+        setBonnetidAsrMethod(json.asrMethod === 1 ? 1 : 2)
+        setLocallyDisconnectedApps(current => ({ ...current, bonnetid: false }))
+        setBonnetidStatusResolved(true)
       }
-    })().catch(() => { if (!cancelled) setAladhanStatusResolved(true) })
+    })().catch(() => { if (!cancelled) setBonnetidStatusResolved(true) })
     return () => { cancelled = true }
   }, [activeDeviceId])
+
   const [wasteConnected, setWasteConnected] = useState(() => connectAppIsConnected(modulesJson, 'waste'))
   const [wasteStatusResolved, setWasteStatusResolved] = useState(false)
   useEffect(() => {
@@ -4177,7 +4174,7 @@ function ConnectAppsScreen({
   }
 
   async function disconnectIntegration(provider: DisconnectableConnectAppKey) {
-    const appName = provider === 'teams' ? 'Microsoft Calendar' : provider === 'google-calendar' ? 'Google Calendar' : provider === 'waste' ? (language === 'no' ? 'Renovasjon' : 'Waste collection') : provider === 'aladhan' ? 'AlAdhan' : 'Spond'
+    const appName = provider === 'teams' ? 'Microsoft Calendar' : provider === 'google-calendar' ? 'Google Calendar' : provider === 'waste' ? (language === 'no' ? 'Renovasjon' : 'Waste collection') : provider === 'bonnetid' ? 'IRN' : 'Spond'
     const setProviderLoading = provider === 'teams' ? setTeamsLoading : provider === 'google-calendar' ? setGoogleLoading : provider === 'spond' ? setSpondLoading : null
     if (disconnectingApp === provider) return
     setProviderLoading?.(true)
@@ -4212,10 +4209,10 @@ function ConnectAppsScreen({
         setWasteConnected(false)
         changeFrameIntegration('waste', { enabled: false })
         window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
-      } else if (provider === 'aladhan') {
-        setAladhanConnected(false)
-        setAladhanCity(null)
-        changeFrameIntegration('aladhan', { enabled: false })
+      } else if (provider === 'bonnetid') {
+        setBonnetidConnected(false)
+        setBonnetidCity(null)
+        changeFrameIntegration('bonnetid', { enabled: false })
         window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
       }
       setLocallyDisconnectedApps((current) => ({ ...current, [provider]: true }))
@@ -4370,7 +4367,7 @@ function ConnectAppsScreen({
     if (app.key === 'google-calendar') return googleAccountConnected
     if (app.key === 'local-events') return !!localEventsSavedArea
     if (app.key === 'waste') return wasteConnected
-    if (app.key === 'aladhan') return aladhanConnected
+    if (app.key === 'bonnetid') return bonnetidConnected
     return connectAppIsConnected(modulesJson, app.key)
   }
 
@@ -4500,8 +4497,8 @@ function ConnectAppsScreen({
               ? (language === 'no' ? `Events valgt, men ingen synkronisering ennå: ${localEventsSyncIssue}` : `Events selected but not synced yet: ${localEventsSyncIssue}`)
               : app.key === 'local-events' && localEventsSelectedName
               ? (language === 'no' ? `Arrangementer nær ${localEventsSelectedName}` : `Events near ${localEventsSelectedName}`)
-              : app.key === 'aladhan' && aladhanCity
-              ? (language === 'no' ? 'Bønnetider for ' : 'Prayer times for ') + aladhanCity + ' · Asr ' + aladhanAsrMethod + 'x'
+              : app.key === 'bonnetid' && bonnetidCity
+              ? (language === 'no' ? 'Bønnetider for ' : 'Prayer times for ') + bonnetidCity + ' · Asr ' + bonnetidAsrMethod + 'x'
               : app.description
             const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar'
             const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : null
@@ -4552,12 +4549,12 @@ function ConnectAppsScreen({
                           {language === 'no' ? 'ENDRE ADRESSE' : 'EDIT ADDRESS'}
                         </button>
                       </div>
-                    ) : app.key === 'aladhan' ? (
+                    ) : app.key === 'bonnetid' ? (
                       <div className="shrink-0 flex flex-col items-stretch gap-1.5">
-                        <button type="button" onClick={() => setDisconnectConfirmApp('aladhan')} disabled={disconnectingApp === 'aladhan'} className="h-8 rounded-xl border border-[#d94b4b]/40 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
+                        <button type="button" onClick={() => setDisconnectConfirmApp('bonnetid')} disabled={disconnectingApp === 'bonnetid'} className="h-8 rounded-xl border border-[#d94b4b]/40 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
                           {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
                         </button>
-                        <button type="button" onClick={() => setAladhanPreviewOpen(true)} disabled={disconnectingApp === 'aladhan'} className="h-7 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)] disabled:opacity-60">
+                        <button type="button" onClick={() => setBonnetidModalOpen(true)} disabled={disconnectingApp === 'bonnetid'} className="h-7 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)] disabled:opacity-60">
                           {language === 'no' ? 'ENDRE' : 'EDIT'}
                         </button>
                       </div>
@@ -4578,7 +4575,7 @@ function ConnectAppsScreen({
                   ) : (
                     <button
                       type="button"
-                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'aladhan' && !aladhanStatusResolved) || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved))}
+                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved) || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved))}
                       onClick={() => {
                         if (app.key === 'spond') {
                           if (spondAccountConnected) { setSpondConnected(true); changeFrameIntegration('spond', { enabled: true }) }
@@ -4596,15 +4593,15 @@ function ConnectAppsScreen({
                           setLocalEventsOpen(true)
                         } else if (app.key === 'waste') {
                           setWasteModalOpen(true)
-                        } else if (app.key === 'aladhan') {
-                          setAladhanPreviewOpen(true)
+                        } else if (app.key === 'bonnetid') {
+                          setBonnetidModalOpen(true)
                         }
                       }}
                       className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-20)] text-[11px] tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
                     >
                       {app.key === 'local-events'
                         ? (language === 'no' ? 'KOBLE TIL' : 'CONNECT')
-                        : (app.key === 'google-calendar' && !googleStatusResolved) || (app.key === 'teams' && !teamsStatusResolved) || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'aladhan' && !aladhanStatusResolved)
+                        : (app.key === 'google-calendar' && !googleStatusResolved) || (app.key === 'teams' && !teamsStatusResolved) || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved)
                           ? (language === 'no' ? 'SJEKKER…' : 'CHECKING…')
                           : ((app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading))
                             ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…')
@@ -4673,16 +4670,16 @@ function ConnectAppsScreen({
         >
             <div className="text-base font-semibold text-[color:var(--fg-90)]">
               {language === 'no'
-                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? 'Renovasjon' : disconnectConfirmApp === 'aladhan' ? 'AlAdhan' : 'Spond'}?`
-                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? 'Waste collection' : disconnectConfirmApp === 'aladhan' ? 'AlAdhan' : 'Spond'}?`}
+                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? 'Renovasjon' : disconnectConfirmApp === 'bonnetid' ? 'IRN' : 'Spond'}?`
+                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? 'Waste collection' : disconnectConfirmApp === 'bonnetid' ? 'IRN' : 'Spond'}?`}
             </div>
             <div className="mt-2 text-xs leading-snug text-[color:var(--fg-45)]">
               {disconnectConfirmApp === 'waste'
                 ? (language === 'no'
                   ? 'Den valgte adressen og tilhørende tømmedatoer fjernes fra Påminnelser.'
                   : 'The selected address and its collection dates will be removed from Reminders.')
-                : disconnectConfirmApp === 'aladhan'
-                ? (language === 'no' ? 'Den valgte byen og alle AlAdhan-tider fjernes fra Påminnelser.' : 'Your city and all AlAdhan times will be removed from Reminders.')
+                : disconnectConfirmApp === 'bonnetid'
+                ? (language === 'no' ? 'Den valgte byen og alle IRN-tider fjernes fra Påminnelser.' : 'Your city and all IRN times will be removed from Reminders.')
                 : (language === 'no'
                   ? 'Lagrede innlogginger og synkroniserte data fjernes fra denne integrasjonen.'
                   : 'Stored credentials and synced data will be removed for this integration.')}
@@ -4695,10 +4692,10 @@ function ConnectAppsScreen({
 
       {localEventsOpen && renderLocalEventsModal()}
       {wasteModalOpen && <WasteSetupModal language={language} onClose={() => setWasteModalOpen(false)} onSaved={(connected) => { setWasteConnected(connected); setLocallyDisconnectedApps(current => ({ ...current, waste: false })); changeFrameIntegration('waste', { enabled: connected }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }} />}
-      {aladhanPreviewOpen && <AladhanPreviewModal language={language} currentCity={aladhanCity} currentAsrMethod={aladhanAsrMethod} currentMethod={aladhanMethod} currentHighLatitude={aladhanHighLatitude} onClose={() => setAladhanPreviewOpen(false)} onConnected={({ city, asrMethod, method, highLatitude }) => {
-        setAladhanConnected(true); setAladhanCity(city); setAladhanAsrMethod(asrMethod); setAladhanMethod(method); setAladhanHighLatitude(highLatitude);
-        setLocallyDisconnectedApps(current => ({ ...current, aladhan: false }));
-        changeFrameIntegration('aladhan', { enabled: true });
+      {bonnetidModalOpen && <BonnetidSetupModal language={language} currentCity={bonnetidCity} currentAsrMethod={bonnetidAsrMethod} onClose={() => setBonnetidModalOpen(false)} onSaved={(connected, city, asrMethod) => {
+        setBonnetidConnected(connected); setBonnetidCity(city); setBonnetidAsrMethod(asrMethod);
+        setLocallyDisconnectedApps(current => ({ ...current, bonnetid: false }));
+        changeFrameIntegration('bonnetid', { enabled: connected });
         window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
       }} />}
 
@@ -11237,7 +11234,7 @@ type ReminderRepeatKey =
   | 'custom'
 
 type ReminderTag = 'work' | 'personal' | 'sports' | 'chores' | 'event'
-type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'waste' | 'local-events' | 'aladhan'
+type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'waste' | 'local-events' | 'bonnetid'
 type ReminderSourceFilter = ReminderSource
 
 type ReminderUiItem = {
@@ -11341,7 +11338,7 @@ function isReminderTag(v: any): v is ReminderTag {
 function integrationProviderToReminderSource(provider: any): ReminderSource | null {
   const value = String(provider ?? '').trim().toLowerCase()
   if (value === 'edge-of-norway') return 'local-events'
-  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'waste' || value === 'aladhan') return value
+  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'waste' || value === 'bonnetid') return value
   return null
 }
 
@@ -11372,7 +11369,7 @@ function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
   if (source === 'spond') return 'sports'
   if (source === 'waste') return 'chores'
   if (source === 'local-events') return 'event'
-  if (source === 'aladhan') return 'event'
+  if (source === 'bonnetid') return 'event'
   return null
 }
 
@@ -11382,7 +11379,7 @@ function integrationReminderSourceLabel(language: AppLanguage, source?: Reminder
   if (source === 'spond') return 'Spond'
   if (source === 'waste') return language === 'no' ? 'Renovasjon' : 'Waste'
   if (source === 'local-events') return 'Events'
-  if (source === 'aladhan') return 'AlAdhan'
+  if (source === 'bonnetid') return 'IRN'
   return language === 'no' ? 'Påminnelse' : 'Reminder'
 }
 
@@ -15263,7 +15260,7 @@ const manualItems: ReminderUiItem[] = (data || [])
 
       let integrationItems: ReminderUiItem[] = []
       let nextAvailableSources: ReminderSourceFilter[] = ['remind']
-      let aladhanRefresh: Promise<boolean> | null = null
+      let bonnetidRefresh: Promise<boolean> | null = null
       const sessionUserId = (await supabase.auth.getUser())?.data?.user?.id
       if (generation !== requestGenerationRef.current) return
       if (!sessionUserId || sessionUserId !== userId) return
@@ -15278,7 +15275,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           const source = integrationProviderToReminderSource(connection.provider)
           if (source) connectedSources.add(source)
         }
-        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste', 'aladhan'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
+        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste', 'bonnetid'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
         // Provider chips do not depend on potentially slow upstream event refreshes.
         if (generation !== requestGenerationRef.current) return
         setAvailableSources(nextAvailableSources)
@@ -15316,18 +15313,18 @@ const manualItems: ReminderUiItem[] = (data || [])
           }
         }
 
-        if (isActive && !skipProviderSync && connectedSources.has('aladhan')) {
+        if (isActive && !skipProviderSync && connectedSources.has('bonnetid')) {
           // Render the saved timetable now. A stale-provider sync can involve
           // multiple upstream requests and must never block the source chip.
-          aladhanRefresh = (async () => {
+          bonnetidRefresh = (async () => {
             try {
               const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
               if (!token) return false
-              const response = await fetch('/api/integrations/aladhan/sync', {
+              const response = await fetch('/api/integrations/bonnetid/sync', {
                 method: 'POST', headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
               })
               if (!response.ok) {
-                console.warn('[reminders] AlAdhan refresh failed', response.status)
+                console.warn('[reminders] IRN refresh failed', response.status)
                 return false
               }
               const result = await response.json().catch(() => null)
@@ -15335,7 +15332,7 @@ const manualItems: ReminderUiItem[] = (data || [])
               // exclusively when the server actually refreshed the timetable.
               return result?.connected === true && Number.isInteger(result?.itemCount)
             } catch (error) {
-              console.warn('[reminders] AlAdhan refresh failed', error)
+              console.warn('[reminders] IRN refresh failed', error)
               return false
             }
           })()
@@ -15345,9 +15342,9 @@ const manualItems: ReminderUiItem[] = (data || [])
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
-          .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway', 'aladhan'])
+          .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway', 'bonnetid'])
           .or(activeDeviceId ? `user_id.eq.${sessionUserId},device_id.eq.${activeDeviceId}` : `user_id.eq.${sessionUserId}`)
-          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.aladhan`)
+          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.bonnetid`)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (integrationError) {
@@ -15394,18 +15391,13 @@ const manualItems: ReminderUiItem[] = (data || [])
             .map((row: any) => {
               const source = integrationProviderToReminderSource(row.provider)
               if (!source) return null
-              if (source === 'aladhan') {
-                const isPrayerOrSolarTime = row.raw?.type === 'prayer_time' &&
-                  ['Fajr', 'Soloppgang', 'Dhuhr', 'Asr', 'Solnedgang', 'Maghrib', 'Isha'].includes(String(row.title || ''))
-                const isIslamicOccasion = row.raw?.type === 'islamic_holiday' && row.raw?.all_day === true
-                if (!isPrayerOrSolarTime && !isIslamicOccasion) return null
-              }
+              if (source === 'bonnetid' && (row.raw?.source !== 'bonnetid' || !['prayer_time', 'holiday', 'event'].includes(row.raw?.type))) return null
               const externalEventId = source === 'local-events' ? String(row.external_id || '').trim() : ''
               const groupKey = source === 'local-events' ? localEventGroupKeyFromRaw(row) : ''
               if (source === 'local-events' && manualItems.some(item => item.sourceEventGroupKey === groupKey && groupKey)) return null
               const { date, time } = integrationItemDateTime(row)
               const title = integrationReminderTitle(row, source, language)
-              if (!title || !date || (source === 'aladhan' && row.raw?.type === 'islamic_holiday' && date < todayYmd)) return null
+              if (!title || !date || (source === 'bonnetid' && date < todayYmd)) return null
               return {
                 id: `${source}:${String(row.external_id || row.id)}`,
                 title,
@@ -15441,10 +15433,10 @@ const manualItems: ReminderUiItem[] = (data || [])
       writeTabSnapshot(window.localStorage, userId, activeDeviceId, 'reminders', '', {
         items:nextReminders, completedOccurrences:nextCompletions, availableSources:nextAvailableSources,
       })
-      if (aladhanRefresh) {
+      if (bonnetidRefresh) {
         // Once a real refresh finishes, quietly replace the saved snapshot.
         // The follow-up read skips providers so it cannot cause a sync loop.
-        void aladhanRefresh.then(refreshed => {
+        void bonnetidRefresh.then(refreshed => {
           if (refreshed && generation === requestGenerationRef.current) {
             void loadReminders({ silent: true }, true)
           }
@@ -15476,7 +15468,7 @@ const manualItems: ReminderUiItem[] = (data || [])
   // Keep all timed integration filters current at the exact minute boundary.
   // This timer updates the phone UI only; it does not trigger any API polling.
   useEffect(() => {
-    if (sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'google-calendar' && sourceFilter !== 'spond' && sourceFilter !== 'aladhan') return
+    if (sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'google-calendar' && sourceFilter !== 'spond' && sourceFilter !== 'bonnetid') return
     setEventNowMs(Date.now())
     let interval: number | undefined
     const delayUntilNextMinute = 60_000 - (Date.now() % 60_000) + 50
@@ -15550,10 +15542,9 @@ const manualItems: ReminderUiItem[] = (data || [])
     const upcoming = reminders.filter((item) => (item.source || 'remind') === sourceFilter).filter((item) =>
       isUpcomingIntegratedCalendarItem(item.source, item.date, normalizeReminderTime(item.time), today, clock)
     )
-    // Roll each prayer or solar time to its next occurrence, but keep all-day
-    // Islamic occasions under the same AlAdhan filter without deduplicating them.
-    if (sourceFilter === 'aladhan') {
-      return nextAladhanWithOccasions(upcoming, item => item.title,
+    // Keep the next official occurrence per prayer; preserve distinct all-day IRN events.
+    if (sourceFilter === 'bonnetid') {
+      return nextBonnetidWithOccasions(upcoming, item => item.title,
         item => item.date, item => normalizeReminderTime(item.time))
     }
     return upcoming
