@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { INTEGRATION_CATALOGUE, integrationMatchesSearch, integrationStatusLabel } from '../app/lib/integrations/catalog.ts'
+import { INTEGRATION_CATALOGUE, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst } from '../app/lib/integrations/catalog.ts'
 
 test('shared integrations are ordered and expose lifecycle capabilities', () => {
   assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'google-calendar', 'local-events', 'spond', 'waste', 'bonnetid', 'vigilo', 'transponder', 'planta'])
@@ -28,4 +28,21 @@ test('Connect Apps search matches names, localizations and evaluation statuses',
   assert.deepEqual(keys('under vurdering'), ['vigilo', 'transponder', 'planta'])
   assert.deepEqual(keys('not a real integration'), [])
   assert.deepEqual(keys('  '), INTEGRATION_CATALOGUE.map(item => item.key))
+})
+
+
+test('Connect Apps shows connected integrations first without rearranging the rest', () => {
+  const apps = [
+    { key: 'teams', connected: false },
+    { key: 'google-calendar', connected: true },
+    { key: 'local-events', connected: false },
+    { key: 'spond', connected: true },
+    { key: 'waste', connected: false },
+  ]
+  assert.deepEqual(sortConnectedAppsFirst(apps).map(item => item.key), ['google-calendar', 'spond', 'teams', 'local-events', 'waste'])
+  assert.deepEqual(apps.map(item => item.key), ['teams', 'google-calendar', 'local-events', 'spond', 'waste'])
+
+  // Once an integration disconnects, it returns to its catalogue position in the remaining group.
+  const afterDisconnect = apps.map(item => item.key === 'google-calendar' ? { ...item, connected: false } : item)
+  assert.deepEqual(sortConnectedAppsFirst(afterDisconnect).map(item => item.key), ['spond', 'teams', 'google-calendar', 'local-events', 'waste'])
 })
