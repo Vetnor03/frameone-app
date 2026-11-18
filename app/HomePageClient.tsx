@@ -15383,7 +15383,7 @@ const manualItems: ReminderUiItem[] = (data || [])
                 ? 'aladhan-holidays' : integrationProviderToReminderSource(row.provider)
               if (!source) return null
               if (source === 'aladhan' && (row.raw?.type !== 'prayer_time' ||
-                  !['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].includes(String(row.title || '')))) return null
+                  !['Fajr', 'Soloppgang', 'Dhuhr', 'Asr', 'Solnedgang', 'Maghrib', 'Isha'].includes(String(row.title || '')))) return null
               const externalEventId = source === 'local-events' ? String(row.external_id || '').trim() : ''
               const groupKey = source === 'local-events' ? localEventGroupKeyFromRaw(row) : ''
               if (source === 'local-events' && manualItems.some(item => item.sourceEventGroupKey === groupKey && groupKey)) return null

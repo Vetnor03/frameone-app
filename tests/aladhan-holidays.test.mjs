@@ -35,7 +35,7 @@ test('calculated upcoming major observances are bounded and missing upstream res
   assert.deepEqual(unavailable.dates, [])
 })
 
-test('prayer and holiday source stay separate, with no solar reminders', () => {
+test('Islamic occasions stay separate while sunrise and sunset are included', () => {
   const backend = readFileSync(new URL('../app/lib/integrations/aladhan/server.ts', import.meta.url), 'utf8')
   const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   const physical = readFileSync(new URL('../app/lib/device/remindersFeed.ts', import.meta.url), 'utf8')
@@ -46,5 +46,10 @@ test('prayer and holiday source stay separate, with no solar reminders', () => {
   assert.match(home, /aladhan-holidays/)
   assert.match(modal, /currentCity && <button/)
   assert.match(modal, /currentCity && advanced &&/)
-  assert.match(modal, /\.filter\(item => item\.name !== 'Sunrise' && item\.name !== 'Sunset'\)/)
+  assert.match(backend, /const timingNames = new Set\(\['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Sunset', 'Maghrib', 'Isha'\]\)/)
+  assert.match(backend, /timingRows\.length !== DAYS \* 7/)
+  assert.match(home, /'Fajr', 'Soloppgang', 'Dhuhr', 'Asr', 'Solnedgang', 'Maghrib', 'Isha'/)
+  assert.match(physical, /'Fajr', 'Soloppgang', 'Dhuhr', 'Asr', 'Solnedgang', 'Maghrib', 'Isha'/)
+  assert.match(modal, /preview\.times\.map\(item =>/)
+  assert.doesNotMatch(modal, /preview\.times\.filter\(item => item\.name !== 'Sunrise'/)
 })

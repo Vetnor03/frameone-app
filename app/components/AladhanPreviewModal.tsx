@@ -22,8 +22,10 @@ const latitudeMethods = [
 ]
 const names: Record<string, { no: string; en: string }> = {
   Fajr: { no: 'Fajr', en: 'Fajr' },
+  Sunrise: { no: 'Soloppgang', en: 'Sunrise' },
   Dhuhr: { no: 'Dhuhr', en: 'Dhuhr' },
   Asr: { no: 'Asr', en: 'Asr' },
+  Sunset: { no: 'Solnedgang', en: 'Sunset' },
   Maghrib: { no: 'Maghrib', en: 'Maghrib' },
   Isha: { no: 'Isha', en: 'Isha' },
 }
@@ -142,8 +144,8 @@ export default function AladhanPreviewModal({
     >
       <p className="text-sm leading-relaxed text-[color:var(--fg-70)]">
         {language === 'no'
-          ? 'Velg sted og Asr-metode. Fem daglige bønner og islamske merkedager legges automatisk til.'
-          : 'Choose a city and Asr method. Five daily prayers and Islamic occasions will be added automatically.'}
+          ? 'Velg sted og Asr-metode. Bønnetider, soloppgang, solnedgang og islamske merkedager legges automatisk til.'
+          : 'Choose a city and Asr method. Prayer times, sunrise, sunset and Islamic occasions will be added automatically.'}
       </p>
 
       <div className="mt-6">
@@ -245,7 +247,7 @@ export default function AladhanPreviewModal({
             <div className="rounded-2xl border border-[color:var(--bd-15)] p-4">
               <p className="mb-3 text-sm font-medium text-[color:var(--fg-85)]">{preview.city} · {preview.date}</p>
               <div className="space-y-2">
-                {preview.times.filter(item => item.name !== 'Sunrise' && item.name !== 'Sunset').map(item => (
+                {preview.times.map(item => (
                   <div key={item.name} className="flex justify-between border-b border-[color:var(--bd-10)] pb-2 text-sm text-[color:var(--fg-80)]">
                     <span>{names[item.name]?.[language] || item.name}</span>
                     <span className="font-semibold tabular-nums">{item.time}</span>
