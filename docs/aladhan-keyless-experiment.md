@@ -26,3 +26,27 @@ Docs:
 https://islamic.network/api/
 https://aladhan.com/prayer-times-api
 https://aladhan.com/credits-and-terms
+
+
+## Connected beta (not just a preview)
+
+Connect > AlAdhan now supports selecting a Norwegian city, Asr 1x or 2x,
+calculation method and high-latitude method, then linking the source. A verified
+7-day schedule is stored as account-level user_integrations + integration_items
+records under **provider=aladhan**, separate from IRN / bonnetid.
+The Reminders filter is named AlAdhan, and physical Reminders displays the
+upcoming events when enabled for that frame. Existing smart reminder-time
+boundaries drive the frame wake without a separate polling mode.
+
+The provider returns Fajr, Sunrise, Dhuhr, Asr, Sunset, Maghrib and Isha.
+On initial connection *all days* must be verified before data are written.
+Any upstream error leaves the existing timetable untouched. Scheduled sync
+occurs no more often than once every 12 hours; daily upstream API requests
+use a six-hour shared cache. Disconnect removes only AlAdhan account data.
+No fallback to IRN, no guessed times, no client credentials.
+
+This is an **Experimental** integration pending comparison with IRN Norwegian
+timetables. The public Islamic Network API does not require a key and publicly
+discusses usage and rate limits. Review its usage terms and attribution
+for product launch. Note that the Hijri holiday markers in the Preview
+are calculated; no holiday calendar is silently imported.

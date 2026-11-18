@@ -18,12 +18,16 @@ const translated:Record<string,{no:string;en:string}>={
   Sunset:{no:'Solnedgang',en:'Sunset'},Maghrib:{no:'Maghrib',en:'Maghrib'},
   Isha:{no:'Isha',en:'Isha'},
 }
-export default function AladhanPreviewModal({language,onClose}:{language:'no'|'en';onClose:()=>void}) {
-  const [city,setCity]=useState('Stavanger')
+export default function AladhanPreviewModal({language,onClose,currentCity,currentAsrMethod,currentMethod,currentHighLatitude,onConnected}:{
+  language:'no'|'en';onClose:()=>void;currentCity?:string|null;currentAsrMethod?:1|2;currentMethod?:number;currentHighLatitude?:number;
+  onConnected:(selection:{city:string;asrMethod:1|2;method:number;highLatitude:number})=>void
+}) {
+  const [city,setCity]=useState(currentCity||'Stavanger')
   const [date,setDate]=useState(()=>new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Oslo'}))
-  const [asr,setAsr]=useState<1|2>(1)
-  const [method,setMethod]=useState(3)
-  const [highLatitude,setHighLatitude]=useState(3)
+  const [asr,setAsr]=useState<1|2>(currentAsrMethod||1)
+  const [method,setMethod]=useState(currentMethod||3)
+  const [highLatitude,setHighLatitude]=useState(currentHighLatitude||3)
+  const [connecting,setConnecting]=useState(false)
   const [result,setResult]=useState<AladhanPreview|null>(null)
   const [loading,setLoading]=useState(false)
   const [error,setError]=useState('')
@@ -44,13 +48,39 @@ export default function AladhanPreviewModal({language,onClose}:{language:'no'|'e
     }catch(e){if(req===current.current)setError(e instanceof Error?e.message:'AlAdhan unavailable')}
     finally{if(req===current.current)setLoading(false)}
   }
+  async function connect(){
+    if (connecting || loading || city.trim().length < 2) return
+    setConnecting(true);setError('')
+    try {
+      const token=(await supabase.auth.getSession()).data.session?.access_token
+      if(!token)throw Error(language==='no'?'Du må logge inn.':'Sign in required.')
+      const response=await fetch('/api/integrations/aladhan/connect',{
+        method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+        body:JSON.stringify({city:city.trim(),asrMethod:asr,method,highLatitude}),
+      })
+      const json=await response.json()
+      if(!response.ok)throw Error(json.error||'Could not connect AlAdhan')
+      onConnected({city:json.city||city.trim(),asrMethod:asr,method,highLatitude})
+      onClose()
+    }catch(e){setError(e instanceof Error?e.message:'Could not connect AlAdhan')}
+    finally{setConnecting(false)}
+  }
   const input='mt-1 h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] px-3 text-base text-[color:var(--fg-90)]'
   const label='block text-[10px] tracking-widest text-[color:var(--fg-45)]'
-  return <AppSheet title={language==='no'?'AlAdhan · test':'AlAdhan · preview'} onClose={()=>{clear();onClose()}}
-    footer={<button type="button" onClick={()=>void preview()} disabled={loading||city.trim().length<2||!date} className="h-11 w-full rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:opacity-40">{loading?'HENTER…':language==='no'?'HENT BØNNETIDER':'PREVIEW TIMES'}</button>}>
+  return <AppSheet title="AlAdhan" onClose={()=>{if(!connecting){clear();onClose()}}} dismissible={!connecting}
+    footer={<div className="flex w-full gap-2">
+      <button type="button" onClick={()=>void preview()} disabled={loading||connecting||city.trim().length<2||!date}
+        className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-20)] text-[11px] tracking-widest text-[color:var(--fg-80)] disabled:opacity-40">
+        {loading?(language==='no'?'HENTER…':'LOADING…'):(language==='no'?'FORHÅNDSVIS':'PREVIEW')}
+      </button>
+      <button type="button" onClick={()=>void connect()} disabled={loading||connecting||city.trim().length<2}
+        className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-[11px] tracking-widest text-[#2aa3ff] disabled:opacity-40">
+        {connecting?(language==='no'?'KOBLER TIL…':'CONNECTING…'):currentCity?(language==='no'?'LAGRE':'SAVE'):(language==='no'?'KOBLE TIL':'CONNECT')}
+      </button>
+    </div>}>
     <p className="text-sm leading-relaxed text-[color:var(--fg-70)]">{language==='no'
-      ?'Test beregnede bønnetider uten API-nøkkel. Dette er ikke offisielle IRN-tider. Ingenting lagres i Påminnelser eller på rammen.'
-      :'Preview calculated prayer times without an API key. Not official IRN times. Nothing is saved to Reminders or the frame.'}</p>
+      ?'Velg by og beregningsmetode. Koble til for å vise kommende bønnetider under AlAdhan i Påminnelser og på rammen. Dette er beregnede tider, ikke IRNs offisielle tabell.'
+      :'Choose a city and calculation method. Connect to show upcoming times under AlAdhan in Reminders and on your frame. These are calculated times, not official IRN timetables.'}</p>
     <label htmlFor="aladhan-city" className={'mt-4 '+label}>{language==='no'?'BY I NORGE':'CITY IN NORWAY'}</label>
     <input id="aladhan-city" className={input} value={city} onChange={e=>{clear();setCity(e.target.value)}} placeholder="Stavanger"/>
     <label htmlFor="aladhan-date" className={'mt-4 '+label}>{language==='no'?'DATO':'DATE'}</label>
@@ -80,7 +110,7 @@ export default function AladhanPreviewModal({language,onClose}:{language:'no'|'e
       {!!result.hijri.holidays.length&&<p className="mt-2 text-xs text-[color:var(--fg-70)]">{language==='no'?'Beregnet kalendermerking':'Calculated calendar labels'}: {result.hijri.holidays.join(', ')}</p>}
     </div>}
     <p className="mt-4 text-xs leading-relaxed text-[color:var(--fg-45)]">{language==='no'
-      ?'Tidene kan avvike fra IRN og lokale moskeer, særlig ved høye breddegrader. Kommersiell bruksrett må avklares før lansering.'
-      :'Times may differ from IRN and local mosques, especially at high latitudes. Commercial rights must be checked before launch.'}</p>
+      ?'Eksperimentell integrasjon. Beregnede tider kan avvike fra lokale moskeer, særlig ved høye breddegrader. Velg kun metode du ønsker å følge.'
+      :'Experimental integration. Calculated times may differ from local mosques, especially at high latitudes. Choose the method you wish to follow.'}</p>
   </AppSheet>
 }

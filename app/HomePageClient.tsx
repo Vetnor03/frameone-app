@@ -3655,7 +3655,7 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'waste'
+type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'aladhan'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -3758,6 +3758,38 @@ function ConnectAppsScreen({
   const [localEventsOpen, setLocalEventsOpen] = useState(false)
   const [wasteModalOpen, setWasteModalOpen] = useState(false)
   const [aladhanPreviewOpen, setAladhanPreviewOpen] = useState(false)
+  const [aladhanConnected, setAladhanConnected] = useState(false)
+  const [aladhanCity, setAladhanCity] = useState<string | null>(null)
+  const [aladhanAsrMethod, setAladhanAsrMethod] = useState<1 | 2>(1)
+  const [aladhanMethod, setAladhanMethod] = useState(3)
+  const [aladhanHighLatitude, setAladhanHighLatitude] = useState(3)
+  const [aladhanStatusResolved, setAladhanStatusResolved] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    setAladhanStatusResolved(false)
+    void (async () => {
+      const token = (await supabase.auth.getSession()).data.session?.access_token
+      if (!token) {
+        if (!cancelled) { setAladhanConnected(false); setAladhanStatusResolved(true) }
+        return
+      }
+      const response = await fetch('/api/integrations/aladhan/status', {
+        headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
+      })
+      if (!response.ok) throw new Error('AlAdhan status unavailable')
+      const json = await response.json()
+      if (!cancelled) {
+        setAladhanConnected(json.connected === true)
+        setAladhanCity(typeof json.city === 'string' ? json.city : null)
+        setAladhanAsrMethod(json.asrMethod === 2 ? 2 : 1)
+        setAladhanMethod(typeof json.method === 'number' ? json.method : 3)
+        setAladhanHighLatitude(typeof json.highLatitude === 'number' ? json.highLatitude : 3)
+        setAladhanStatusResolved(true)
+        setLocallyDisconnectedApps(current => ({ ...current, aladhan: false }))
+      }
+    })().catch(() => { if (!cancelled) setAladhanStatusResolved(true) })
+    return () => { cancelled = true }
+  }, [activeDeviceId])
   const [wasteConnected, setWasteConnected] = useState(() => connectAppIsConnected(modulesJson, 'waste'))
   const [wasteStatusResolved, setWasteStatusResolved] = useState(false)
   useEffect(() => {
@@ -4144,7 +4176,7 @@ function ConnectAppsScreen({
   }
 
   async function disconnectIntegration(provider: DisconnectableConnectAppKey) {
-    const appName = provider === 'teams' ? 'Microsoft Calendar' : provider === 'google-calendar' ? 'Google Calendar' : provider === 'waste' ? (language === 'no' ? 'Renovasjon' : 'Waste collection') : 'Spond'
+    const appName = provider === 'teams' ? 'Microsoft Calendar' : provider === 'google-calendar' ? 'Google Calendar' : provider === 'waste' ? (language === 'no' ? 'Renovasjon' : 'Waste collection') : provider === 'aladhan' ? 'AlAdhan' : 'Spond'
     const setProviderLoading = provider === 'teams' ? setTeamsLoading : provider === 'google-calendar' ? setGoogleLoading : provider === 'spond' ? setSpondLoading : null
     if (disconnectingApp === provider) return
     setProviderLoading?.(true)
@@ -4178,6 +4210,11 @@ function ConnectAppsScreen({
       } else if (provider === 'waste') {
         setWasteConnected(false)
         changeFrameIntegration('waste', { enabled: false })
+        window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
+      } else if (provider === 'aladhan') {
+        setAladhanConnected(false)
+        setAladhanCity(null)
+        changeFrameIntegration('aladhan', { enabled: false })
         window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
       }
       setLocallyDisconnectedApps((current) => ({ ...current, [provider]: true }))
@@ -4332,6 +4369,7 @@ function ConnectAppsScreen({
     if (app.key === 'google-calendar') return googleAccountConnected
     if (app.key === 'local-events') return !!localEventsSavedArea
     if (app.key === 'waste') return wasteConnected
+    if (app.key === 'aladhan') return aladhanConnected
     return connectAppIsConnected(modulesJson, app.key)
   }
 
@@ -4461,6 +4499,8 @@ function ConnectAppsScreen({
               ? (language === 'no' ? `Events valgt, men ingen synkronisering ennå: ${localEventsSyncIssue}` : `Events selected but not synced yet: ${localEventsSyncIssue}`)
               : app.key === 'local-events' && localEventsSelectedName
               ? (language === 'no' ? `Arrangementer nær ${localEventsSelectedName}` : `Events near ${localEventsSelectedName}`)
+              : app.key === 'aladhan' && aladhanCity
+              ? (language === 'no' ? 'Bønnetider for ' : 'Prayer times for ') + aladhanCity + ' · Asr ' + aladhanAsrMethod + 'x'
               : app.description
             const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar'
             const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : null
@@ -4481,15 +4521,9 @@ function ConnectAppsScreen({
                   </div>
 
                   {!app.connectable ? (
-                    app.key === 'aladhan' ? (
-                      <button type="button" onClick={() => setAladhanPreviewOpen(true)} className="shrink-0 h-8 rounded-xl border border-[#2aa3ff]/40 px-3 text-[11px] tracking-widest text-[#2aa3ff]">
-                        {language === 'no' ? 'TEST' : 'PREVIEW'}
-                      </button>
-                    ) : (
-                      <span className="shrink-0 h-8 px-3 rounded-xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[11px] tracking-widest text-[#2aa3ff] inline-flex items-center">
-                        {integrationStatusLabel(app.status, language)}
-                      </span>
-                    )
+                    <span className="shrink-0 h-8 px-3 rounded-xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[11px] tracking-widest text-[#2aa3ff] inline-flex items-center">
+                      {integrationStatusLabel(app.status, language)}
+                    </span>
                   ) : connected ? (
                     startup && credentialProvider ? (
                       <button
@@ -4517,6 +4551,15 @@ function ConnectAppsScreen({
                           {language === 'no' ? 'ENDRE ADRESSE' : 'EDIT ADDRESS'}
                         </button>
                       </div>
+                    ) : app.key === 'aladhan' ? (
+                      <div className="shrink-0 flex flex-col items-stretch gap-1.5">
+                        <button type="button" onClick={() => setDisconnectConfirmApp('aladhan')} disabled={disconnectingApp === 'aladhan'} className="h-8 rounded-xl border border-[#d94b4b]/40 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
+                          {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
+                        </button>
+                        <button type="button" onClick={() => setAladhanPreviewOpen(true)} disabled={disconnectingApp === 'aladhan'} className="h-7 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)] disabled:opacity-60">
+                          {language === 'no' ? 'ENDRE' : 'EDIT'}
+                        </button>
+                      </div>
                     ) : credentialProvider ? (
                       <button
                         type="button"
@@ -4534,7 +4577,7 @@ function ConnectAppsScreen({
                   ) : (
                     <button
                       type="button"
-                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved))}
+                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'aladhan' && !aladhanStatusResolved) || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved))}
                       onClick={() => {
                         if (app.key === 'spond') {
                           if (spondAccountConnected) { setSpondConnected(true); changeFrameIntegration('spond', { enabled: true }) }
@@ -4552,13 +4595,15 @@ function ConnectAppsScreen({
                           setLocalEventsOpen(true)
                         } else if (app.key === 'waste') {
                           setWasteModalOpen(true)
+                        } else if (app.key === 'aladhan') {
+                          setAladhanPreviewOpen(true)
                         }
                       }}
                       className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-20)] text-[11px] tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
                     >
                       {app.key === 'local-events'
                         ? (language === 'no' ? 'KOBLE TIL' : 'CONNECT')
-                        : (app.key === 'google-calendar' && !googleStatusResolved) || (app.key === 'teams' && !teamsStatusResolved) || (app.key === 'waste' && !wasteStatusResolved)
+                        : (app.key === 'google-calendar' && !googleStatusResolved) || (app.key === 'teams' && !teamsStatusResolved) || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'aladhan' && !aladhanStatusResolved)
                           ? (language === 'no' ? 'SJEKKER…' : 'CHECKING…')
                           : ((app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading))
                             ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…')
@@ -4627,14 +4672,16 @@ function ConnectAppsScreen({
         >
             <div className="text-base font-semibold text-[color:var(--fg-90)]">
               {language === 'no'
-                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? 'Renovasjon' : 'Spond'}?`
-                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? 'Waste collection' : 'Spond'}?`}
+                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? 'Renovasjon' : disconnectConfirmApp === 'aladhan' ? 'AlAdhan' : 'Spond'}?`
+                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? 'Waste collection' : disconnectConfirmApp === 'aladhan' ? 'AlAdhan' : 'Spond'}?`}
             </div>
             <div className="mt-2 text-xs leading-snug text-[color:var(--fg-45)]">
               {disconnectConfirmApp === 'waste'
                 ? (language === 'no'
                   ? 'Den valgte adressen og tilhørende tømmedatoer fjernes fra Påminnelser.'
                   : 'The selected address and its collection dates will be removed from Reminders.')
+                : disconnectConfirmApp === 'aladhan'
+                ? (language === 'no' ? 'Den valgte byen og alle AlAdhan-tider fjernes fra Påminnelser.' : 'Your city and all AlAdhan times will be removed from Reminders.')
                 : (language === 'no'
                   ? 'Lagrede innlogginger og synkroniserte data fjernes fra denne integrasjonen.'
                   : 'Stored credentials and synced data will be removed for this integration.')}
@@ -4647,7 +4694,12 @@ function ConnectAppsScreen({
 
       {localEventsOpen && renderLocalEventsModal()}
       {wasteModalOpen && <WasteSetupModal language={language} onClose={() => setWasteModalOpen(false)} onSaved={(connected) => { setWasteConnected(connected); setLocallyDisconnectedApps(current => ({ ...current, waste: false })); changeFrameIntegration('waste', { enabled: connected }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }} />}
-      {aladhanPreviewOpen && <AladhanPreviewModal language={language} onClose={() => setAladhanPreviewOpen(false)} />}
+      {aladhanPreviewOpen && <AladhanPreviewModal language={language} currentCity={aladhanCity} currentAsrMethod={aladhanAsrMethod} currentMethod={aladhanMethod} currentHighLatitude={aladhanHighLatitude} onClose={() => setAladhanPreviewOpen(false)} onConnected={({ city, asrMethod, method, highLatitude }) => {
+        setAladhanConnected(true); setAladhanCity(city); setAladhanAsrMethod(asrMethod); setAladhanMethod(method); setAladhanHighLatitude(highLatitude);
+        setLocallyDisconnectedApps(current => ({ ...current, aladhan: false }));
+        changeFrameIntegration('aladhan', { enabled: true });
+        window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
+      }} />}
 
       {spondModalOpen && (
         <AppSheet
@@ -11184,7 +11236,7 @@ type ReminderRepeatKey =
   | 'custom'
 
 type ReminderTag = 'work' | 'personal' | 'sports' | 'chores' | 'event'
-type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'waste' | 'local-events'
+type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'waste' | 'local-events' | 'aladhan'
 type ReminderSourceFilter = ReminderSource
 
 type ReminderUiItem = {
@@ -11288,7 +11340,7 @@ function isReminderTag(v: any): v is ReminderTag {
 function integrationProviderToReminderSource(provider: any): ReminderSource | null {
   const value = String(provider ?? '').trim().toLowerCase()
   if (value === 'edge-of-norway') return 'local-events'
-  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'waste') return value
+  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'waste' || value === 'aladhan') return value
   return null
 }
 
@@ -11319,6 +11371,7 @@ function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
   if (source === 'spond') return 'sports'
   if (source === 'waste') return 'chores'
   if (source === 'local-events') return 'event'
+  if (source === 'aladhan') return 'event'
   return null
 }
 
@@ -11328,6 +11381,7 @@ function integrationReminderSourceLabel(language: AppLanguage, source?: Reminder
   if (source === 'spond') return 'Spond'
   if (source === 'waste') return language === 'no' ? 'Renovasjon' : 'Waste'
   if (source === 'local-events') return 'Events'
+  if (source === 'aladhan') return 'AlAdhan'
   return language === 'no' ? 'Påminnelse' : 'Reminder'
 }
 
@@ -15222,7 +15276,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           const source = integrationProviderToReminderSource(connection.provider)
           if (source) connectedSources.add(source)
         }
-        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
+        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste', 'aladhan'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
 
         if (isActive && connectedSources.has('teams')) {
           try {
@@ -15257,12 +15311,25 @@ const manualItems: ReminderUiItem[] = (data || [])
           }
         }
 
+        if (isActive && connectedSources.has('aladhan')) {
+          try {
+            const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+            if (token) {
+              const response = await fetch('/api/integrations/aladhan/sync', {
+                method: 'POST', headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
+              })
+              if (!response.ok) console.warn('[reminders] AlAdhan refresh failed', response.status)
+            }
+          } catch (error) {
+            console.warn('[reminders] AlAdhan refresh failed', error)
+          }
+        }
         const nowIso = new Date().toISOString()
         let localEventSkippedIds = new Set<string>()
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
-          .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway'])
+          .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway', 'aladhan'])
           .or(activeDeviceId ? `user_id.eq.${sessionUserId},device_id.eq.${activeDeviceId}` : `user_id.eq.${sessionUserId}`)
           .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste`)
           .order('starts_at', { ascending: true, nullsFirst: false })
@@ -15378,7 +15445,7 @@ const manualItems: ReminderUiItem[] = (data || [])
   // Keep all timed integration filters current at the exact minute boundary.
   // This timer updates the phone UI only; it does not trigger any API polling.
   useEffect(() => {
-    if (sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'google-calendar' && sourceFilter !== 'spond') return
+    if (sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'google-calendar' && sourceFilter !== 'spond' && sourceFilter !== 'aladhan') return
     setEventNowMs(Date.now())
     let interval: number | undefined
     const delayUntilNextMinute = 60_000 - (Date.now() % 60_000) + 50

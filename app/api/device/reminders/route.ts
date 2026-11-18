@@ -6,7 +6,8 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsIfStaleForUser } from '@/app/lib/integrations/teams/server'
 import { syncGoogleCalendarFromStoredConnection } from '@/app/lib/integrations/google-calendar/server'
-import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildWasteCollectionItems, preferTomorrowAfterSingleAllDayEvent, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
+import { syncAladhanIfStale } from '@/app/lib/integrations/aladhan/server'
+import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildWasteCollectionItems, buildAladhanPrayerItems, preferTomorrowAfterSingleAllDayEvent, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
 import { reminderClockBoundaryReached } from '@/app/lib/device/reminderClockBoundary'
@@ -649,6 +650,7 @@ export async function GET(req: Request) {
     let teamsItems: DeviceReminderItem[] = []
     let googleCalendarItems: DeviceReminderItem[] = []
     let wasteItems: DeviceReminderItem[] = []
+    let aladhanItems: DeviceReminderItem[] = []
     let localEventItems: DeviceReminderItem[] = []
     const settingsJson = (deviceSettingsData?.settings_json || null) as {
       modules?: {
@@ -672,6 +674,7 @@ export async function GET(req: Request) {
             providerEnabled('spond') ? syncSpondIfStaleForUsers(memberUserIds) : Promise.resolve(),
             Promise.allSettled((providerEnabled('teams') ? memberUserIds : []).map((userId) => syncTeamsIfStaleForUser(userId, { horizonDays }))),
             Promise.allSettled((providerEnabled('google-calendar') ? memberUserIds : []).map((userId) => syncGoogleCalendarFromStoredConnection(userId))),
+            Promise.allSettled((providerEnabled('aladhan') ? memberUserIds : []).map(userId => syncAladhanIfStale(userId))),
           ])
           syncResults.forEach((result) => {
             if (result.status === 'rejected') logOptionalReminderProviderFailure('integration-sync', result.reason)
@@ -758,6 +761,17 @@ export async function GET(req: Request) {
       } catch (error) {
         logOptionalReminderProviderFailure('waste', error)
       } })(), (async () => { try {
+        if (!integrationActiveForPilot('aladhan') || !providerEnabled('aladhan')) return
+        const { data, error } = await supabase.from('integration_items')
+          .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
+          .eq('provider', 'aladhan').in('user_id', memberUserIds)
+          .order('starts_at', { ascending: true, nullsFirst: false })
+        if (error) throw error
+        aladhanItems = buildAladhanPrayerItems(Array.isArray(data) ? data as IntegrationItemRow[] : [],
+          todayYmd, horizonEndYmd, timeZone, now)
+      } catch (error) {
+        logOptionalReminderProviderFailure('aladhan', error)
+      } })(), (async () => { try {
         if (!providerEnabled('local-events')) return
 
         const localEventsStartedAt = Date.now()
@@ -819,6 +833,7 @@ export async function GET(req: Request) {
       ...teamsItems,
       ...googleCalendarItems,
       ...wasteItems,
+      ...aladhanItems,
       ...localEventItems,
     ])
 
@@ -845,13 +860,15 @@ export async function GET(req: Request) {
       selectReminderDisplayGroups(displayItems, limit),
       displayProfiles
     )
+    // Preserve canonical prayer and solar-event names; never paraphrase them
+    // via AI. Keep indices of other sources unchanged.
     const optimizerItems = selectedItems.map((item, index) => ({
         id: String(index),
         title: item.title,
         source: item.source,
         displayDate: item.display_date,
         displayTime: item.display_time,
-      }))
+      })).filter(item => item.source !== 'aladhan')
     const persistentCache = supabaseTitleCache(supabase)
     const optimizedByProfile = new Map(await Promise.all(displayProfiles.map(async displayProfile => {
       const titles = await optimizeFrameContent(optimizerItems, {
