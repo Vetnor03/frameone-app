@@ -18,3 +18,5 @@ This integration intentionally **fails closed** when token is missing or data ca
 Times are normalized as Norway-local wall clock and converted to instants using `Europe/Oslo` (DST-aware); the selected Asr method controls both the API query and which of the 1x / 2x fields is used. New connections require an explicit method selection; existing connections continue to default to the previous 2x behavior. Upstream responses are not yet validated against a licensed production account; confirm schema, method and rate limits with IRN before promoting from Experimental.
 
 Server refresh is debounced to 12 hours and can be triggered by an active Reminders tab or deferred physical-frame refresh. The initial cache covers ten calendar days. No end-user credentials are requested.
+
+The physical Reminders integration uses its existing hard reminder-time scheduler. Each prayer event at an exact minute prompts the next scheduled frame wake in both modes, without adding another polling loop. IRN names are retained verbatim and excluded from AI title rewriting.

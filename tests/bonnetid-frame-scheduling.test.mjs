@@ -85,3 +85,9 @@ test('existing firmware smart schedule handles prayer boundaries without an extr
   assert.match(requestPlan, /reminderBoundaries\(sources\[ref\.key\], now\)/)
   assert.match(requestPlan, /\/api\/device\/reminders/)
 })
+
+test('physical frame preserves exact official prayer names without AI rewriting', () => {
+  const route = readFileSync(new URL('../app/api/device/reminders/route.ts', import.meta.url), 'utf8')
+  assert.match(route, /optimizerItems = selectedItems\.map\([\s\S]*?\.filter\(\(item\) => item\.source !== 'bonnetid'\)/)
+  assert.match(route, /primaryTitles\.get\(index\) \|\| item\.title/)
+})

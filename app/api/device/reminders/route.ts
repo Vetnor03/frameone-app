@@ -861,13 +861,15 @@ export async function GET(req: Request) {
       selectReminderDisplayGroups(displayItems, limit),
       displayProfiles
     )
+    // Provider prayer names are authoritative. Never rewrite them through AI.
+    // Filtering after mapping retains the original index for all other titles.
     const optimizerItems = selectedItems.map((item, index) => ({
         id: String(index),
         title: item.title,
         source: item.source,
         displayDate: item.display_date,
         displayTime: item.display_time,
-      }))
+      })).filter((item) => item.source !== 'bonnetid')
     const persistentCache = supabaseTitleCache(supabase)
     const optimizedByProfile = new Map(await Promise.all(displayProfiles.map(async displayProfile => {
       const titles = await optimizeFrameContent(optimizerItems, {
