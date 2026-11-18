@@ -1817,8 +1817,11 @@ export default function HomePage() {
       powerSaver: args.powerSaver,
       language: args.language,
       fontSize: args.fontSize,
-      layout: args.layoutKey,
-      cells: cellsMapToArray(args.cellsByLayout[args.layoutKey]),
+      // The slider selects an editor view, not a physical edit. With Dynamic
+      // Layout enabled, all four persisted periods determine the desired state;
+      // switching the preview period must never make Update look dirty.
+      layout: args.dynamicLayout?.enabled ? 'dynamic' : args.layoutKey,
+      cells: args.dynamicLayout?.enabled ? [] : cellsMapToArray(args.cellsByLayout[args.layoutKey]),
       modules: normalizedModules,
       pinned_tabs: args.pinnedModuleTabs,
       dynamic_layout: args.dynamicLayout ?? null,
