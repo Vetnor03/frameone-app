@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '../spond/server'
-import { bonnetidLocalToIso, normalizeBonnetidDay, normalizeBonnetidLocations, normalizeBonnetidMonth, type BonnetidCity, type BonnetidPrayer } from './normalize.mjs'
+import { bonnetidLocalToIso, normalizeBonnetidLocations, normalizeBonnetidMonth, type BonnetidCity, type BonnetidPrayer } from './normalize.mjs'
 
 const PROVIDER = 'bonnetid'
 const API_BASE = 'https://api.bonnetid.no'
