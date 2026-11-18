@@ -15195,7 +15195,7 @@ function RemindersModuleSettingsTab({
   const calendarAnimTimerRef = useRef<number | null>(null)
 
   const todayYmd = toLocalYmd(new Date())
-  async function loadReminders({ silent = false }: { silent?: boolean } = {}) {
+  async function loadReminders({ silent = false, skipProviderSync = false }: { silent?: boolean; skipProviderSync?: boolean } = {}) {
     const generation = ++requestGenerationRef.current
     if (!activeDeviceId) {
       setReminders([])
@@ -15263,6 +15263,7 @@ const manualItems: ReminderUiItem[] = (data || [])
 
       let integrationItems: ReminderUiItem[] = []
       let nextAvailableSources: ReminderSourceFilter[] = ['remind']
+      let aladhanRefresh: Promise<boolean> | null = null
       const sessionUserId = (await supabase.auth.getUser())?.data?.user?.id
       if (generation !== requestGenerationRef.current) return
       if (!sessionUserId || sessionUserId !== userId) return
@@ -15278,8 +15279,11 @@ const manualItems: ReminderUiItem[] = (data || [])
           if (source) connectedSources.add(source)
         }
         nextAvailableSources = ['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste', 'aladhan'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
+        // Provider chips do not depend on potentially slow upstream event refreshes.
+        if (generation !== requestGenerationRef.current) return
+        setAvailableSources(nextAvailableSources)
 
-        if (isActive && connectedSources.has('teams')) {
+        if (isActive && !skipProviderSync && connectedSources.has('teams')) {
           try {
             const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
             if (accessToken) {
@@ -15298,7 +15302,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           }
         }
 
-        if (isActive && connectedSources.has('google-calendar')) {
+        if (isActive && !skipProviderSync && connectedSources.has('google-calendar')) {
           try {
             const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
             if (accessToken) {
@@ -15312,18 +15316,29 @@ const manualItems: ReminderUiItem[] = (data || [])
           }
         }
 
-        if (isActive && connectedSources.has('aladhan')) {
-          try {
-            const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-            if (token) {
+        if (isActive && !skipProviderSync && connectedSources.has('aladhan')) {
+          // Render the saved timetable now. A stale-provider sync can involve
+          // multiple upstream requests and must never block the source chip.
+          aladhanRefresh = (async () => {
+            try {
+              const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+              if (!token) return false
               const response = await fetch('/api/integrations/aladhan/sync', {
                 method: 'POST', headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
               })
-              if (!response.ok) console.warn('[reminders] AlAdhan refresh failed', response.status)
+              if (!response.ok) {
+                console.warn('[reminders] AlAdhan refresh failed', response.status)
+                return false
+              }
+              const result = await response.json().catch(() => null)
+              // A fresh cached schedule returns status only; re-read records
+              // exclusively when the server actually refreshed the timetable.
+              return result?.connected === true && Number.isInteger(result?.itemCount)
+            } catch (error) {
+              console.warn('[reminders] AlAdhan refresh failed', error)
+              return false
             }
-          } catch (error) {
-            console.warn('[reminders] AlAdhan refresh failed', error)
-          }
+          })()
         }
         const nowIso = new Date().toISOString()
         let localEventSkippedIds = new Set<string>()
@@ -15426,6 +15441,15 @@ const manualItems: ReminderUiItem[] = (data || [])
       writeTabSnapshot(window.localStorage, userId, activeDeviceId, 'reminders', '', {
         items:nextReminders, completedOccurrences:nextCompletions, availableSources:nextAvailableSources,
       })
+      if (aladhanRefresh) {
+        // Once a real refresh finishes, quietly replace the saved snapshot.
+        // The follow-up read skips providers so it cannot cause a sync loop.
+        void aladhanRefresh.then(refreshed => {
+          if (refreshed && generation === requestGenerationRef.current) {
+            void loadReminders({ silent: true, skipProviderSync: true })
+          }
+        })
+      }
     } finally {
       if (generation === requestGenerationRef.current && !silent) setLoading(false)
     }
