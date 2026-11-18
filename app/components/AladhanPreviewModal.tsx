@@ -22,10 +22,8 @@ const latitudeMethods = [
 ]
 const names: Record<string, { no: string; en: string }> = {
   Fajr: { no: 'Fajr', en: 'Fajr' },
-  Sunrise: { no: 'Soloppgang', en: 'Sunrise' },
   Dhuhr: { no: 'Dhuhr', en: 'Dhuhr' },
   Asr: { no: 'Asr', en: 'Asr' },
-  Sunset: { no: 'Solnedgang', en: 'Sunset' },
   Maghrib: { no: 'Maghrib', en: 'Maghrib' },
   Isha: { no: 'Isha', en: 'Isha' },
 }
@@ -144,8 +142,8 @@ export default function AladhanPreviewModal({
     >
       <p className="text-sm leading-relaxed text-[color:var(--fg-70)]">
         {language === 'no'
-          ? 'Velg hvor du bor og Asr-metode. Bønnetidene vises automatisk i Påminnelser og på rammen.'
-          : 'Choose your city and Asr method. Prayer times will appear in Reminders and on your frame.'}
+          ? 'Velg sted og Asr-metode. Fem daglige bønner og islamske merkedager legges automatisk til.'
+          : 'Choose a city and Asr method. Five daily prayers and Islamic occasions will be added automatically.'}
       </p>
 
       <div className="mt-6">
@@ -184,23 +182,23 @@ export default function AladhanPreviewModal({
                 disabled={busy}
                 onChange={() => { clearPreview(); setAsrMethod(value) }}
               />
-              {value}x
+              {value === 1 ? 'Standard' : 'Hanafi'}
             </label>
           ))}
         </div>
       </fieldset>
 
-      <button
+      {currentCity && <button
         type="button"
         aria-expanded={advanced}
         onClick={() => setAdvanced(value => !value)}
         className="mt-5 flex w-full items-center justify-between border-t border-[color:var(--bd-10)] pt-4 text-left text-sm text-[color:var(--fg-60)]"
       >
-        <span>{language === 'no' ? 'Avanserte innstillinger' : 'Advanced settings'}</span>
+        <span>{language === 'no' ? 'Juster beregningene' : 'Adjust calculations'}</span>
         <span aria-hidden="true">{advanced ? '−' : '+'}</span>
-      </button>
+      </button>}
 
-      {advanced && (
+      {currentCity && advanced && (
         <div className="mt-4 space-y-4">
           <div>
             <label htmlFor="aladhan-method" className={labelClass}>
@@ -247,7 +245,7 @@ export default function AladhanPreviewModal({
             <div className="rounded-2xl border border-[color:var(--bd-15)] p-4">
               <p className="mb-3 text-sm font-medium text-[color:var(--fg-85)]">{preview.city} · {preview.date}</p>
               <div className="space-y-2">
-                {preview.times.map(item => (
+                {preview.times.filter(item => item.name !== 'Sunrise' && item.name !== 'Sunset').map(item => (
                   <div key={item.name} className="flex justify-between border-b border-[color:var(--bd-10)] pb-2 text-sm text-[color:var(--fg-80)]">
                     <span>{names[item.name]?.[language] || item.name}</span>
                     <span className="font-semibold tabular-nums">{item.time}</span>

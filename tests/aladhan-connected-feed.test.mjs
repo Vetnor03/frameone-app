@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { osloYmd, followingDays, osloWallClockToIso } from '../app/lib/integrations/aladhan/time.mjs'
-import { buildAladhanPrayerItems } from '../app/lib/device/remindersFeed.ts'
+import { buildAladhanPrayerItems, buildAladhanHolidayItems } from '../app/lib/device/remindersFeed.ts'
 import { isUpcomingIntegratedCalendarItem } from '../app/lib/device/calendarVisibility.ts'
 import { nextAladhanOccurrences } from '../app/lib/integrations/aladhan/nextOccurrence.mjs'
 import { physicalModuleDeadlines, physicalRenderDigest } from '../app/lib/device/contentSignature.mjs'
@@ -27,8 +27,8 @@ test('local Norway conversion survives DST and does not invent nonexistent times
 })
 
 test('AlAdhan records join Reminders without impersonating IRN', () => {
-  assert.deepEqual(remaining('2026-11-18T11:14:00Z').map(x=>x.title),['Dhuhr','Asr','Solnedgang','Maghrib','Isha'])
-  assert.deepEqual(remaining('2026-11-18T11:15:00Z').map(x=>x.title),['Asr','Solnedgang','Maghrib','Isha'])
+  assert.deepEqual(remaining('2026-11-18T11:14:00Z').map(x=>x.title),['Dhuhr','Asr','Maghrib','Isha'])
+  assert.deepEqual(remaining('2026-11-18T11:15:00Z').map(x=>x.title),['Asr','Maghrib','Isha'])
   assert.equal(remaining('2026-11-18T11:15:00Z').every(x=>x.source==='aladhan'),true)
   assert.equal(buildAladhanPrayerItems([{...fixtures[0],raw:{source:'bonnetid',type:'prayer_time'}}],ymd,ymd,'Europe/Oslo').length,0)
   assert.equal(isUpcomingIntegratedCalendarItem('aladhan',ymd,'12:15',ymd,'12:14'),true)
@@ -72,7 +72,7 @@ test('AlAdhan is a real but experimental Connect source, with own storage lifecy
 })
 
 
-test('one future instance of each prayer and solar event, sorted chronologically', () => {
+test('one future instance of each of the five prayers, never sunrise or sunset, sorted chronologically', () => {
   const tomorrow = '2026-11-19'
   const samples = [
     row('Isha', '18:25', tomorrow),
@@ -91,21 +91,19 @@ test('one future instance of each prayer and solar event, sorted chronologically
     row('Asr', '13:35', tomorrow),
   ]
   const atOnePm = buildAladhanPrayerItems(samples, ymd, tomorrow, 'Europe/Oslo', new Date('2026-11-18T12:00:00Z'))
-  assert.equal(atOnePm.length, 7)
+  assert.equal(atOnePm.length, 5)
   assert.deepEqual(atOnePm.map(x => x.title), [
-    'Asr', 'Solnedgang', 'Maghrib', 'Isha', 'Fajr', 'Soloppgang', 'Dhuhr'
+    'Asr', 'Maghrib', 'Isha', 'Fajr', 'Dhuhr'
   ])
   assert.equal(atOnePm.find(x => x.title === 'Isha').occurrence_date, ymd)
   assert.equal(atOnePm.find(x => x.title === 'Fajr').occurrence_date, tomorrow)
-  assert.equal(atOnePm.find(x => x.title === 'Soloppgang').occurrence_date, tomorrow)
-  assert.equal(atOnePm.find(x => x.title === 'Solnedgang').occurrence_date, ymd)
   const afterIsha = buildAladhanPrayerItems(samples, ymd, tomorrow, 'Europe/Oslo', new Date('2026-11-18T17:00:00Z'))
-  assert.equal(afterIsha.length, 7)
+  assert.equal(afterIsha.length, 5)
   assert.equal(afterIsha.find(x => x.title === 'Isha').occurrence_date, tomorrow)
   assert.equal(afterIsha.find(x => x.title === 'Isha').display_time, '18:25')
-  assert.equal(new Set(afterIsha.map(x => x.title)).size, 7)
+  assert.equal(new Set(afterIsha.map(x => x.title)).size, 5)
   assert.deepEqual(afterIsha.map(x => x.title), [
-    'Fajr', 'Soloppgang', 'Dhuhr', 'Asr', 'Maghrib', 'Solnedgang', 'Isha'
+    'Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'
   ])
 })
 
@@ -124,6 +122,20 @@ test('phone AlAdhan filter chooses the nearest event independently of storage or
     isUpcomingIntegratedCalendarItem('aladhan', x.date, x.time, '2026-11-18', '18:25'))
   assert.deepEqual(nextAladhanOccurrences(afterIsha, x => x.title, x => x.date + 'T' + x.time)
     .map(x => x.id), ['4', '5', '2'])
+})
+
+test('Islamic occasions are kept on their date as untimed, separate all-day entries', () => {
+  const holidays = [
+    { ...row('Ramadan begynner','12:00'), external_id:'hijri:1448:ramadan-start',
+      raw: { source:'aladhan', type:'islamic_holiday', date: ymd, all_day:true, calculated:true } },
+    { ...row('Id al-fitr','12:00','2026-11-19'), external_id:'hijri:1448:eid-al-fitr',
+      raw: { source:'aladhan', type:'islamic_holiday', date:'2026-11-19', all_day:true, calculated:true } },
+  ]
+  const items = buildAladhanHolidayItems(holidays, ymd, '2026-11-19')
+  assert.deepEqual(items.map(x => x.title), ['Ramadan begynner', 'Id al-fitr'])
+  assert.ok(items.every(x => x.is_all_day && x.display_time === null && x.source === 'aladhan'))
+  assert.equal(buildAladhanPrayerItems(holidays, ymd, '2026-11-19', 'Europe/Oslo').length, 0)
+  assert.equal(buildAladhanHolidayItems(holidays, '2026-11-20', '2026-11-26').length, 0)
 })
 
 test('upcoming-only AlAdhan filtering is shared by app and physical Reminders', () => {

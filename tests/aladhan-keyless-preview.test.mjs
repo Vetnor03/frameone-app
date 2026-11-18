@@ -107,7 +107,7 @@ test('AlAdhan previews and connecting now share the same Norwegian coordinates l
   assert.match(route, /resolveNorwegianCity\(city\)/)
   assert.match(route, /aladhanCoordinatesUrl\(/)
   const modal = readFileSync(new URL('../app/components/AladhanPreviewModal.tsx', import.meta.url), 'utf8')
-  assert.match(modal, /Avanserte innstillinger/)
+  assert.match(modal, /Juster beregningene/)
   assert.match(modal, /aria-expanded=\{advanced\}/)
   assert.match(modal, /KOBLE TIL/)
   assert.doesNotMatch(modal, /type="date"/)

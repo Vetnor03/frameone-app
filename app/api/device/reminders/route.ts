@@ -7,7 +7,7 @@ import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsIfStaleForUser } from '@/app/lib/integrations/teams/server'
 import { syncGoogleCalendarFromStoredConnection } from '@/app/lib/integrations/google-calendar/server'
 import { syncAladhanIfStale } from '@/app/lib/integrations/aladhan/server'
-import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildWasteCollectionItems, buildAladhanPrayerItems, preferTomorrowAfterSingleAllDayEvent, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
+import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildWasteCollectionItems, buildAladhanPrayerItems, buildAladhanHolidayItems, preferTomorrowAfterSingleAllDayEvent, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
 import { reminderClockBoundaryReached } from '@/app/lib/device/reminderClockBoundary'
@@ -767,8 +767,11 @@ export async function GET(req: Request) {
           .eq('provider', 'aladhan').in('user_id', memberUserIds)
           .order('starts_at', { ascending: true, nullsFirst: false })
         if (error) throw error
-        aladhanItems = buildAladhanPrayerItems(Array.isArray(data) ? data as IntegrationItemRow[] : [],
-          todayYmd, horizonEndYmd, timeZone, now)
+        const aladhanRows = Array.isArray(data) ? data as IntegrationItemRow[] : []
+        aladhanItems = [
+          ...buildAladhanPrayerItems(aladhanRows, todayYmd, horizonEndYmd, timeZone, now),
+          ...buildAladhanHolidayItems(aladhanRows, todayYmd, horizonEndYmd),
+        ]
       } catch (error) {
         logOptionalReminderProviderFailure('aladhan', error)
       } })(), (async () => { try {
