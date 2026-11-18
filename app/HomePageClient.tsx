@@ -4422,7 +4422,7 @@ function ConnectAppsScreen({
   // On the very first visit, avoid showing an incorrectly disconnected list.
   const showConnectPlaceholders = !startup && (!connectionCacheHydrated ||
     (['teams', 'google-calendar', 'spond', 'local-events', 'waste', 'bonnetid'] as const)
-      .some(provider => cachedConnectionStatus[provider] === undefined) && statusDiscoveryPending))
+      .some(provider => cachedConnectionStatus[provider] === undefined) && statusDiscoveryPending)
 
   const renderLocalEventsModal = () => {
     const area = localEventsDraftArea
