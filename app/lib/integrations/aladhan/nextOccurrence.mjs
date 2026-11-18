@@ -17,3 +17,21 @@ export function nextAladhanOccurrences(items, getName, getLocalStart) {
     .sort((a, b) => a.start.localeCompare(b.start) || a.name.localeCompare(b.name))
     .map(entry => entry.item)
 }
+
+/**
+ * Combine timed prayers/solar events with date-only Islamic occasions under
+ * one AlAdhan source. Only timed entries roll over per event name; occasions
+ * remain independent all-day dates, even when multiple share a name.
+ */
+export function nextAladhanWithOccasions(items, getName, getDate, getTime) {
+  const timed = items.filter(item => getTime(item))
+  const occasions = items.filter(item => !getTime(item))
+  const upcomingTimes = nextAladhanOccurrences(timed, getName,
+    item => String(getDate(item) || '') + 'T' + String(getTime(item) || ''))
+  return [...upcomingTimes, ...occasions].sort((a, b) => {
+    const aKey = String(getDate(a) || '') + 'T' + String(getTime(a) || '00:00')
+    const bKey = String(getDate(b) || '') + 'T' + String(getTime(b) || '00:00')
+    return aKey.localeCompare(bKey) ||
+      String(getName(a) || '').localeCompare(String(getName(b) || ''))
+  })
+}
