@@ -35,7 +35,10 @@ export function normalizeHijriHoliday(payload, observance, year) {
   const gregorian = data.gregorian && typeof data.gregorian === 'object' ? data.gregorian : {}
   const hijriDate = String(observance.day).padStart(2, '0') + '-' +
     String(observance.month).padStart(2, '0') + '-' + year
-  if (hijri.date && hijri.date !== hijriDate) return null
+  if (hijri.date) {
+    const actual = String(hijri.date).match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)
+    if (!actual || Number(actual[1]) !== observance.day || Number(actual[2]) !== observance.month || Number(actual[3]) !== year) return null
+  }
   const match = String(gregorian.date || '').match(/^(\d{2})-(\d{2})-(\d{4})$/)
   if (!match) return null
   const ymd = match[3] + '-' + match[2] + '-' + match[1]
