@@ -4926,11 +4926,14 @@ function FrameTab(props: {
     const updateCurrentTimePeriod = () => {
       setCurrentTimePeriod(dynamicPeriodAt(Date.now(), dynamicTimezone))
     }
+    // Also sync immediately when another frame/timezone is selected.
+    const animationFrame = window.requestAnimationFrame(updateCurrentTimePeriod)
     // Foreground events correct timers throttled while iOS suspends the app.
     const timer = window.setInterval(updateCurrentTimePeriod, 15000)
     document.addEventListener('visibilitychange', updateCurrentTimePeriod)
     window.addEventListener('focus', updateCurrentTimePeriod)
     return () => {
+      window.cancelAnimationFrame(animationFrame)
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', updateCurrentTimePeriod)
       window.removeEventListener('focus', updateCurrentTimePeriod)
