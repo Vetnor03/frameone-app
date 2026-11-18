@@ -3762,6 +3762,7 @@ function ConnectAppsScreen({
   const [bonnetidModalOpen, setBonnetidModalOpen] = useState(false)
   const [bonnetidConnected, setBonnetidConnected] = useState(false)
   const [bonnetidCity, setBonnetidCity] = useState<string | null>(null)
+  const [bonnetidAsrMethod, setBonnetidAsrMethod] = useState<1 | 2>(2)
   const [bonnetidStatusResolved, setBonnetidStatusResolved] = useState(false)
   useEffect(() => {
     let cancelled = false
@@ -3801,6 +3802,7 @@ function ConnectAppsScreen({
       if (!cancelled) {
         setBonnetidConnected(json.connected === true)
         setBonnetidCity(typeof json.city === 'string' ? json.city : null)
+        setBonnetidAsrMethod(json.asrMethod === 1 ? 1 : 2)
         setLocallyDisconnectedApps(current => ({ ...current, bonnetid: false }))
         setBonnetidStatusResolved(true)
       }
@@ -4207,6 +4209,7 @@ function ConnectAppsScreen({
       } else if (provider === 'bonnetid') {
         setBonnetidConnected(false)
         setBonnetidCity(null)
+        setBonnetidAsrMethod(2)
         changeFrameIntegration('bonnetid', { enabled: false })
         window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
       }
@@ -4493,7 +4496,7 @@ function ConnectAppsScreen({
               : app.key === 'local-events' && localEventsSelectedName
               ? (language === 'no' ? `Arrangementer nær ${localEventsSelectedName}` : `Events near ${localEventsSelectedName}`)
               : app.key === 'bonnetid' && bonnetidCity
-              ? (language === 'no' ? 'Bønnetider for ' : 'Prayer times for ') + bonnetidCity
+              ? (language === 'no' ? 'Bønnetider for ' : 'Prayer times for ') + bonnetidCity + ' · Asr ' + bonnetidAsrMethod + 'x'
               : app.description
             const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar'
             const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : null
@@ -4687,7 +4690,7 @@ function ConnectAppsScreen({
 
       {localEventsOpen && renderLocalEventsModal()}
       {wasteModalOpen && <WasteSetupModal language={language} onClose={() => setWasteModalOpen(false)} onSaved={(connected) => { setWasteConnected(connected); setLocallyDisconnectedApps(current => ({ ...current, waste: false })); changeFrameIntegration('waste', { enabled: connected }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }} />}
-      {bonnetidModalOpen && <BonnetidSetupModal language={language} currentCity={bonnetidCity} onClose={() => setBonnetidModalOpen(false)} onSaved={(connected, city) => { setBonnetidConnected(connected); setBonnetidCity(city); setLocallyDisconnectedApps(current => ({ ...current, bonnetid: false })); changeFrameIntegration('bonnetid', { enabled: connected }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }} />}
+      {bonnetidModalOpen && <BonnetidSetupModal language={language} currentCity={bonnetidCity} currentAsrMethod={bonnetidAsrMethod} onClose={() => setBonnetidModalOpen(false)} onSaved={(connected, city, asrMethod) => { setBonnetidConnected(connected); setBonnetidCity(city); setBonnetidAsrMethod(asrMethod); setLocallyDisconnectedApps(current => ({ ...current, bonnetid: false })); changeFrameIntegration('bonnetid', { enabled: connected }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }} />}
 
       {spondModalOpen && (
         <AppSheet
@@ -15431,7 +15434,7 @@ const manualItems: ReminderUiItem[] = (data || [])
   // Keep all timed integration filters current at the exact minute boundary.
   // This timer updates the phone UI only; it does not trigger any API polling.
   useEffect(() => {
-    if (sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'google-calendar' && sourceFilter !== 'spond') return
+    if (sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'google-calendar' && sourceFilter !== 'spond' && sourceFilter !== 'bonnetid') return
     setEventNowMs(Date.now())
     let interval: number | undefined
     const delayUntilNextMinute = 60_000 - (Date.now() % 60_000) + 50

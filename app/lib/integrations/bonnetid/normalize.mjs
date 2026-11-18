@@ -32,18 +32,40 @@ export function normalizeBonnetidTime(value) {
   return pad(hour) + ':' + pad(minute)
 }
 
-export function normalizeBonnetidDay(rawValue, date) {
+export function normalizeBonnetidDay(rawValue, date, asrMethod = 2) {
   const outer = record(rawValue)
   const data = record(outer.prayer_times ?? outer.prayertimes ?? outer.times ?? outer)
-  const fields = [
+  const asr1 = data.asr_1x_shadow ?? data.asr_1x ?? data.asr_1 ?? data.asr_shafi
+  const asr2 = data.asr_2x_shadow ?? data.asr_2x ?? data.asr_2 ?? data.asr_hanafi
+  // Only use a generic "asr" field when the provider supplies no explicit
+  // alternative, and the API was requested with the selected ?asr= method.
+  const asr = asrMethod === 1
+    ? (asr1 ?? (asr2 === undefined ? data.asr : undefined))
+    : (asr2 ?? (asr1 === undefined ? data.asr : undefined))
+  const prayers = [
     ['Fajr', data.fajr],
     ['Dhuhr', data.duhr ?? data.dhuhr ?? data.zuhr],
-    ['Asr', data.asr_2x_shadow ?? data.asr_2x ?? data.asr],
+    ['Asr', asr],
     ['Maghrib', data.maghrib],
     ['Isha', data.isha],
   ]
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return []
-  if (!fields.every(([, value]) => normalizeBonnetidTime(value))) return []
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || (asrMethod !== 1 && asrMethod !== 2)) return []
+  if (!prayers.every(([, value]) => normalizeBonnetidTime(value))) return []
+
+  // Shuruq is the official sunrise from the same IRN timetable. Sunset is
+  // represented by Maghrib unless IRN provides a distinct sunset timestamp.
+  const sunrise = normalizeBonnetidTime(data.shuruq_sunrise ?? data.shuruq ?? data.sunrise)
+  const sunset = normalizeBonnetidTime(data.sunset ?? data.sunset_time)
+  const maghrib = normalizeBonnetidTime(data.maghrib)
+  const fields = [
+    prayers[0],
+    ...(sunrise ? [['Soloppgang', sunrise]] : []),
+    prayers[1],
+    prayers[2],
+    ...(sunset && sunset !== maghrib ? [['Solnedgang', sunset]] : []),
+    prayers[3],
+    prayers[4],
+  ]
   return fields.map(([name, value]) => ({ date, name, time: normalizeBonnetidTime(value) }))
 }
 
@@ -58,7 +80,7 @@ function parseDate(value, year, month) {
   return parseDate(next, year, month)
 }
 
-export function normalizeBonnetidMonth(payload, year, month) {
+export function normalizeBonnetidMonth(payload, year, month, asrMethod = 2) {
   let rows = list(payload, ['results', 'data', 'prayertimes', 'prayer_times', 'items', 'result'])
   // Some monthly endpoints return a YYYY-MM-DD keyed object rather than a list.
   if (!rows.length) rows = Object.entries(record(payload)).filter(([key]) => /^\d{4}-\d{2}-\d{2}$/.test(key)).map(([date, value]) => ({ ...record(value), gregorian_date: date }))
@@ -67,8 +89,8 @@ export function normalizeBonnetidMonth(payload, year, month) {
     const row = record(item)
     const date = parseDate(row.gregorian_date ?? row.date ?? row.day ?? record(row.meta).date ?? null, year, month)
     if (!date || !date.startsWith(year + '-' + pad(month) + '-')) continue
-    const times = normalizeBonnetidDay(row, date)
-    if (times.length === 5) byDate.set(date, times)
+    const times = normalizeBonnetidDay(row, date, asrMethod)
+    if (times.length >= 5) byDate.set(date, times)
   }
   return [...byDate.values()].flat()
 }

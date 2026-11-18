@@ -56,12 +56,12 @@ function upcomingDates() {
   return days
 }
 
-async function officialPrayerSchedule(cityId: string) {
+async function officialPrayerSchedule(cityId: string, asrMethod: 1 | 2) {
   const dates = upcomingDates()
   const uniqueMonths = [...new Set(dates.map(date => date.slice(0, 7)))]
   const monthlyResults = await Promise.allSettled(uniqueMonths.map(async month => {
     const [year, monthNumber] = month.split('-').map(Number)
-    return normalizeBonnetidMonth(await apiGet('/meta/prayertimes/' + cityId + '/' + year + '/' + monthNumber + '/?asr=2'), year, monthNumber)
+    return normalizeBonnetidMonth(await apiGet('/meta/prayertimes/' + cityId + '/' + year + '/' + monthNumber + '/?asr=' + asrMethod), year, monthNumber, asrMethod)
   }))
   const grouped = new Map<string, BonnetidPrayer[]>()
   for (const result of monthlyResults) if (result.status === 'fulfilled') for (const item of result.value) {
@@ -72,15 +72,15 @@ async function officialPrayerSchedule(cityId: string) {
   // The public API exposes a monthly /prayertimes/ collection as an alternate
   // endpoint. Its trailing /{id}/ route is a record identifier, NOT a date.
   // Try the alternate monthly collection for any missing dates.
-  const missingMonths = [...new Set(dates.filter(date => (grouped.get(date) || []).length !== 5).map(date => date.slice(0, 7)))]
+  const missingMonths = [...new Set(dates.filter(date => (grouped.get(date) || []).length < 5).map(date => date.slice(0, 7)))]
   const alternateMonths = await Promise.allSettled(missingMonths.map(async month => {
     const [year, monthNumber] = month.split('-').map(Number)
-    return normalizeBonnetidMonth(await apiGet('/prayertimes/' + cityId + '/' + year + '/' + monthNumber + '/'), year, monthNumber)
+    return normalizeBonnetidMonth(await apiGet('/prayertimes/' + cityId + '/' + year + '/' + monthNumber + '/?asr=' + asrMethod), year, monthNumber, asrMethod)
   }))
   for (const result of alternateMonths) if (result.status === 'fulfilled') {
     for (const item of result.value) {
       const list = grouped.get(item.date) || []
-      if (list.length !== 5) list.push(item)
+      if (list.length < 5) list.push(item)
       grouped.set(item.date, list)
     }
   }
@@ -91,15 +91,16 @@ async function officialPrayerSchedule(cityId: string) {
 
 export async function getBonnetidStatus(userId: string) {
   const { data, error } = await getSupabaseAdmin().from('user_integrations')
-    .select('status,external_account_id,external_account_label,last_sync_at,last_error')
+    .select('status,external_account_id,external_account_label,encrypted_credentials,last_sync_at,last_error')
     .eq('user_id', userId).eq('provider', PROVIDER).maybeSingle()
   if (error) throw new Error(error.message)
-  return { connected: data?.status === 'connected', city: data?.external_account_label || null, cityId: data?.external_account_id || null, lastSyncAt: data?.last_sync_at || null, error: data?.last_error || null }
+  return { connected: data?.status === 'connected', city: data?.external_account_label || null, cityId: data?.external_account_id || null, asrMethod: data?.encrypted_credentials?.asrMethod === 1 ? 1 : 2, lastSyncAt: data?.last_sync_at || null, error: data?.last_error || null }
 }
 
-export async function refreshBonnetidForUser(userId: string, chosenCity?: BonnetidCity) {
+export async function refreshBonnetidForUser(userId: string, chosenCity?: BonnetidCity, chosenAsrMethod?: 1 | 2) {
   const db = getSupabaseAdmin()
   let city = chosenCity
+  let asrMethod: 1 | 2 = chosenAsrMethod === 1 ? 1 : 2
   if (!city) {
     const { data, error } = await db.from('user_integrations')
       .select('encrypted_credentials,status').eq('user_id', userId).eq('provider', PROVIDER).maybeSingle()
@@ -108,9 +109,10 @@ export async function refreshBonnetidForUser(userId: string, chosenCity?: Bonnet
     const saved = data.encrypted_credentials?.city
     if (!saved) return { connected: false }
     city = { id: String(saved.id), name: String(saved.name) }
+    asrMethod = data.encrypted_credentials?.asrMethod === 1 ? 1 : 2
   }
   if (!/^\d{1,8}$/.test(city.id)) throw new BonnetidError('invalid_city', 'Select a city from the list.')
-  const prayers = await officialPrayerSchedule(city.id)
+  const prayers = await officialPrayerSchedule(city.id, asrMethod)
   const now = new Date().toISOString()
   const rows = prayers.map(prayer => ({
     user_id: userId,
@@ -121,7 +123,7 @@ export async function refreshBonnetidForUser(userId: string, chosenCity?: Bonnet
     starts_at: bonnetidLocalToIso(prayer.date, prayer.time),
     due_at: null,
     priority: 5,
-    raw: { source: PROVIDER, type: 'prayer_time', date: prayer.date, time: prayer.time, city_id: city.id },
+    raw: { source: PROVIDER, type: 'prayer_time', date: prayer.date, time: prayer.time, city_id: city.id, asr_method: asrMethod },
     updated_at: now,
   })).filter(row => row.starts_at !== null)
   if (rows.length < 5) throw new BonnetidError('no_times', 'Bønnetid returned invalid times.')
@@ -139,7 +141,7 @@ export async function refreshBonnetidForUser(userId: string, chosenCity?: Bonnet
     user_id: userId,
     provider: PROVIDER,
     status: 'connected',
-    encrypted_credentials: { city },
+    encrypted_credentials: { city, asrMethod },
     external_account_id: city.id,
     external_account_label: city.name,
     last_sync_at: now,
@@ -150,14 +152,14 @@ export async function refreshBonnetidForUser(userId: string, chosenCity?: Bonnet
     updated_at: now,
   }, { onConflict: 'user_id,provider' })
   if (saved.error) throw new Error(saved.error.message)
-  return { connected: true, city: city.name, itemCount: rows.length }
+  return { connected: true, city: city.name, asrMethod, itemCount: rows.length }
 }
 
-export async function connectBonnetidForUser(userId: string, cityId: string) {
+export async function connectBonnetidForUser(userId: string, cityId: string, asrMethod: 1 | 2) {
   const cities = await getBonnetidCities()
   const city = cities.find(entry => entry.id === cityId)
   if (!city) throw new BonnetidError('invalid_city', 'Select a city from the official list.')
-  return refreshBonnetidForUser(userId, city)
+  return refreshBonnetidForUser(userId, city, asrMethod)
 }
 
 export async function syncBonnetidIfStale(userId: string) {

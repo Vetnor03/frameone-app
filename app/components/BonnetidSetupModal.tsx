@@ -6,15 +6,17 @@ import { supabase } from '@/app/lib/supabase'
 
 type City = { id: string; name: string }
 
-export default function BonnetidSetupModal({ language, currentCity, onClose, onSaved }: {
+export default function BonnetidSetupModal({ language, currentCity, currentAsrMethod, onClose, onSaved }: {
   language: 'en' | 'no'
   currentCity?: string | null
+  currentAsrMethod?: 1 | 2
   onClose: () => void
-  onSaved: (connected: boolean, city: string) => void
+  onSaved: (connected: boolean, city: string, asrMethod: 1 | 2) => void
 }) {
   const [cities, setCities] = useState<City[]>([])
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<City | null>(null)
+  const [asrMethod, setAsrMethod] = useState<1 | 2 | null>(currentCity ? currentAsrMethod || 2 : null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -39,18 +41,18 @@ export default function BonnetidSetupModal({ language, currentCity, onClose, onS
   }, [retry, language])
 
   async function connect() {
-    if (!selected || saving) return
+    if (!selected || !asrMethod || saving) return
     setSaving(true); setError('')
     try {
       const token = (await supabase.auth.getSession()).data.session?.access_token
       if (!token) throw new Error('Sign in to connect Bønnetid')
       const response = await fetch('/api/integrations/bonnetid/connect', {
         method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cityId: selected.id }),
+        body: JSON.stringify({ cityId: selected.id, asrMethod }),
       })
       const json = await response.json()
       if (!response.ok) throw new Error(json.error || 'Could not connect Bønnetid')
-      onSaved(true, json.city || selected.name)
+      onSaved(true, json.city || selected.name, asrMethod)
       onClose()
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not connect Bønnetid') }
     finally { setSaving(false) }
@@ -61,7 +63,7 @@ export default function BonnetidSetupModal({ language, currentCity, onClose, onS
       title="Bønnetid"
       onClose={onClose}
       dismissible={!saving}
-      footer={<button type="button" onClick={connect} disabled={!selected || saving || loading} className="h-11 w-full rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:opacity-40">
+      footer={<button type="button" onClick={connect} disabled={!selected || !asrMethod || saving || loading} className="h-11 w-full rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:opacity-40">
         {saving ? (language === 'no' ? 'KOBLER TIL…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
       </button>}
     >
@@ -77,6 +79,17 @@ export default function BonnetidSetupModal({ language, currentCity, onClose, onS
           {!filtered.length && !error && <p className="px-3 py-4 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Ingen byer funnet' : 'No cities found'}</p>}
         </div>
       )}
+      <fieldset className="mt-5">
+        <legend className="block text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'ASR-METODE' : 'ASR METHOD'}</legend>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {([1, 2] as const).map(method => (
+            <label key={method} className={'flex cursor-pointer items-center gap-2 rounded-2xl border px-3 py-3 text-sm ' + (asrMethod === method ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-70)]')}>
+              <input type="radio" name="bonnetid-asr" checked={asrMethod === method} onChange={() => setAsrMethod(method)} />
+              {method}x
+            </label>
+          ))}
+        </div>
+      </fieldset>
       {error && <div role="alert" className="mt-3 rounded-xl bg-[#d94b4b]/10 p-3 text-xs text-[#ff7a7a]">{error}{!saving && <button type="button" onClick={() => setRetry(value => value + 1)} className="ml-2 underline">{language === 'no' ? 'Prøv igjen' : 'Retry'}</button>}</div>}
       <p className="mt-3 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Eksperimentell integrasjon · tider fra Islamsk Råd Norge' : 'Experimental integration · times from Islamsk Råd Norge'}</p>
     </AppSheet>
