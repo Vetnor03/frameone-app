@@ -1,6 +1,6 @@
 export type IntegrationStatus = 'available' | 'experimental' | 'under-evaluation'
 
-export type ConnectAppKey = 'waste' | 'teams' | 'google-calendar' | 'local-events' | 'spond' | 'vigilo' | 'transponder' | 'planta'
+export type ConnectAppKey = 'waste' | 'teams' | 'google-calendar' | 'local-events' | 'spond' | 'vigilo' | 'transponder' | 'planta' | 'aladhan'
 
 export type IntegrationDefinition = {
   key: ConnectAppKey
@@ -17,6 +17,7 @@ export const INTEGRATION_CATALOGUE: readonly IntegrationDefinition[] = [
   { key: 'local-events', name: { en: 'Local Events', no: 'Lokale arrangementer' }, description: { en: 'Choose your local area for nearby events', no: 'Velg nærområdet ditt for lokale arrangementer' }, status: 'available', connectable: true },
   { key: 'spond', name: { en: 'Spond', no: 'Spond' }, description: { en: 'Show Spond messages on your frame', no: 'Vis Spond-meldinger på framen din' }, status: 'experimental', connectable: true },
   { key: 'waste', name: { en: 'Waste collection', no: 'Renovasjon' }, description: { en: 'Find your address and see upcoming waste collections', no: 'Finn adressen din og se kommende tømminger' }, status: 'experimental', connectable: true },
+  { key: 'aladhan', name: { en: 'AlAdhan', no: 'AlAdhan' }, description: { en: 'Try calculated prayer times without connecting your frame', no: 'Test beregnede bønnetider uten å koble til rammen' }, status: 'experimental', connectable: false },
   { key: 'vigilo', name: { en: 'Vigilo', no: 'Vigilo' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },
   { key: 'transponder', name: { en: 'Transponder', no: 'Transponder' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },
   { key: 'planta', name: { en: 'PLANTA', no: 'PLANTA' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },

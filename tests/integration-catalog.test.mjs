@@ -3,13 +3,14 @@ import test from 'node:test'
 import { INTEGRATION_CATALOGUE, integrationMatchesSearch, integrationStatusLabel } from '../app/lib/integrations/catalog.ts'
 
 test('shared integrations are ordered and expose lifecycle capabilities', () => {
-  assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'google-calendar', 'local-events', 'spond', 'waste', 'vigilo', 'transponder', 'planta'])
+  assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'google-calendar', 'local-events', 'spond', 'waste', 'aladhan', 'vigilo', 'transponder', 'planta'])
   const waste = INTEGRATION_CATALOGUE.find(item => item.key === 'waste')
   assert.deepEqual({ status: waste.status, connectable: waste.connectable }, { status: 'experimental', connectable: true })
   assert.equal(waste.description.en, 'Find your address and see upcoming waste collections')
   assert.equal(INTEGRATION_CATALOGUE.find(item => item.key === 'teams').name.en, 'Teams')
   const spond = INTEGRATION_CATALOGUE.find(item => item.key === 'spond')
   assert.deepEqual({ status: spond.status, connectable: spond.connectable }, { status: 'experimental', connectable: true })
+  assert.deepEqual(INTEGRATION_CATALOGUE.find(item => item.key === 'aladhan') && (({ status, connectable }) => ({ status, connectable }))(INTEGRATION_CATALOGUE.find(item => item.key === 'aladhan')), { status: 'experimental', connectable: false })
   for (const key of ['vigilo', 'transponder', 'planta']) {
     const integration = INTEGRATION_CATALOGUE.find(item => item.key === key)
     assert.deepEqual({ status: integration.status, connectable: integration.connectable }, { status: 'under-evaluation', connectable: false })

@@ -30,6 +30,7 @@ import { DEFAULT_LOCAL_EVENT_AREA, getLocalEventPlace, normalizeLocalEventAreaPr
 import { localEventGroupKeyFromRaw, groupSkipId } from './lib/integrations/local-events/grouping'
 import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationMatchesSearch, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
 const WasteSetupModal = dynamic(() => import('./components/WasteSetupModal'))
+const AladhanPreviewModal = dynamic(() => import('./components/AladhanPreviewModal'))
 const IntegrationRequestCard = dynamic(() => import('./components/IntegrationRequestCard'))
 import AppSheet, { AppSheetVisibilityContext } from './components/AppSheet'
 import { StartupSplash } from './components/StartupSplash'
@@ -3756,6 +3757,7 @@ function ConnectAppsScreen({
   const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams' | 'google-calendar', string>>>({})
   const [localEventsOpen, setLocalEventsOpen] = useState(false)
   const [wasteModalOpen, setWasteModalOpen] = useState(false)
+  const [aladhanPreviewOpen, setAladhanPreviewOpen] = useState(false)
   const [wasteConnected, setWasteConnected] = useState(() => connectAppIsConnected(modulesJson, 'waste'))
   const [wasteStatusResolved, setWasteStatusResolved] = useState(false)
   useEffect(() => {
@@ -4479,9 +4481,15 @@ function ConnectAppsScreen({
                   </div>
 
                   {!app.connectable ? (
-                    <span className="shrink-0 h-8 px-3 rounded-xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[11px] tracking-widest text-[#2aa3ff] inline-flex items-center">
-                      {integrationStatusLabel(app.status, language)}
-                    </span>
+                    app.key === 'aladhan' ? (
+                      <button type="button" onClick={() => setAladhanPreviewOpen(true)} className="shrink-0 h-8 rounded-xl border border-[#2aa3ff]/40 px-3 text-[11px] tracking-widest text-[#2aa3ff]">
+                        {language === 'no' ? 'TEST' : 'PREVIEW'}
+                      </button>
+                    ) : (
+                      <span className="shrink-0 h-8 px-3 rounded-xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[11px] tracking-widest text-[#2aa3ff] inline-flex items-center">
+                        {integrationStatusLabel(app.status, language)}
+                      </span>
+                    )
                   ) : connected ? (
                     startup && credentialProvider ? (
                       <button
@@ -4639,6 +4647,7 @@ function ConnectAppsScreen({
 
       {localEventsOpen && renderLocalEventsModal()}
       {wasteModalOpen && <WasteSetupModal language={language} onClose={() => setWasteModalOpen(false)} onSaved={(connected) => { setWasteConnected(connected); setLocallyDisconnectedApps(current => ({ ...current, waste: false })); changeFrameIntegration('waste', { enabled: connected }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }} />}
+      {aladhanPreviewOpen && <AladhanPreviewModal language={language} onClose={() => setAladhanPreviewOpen(false)} />}
 
       {spondModalOpen && (
         <AppSheet
