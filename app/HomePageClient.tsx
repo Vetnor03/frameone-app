@@ -11237,7 +11237,7 @@ type ReminderRepeatKey =
   | 'custom'
 
 type ReminderTag = 'work' | 'personal' | 'sports' | 'chores' | 'event'
-type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'waste' | 'local-events' | 'aladhan'
+type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'waste' | 'local-events' | 'aladhan' | 'aladhan-holidays'
 type ReminderSourceFilter = ReminderSource
 
 type ReminderUiItem = {
@@ -11372,7 +11372,7 @@ function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
   if (source === 'spond') return 'sports'
   if (source === 'waste') return 'chores'
   if (source === 'local-events') return 'event'
-  if (source === 'aladhan') return 'event'
+  if (source === 'aladhan' || source === 'aladhan-holidays') return 'event'
   return null
 }
 
@@ -11383,6 +11383,7 @@ function integrationReminderSourceLabel(language: AppLanguage, source?: Reminder
   if (source === 'waste') return language === 'no' ? 'Renovasjon' : 'Waste'
   if (source === 'local-events') return 'Events'
   if (source === 'aladhan') return 'AlAdhan'
+  if (source === 'aladhan-holidays') return language === 'no' ? 'Islamske merkedager' : 'Islamic occasions'
   return language === 'no' ? 'Påminnelse' : 'Reminder'
 }
 
@@ -15276,8 +15277,9 @@ const manualItems: ReminderUiItem[] = (data || [])
         for (const connection of connectionData || []) {
           const source = integrationProviderToReminderSource(connection.provider)
           if (source) connectedSources.add(source)
+          if (source === 'aladhan') connectedSources.add('aladhan-holidays')
         }
-        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste', 'aladhan'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
+        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste', 'aladhan', 'aladhan-holidays'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
 
         if (isActive && connectedSources.has('teams')) {
           try {
@@ -15332,7 +15334,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           .select('id, provider, external_id, title, starts_at, due_at, raw')
           .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway', 'aladhan'])
           .or(activeDeviceId ? `user_id.eq.${sessionUserId},device_id.eq.${activeDeviceId}` : `user_id.eq.${sessionUserId}`)
-          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste`)
+          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.aladhan`)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (integrationError) {
@@ -15377,14 +15379,17 @@ const manualItems: ReminderUiItem[] = (data || [])
 
           integrationItems = visibleIntegrationData
             .map((row: any) => {
-              const source = integrationProviderToReminderSource(row.provider)
+              const source: ReminderSource | null = row.provider === 'aladhan' && row.raw?.type === 'islamic_holiday'
+                ? 'aladhan-holidays' : integrationProviderToReminderSource(row.provider)
               if (!source) return null
+              if (source === 'aladhan' && (row.raw?.type !== 'prayer_time' ||
+                  !['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].includes(String(row.title || '')))) return null
               const externalEventId = source === 'local-events' ? String(row.external_id || '').trim() : ''
               const groupKey = source === 'local-events' ? localEventGroupKeyFromRaw(row) : ''
               if (source === 'local-events' && manualItems.some(item => item.sourceEventGroupKey === groupKey && groupKey)) return null
               const { date, time } = integrationItemDateTime(row)
               const title = integrationReminderTitle(row, source, language)
-              if (!title || !date) return null
+              if (!title || !date || (source === 'aladhan-holidays' && date < todayYmd)) return null
               return {
                 id: `${source}:${String(row.external_id || row.id)}`,
                 title,
@@ -15446,7 +15451,7 @@ const manualItems: ReminderUiItem[] = (data || [])
   // Keep all timed integration filters current at the exact minute boundary.
   // This timer updates the phone UI only; it does not trigger any API polling.
   useEffect(() => {
-    if (sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'google-calendar' && sourceFilter !== 'spond' && sourceFilter !== 'aladhan') return
+    if (sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'google-calendar' && sourceFilter !== 'spond' && sourceFilter !== 'aladhan' && sourceFilter !== 'aladhan-holidays') return
     setEventNowMs(Date.now())
     let interval: number | undefined
     const delayUntilNextMinute = 60_000 - (Date.now() % 60_000) + 50
@@ -15518,7 +15523,9 @@ const manualItems: ReminderUiItem[] = (data || [])
     const today = toLocalYmd(now)
     const clock = pad2(now.getHours()) + ':' + pad2(now.getMinutes())
     const upcoming = reminders.filter((item) => (item.source || 'remind') === sourceFilter).filter((item) =>
-      isUpcomingIntegratedCalendarItem(item.source, item.date, normalizeReminderTime(item.time), today, clock)
+      sourceFilter === 'aladhan-holidays'
+        ? item.date >= today
+        : isUpcomingIntegratedCalendarItem(item.source, item.date, normalizeReminderTime(item.time), today, clock)
     )
     // Only one future instance per AlAdhan event. When today's Isha expires,
     // tomorrow's Isha becomes visible without reloading the saved schedule.
