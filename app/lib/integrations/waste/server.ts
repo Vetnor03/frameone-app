@@ -1,7 +1,7 @@
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
 import { createHash } from 'node:crypto'
 import { providerForAddress, providerRegistrationFor, searchKartverketAddresses, WasteProviderError, wasteCollectionTitle, type ProviderFamily, type WasteAddress, type WasteCollection } from './providers'
-import { pilotWasteCollections, pilotWasteScheduleForAddress, resolvePilotWasteAddress, searchPilotWasteAddresses } from './pilotManualSchedules'
+import { pilotWasteCollections, pilotWasteScheduleForAddress, resolvePilotWasteAddress } from './pilotManualSchedules'
 import { norwayLocalYmd } from './date'
 import { wasteCachePlan } from './cache'
 import { wasteCollectionDisplayTitle, type WasteDisplayLanguage } from './display.ts'
@@ -113,20 +113,9 @@ export async function previewWasteAddress(address: WasteAddress, language: Waste
 }
 
 export async function searchWasteAddresses(query: string) {
-  const manual = searchPilotWasteAddresses(query)
-  // Search Kartverket nationwide, not just locations with a collection feed.
-  // Keep exact manual matches at the top, but avoid duplicate suggestions.
-  try {
-    const national = await searchKartverketAddresses(query)
-    return [...manual, ...national.filter(address => {
-      const matching = matchingManualSchedule(address)
-      return !matching || !manual.some(item => item.addressId === `pilot:${matching.schedule.key}`)
-    })]
-  } catch (error) {
-    // Keep already documented addresses searchable during temporary outages.
-    if (manual.length) return manual
-    throw error
-  }
+  // Kartverket alone determines which addresses appear and in which order.
+  // Manual calendars are resolved only after selecting a normal address.
+  return searchKartverketAddresses(query)
 }
 export async function connectWasteForUser(userId: string, address: WasteAddress) { return refreshWasteForUser(userId, address) }
 
