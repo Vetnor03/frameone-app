@@ -2827,9 +2827,10 @@ export default function HomePage() {
     return next
   }
 
-  function selectDynamicPeriod(period: DynamicPeriod) {
-    if (!dynamicLayout?.enabled || period === dynamicPeriod) return
-    const choice = dynamicLayout.periods[period]
+  function selectDynamicPeriod(period: DynamicPeriod, requestedConfig?: DynamicConfig) {
+    const config = requestedConfig ?? dynamicLayout
+    if (!config?.enabled || (period === dynamicPeriod && !requestedConfig)) return
+    const choice = config.periods[period]
     setDynamicPeriod(period)
     if (choice.layout === 'custom' && choice.custom_layout_id) {
       const custom = customLayouts.find(item => item.id === choice.custom_layout_id)
@@ -2866,7 +2867,9 @@ export default function HomePage() {
         })()
     setDynamicLayout(next)
     if (next.enabled) {
-      setDynamicPeriod(dynamicPeriodAt(Date.now(), next.timezone))
+      // Re-enabling restores the appropriate saved period instead of showing an
+      // unrelated static layout until the slider is touched.
+      selectDynamicPeriod(dynamicPeriodAt(Date.now(), next.timezone), next)
     }
     markDirty({ dynamicLayout: next })
   }
