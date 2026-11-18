@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from '../spond/server'
 import { aladhanCoordinatesUrl, normalizeAladhan, safeCity, METHODS } from './preview.mjs'
 import { resolveNorwegianCity, type NorwegianPlace } from './location.mjs'
 import { followingDays, osloWallClockToIso } from './time.mjs'
+import { getAladhanHolidayDates } from './holidays.mjs'
 
 const PROVIDER = 'aladhan'
 const UPSTREAM_CACHE_SECONDS = 6 * 60 * 60
@@ -94,11 +95,12 @@ export async function refreshAladhanForUser(userId: string, chosen?: AladhanSele
     throw new AladhanIntegrationError('upstream_unavailable', 'AlAdhan is temporarily unavailable. Your existing schedule is unchanged.')
   }
   const now = new Date().toISOString()
-  const rows = days.flatMap(day => day.times.map(item => ({
+  const prayerNames = new Set(['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'])
+  const prayerRows = days.flatMap(day => day.times.filter(item => prayerNames.has(item.name)).map(item => ({
     user_id: userId,
     provider: PROVIDER,
     external_id: selection.city.toLocaleLowerCase('nb-NO') + ':' + day.date + ':' + item.name.toLowerCase(),
-    title: item.name === 'Sunrise' ? 'Soloppgang' : item.name === 'Sunset' ? 'Solnedgang' : item.name,
+    title: item.name,
     body: null,
     starts_at: osloWallClockToIso(day.date, item.time),
     due_at: null,
@@ -107,8 +109,30 @@ export async function refreshAladhanForUser(userId: string, chosen?: AladhanSele
       method: selection.method, asr_method: selection.asrMethod, high_latitude: selection.highLatitude },
     updated_at: now,
   })))
-  if (rows.length !== DAYS * 7 || rows.some(row => !row.starts_at))
-    throw new AladhanIntegrationError('invalid_timetable', 'AlAdhan returned an incomplete schedule. Nothing was changed.')
+  if (prayerRows.length !== DAYS * 5 || prayerRows.some(row => !row.starts_at))
+    throw new AladhanIntegrationError('invalid_timetable', 'AlAdhan returned an incomplete prayer schedule. Nothing was changed.')
+
+  // Separate, all-day Islamic observances. Their dates are calculated by the
+  // provider, may differ from locally announced dates, and are not mosque events.
+  // Failure to convert holiday dates must never block the verified five prayers.
+  const observances = await getAladhanHolidayDates(days[0]?.hijri?.date || '', dates[0])
+    .catch(() => ({ dates: [], complete: false }))
+  const holidayRows = observances.dates.map(item => ({
+    user_id: userId,
+    provider: PROVIDER,
+    external_id: 'hijri:' + item.year + ':' + item.key,
+    title: item.title,
+    body: 'Beregnet dato – kan avvike fra lokale kunngjøringer.',
+    starts_at: osloWallClockToIso(item.date, '12:00'),
+    due_at: null,
+    priority: 5,
+    raw: { source: PROVIDER, type: 'islamic_holiday', date: item.date,
+      hijri_date: item.hijriDate, key: item.key, calculated: true, all_day: true },
+    updated_at: now,
+  }))
+  const rows = [...prayerRows, ...holidayRows]
+  if (rows.some(row => !row.starts_at))
+    throw new AladhanIntegrationError('invalid_timetable', 'Invalid AlAdhan holiday date. Nothing was changed.')
 
   const previous = await db.from('integration_items')
     .select('external_id,raw').eq('user_id', userId).eq('provider', PROVIDER)
@@ -116,7 +140,8 @@ export async function refreshAladhanForUser(userId: string, chosen?: AladhanSele
   const saved = await db.from('integration_items').upsert(rows, { onConflict: 'user_id,provider,external_id' })
   if (saved.error) throw new Error(saved.error.message)
   const next = new Set(rows.map(row => row.external_id))
-  const stale = (previous.data || []).filter(row => row.raw?.type === 'prayer_time').map(row => row.external_id)
+  const stale = (previous.data || []).filter(row => row.raw?.type === 'prayer_time' ||
+    (observances.complete && row.raw?.type === 'islamic_holiday')).map(row => row.external_id)
     .filter(id => !next.has(id))
   if (stale.length) {
     const removed = await db.from('integration_items').delete().eq('user_id', userId)
