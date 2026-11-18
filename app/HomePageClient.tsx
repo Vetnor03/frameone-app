@@ -11361,7 +11361,8 @@ function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
   if (source === 'google-calendar') return 'event'
   if (source === 'spond') return 'sports'
   if (source === 'waste') return 'chores'
-  if (source === 'local-events' || source === 'bonnetid') return 'event'
+  if (source === 'local-events') return 'event'
+  if (source === 'bonnetid') return 'event'
   return null
 }
 
