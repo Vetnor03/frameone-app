@@ -3373,6 +3373,7 @@ async function handleSelectTab(k: TabKey) {
                   frameTheme={frameTheme}
                   dynamicLayoutEnabled={dynamicLayout?.enabled === true}
                   dynamicPeriod={dynamicPeriod}
+                  dynamicTimezone={dynamicLayout?.timezone ?? 'Europe/Oslo'}
                   onDynamicPeriodChange={selectDynamicPeriod}
                   onDynamicLayoutToggle={toggleDynamicLayout}
                   canChangeFrameTheme={!!activeDeviceId}
@@ -4891,6 +4892,7 @@ function FrameTab(props: {
   onFrameThemeToggle: () => void
   dynamicLayoutEnabled: boolean
   dynamicPeriod: DynamicPeriod
+  dynamicTimezone: string
   onDynamicPeriodChange: (period: DynamicPeriod) => void
   onDynamicLayoutToggle: () => void
   layoutKey: LayoutKey
@@ -4912,7 +4914,31 @@ function FrameTab(props: {
   onAdd:()=>void
   onEdit:(layout:CustomLayout)=>void
 }) {
-  const { title, subtitle, frameTheme, canChangeFrameTheme, onFrameThemeToggle, dynamicLayoutEnabled, dynamicPeriod, onDynamicPeriodChange, onDynamicLayoutToggle, layoutKey, cells, onPrev, onNext, onCellTap, language,editorMode,editorName,editorCells,editorUnsupportedSlots,onEditorNameChange,onEditorCellsChange,onCancelEditor,customLayout,customAssignments,isAddCard,onAdd,onEdit } = props
+  const { title, subtitle, frameTheme, canChangeFrameTheme, onFrameThemeToggle, dynamicLayoutEnabled, dynamicPeriod, dynamicTimezone, onDynamicPeriodChange, onDynamicLayoutToggle, layoutKey, cells, onPrev, onNext, onCellTap, language,editorMode,editorName,editorCells,editorUnsupportedSlots,onEditorNameChange,onEditorCellsChange,onCancelEditor,customLayout,customAssignments,isAddCard,onAdd,onEdit } = props
+
+  // The filled blue dot denotes the current local time, not the preview.
+  // The user can select a different period to edit without moving that dot.
+  const [currentTimePeriod, setCurrentTimePeriod] = useState<DynamicPeriod>(() =>
+    dynamicPeriodAt(Date.now(), dynamicTimezone)
+  )
+  useEffect(() => {
+    if (!dynamicLayoutEnabled) return
+    const updateCurrentTimePeriod = () => {
+      setCurrentTimePeriod(dynamicPeriodAt(Date.now(), dynamicTimezone))
+    }
+    // Also sync immediately when another frame/timezone is selected.
+    const animationFrame = window.requestAnimationFrame(updateCurrentTimePeriod)
+    // Foreground events correct timers throttled while iOS suspends the app.
+    const timer = window.setInterval(updateCurrentTimePeriod, 15000)
+    document.addEventListener('visibilitychange', updateCurrentTimePeriod)
+    window.addEventListener('focus', updateCurrentTimePeriod)
+    return () => {
+      window.cancelAnimationFrame(animationFrame)
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', updateCurrentTimePeriod)
+      window.removeEventListener('focus', updateCurrentTimePeriod)
+    }
+  }, [dynamicLayoutEnabled, dynamicTimezone])
 
   return (
     <div id="frame-layout-controls" tabIndex={-1} className="h-full flex flex-col outline-none">
@@ -4932,13 +4958,16 @@ function FrameTab(props: {
             <div className="relative grid grid-cols-4">
               {(['morning','afternoon','evening','night'] as const).map(period => {
                 const selected = period === dynamicPeriod
+                const isCurrent = period === currentTimePeriod
                 const labels = language === 'no'
                   ? { morning: 'Morgen', afternoon: 'Ettermiddag', evening: 'Kveld', night: 'Natt' }
                   : { morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening', night: 'Night' }
-                return <button key={period} type="button" aria-pressed={selected} onClick={() => onDynamicPeriodChange(period)}
+                return <button key={period} type="button" aria-pressed={selected} aria-current={isCurrent ? 'time' : undefined}
+                  title={isCurrent ? (language === 'no' ? 'Aktivt tidspunkt nå' : 'Current time period') : undefined}
+                  onClick={() => onDynamicPeriodChange(period)}
                   className="flex min-h-11 flex-col items-center justify-start gap-2 text-[11px] text-[color:var(--fg-50)]">
-                  <span aria-hidden="true" className={`h-[13px] w-[13px] rounded-full border-2 ${selected ? 'border-[#2196f3] bg-[#2196f3]' : 'border-[color:var(--fg-35)] bg-[color:var(--bg)]'}`} />
-                  <span className={selected ? 'text-[color:var(--fg)]' : ''}>{labels[period]}</span>
+                  <span aria-hidden="true" className={`h-[13px] w-[13px] rounded-full border-2 transition-colors ${isCurrent ? 'border-[#2196f3] bg-[#2196f3]' : selected ? 'border-[#2196f3] bg-[color:var(--bg)]' : 'border-[color:var(--fg-35)] bg-[color:var(--bg)]'}`} />
+                  <span className={selected ? 'font-semibold text-[color:var(--fg)]' : ''}>{labels[period]}</span>
                 </button>
               })}
             </div>

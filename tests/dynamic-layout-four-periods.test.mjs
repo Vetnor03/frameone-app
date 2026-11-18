@@ -62,3 +62,16 @@ test('UI keeps existing app tabs and features a slider plus side-by-side toggles
   assert.match(source, /gap-x-4 gap-y-2/)
   assert.match(source, /<TabBar/)
 })
+
+test('live clock dot follows actual period while editor selection stays independent', () => {
+  const source = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  assert.match(source, /dynamicTimezone=\{dynamicLayout\?\.timezone \?\? 'Europe\/Oslo'\}/)
+  assert.match(source, /setCurrentTimePeriod\(dynamicPeriodAt\(Date\.now\(\), dynamicTimezone\)\)/)
+  assert.match(source, /setInterval\(updateCurrentTimePeriod, 15000\)/)
+  assert.match(source, /addEventListener\('visibilitychange', updateCurrentTimePeriod\)/)
+  assert.match(source, /addEventListener\('focus', updateCurrentTimePeriod\)/)
+  assert.match(source, /const selected = period === dynamicPeriod/)
+  assert.match(source, /const isCurrent = period === currentTimePeriod/)
+  assert.match(source, /aria-current=\{isCurrent \? 'time' : undefined\}/)
+  assert.match(source, /isCurrent \? 'border-\[#2196f3\] bg-\[#2196f3\]' : selected/)
+})
