@@ -10,4 +10,6 @@ export function safeCity(x:unknown):string|null
 export function validDate(x:unknown):boolean
 export function prayerClock(x:unknown):string|null
 export function aladhanUrl(x:{city:string;date:string;asrMethod:1|2;method:number;highLatitude:number}):URL
-export function normalizeAladhan(x:unknown,args:{city:string;date:string;asrMethod:1|2;method:number}):AladhanPreview
+export function normalizeAladhan(x:unknown,args:{city:string;date:string;asrMethod:1|2;method:number;coordinates?:{latitude:number;longitude:number}}):AladhanPreview
+
+export function aladhanCoordinatesUrl(x:{latitude:number;longitude:number;date:string;asrMethod:1|2;method:number;highLatitude:number}): URL

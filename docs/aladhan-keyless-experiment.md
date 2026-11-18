@@ -50,3 +50,18 @@ timetables. The public Islamic Network API does not require a key and publicly
 discusses usage and rate limits. Review its usage terms and attribution
 for product launch. Note that the Hijri holiday markers in the Preview
 are calculated; no holiday calendar is silently imported.
+
+## November 18 fix — fewer settings, reliable Norwegian city lookup
+
+The regular Connect modal now requires only city and Asr 1x/2x. The date and
+calculation/high-latitude selectors are removed from the primary flow. MWL
+(method 3) and angle-based high-latitude adjustment (3) are defaults; the
+advanced options remain available to users who need different methods, with
+an optional current-day preview.
+
+The previous by-city API lookup could fail the Norwegian location check even
+for Stavanger (confirmed by Vercel runtime logs). Both preview and connected
+seven-day sync now use Open-Meteo geocoding restricted to verified Norwegian
+results, followed by AlAdhan's geographic **/v1/timings** endpoint with the
+actual latitude and longitude. Reject fuzzy mismatches and inconsistent API
+metadata. Keep no real user data until all seven days have been verified.

@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '../spond/server'
-import { aladhanUrl, normalizeAladhan, safeCity, METHODS } from './preview.mjs'
+import { aladhanCoordinatesUrl, normalizeAladhan, safeCity, METHODS } from './preview.mjs'
+import { resolveNorwegianCity, type NorwegianPlace } from './location.mjs'
 import { followingDays, osloWallClockToIso } from './time.mjs'
 
 const PROVIDER = 'aladhan'
@@ -23,17 +24,17 @@ export function validateAladhanSelection(input: unknown): AladhanSelection {
   const obj = input && typeof input === 'object' && !Array.isArray(input) ? input as Record<string, unknown> : {}
   const city = safeCity(obj.city)
   const asrMethod = Number(obj.asrMethod)
-  const method = Number(obj.method)
-  const highLatitude = Number(obj.highLatitude)
+  const method = obj.method == null ? 3 : Number(obj.method)
+  const highLatitude = obj.highLatitude == null ? 3 : Number(obj.highLatitude)
   if (!city || (asrMethod !== 1 && asrMethod !== 2) ||
       !METHODS.includes(method) || ![1, 2, 3].includes(highLatitude)) {
     throw new AladhanIntegrationError('invalid_configuration', 'Choose a Norwegian city, Asr method and calculation settings.')
   }
   return { city, asrMethod: asrMethod as 1 | 2, method, highLatitude }
 }
-async function officialProviderCalculatedDay(date: string, selection: AladhanSelection) {
+async function officialProviderCalculatedDay(date: string, selection: AladhanSelection, location: NorwegianPlace) {
   // This is calculated AlAdhan data, NOT official IRN timetable data.
-  const url = aladhanUrl({ ...selection, date })
+  const url = aladhanCoordinatesUrl({ ...selection, date, latitude: location.latitude, longitude: location.longitude })
   const response = await fetch(url, {
     headers: { Accept: 'application/json' },
     next: { revalidate: UPSTREAM_CACHE_SECONDS },
@@ -42,8 +43,9 @@ async function officialProviderCalculatedDay(date: string, selection: AladhanSel
   if (!response.ok) throw new AladhanIntegrationError('upstream_unavailable', 'AlAdhan returned HTTP ' + response.status)
   const payload: unknown = await response.json()
   try {
-    return normalizeAladhan(payload, { city: selection.city, date, asrMethod: selection.asrMethod, method: selection.method })
-  } catch {
+    return normalizeAladhan(payload, { city: location.name, date, asrMethod: selection.asrMethod, method: selection.method, coordinates: location })
+  } catch (error) {
+    console.warn('[aladhan] Invalid upstream timetable', date, error instanceof Error ? error.message : 'unknown')
     throw new AladhanIntegrationError('invalid_timetable', 'Could not verify AlAdhan prayer times for ' + date + '. Try a different method or city.')
   }
 }
@@ -74,12 +76,19 @@ export async function refreshAladhanForUser(userId: string, chosen?: AladhanSele
     if (data?.status !== 'connected') return { connected: false }
     selection = validateAladhanSelection(data.encrypted_credentials)
   } else selection = validateAladhanSelection(selection)
+  let location: NorwegianPlace
+  try {
+    location = await resolveNorwegianCity(selection.city)
+  } catch (error) {
+    throw new AladhanIntegrationError('invalid_configuration',
+      error instanceof Error ? error.message : 'Could not locate this Norwegian city.')
+  }
   const dates = followingDays(DAYS)
   // Fail closed: do not replace any stored timetable with a partial or
   // unverified response. The upstream cache reuses identical city/method/day calls.
   let days: Awaited<ReturnType<typeof officialProviderCalculatedDay>>[]
   try {
-    days = await Promise.all(dates.map(date => officialProviderCalculatedDay(date, selection)))
+    days = await Promise.all(dates.map(date => officialProviderCalculatedDay(date, selection, location)))
   } catch (err) {
     if (err instanceof AladhanIntegrationError) throw err
     throw new AladhanIntegrationError('upstream_unavailable', 'AlAdhan is temporarily unavailable. Your existing schedule is unchanged.')
