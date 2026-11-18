@@ -43,11 +43,11 @@ test('rejects unsupported clocks, cities, dates and mismatched upstream methods'
  const wrongDate=data();wrongDate.data.date.gregorian.date='17-11-2026'
  assert.throws(()=>normalizeAladhan(wrongDate,args),/date/)
 })
-test('read-only Connect preview is not a connected provider, IRN or a frame update',()=>{
+test('preview API stays read-only even when AlAdhan Connect is enabled',()=>{
  const cat=readFileSync(new URL('../app/lib/integrations/catalog.ts',import.meta.url),'utf8')
  const home=readFileSync(new URL('../app/HomePageClient.tsx',import.meta.url),'utf8')
  const route=readFileSync(new URL('../app/api/integrations/aladhan/preview/route.ts',import.meta.url),'utf8')
- assert.match(cat,/key: 'aladhan'[\s\S]*?connectable: false/)
+ assert.match(cat,/key: 'aladhan'[\s\S]*?connectable: true/)
  assert.match(home,/setAladhanPreviewOpen\(true\)/)
  assert.match(route,/getAuthenticatedUserId\(req\)/)
  assert.match(route,/revalidate:21600/)
