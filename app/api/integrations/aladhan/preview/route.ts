@@ -14,7 +14,7 @@ export async function GET(req:Request) {
   if(!await getAuthenticatedUserId(req))return NextResponse.json({error:'Unauthorized'},{status:401})
   const q=new URL(req.url).searchParams
   const city=safeCity(q.get('city')),date=q.get('date')||osloDate()
-  const asrMethod=Number(q.get('asrMethod')),method=Number(q.get('method')),highLatitude=Number(q.get('highLatitude'))
+  const asrMethod=Number(q.get('asrMethod')) as 1 | 2,method=Number(q.get('method')),highLatitude=Number(q.get('highLatitude'))
   const chosen=Date.parse(date+'T12:00:00Z'),today=Date.parse(osloDate()+'T12:00:00Z')
   if(!city||!validDate(date)||!Number.isFinite(chosen)||Math.abs(chosen-today)>365*86400000||
      ![1,2].includes(asrMethod)||!METHODS.includes(method)||![1,2,3].includes(highLatitude))
