@@ -1,5 +1,4 @@
 const zone = 'Europe/Oslo'
-const p2 = n => String(n).padStart(2, '0')
 export function osloYmd(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date)
   const v = k => parts.find(p => p.type === k)?.value || ''
