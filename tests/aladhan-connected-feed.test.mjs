@@ -143,6 +143,6 @@ test('Islamic occasions are kept on their date as untimed, separate all-day entr
 test('upcoming-only AlAdhan filtering is shared by app and physical Reminders', () => {
   const app = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   const feed = readFileSync(new URL('../app/lib/device/remindersFeed.ts', import.meta.url), 'utf8')
-  assert.match(app, /sourceFilter === 'aladhan'[\s\S]*?nextAladhanOccurrences\(upcoming/)
+  assert.match(app, /sourceFilter === 'aladhan'[\s\S]*?nextAladhanWithOccasions\(upcoming/)
   assert.match(feed, /return nextAladhanOccurrences\(upcoming/)
 })
