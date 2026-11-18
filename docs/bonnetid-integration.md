@@ -11,7 +11,7 @@ IRN's Zebra API requires a licensed `Api-Token`. Configure server-side `BONNETID
 * Official API: https://api.bonnetid.no/
 * City list: `GET /meta/locations/`
 * Monthly timetable: `GET /meta/prayertimes/{location_id}/{year}/{month}/`
-* Daily fallback: `GET /prayertimes/{location_id}/{year}/{month}/{day}/?asr=2`
+* Alternate monthly collection: `GET /prayertimes/{location_id}/{year}/{month}/` (the final segment on the detail endpoint is a record ID, not the day of month)
 
 This integration intentionally **fails closed** when token is missing or data cannot be verified. It must not invent times, select a location automatically, or use a third-party prayer calculation with potentially different results. Connection only succeeds once official times have been fetched and stored.
 
