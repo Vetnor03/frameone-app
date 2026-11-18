@@ -272,7 +272,7 @@ export function buildAladhanPrayerItems(
     const externalId = String(row.external_id || '').trim()
     const start = String(row.starts_at || '')
     const timestamp = Date.parse(start)
-    if (!['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].includes(title) || !externalId || row.raw?.source !== 'aladhan' ||
+    if (!['Fajr', 'Soloppgang', 'Dhuhr', 'Asr', 'Solnedgang', 'Maghrib', 'Isha'].includes(title) || !externalId || row.raw?.source !== 'aladhan' ||
         row.raw?.type !== 'prayer_time' || !Number.isFinite(timestamp) ||
         timestamp <= now.getTime()) return []
     const occurrenceDate = isoToYmdInTimeZone(start, timeZone)
@@ -293,8 +293,8 @@ export function buildAladhanPrayerItems(
       external_id: externalId,
     }]
   })
-  // Only the next occurrence of each of the five prayers is displayed.
-  // Exclude legacy stored sunrise/sunset rows before the physical display cap.
+  // Show one upcoming occurrence of each prayer and solar event before
+  // the physical display cap; sunset and Maghrib remain distinct.
   return nextAladhanOccurrences(upcoming, item => item.title,
     item => item.occurrence_date + 'T' + (item.display_time || ''))
 }
