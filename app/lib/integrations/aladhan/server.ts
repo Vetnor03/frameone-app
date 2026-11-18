@@ -95,12 +95,12 @@ export async function refreshAladhanForUser(userId: string, chosen?: AladhanSele
     throw new AladhanIntegrationError('upstream_unavailable', 'AlAdhan is temporarily unavailable. Your existing schedule is unchanged.')
   }
   const now = new Date().toISOString()
-  const prayerNames = new Set(['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'])
-  const prayerRows = days.flatMap(day => day.times.filter(item => prayerNames.has(item.name)).map(item => ({
+  const timingNames = new Set(['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Sunset', 'Maghrib', 'Isha'])
+  const timingRows = days.flatMap(day => day.times.filter(item => timingNames.has(item.name)).map(item => ({
     user_id: userId,
     provider: PROVIDER,
     external_id: selection.city.toLocaleLowerCase('nb-NO') + ':' + day.date + ':' + item.name.toLowerCase(),
-    title: item.name,
+    title: item.name === 'Sunrise' ? 'Soloppgang' : item.name === 'Sunset' ? 'Solnedgang' : item.name,
     body: null,
     starts_at: osloWallClockToIso(day.date, item.time),
     due_at: null,
@@ -109,12 +109,12 @@ export async function refreshAladhanForUser(userId: string, chosen?: AladhanSele
       method: selection.method, asr_method: selection.asrMethod, high_latitude: selection.highLatitude },
     updated_at: now,
   })))
-  if (prayerRows.length !== DAYS * 5 || prayerRows.some(row => !row.starts_at))
-    throw new AladhanIntegrationError('invalid_timetable', 'AlAdhan returned an incomplete prayer schedule. Nothing was changed.')
+  if (timingRows.length !== DAYS * 7 || timingRows.some(row => !row.starts_at))
+    throw new AladhanIntegrationError('invalid_timetable', 'AlAdhan returned an incomplete timetable. Nothing was changed.')
 
   // Separate, all-day Islamic observances. Their dates are calculated by the
   // provider, may differ from locally announced dates, and are not mosque events.
-  // Failure to convert holiday dates must never block the verified five prayers.
+  // Failure to convert holiday dates must never block the verified timetable.
   const observances = await getAladhanHolidayDates(days[0]?.hijri?.date || '', dates[0])
     .catch(() => ({ dates: [], complete: false }))
   const holidayRows = observances.dates.map(item => ({
@@ -130,7 +130,7 @@ export async function refreshAladhanForUser(userId: string, chosen?: AladhanSele
       hijri_date: item.hijriDate, key: item.key, calculated: true, all_day: true },
     updated_at: now,
   }))
-  const rows = [...prayerRows, ...holidayRows]
+  const rows = [...timingRows, ...holidayRows]
   if (rows.some(row => !row.starts_at))
     throw new AladhanIntegrationError('invalid_timetable', 'Invalid AlAdhan holiday date. Nothing was changed.')
 
