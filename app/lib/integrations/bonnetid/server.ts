@@ -69,15 +69,20 @@ async function officialPrayerSchedule(cityId: string) {
     list.push(item)
     grouped.set(item.date, list)
   }
-  // Daily endpoint is documented too and supports installations whose monthly
-  // response schema differs. Only fetch days that could not be parsed.
-  const missing = dates.filter(date => (grouped.get(date) || []).length !== 5)
-  const daily = await Promise.allSettled(missing.map(async date => {
-    const [year, month, day] = date.split('-').map(Number)
-    return { date, prayers: normalizeBonnetidDay(await apiGet('/prayertimes/' + cityId + '/' + year + '/' + month + '/' + day + '/?asr=2'), date) }
+  // The public API exposes a monthly /prayertimes/ collection as an alternate
+  // endpoint. Its trailing /{id}/ route is a record identifier, NOT a date.
+  // Try the alternate monthly collection for any missing dates.
+  const missingMonths = [...new Set(dates.filter(date => (grouped.get(date) || []).length !== 5).map(date => date.slice(0, 7)))]
+  const alternateMonths = await Promise.allSettled(missingMonths.map(async month => {
+    const [year, monthNumber] = month.split('-').map(Number)
+    return normalizeBonnetidMonth(await apiGet('/prayertimes/' + cityId + '/' + year + '/' + monthNumber + '/'), year, monthNumber)
   }))
-  for (const result of daily) if (result.status === 'fulfilled' && result.value.prayers.length === 5) {
-    grouped.set(result.value.date, result.value.prayers)
+  for (const result of alternateMonths) if (result.status === 'fulfilled') {
+    for (const item of result.value) {
+      const list = grouped.get(item.date) || []
+      if (list.length !== 5) list.push(item)
+      grouped.set(item.date, list)
+    }
   }
   const prayers = dates.flatMap(date => grouped.get(date) || [])
   if (prayers.length < 5 || !grouped.has(dates[0])) throw new BonnetidError('no_times', 'Official prayer times are not available for this city right now.')
