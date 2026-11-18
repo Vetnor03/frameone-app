@@ -21,7 +21,24 @@ export function aladhanUrl({city,date,asrMethod,method,highLatitude}) {
   for(const [k,v] of Object.entries({city:safeCity(city),country:'NO',method,school:asrMethod===1?0:1,latitudeAdjustmentMethod:highLatitude,timezonestring:'Europe/Oslo'}))u.searchParams.set(k,String(v))
   return u
 }
-export function normalizeAladhan(payload,{city,date,asrMethod,method}) {
+
+export function aladhanCoordinatesUrl({ latitude, longitude, date, asrMethod, method, highLatitude }) {
+  if (!validDate(date) || ![1, 2].includes(asrMethod) ||
+      !METHODS.includes(method) || ![1, 2, 3].includes(highLatitude) ||
+      !Number.isFinite(latitude) || latitude < 57 || latitude > 82 ||
+      !Number.isFinite(longitude) || longitude < 4 || longitude > 33) {
+    throw Error('Invalid AlAdhan coordinates or calculation settings')
+  }
+  const [y, m, d] = date.split('-')
+  const url = new URL('https://api.aladhan.com/v1/timings/' + d + '-' + m + '-' + y)
+  for (const [key, value] of Object.entries({
+    latitude, longitude, method, school: asrMethod === 1 ? 0 : 1,
+    latitudeAdjustmentMethod: highLatitude, timezonestring: 'Europe/Oslo',
+  })) url.searchParams.set(key, String(value))
+  return url
+}
+
+export function normalizeAladhan(payload,{city,date,asrMethod,method,coordinates}) {
   const top=object(payload), data=object(top.data), meta=object(data.meta)
   if(Number(top.code)!==200)throw Error('Invalid AlAdhan response')
   const [y,m,d]=date.split('-')
@@ -31,8 +48,18 @@ export function normalizeAladhan(payload,{city,date,asrMethod,method}) {
   if(Number(info.id)!==method)throw Error('AlAdhan method mismatch')
   const school=String(meta.school??'').toUpperCase()
   if(asrMethod===1?!['STANDARD','SHAFI'].includes(school):school!=='HANAFI')throw Error('AlAdhan Asr mismatch')
-  const lat=Number(meta.latitude),lon=Number(meta.longitude)
-  if(!Number.isFinite(lat)||lat<57||lat>82||!Number.isFinite(lon)||lon<4||lon>33)throw Error('City did not resolve in Norway')
+  // City-name geocoding by AlAdhan sometimes returns no usable coordinates.
+  // When supplied, rely on independently verified Norwegian coordinates.
+  const lat=coordinates ? Number(coordinates.latitude) : Number(meta.latitude)
+  const lon=coordinates ? Number(coordinates.longitude) : Number(meta.longitude)
+  if(!Number.isFinite(lat)||lat<57||lat>82||!Number.isFinite(lon)||lon<4||lon>33)
+    throw Error('City did not resolve in Norway')
+  if (coordinates && meta.latitude != null && meta.longitude != null) {
+    const actualLat=Number(meta.latitude), actualLon=Number(meta.longitude)
+    if (Number.isFinite(actualLat) && Number.isFinite(actualLon) &&
+        (Math.abs(actualLat-lat)>0.2 || Math.abs(actualLon-lon)>0.2))
+      throw Error('Prayer coordinates do not match selected city')
+  }
   const timings=object(data.timings)
   const names=['Fajr','Sunrise','Dhuhr','Asr','Sunset','Maghrib','Isha']
   const times=names.map(name=>({name,time:prayerClock(timings[name])}))

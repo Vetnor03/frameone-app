@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUserId } from '@/app/lib/integrations/spond/server'
-import { safeCity, validDate, METHODS, aladhanUrl, normalizeAladhan } from '@/app/lib/integrations/aladhan/preview.mjs'
+import { safeCity, validDate, METHODS, aladhanCoordinatesUrl, normalizeAladhan } from '@/app/lib/integrations/aladhan/preview.mjs'
+import { resolveNorwegianCity } from '@/app/lib/integrations/aladhan/location.mjs'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -20,12 +21,13 @@ export async function GET(req:Request) {
      ![1,2].includes(asrMethod)||!METHODS.includes(method)||![1,2,3].includes(highLatitude))
     return NextResponse.json({error:'Choose a Norwegian city, date, Asr method and calculation options.'},{status:400})
   try {
-    const url=aladhanUrl({city,date,asrMethod,method,highLatitude})
+    const location=await resolveNorwegianCity(city)
+    const url=aladhanCoordinatesUrl({latitude:location.latitude,longitude:location.longitude,date,asrMethod,method,highLatitude})
     // AlAdhan asks callers to cache responses; the preview is read-only.
     const res=await fetch(url,{headers:{Accept:'application/json'},next:{revalidate:21600},signal:AbortSignal.timeout(12000)})
     if(!res.ok)throw Error('Upstream HTTP '+res.status)
     const data:unknown=await res.json()
-    return NextResponse.json(normalizeAladhan(data,{city,date,asrMethod,method}),{headers:{'Cache-Control':'private, no-store'}})
+    return NextResponse.json(normalizeAladhan(data,{city:location.name,date,asrMethod,method,coordinates:location}),{headers:{'Cache-Control':'private, no-store'}})
   } catch(error) {
     console.warn('[aladhan-preview] failed',error instanceof Error?error.message:'unknown')
     return NextResponse.json({error:'Could not verify times for this city and method. Try again or choose another city.'},{status:502})
