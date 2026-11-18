@@ -67,22 +67,21 @@ test('reminder and countdown cache preserves display data without arbitrary raw 
   assert.deepEqual(c.data.items,[{id:'x',title:'Holiday',date:'2026-12-25',pinned:true}])
 })
 
-test('AlAdhan source chip and dated prayer/occasion items survive app relaunch cache', () => {
+test('legacy AlAdhan cached data is removed while official IRN data remains', () => {
   const storage = memory()
   const reminders = {
     items: [
-      {id:'aladhan:prayer',title:'Fajr',date:'2026-11-19',time:'05:30',source:'aladhan',editable:false,raw:{secret:'NOT_SAVED'}},
-      {id:'aladhan:occasion',title:'Ramadan begynner',date:'2027-02-08',time:null,source:'aladhan',editable:false},
+      {id:'aladhan:prayer',title:'Fajr',date:'2026-11-19',time:'05:30',source:'aladhan',editable:false},
+      {id:'bonnetid:prayer',title:'Fajr',date:'2026-11-19',time:'06:00',source:'bonnetid',editable:false,raw:{secret:'NOT_SAVED'}},
     ],
     completedOccurrences:[],
-    availableSources:['remind','aladhan'],
+    availableSources:['remind','aladhan','bonnetid'],
   }
   assert.equal(writeTabSnapshot(storage,u1,d1,'reminders','',reminders,1000),true)
   const cached=readTabSnapshot(storage,u1,d1,'reminders','',1001).data
-  assert.deepEqual(cached.availableSources,['remind','aladhan'])
+  assert.deepEqual(cached.availableSources,['remind','bonnetid'])
   assert.deepEqual(cached.items.map(item=>({title:item.title,source:item.source,time:item.time})),[
-    {title:'Fajr',source:'aladhan',time:'05:30'},
-    {title:'Ramadan begynner',source:'aladhan',time:null},
+    {title:'Fajr',source:'bonnetid',time:'06:00'},
   ])
   assert.equal(JSON.stringify(cached).includes('NOT_SAVED'),false)
 })
