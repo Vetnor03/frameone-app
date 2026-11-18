@@ -66,3 +66,23 @@ test('reminder and countdown cache preserves display data without arbitrary raw 
   const c=readTabSnapshot(storage,u1,d1,'countdown','',1001)
   assert.deepEqual(c.data.items,[{id:'x',title:'Holiday',date:'2026-12-25',pinned:true}])
 })
+
+test('AlAdhan source chip and dated prayer/occasion items survive app relaunch cache', () => {
+  const storage = memory()
+  const reminders = {
+    items: [
+      {id:'aladhan:prayer',title:'Fajr',date:'2026-11-19',time:'05:30',source:'aladhan',editable:false,raw:{secret:'NOT_SAVED'}},
+      {id:'aladhan:occasion',title:'Ramadan begynner',date:'2027-02-08',time:null,source:'aladhan',editable:false},
+    ],
+    completedOccurrences:[],
+    availableSources:['remind','aladhan'],
+  }
+  assert.equal(writeTabSnapshot(storage,u1,d1,'reminders','',reminders,1000),true)
+  const cached=readTabSnapshot(storage,u1,d1,'reminders','',1001).data
+  assert.deepEqual(cached.availableSources,['remind','aladhan'])
+  assert.deepEqual(cached.items.map(item=>({title:item.title,source:item.source,time:item.time})),[
+    {title:'Fajr',source:'aladhan',time:'05:30'},
+    {title:'Ramadan begynner',source:'aladhan',time:null},
+  ])
+  assert.equal(JSON.stringify(cached).includes('NOT_SAVED'),false)
+})
