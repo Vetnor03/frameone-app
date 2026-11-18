@@ -29,7 +29,7 @@ import { nextBonnetidWithOccasions } from './lib/integrations/bonnetid/nextOccur
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, getLocalEventPlace, normalizeLocalEventAreaPreference, nationwideLocalEventArea, type LocalEventAreaPreference } from './lib/integrations/local-events/places'
 import { localEventGroupKeyFromRaw, groupSkipId } from './lib/integrations/local-events/grouping'
-import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationMatchesSearch, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
+import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst, type ConnectAppKey } from './lib/integrations/catalog'
 const WasteSetupModal = dynamic(() => import('./components/WasteSetupModal'))
 const BonnetidSetupModal = dynamic(() => import('./components/BonnetidSetupModal'))
 const IntegrationRequestCard = dynamic(() => import('./components/IntegrationRequestCard'))
@@ -4371,7 +4371,7 @@ function ConnectAppsScreen({
     return connectAppIsConnected(modulesJson, app.key)
   }
 
-  const sortedApps = apps.map(app => ({ app, connected: getAppConnected(app) }))
+  const sortedApps = sortConnectedAppsFirst(apps.map(app => ({ app, connected: getAppConnected(app) })))
 
   const renderLocalEventsModal = () => {
     const area = localEventsDraftArea
