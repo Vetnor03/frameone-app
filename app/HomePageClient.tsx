@@ -40,6 +40,8 @@ import { hasChosenWeatherLocation, norwegianStarterCountdowns, norwegianStarterR
 import { firstReminderOccurrenceDate, nextReminderOccurrenceDate as nextReminderOccurrenceDateShared, normalizeRepeatWeekdays } from './lib/reminders/recurrence'
 import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
 import { deriveDynamicModuleKeys } from './lib/dynamicModuleTabs.mjs'
+import { dynamicPeriodAt, normalizeDynamicLayout, resolveDynamicFrameSettings } from './lib/device/dynamicLayout.mjs'
+import type { DynamicChoice, DynamicConfig, DynamicPeriod } from './lib/device/dynamicLayout.mjs'
 import { initializeProductAnalytics, trackProductEvent } from './lib/productAnalytics.mjs'
 import {
   DEVICE_UPDATE_POLL_MS,
@@ -570,6 +572,7 @@ type SettingsJson = {
   modules?: Record<string, any>
   pinned_tabs?: ModuleKey[]
   layout_module_memory?: (ModuleKey | null)[]
+  dynamic_layout?: DynamicConfig
 }
 
 type MemberRow = {
@@ -1275,6 +1278,8 @@ export default function HomePage() {
   )
 
   const [layoutKey, setLayoutKey] = useState<LayoutKey>('default')
+  const [dynamicLayout, setDynamicLayout] = useState<DynamicConfig | null>(null)
+  const [dynamicPeriod, setDynamicPeriod] = useState<DynamicPeriod>('morning')
   const [customLayouts, setCustomLayouts] = useState<CustomLayout[]>([])
   const [activeCustomLayoutId, setActiveCustomLayoutId] = useState<string | null>(null)
   const [customAssignments, setCustomAssignments] = useState<Record<string, Record<number, ModuleKey | null>>>({})
@@ -1803,6 +1808,7 @@ export default function HomePage() {
     cellsByLayout: Record<LayoutKey, Record<number, ModuleKey | null>>
     modulesJson: Record<string, any>
     pinnedModuleTabs: ModuleKey[]
+    dynamicLayout?: DynamicConfig | null
   }) {
     const normalizedModules = normalizeModulesForSave(args.modulesJson)
 
@@ -1811,10 +1817,14 @@ export default function HomePage() {
       powerSaver: args.powerSaver,
       language: args.language,
       fontSize: args.fontSize,
-      layout: args.layoutKey,
-      cells: cellsMapToArray(args.cellsByLayout[args.layoutKey]),
+      // The slider selects an editor view, not a physical edit. With Dynamic
+      // Layout enabled, all four persisted periods determine the desired state;
+      // switching the preview period must never make Update look dirty.
+      layout: args.dynamicLayout?.enabled ? 'dynamic' : args.layoutKey,
+      cells: args.dynamicLayout?.enabled ? [] : cellsMapToArray(args.cellsByLayout[args.layoutKey]),
       modules: normalizedModules,
       pinned_tabs: args.pinnedModuleTabs,
+      dynamic_layout: args.dynamicLayout ?? null,
     })
   }
 
@@ -1828,6 +1838,7 @@ export default function HomePage() {
     cellsByLayout?: Record<LayoutKey, Record<number, ModuleKey | null>>
     modulesJson?: Record<string, any>
     pinnedModuleTabs?: ModuleKey[]
+    dynamicLayout?: DynamicConfig | null
   } | null>(null)
 
   type DesiredFrameState = {
@@ -1839,6 +1850,7 @@ export default function HomePage() {
     cellsByLayout?: Record<LayoutKey, Record<number, ModuleKey | null>>
     modulesJson?: Record<string, any>
     pinnedModuleTabs?: ModuleKey[]
+    dynamicLayout?: DynamicConfig | null
   }
 
   function serializeDesiredState(next?: DesiredFrameState) {
@@ -1851,6 +1863,7 @@ export default function HomePage() {
       cellsByLayout: next?.cellsByLayout ?? cellsByLayout,
       modulesJson: next?.modulesJson ?? modulesJson,
       pinnedModuleTabs: next?.pinnedModuleTabs ?? pinnedModuleTabs,
+      dynamicLayout: next?.dynamicLayout === undefined ? dynamicLayout : next.dynamicLayout,
     })
   }
 
@@ -2241,12 +2254,18 @@ export default function HomePage() {
     // `theme` remains the frame setting for backwards compatibility, so an
     // existing physical frame never changes appearance during migration.
     const nextFrameTheme = isAppTheme(json.theme) ? json.theme : 'dark'
+    const nextDynamicLayout = normalizeDynamicLayout(json.dynamic_layout, json)
+    const nextDynamicPeriod = nextDynamicLayout ? dynamicPeriodAt(Date.now(), nextDynamicLayout.timezone) : 'morning'
+    const periodChoice = nextDynamicLayout?.enabled ? nextDynamicLayout.periods[nextDynamicPeriod] : null
+    const shownLayout = periodChoice?.layout ?? json.layout
+    const shownCells = periodChoice?.cells ?? json.cells
     const nextPowerSaver = json.powerSaver === true ? true : DEFAULT_POWER_SAVER
     const nextLanguage = (json.language || 'en') as AppLanguage
     const nextFontSize = (json.fontSize || 'normal') as AppFontSize
-    const storedCustomId = SHOW_CUSTOM_LAYOUT_UI && json.layout === 'custom' && typeof json.custom_layout_id === 'string' ? json.custom_layout_id : null
-    const nextLayout = (json.layout === 'custom' ? 'default' : (json.layout || 'default')) as LayoutKey
-    const nextCellsForLayout = cellsArrayToMap(nextLayout, json.cells || [])
+    const customId = periodChoice?.custom_layout_id ?? json.custom_layout_id
+    const storedCustomId = SHOW_CUSTOM_LAYOUT_UI && shownLayout === 'custom' && typeof customId === 'string' ? customId : null
+    const nextLayout = (shownLayout === 'custom' ? 'default' : (shownLayout || 'default')) as LayoutKey
+    const nextCellsForLayout = cellsArrayToMap(nextLayout, shownCells || [])
 
     const nextCellsByLayout = {
       ...makeEmptyCellsByLayout(),
@@ -2279,9 +2298,11 @@ export default function HomePage() {
     setFontSize(nextFontSize)
     setCellsByLayout(nextCellsByLayout)
     setLayoutKey(nextLayout)
+    setDynamicLayout(nextDynamicLayout)
+    setDynamicPeriod(nextDynamicPeriod)
     setActiveCustomLayoutId(storedCustomId)
     setCarouselItemId(storedCustomId || `built-in:${nextLayout}`)
-    if (storedCustomId) setCustomAssignments(previous => ({...previous,[storedCustomId]:Object.fromEntries((json.cells||[]).map(cell=>[cell.slot,baseModuleKeyFromStored(cell.module)]))}))
+    if (storedCustomId) setCustomAssignments(previous => ({...previous,[storedCustomId]:Object.fromEntries((shownCells||[]).map(cell=>[cell.slot,baseModuleKeyFromStored(cell.module)]))}))
     setModulesJson(normalizedModules)
     setPinnedModuleTabs(nextPinnedTabs)
 
@@ -2294,6 +2315,7 @@ export default function HomePage() {
       cellsByLayout: nextCellsByLayout,
       modulesJson: normalizedModules,
       pinnedModuleTabs: nextPinnedTabs,
+      dynamicLayout: nextDynamicLayout,
     })
     savedStateRef.current = loadedState
     desiredStateRef.current = loadedState
@@ -2543,6 +2565,8 @@ export default function HomePage() {
         setCachedPreviewDeviceId(null)
         setCachedPreviewSyncFailed(false)
         setCellsByLayout(makeEmptyCellsByLayout())
+        setDynamicLayout(null)
+        setDynamicPeriod('morning')
         setLayoutKey('default')
         setActiveCustomLayoutId(null)
         setCustomLayouts([])
@@ -2691,7 +2715,8 @@ export default function HomePage() {
     setModulesJson(nextModules)
     setPinnedModuleTabs(nextPinnedTabs)
     setPowerSaver(DEFAULT_POWER_SAVER)
-    savedStateRef.current = serializeComparableState({ frameTheme, powerSaver: DEFAULT_POWER_SAVER, language, fontSize, layoutKey: nextLayout, cellsByLayout: nextCellsByLayout, modulesJson: nextModules, pinnedModuleTabs: nextPinnedTabs })
+    setDynamicLayout(null)
+    savedStateRef.current = serializeComparableState({ frameTheme, powerSaver: DEFAULT_POWER_SAVER, language, fontSize, layoutKey: nextLayout, cellsByLayout: nextCellsByLayout, modulesJson: nextModules, pinnedModuleTabs: nextPinnedTabs, dynamicLayout: null })
     desiredStateRef.current = savedStateRef.current
     setDirty(false)
     sessionStorage.removeItem(`remind:onboarding:${activeDeviceId}`)
@@ -2717,20 +2742,166 @@ export default function HomePage() {
     try{await saveCustomLayout(name,cells)}catch(error){setLayoutDraftError(error instanceof Error?error.message:'Unable to save layout.')}finally{setLayoutDraftSaving(false)}
   }
   async function saveCustomLayout(name:string,cells:CustomLayoutCell[]) {
+    let nextDynamic = dynamicLayout
     if(layoutFlow?.mode==='edit'){
       const json=await customLayoutRequest(`/api/custom-layouts/${layoutFlow.layout.id}`,{method:'PATCH',body:JSON.stringify({name,cells})})
-      setCustomLayouts(items=>items.map(item=>item.id===json.layout.id?json.layout:item));setCarouselItemId(json.layout.id);setActiveCustomLayoutId(json.layout.id);setActiveTab('frame')
-      setCustomAssignments(items=>({...items,[json.layout.id]:remapAssignmentsAfterGeometryEdit(layoutFlow.layout.cells,cells,items[json.layout.id]||{})}))
+      const currentAssignments = remapAssignmentsAfterGeometryEdit(
+        layoutFlow.layout.cells, cells, customAssignments[json.layout.id] || {},
+      )
+      setCustomLayouts(items=>items.map(item=>item.id===json.layout.id?json.layout:item))
+      setCarouselItemId(json.layout.id)
+      setActiveCustomLayoutId(json.layout.id)
+      setActiveTab('frame')
+      setCustomAssignments(items=>({...items,[json.layout.id]:currentAssignments}))
+      if (dynamicLayout) {
+        const periods = { ...dynamicLayout.periods }
+        for (const period of ['morning','afternoon','evening','night'] as const) {
+          const current = periods[period]
+          if (current.layout !== 'custom' || current.custom_layout_id !== json.layout.id) continue
+          const existing = Object.fromEntries(current.cells.map(cell=>[cell.slot,baseModuleKeyFromStored(cell.module)]))
+          const assignments = remapAssignmentsAfterGeometryEdit(layoutFlow.layout.cells,cells,existing)
+          const updated = customPhysicalPayload(json.layout,assignments)
+          if (updated) periods[period] = updated
+        }
+        nextDynamic = { ...dynamicLayout, periods }
+        setDynamicLayout(nextDynamic)
+      }
     }else{
       if(!activeDeviceId)throw new Error('Select a frame before creating a layout.')
       const json=await customLayoutRequest('/api/custom-layouts',{method:'POST',body:JSON.stringify({deviceId:activeDeviceId,name,cells})})
-      setCustomLayouts(items=>[...items,json.layout]);setActiveCustomLayoutId(json.layout.id);setCarouselItemId(json.layout.id)
-      setCustomAssignments(items=>({...items,[json.layout.id]:Object.fromEntries(cells.map(cell=>[cell.slot,null]))}))
+      const assignments = Object.fromEntries(cells.map(cell=>[cell.slot,null]))
+      setCustomLayouts(items=>[...items,json.layout])
+      setActiveCustomLayoutId(json.layout.id)
+      setCarouselItemId(json.layout.id)
+      setCustomAssignments(items=>({...items,[json.layout.id]:assignments}))
+      if (dynamicLayout?.enabled) {
+        const payload = customPhysicalPayload(json.layout, assignments)
+        if (payload) {
+          nextDynamic = { ...dynamicLayout, periods: { ...dynamicLayout.periods, [dynamicPeriod]: payload } }
+          setDynamicLayout(nextDynamic)
+        }
+      }
+    }
+    markDirty({ dynamicLayout: nextDynamic })
+    setLayoutFlow(null)
+  }
+
+  async function deleteCustom(layout:CustomLayout) {
+    if (!window.confirm(`Delete “${layout.name}”?`)) return
+    await customLayoutRequest(`/api/custom-layouts/${layout.id}`, { method: 'DELETE' })
+    setCustomLayouts(items=>items.filter(item=>item.id!==layout.id))
+    const fallback = { layout: 'default' as const, cells: cellsMapToArray(emptyCellsFor('default')) }
+    const nextDynamic = dynamicLayout ? {
+      ...dynamicLayout,
+      periods: Object.fromEntries((['morning','afternoon','evening','night'] as const).map(period => [
+        period,
+        dynamicLayout.periods[period].custom_layout_id === layout.id ? fallback : dynamicLayout.periods[period],
+      ])) as DynamicConfig['periods'],
+    } : null
+    if (dynamicLayout) setDynamicLayout(nextDynamic)
+    if (activeCustomLayoutId === layout.id) {
+      const nextCells = { ...cellsByLayout, default: emptyCellsFor('default') }
+      setActiveCustomLayoutId(null)
+      setLayoutKey('default')
+      setCellsByLayout(nextCells)
+      setCarouselItemId('built-in:default')
+      markDirty({ layoutKey: 'default', cellsByLayout: nextCells, dynamicLayout: nextDynamic })
+    } else {
+      markDirty({ dynamicLayout: nextDynamic })
     }
     setLayoutFlow(null)
   }
-  async function deleteCustom(layout:CustomLayout){if(!window.confirm(`Delete “${layout.name}”?`))return;if(activeCustomLayoutId===layout.id&&activeDeviceId){const nextCells={...cellsByLayout,default:projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,'default')};setActiveCustomLayoutId(null);setLayoutKey('default');setCellsByLayout(nextCells);setCarouselItemId('built-in:default');markDirty({layoutKey:'default',cellsByLayout:nextCells})};await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'DELETE'});setCustomLayouts(items=>items.filter(item=>item.id!==layout.id));setLayoutFlow(null)}
-  function selectCarouselItem(id:string){setCarouselItemId(id);if(id==='add-layout')return;const custom=customLayouts.find(item=>item.id===id);trackProductEvent({event:'layout_selected',surface:'frame',metadata:{layoutType:custom?'custom':'built_in'}});if(custom){setActiveCustomLayoutId(id);setCustomAssignments(items=>({...items,[id]:items[id]||Object.fromEntries(custom.cells.map(cell=>[cell.slot,layoutModuleMemoryRef.current[cell.slot]??null]))}));setActiveTab('frame');setDirty(true);return}const key=id.replace('built-in:','') as LayoutKey;const projected=projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,key),nextCells={...cellsByLayout,[key]:projected};setActiveCustomLayoutId(null);setLayoutKey(key);setCellsByLayout(nextCells);setActiveTab('frame');markDirty({layoutKey:key,cellsByLayout:nextCells})}
+
+  // Each period stores a complete layout snapshot. Switching the slider only
+  // switches the editor, never requests a physical refresh on its own.
+  function currentDynamicChoice(): DynamicChoice {
+    if (SHOW_CUSTOM_LAYOUT_UI && activeCustomLayoutId) {
+      const custom = customLayouts.find(item => item.id === activeCustomLayoutId)
+      const payload = custom && customPhysicalPayload(custom, customAssignments[activeCustomLayoutId] || {})
+      if (payload) return payload
+    }
+    return { layout: layoutKey, cells: cellsMapToArray(cellsByLayout[layoutKey] || emptyCellsFor(layoutKey)) }
+  }
+
+  function withUpdatedDynamicChoice(choice: DynamicChoice): DynamicConfig | null {
+    if (!dynamicLayout?.enabled) return dynamicLayout
+    const next = { ...dynamicLayout, periods: { ...dynamicLayout.periods, [dynamicPeriod]: choice } }
+    setDynamicLayout(next)
+    return next
+  }
+
+  function selectDynamicPeriod(period: DynamicPeriod, requestedConfig?: DynamicConfig) {
+    const config = requestedConfig ?? dynamicLayout
+    if (!config?.enabled || (period === dynamicPeriod && !requestedConfig)) return
+    const choice = config.periods[period]
+    setDynamicPeriod(period)
+    if (choice.layout === 'custom' && choice.custom_layout_id) {
+      const custom = customLayouts.find(item => item.id === choice.custom_layout_id)
+      if (custom) {
+        setActiveCustomLayoutId(custom.id)
+        setCarouselItemId(custom.id)
+        setCustomAssignments(current => ({
+          ...current,
+          [custom.id]: Object.fromEntries(choice.cells.map(cell => [cell.slot, baseModuleKeyFromStored(cell.module)])),
+        }))
+        return
+      }
+    }
+    const key = isLayoutKey(choice.layout) ? choice.layout : 'default'
+    const map = cellsArrayToMap(key, choice.cells)
+    setActiveCustomLayoutId(null)
+    setLayoutKey(key)
+    setCellsByLayout(current => ({ ...current, [key]: map }))
+    setCarouselItemId(`built-in:${key}`)
+    layoutModuleMemoryRef.current = mergeCellsIntoSlotMemory([], key, map)
+  }
+
+  function toggleDynamicLayout() {
+    if (!activeDeviceId) return
+    const next = dynamicLayout
+      ? { ...dynamicLayout, enabled: !dynamicLayout.enabled }
+      : (() => {
+          const choice = currentDynamicChoice()
+          return {
+            enabled: true,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+            periods: { morning: choice, afternoon: choice, evening: choice, night: choice },
+          }
+        })()
+    setDynamicLayout(next)
+    if (next.enabled) {
+      // Re-enabling restores the appropriate saved period instead of showing an
+      // unrelated static layout until the slider is touched.
+      selectDynamicPeriod(dynamicPeriodAt(Date.now(), next.timezone), next)
+    }
+    markDirty({ dynamicLayout: next })
+  }
+
+  function selectCarouselItem(id:string) {
+    setCarouselItemId(id)
+    if (id === 'add-layout') return
+    const custom = customLayouts.find(item => item.id === id)
+    trackProductEvent({ event: 'layout_selected', surface: 'frame', metadata: { layoutType: custom ? 'custom' : 'built_in' } })
+    if (custom) {
+      const assignments = customAssignments[id] || Object.fromEntries(custom.cells.map(cell => [cell.slot, layoutModuleMemoryRef.current[cell.slot] ?? null]))
+      setActiveCustomLayoutId(id)
+      setCustomAssignments(items => ({ ...items, [id]: assignments }))
+      setActiveTab('frame')
+      const payload = customPhysicalPayload(custom, assignments)
+      const nextDynamic = payload ? withUpdatedDynamicChoice(payload) : dynamicLayout
+      markDirty({ dynamicLayout: nextDynamic })
+      return
+    }
+    const key = id.replace('built-in:', '') as LayoutKey
+    const projected = projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current, key)
+    const nextCells = { ...cellsByLayout, [key]: projected }
+    setActiveCustomLayoutId(null)
+    setLayoutKey(key)
+    setCellsByLayout(nextCells)
+    setActiveTab('frame')
+    const nextDynamic = withUpdatedDynamicChoice({ layout: key, cells: cellsMapToArray(projected) })
+    markDirty({ layoutKey: key, cellsByLayout: nextCells, dynamicLayout: nextDynamic })
+  }
   function moveCarousel(delta:number){const items=orderedLayoutItems(customLayouts).filter(item=>SHOW_CUSTOM_LAYOUT_UI||item.type==='built-in'),idx=Math.max(0,items.findIndex(item=>item.id===carouselItemId)),next=(idx+delta+items.length)%items.length,target=items[next].id;if(target==='add-layout'){setCarouselItemId(target);return}selectCarouselItem(target)}
 
   function prevLayout() {
@@ -2750,7 +2921,14 @@ export default function HomePage() {
   function chooseModule(module: ModuleKey) {
     if (pickerSlot == null) return
 
-    if(activeCustomLayoutId){setCustomAssignments(items=>({...items,[activeCustomLayoutId]:{...(items[activeCustomLayoutId]||{}),[pickerSlot]:module}}));setPickerOpen(false);setPickerSlot(null);setDirty(true);return}
+    if(activeCustomLayoutId){
+      const nextAssignments = {...(customAssignments[activeCustomLayoutId]||{}),[pickerSlot]:module}
+      setCustomAssignments(items=>({...items,[activeCustomLayoutId]:nextAssignments}))
+      const custom = customLayouts.find(item=>item.id===activeCustomLayoutId)
+      const payload = custom && customPhysicalPayload(custom,nextAssignments)
+      const nextDynamic = payload ? withUpdatedDynamicChoice(payload) : dynamicLayout
+      setPickerOpen(false);setPickerSlot(null);markDirty({dynamicLayout:nextDynamic});return
+    }
 
     layoutModuleMemoryRef.current = replaceMemoryAtSlotIndex(
       layoutModuleMemoryRef.current,
@@ -2769,13 +2947,21 @@ export default function HomePage() {
     setCellsByLayout(nextCellsByLayout)
     setPickerOpen(false)
     setPickerSlot(null)
-    markDirty({ cellsByLayout: nextCellsByLayout })
+    const nextDynamic = withUpdatedDynamicChoice({ layout: layoutKey, cells: cellsMapToArray(nextCellsForLayout) })
+    markDirty({ cellsByLayout: nextCellsByLayout, dynamicLayout: nextDynamic })
   }
 
   function clearCell() {
     if (pickerSlot == null) return
 
-    if(activeCustomLayoutId){setCustomAssignments(items=>({...items,[activeCustomLayoutId]:{...(items[activeCustomLayoutId]||{}),[pickerSlot]:null}}));setPickerOpen(false);setPickerSlot(null);setDirty(true);return}
+    if(activeCustomLayoutId){
+      const nextAssignments = {...(customAssignments[activeCustomLayoutId]||{}),[pickerSlot]:null}
+      setCustomAssignments(items=>({...items,[activeCustomLayoutId]:nextAssignments}))
+      const custom = customLayouts.find(item=>item.id===activeCustomLayoutId)
+      const payload = custom && customPhysicalPayload(custom,nextAssignments)
+      const nextDynamic = payload ? withUpdatedDynamicChoice(payload) : dynamicLayout
+      setPickerOpen(false);setPickerSlot(null);markDirty({dynamicLayout:nextDynamic});return
+    }
 
     layoutModuleMemoryRef.current = replaceMemoryAtSlotIndex(
       layoutModuleMemoryRef.current,
@@ -2794,7 +2980,8 @@ export default function HomePage() {
     setCellsByLayout(nextCellsByLayout)
     setPickerOpen(false)
     setPickerSlot(null)
-    markDirty({ cellsByLayout: nextCellsByLayout })
+    const nextDynamic = withUpdatedDynamicChoice({ layout: layoutKey, cells: cellsMapToArray(nextCellsForLayout) })
+    markDirty({ cellsByLayout: nextCellsByLayout, dynamicLayout: nextDynamic })
   }
 
   async function performSettingsSave(deviceId: string, overrides: { powerSaver?: boolean; modulesJson?: Record<string, unknown> } = {}): Promise<boolean> {
@@ -2810,6 +2997,7 @@ export default function HomePage() {
       const draftCellsByLayout = cellsByLayout
       const draftModules = normalizeModulesForSave(overrides.modulesJson ?? modulesJson)
       const draftPinnedTabs = pinnedModuleTabs
+      const draftDynamicLayout = dynamicLayout
       const currentCells = draftCellsByLayout[draftLayoutKey] || emptyCellsFor(draftLayoutKey)
       const nextLayoutModuleMemory = mergeCellsIntoSlotMemory(
         layoutModuleMemoryRef.current,
@@ -2825,6 +3013,7 @@ export default function HomePage() {
         cellsByLayout: draftCellsByLayout,
         modulesJson: draftModules,
         pinnedModuleTabs: draftPinnedTabs,
+        dynamicLayout: draftDynamicLayout,
       })
 
       let settingsJson: SettingsJson = {
@@ -2837,6 +3026,7 @@ export default function HomePage() {
         modules: draftModules,
         pinned_tabs: draftPinnedTabs,
         layout_module_memory: nextLayoutModuleMemory,
+        ...(draftDynamicLayout ? { dynamic_layout: draftDynamicLayout } : {}),
       }
       if (SHOW_CUSTOM_LAYOUT_UI && activeCustomLayoutId) {
         const custom = customLayouts.find((item) => item.id === activeCustomLayoutId)
@@ -2863,10 +3053,13 @@ export default function HomePage() {
       }
       savedStateRef.current = persistedSignature
       if (userId && typeof window !== 'undefined') {
-        const matchingCustom = settingsJson.layout === 'custom'
-          ? customLayouts.find((item) => item.id === activeCustomLayoutId)
+        // Save the currently effective daypart, not whichever daypart the
+        // user happened to be editing. Avoid a misleading launch preview.
+        const effectivePreviewSettings = resolveDynamicFrameSettings(settingsJson).settings
+        const matchingCustom = effectivePreviewSettings.layout === 'custom'
+          ? customLayouts.find((item) => item.id === effectivePreviewSettings.custom_layout_id)
           : null
-        writeLaunchPreview(window.localStorage, userId, deviceId, settingsJson, matchingCustom)
+        writeLaunchPreview(window.localStorage, userId, deviceId, effectivePreviewSettings, matchingCustom)
       }
       savedFrameStateRef.current = {
         frameTheme: draftTheme,
@@ -3178,6 +3371,10 @@ async function handleSelectTab(k: TabKey) {
                   title={layoutMeta.title}
                   subtitle={layoutMeta.subtitle}
                   frameTheme={frameTheme}
+                  dynamicLayoutEnabled={dynamicLayout?.enabled === true}
+                  dynamicPeriod={dynamicPeriod}
+                  onDynamicPeriodChange={selectDynamicPeriod}
+                  onDynamicLayoutToggle={toggleDynamicLayout}
                   canChangeFrameTheme={!!activeDeviceId}
                   onFrameThemeToggle={() => {
                     const next = frameTheme === 'dark' ? 'light' : 'dark'
@@ -4692,6 +4889,10 @@ function FrameTab(props: {
   frameTheme: AppTheme
   canChangeFrameTheme: boolean
   onFrameThemeToggle: () => void
+  dynamicLayoutEnabled: boolean
+  dynamicPeriod: DynamicPeriod
+  onDynamicPeriodChange: (period: DynamicPeriod) => void
+  onDynamicLayoutToggle: () => void
   layoutKey: LayoutKey
   cells: Record<number, ModuleKey | null>
   onPrev: () => void
@@ -4711,10 +4912,39 @@ function FrameTab(props: {
   onAdd:()=>void
   onEdit:(layout:CustomLayout)=>void
 }) {
-  const { title, subtitle, frameTheme, canChangeFrameTheme, onFrameThemeToggle, layoutKey, cells, onPrev, onNext, onCellTap, language,editorMode,editorName,editorCells,editorUnsupportedSlots,onEditorNameChange,onEditorCellsChange,onCancelEditor,customLayout,customAssignments,isAddCard,onAdd,onEdit } = props
+  const { title, subtitle, frameTheme, canChangeFrameTheme, onFrameThemeToggle, dynamicLayoutEnabled, dynamicPeriod, onDynamicPeriodChange, onDynamicLayoutToggle, layoutKey, cells, onPrev, onNext, onCellTap, language,editorMode,editorName,editorCells,editorUnsupportedSlots,onEditorNameChange,onEditorCellsChange,onCancelEditor,customLayout,customAssignments,isAddCard,onAdd,onEdit } = props
 
   return (
     <div id="frame-layout-controls" tabIndex={-1} className="h-full flex flex-col outline-none">
+      {dynamicLayoutEnabled && !editorMode && (
+        <div className="px-3 pb-5" aria-label={language === 'no' ? 'Dynamisk oppsett' : 'Dynamic layout'}>
+          <div className="mb-3 text-center text-[10px] tracking-[0.16em] text-[color:var(--fg-45)]">
+            {language === 'no' ? 'DYNAMISK OPPSETT' : 'DYNAMIC LAYOUT'}
+          </div>
+          <div className="relative mx-auto max-w-[360px]">
+            <div aria-hidden="true" className="absolute left-[12.5%] right-[12.5%] top-[6px] h-px bg-[color:var(--fg-20)]" />
+            <input type="range" min={0} max={3} step={1}
+              value={(['morning','afternoon','evening','night'] as const).indexOf(dynamicPeriod)}
+              onChange={event => onDynamicPeriodChange((['morning','afternoon','evening','night'] as const)[Number(event.target.value)])}
+              aria-label={language === 'no' ? 'Velg tidspunkt for oppsett' : 'Select layout time of day'}
+              className="absolute left-[12.5%] top-0 z-10 h-4 w-3/4 cursor-pointer opacity-0"
+            />
+            <div className="relative grid grid-cols-4">
+              {(['morning','afternoon','evening','night'] as const).map(period => {
+                const selected = period === dynamicPeriod
+                const labels = language === 'no'
+                  ? { morning: 'Morgen', afternoon: 'Ettermiddag', evening: 'Kveld', night: 'Natt' }
+                  : { morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening', night: 'Night' }
+                return <button key={period} type="button" aria-pressed={selected} onClick={() => onDynamicPeriodChange(period)}
+                  className="flex min-h-11 flex-col items-center justify-start gap-2 text-[11px] text-[color:var(--fg-50)]">
+                  <span aria-hidden="true" className={`h-[13px] w-[13px] rounded-full border-2 ${selected ? 'border-[#2196f3] bg-[#2196f3]' : 'border-[color:var(--fg-35)] bg-[color:var(--bg)]'}`} />
+                  <span className={selected ? 'text-[color:var(--fg)]' : ''}>{labels[period]}</span>
+                </button>
+              })}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <button aria-label={editorMode?'Cancel layout editing':'Previous layout'} onClick={editorMode?onCancelEditor:onPrev} className="w-10 h-10 flex items-center justify-center text-[color:var(--fg-60)] text-3xl">
           {editorMode?'×':'‹'}
@@ -4724,7 +4954,7 @@ function FrameTab(props: {
           {editorMode?<input aria-label="Layout name" maxLength={40} value={editorName} onChange={event=>onEditorNameChange(event.target.value)} placeholder="Layout name" className="w-full bg-transparent text-center text-2xl font-semibold uppercase tracking-widest outline-none placeholder:text-[color:var(--fg-35)]"/>:<div className="flex items-center justify-center gap-1"><span className="text-2xl font-semibold tracking-widest">{title}</span>{customLayout&&<button type="button" aria-label="Edit custom layout" title="Edit layout" onClick={()=>onEdit(customLayout)} className="inline-flex h-8 w-8 items-center justify-center text-[color:var(--fg-45)] transition-colors hover:text-[color:var(--fg-75)]"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.5"><path d="m4 20 4.1-1 10.8-10.8a2.1 2.1 0 0 0-3-3L5.1 16 4 20Z"/><path d="m14.5 6.5 3 3"/></svg></button>}</div>}
           <div className="mt-1 text-xs tracking-widest text-[color:var(--fg-60)]">{editorMode?'Draw to split · trace to erase':subtitle}</div>
           {!editorMode && (
-            <div className="flex flex-col items-center">
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
               <button
                 type="button"
                 role="switch"
@@ -4733,11 +4963,20 @@ function FrameTab(props: {
                 title={language === 'no' ? `Ramme: ${frameTheme === 'dark' ? 'Mørk' : 'Lys'}` : `Frame: ${frameTheme === 'dark' ? 'Dark' : 'Light'}`}
                 disabled={!canChangeFrameTheme}
                 onClick={onFrameThemeToggle}
-                className="mt-2 inline-flex min-h-6 items-center justify-center gap-2 rounded-full px-2 text-[10px] tracking-[0.08em] text-[color:var(--fg-45)] disabled:opacity-40"
+                className="inline-flex min-h-6 items-center justify-center gap-2 rounded-full px-2 text-[10px] tracking-[0.08em] text-[color:var(--fg-45)] disabled:opacity-40"
               >
                 <span>{frameTheme === 'light' ? 'LIGHT' : 'DARK'}</span>
                 <span aria-hidden="true" className={`relative h-[14px] w-[26px] rounded-full border transition-colors ${frameTheme === 'dark' ? 'border-[#354653] bg-[#263440]' : 'border-[#cbd5dc] bg-[#f4f6f8]'}`}>
                   <span className={`absolute left-[2px] top-[2px] h-2 w-2 rounded-full transition-[transform,background-color] ${frameTheme === 'dark' ? 'bg-[#f5f6f8]' : 'bg-[#586773] translate-x-3'}`} />
+                </span>
+              </button>
+              <button type="button" role="switch" aria-checked={dynamicLayoutEnabled}
+                aria-label={language === 'no' ? 'Dynamisk oppsett' : 'Dynamic Layout'}
+                disabled={!canChangeFrameTheme} onClick={onDynamicLayoutToggle}
+                className="inline-flex min-h-6 items-center justify-center gap-2 rounded-full px-2 text-[10px] tracking-[0.08em] text-[color:var(--fg-45)] disabled:opacity-40">
+                <span>{language === 'no' ? 'DYNAMISK OPPSETT' : 'DYNAMIC LAYOUT'}</span>
+                <span aria-hidden="true" className={`relative h-[14px] w-[26px] rounded-full border transition-colors ${dynamicLayoutEnabled ? 'border-[#2196f3] bg-[#2196f3]' : 'border-[#354653] bg-[#263440]'}`}>
+                  <span className={`absolute left-[2px] top-[2px] h-2 w-2 rounded-full bg-white transition-transform ${dynamicLayoutEnabled ? 'translate-x-3' : ''}`} />
                 </span>
               </button>
             </div>

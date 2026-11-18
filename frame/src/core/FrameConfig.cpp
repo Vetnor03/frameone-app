@@ -261,6 +261,7 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
 
   // Power Saver is opt-in. Missing/invalid values preserve Normal mode.
   out.powerSaver = (bool)(settings["powerSaver"] | false);
+  out.dynamicTransitionAt = (time_t)settings["dynamic_transition_at"].as<int64_t>();
 
   // language
   const char* languageStr = settings["language"] | "en";

@@ -107,6 +107,8 @@ struct FrameConfig {
   LayoutKey layout = LAYOUT_DEFAULT;
   ThemeKey theme = THEME_DARK;
   bool powerSaver = false;
+  // Server-resolved next visible Dynamic Layout transition (Unix epoch seconds).
+  time_t dynamicTransitionAt = 0;
   char language[4] = {'e', 'n', '\0', '\0'};
   char newsFeed[8] = "top"; // "top" (default) or "latest"
 

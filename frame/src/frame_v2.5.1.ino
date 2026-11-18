@@ -86,6 +86,9 @@ static const float RECHARGE_DISPLAY_MIN_V = 3.20f;
 
 // Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
 RTC_DATA_ATTR static time_t g_nextScheduledWake = 0;
+// Persist the next Dynamic Layout boundary across ESP32 deep-sleep resets.
+RTC_DATA_ATTR static time_t g_dynamicTransitionAt = 0;
+static constexpr time_t DYNAMIC_LAYOUT_WAKE_GRACE_SECONDS = 15 * 60;
 RTC_DATA_ATTR static time_t g_revisionRetryNotBefore = 0;
 // Power Save is retained across timer wakes so the frame can choose the correct
 // wake policy before making any routine network request.
@@ -238,22 +241,44 @@ static bool waitForBatteryIdleCadenceOrUsbConnect(uint32_t waitMs) {
 }
 #endif
 
+static bool dynamicLayoutDueNow() {
+  const time_t now = time(nullptr);
+  return g_dynamicTransitionAt > 0 && now >= 1000000000 &&
+    now >= g_dynamicTransitionAt &&
+    (g_revisionRetryNotBefore <= 0 || now >= g_revisionRetryNotBefore);
+}
+
+// Prefer an existing module wake within the next 15 minutes; otherwise make
+// one extra wake at the end of the grace window (not four fixed extra wakes).
+static time_t combinedScheduledWake() {
+  const time_t now = time(nullptr);
+  if (g_dynamicTransitionAt <= 0 || now < 1000000000) return g_nextScheduledWake;
+  if (g_dynamicTransitionAt <= now) {
+    if (g_revisionRetryNotBefore > now) return g_revisionRetryNotBefore;
+    return now;
+  }
+  const time_t latest = g_dynamicTransitionAt + DYNAMIC_LAYOUT_WAKE_GRACE_SECONDS;
+  if (g_nextScheduledWake >= g_dynamicTransitionAt && g_nextScheduledWake <= latest)
+    return g_nextScheduledWake;
+  if (g_nextScheduledWake > 0 && g_nextScheduledWake < g_dynamicTransitionAt)
+    return g_nextScheduledWake;
+  return latest;
+}
+
 static bool scheduledSyncDueNow() {
   const time_t now = time(nullptr);
-  return g_nextScheduledWake > 0 && now >= 1000000000 && now >= g_nextScheduledWake;
+  return dynamicLayoutDueNow() ||
+    (g_nextScheduledWake > 0 && now >= 1000000000 && now >= g_nextScheduledWake);
 }
 
 static uint32_t interactiveWaitMs(uint32_t maximumMs) {
   const time_t now = time(nullptr);
-  if (g_nextScheduledWake <= 0 || now < 1000000000 || g_nextScheduledWake <= now) {
-    return g_nextScheduledWake > 0 && now >= g_nextScheduledWake ? 0 : maximumMs;
+  const time_t next = g_dynamicTransitionAt > 0 ? combinedScheduledWake() : g_nextScheduledWake;
+  if (next <= 0 || now < 1000000000 || next <= now) {
+    return next > 0 && now >= next ? 0 : maximumMs;
   }
-
-  const uint64_t untilScheduledMs =
-    (uint64_t)(g_nextScheduledWake - now) * 1000ULL;
-  return untilScheduledMs < maximumMs
-    ? (uint32_t)untilScheduledMs
-    : maximumMs;
+  const uint64_t untilScheduledMs = (uint64_t)(next - now) * 1000ULL;
+  return untilScheduledMs < maximumMs ? (uint32_t)untilScheduledMs : maximumMs;
 }
 
 static bool waitForInteractiveCadence(bool usbPresent, uint32_t maximumMs) {
@@ -421,6 +446,9 @@ static uint64_t nextDeepSleepDurationUs() {
   // Invalid/unset wall time or scheduler state falls back to the revision
   // Invalid-clock/bootstrap fallback only, never a periodic content check.
   if (now < 1000000000 || seconds == 0) seconds = SmartRefresh::REVISION_SAFETY_SECONDS;
+  const time_t dynamicWake = combinedScheduledWake();
+  if (now >= 1000000000 && dynamicWake > 0 && dynamicWake < now + (time_t)seconds)
+    seconds = dynamicWake <= now ? 1 : (uint32_t)(dynamicWake - now);
   // Connected light sleep is preferred. The deep-sleep fallback still wakes
   // for manual commands within 10 seconds, without scheduling content work.
   if (!g_powerSaverMode && seconds > SmartRefresh::MANUAL_PROBE_SECONDS)
@@ -1012,6 +1040,7 @@ static void runOtaCheckIfDue(const BatteryState& batt, const PowerSenseDebug& pw
 }
 
 static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebug& pwr) {
+  g_dynamicTransitionAt = g_cfg.dynamicTransitionAt;
   DisplayCore::setBatteryStatus(batt.percent, batt.isCharging, pwr.usbPresent);
   const uint32_t renderStartedAtMs = millis();
   ModuleDate::setConfig(&g_cfg);
@@ -1267,6 +1296,7 @@ static bool fetchAndRenderExplicit(
     return false;
   }
   if (!renderStateOk) return false;
+  g_dynamicTransitionAt = g_cfg.dynamicTransitionAt;
   setupPendingScreenDisplayed = false;
   SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);
 
@@ -1804,7 +1834,8 @@ void setup() {
   // automatic source work. Manual probes and charger edges do not.
   bool normalSyncDue =
     g_pilotResumed || wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED ||
-    (g_nextScheduledWake > 0 && time(nullptr) >= g_nextScheduledWake);
+    (g_nextScheduledWake > 0 && time(nullptr) >= g_nextScheduledWake) ||
+    dynamicLayoutDueNow();
   if (normalSyncDue) Serial.println("SmartRefresh: cold boot or module deadline due");
 
 
@@ -2184,6 +2215,9 @@ run_normal_sync:
   ContentRevisionState revisionState;
   const uint64_t knownRevision = SmartRefresh::displayedRevision();
   String scheduledModules = SmartRefresh::dueModuleCsv(g_smartState, time(nullptr));
+  // A period change affects the entire cell geometry and module set.
+  // Coalesce it with any simultaneously due reminder/weather/module work.
+  if (dynamicLayoutDueNow()) scheduledModules = "all";
   if (g_pilotResumed || (wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED && !scheduledModules.length())) scheduledModules = "all";
   if (!SmartRefresh::probeRevision(DeviceIdentity::getToken(), knownRevision, revisionState)) {
     deferFailedScheduledRefresh("revision probe unavailable");
@@ -2211,7 +2245,12 @@ run_normal_sync:
     g_revisionRetryNotBefore = 0;
     String affected = SmartRefresh::unionModuleCsv(revisionState.affectedModules, scheduledModules);
     if (!affected.length()) affected = "all";
-    if (affected == "all" && FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken()) != FrameConfigApi::FETCH_OK) {
+    bool configReady = true;
+    if (affected == "all") {
+      configReady = FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken()) == FrameConfigApi::FETCH_OK;
+      if (configReady) g_dynamicTransitionAt = g_cfg.dynamicTransitionAt;
+    }
+    if (!configReady) {
       deferFailedScheduledRefresh("config fetch failed");
       Serial.println("Changed layout/config fetch failed; preserving physical state");
     } else {
