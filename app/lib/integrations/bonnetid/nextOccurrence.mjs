@@ -1,10 +1,10 @@
 /**
- * Show only the nearest future instance of each AlAdhan prayer/solar event.
+ * Show only the nearest future instance of each IRN prayer/solar event.
  * The caller must filter out events that have already started. Retaining the
  * full stored timetable allows the next day's instance to take over locally
  * at the minute boundary, without another API request.
  */
-export function nextAladhanOccurrences(items, getName, getLocalStart) {
+export function nextBonnetidOccurrences(items, getName, getLocalStart) {
   const firstByName = new Map()
   for (const item of items) {
     const name = String(getName(item) || '').trim().toLocaleLowerCase('nb-NO')
@@ -20,13 +20,13 @@ export function nextAladhanOccurrences(items, getName, getLocalStart) {
 
 /**
  * Combine timed prayers/solar events with date-only Islamic occasions under
- * one AlAdhan source. Only timed entries roll over per event name; occasions
+ * one IRN source. Only timed entries roll over per event name; occasions
  * remain independent all-day dates, even when multiple share a name.
  */
-export function nextAladhanWithOccasions(items, getName, getDate, getTime) {
+export function nextBonnetidWithOccasions(items, getName, getDate, getTime) {
   const timed = items.filter(item => getTime(item))
   const occasions = items.filter(item => !getTime(item))
-  const upcomingTimes = nextAladhanOccurrences(timed, getName,
+  const upcomingTimes = nextBonnetidOccurrences(timed, getName,
     item => String(getDate(item) || '') + 'T' + String(getTime(item) || ''))
   return [...upcomingTimes, ...occasions].sort((a, b) => {
     const aKey = String(getDate(a) || '') + 'T' + String(getTime(a) || '00:00')

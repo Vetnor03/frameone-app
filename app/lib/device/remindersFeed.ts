@@ -1,7 +1,6 @@
 import { wasteCollectionDisplayTitle, type WasteDisplayLanguage } from '../integrations/waste/display.ts'
 import { localEventGroupKeyFromRaw, groupSkipId } from '../integrations/local-events/grouping.ts'
 import { isTeamsMeetingVisibleAt } from '../integrations/teams/visibility.ts'
-import { nextAladhanOccurrences } from '../integrations/aladhan/nextOccurrence.mjs'
 
 export type ReminderRepeatKey =
   | 'none'
@@ -16,7 +15,7 @@ export type ReminderRepeatKey =
   | '2years'
   | 'custom'
 
-export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events' | 'aladhan'
+export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events' | 'bonnetid'
 
 export type DeviceReminderItem = {
   reminder_id: string
@@ -256,80 +255,54 @@ export function buildGoogleCalendarItems(
   })
 }
 
-/** The AlAdhan source is calculated, not an IRN/official mosque timetable.
- * Only future Norwegian-local times are shown on the e-paper frame.
- * The existing Reminders boundary scheduler wakes at these start minutes.
- */
-export function buildAladhanPrayerItems(
+export function buildIrnReminderItems(
   rows: IntegrationItemRow[],
   todayYmd: string,
   horizonEndYmd: string,
   timeZone: string,
   now = new Date()
 ): DeviceReminderItem[] {
-  const upcoming = rows.flatMap(row => {
-    const title = String(row.title || '').trim()
-    const externalId = String(row.external_id || '').trim()
-    const start = String(row.starts_at || '')
-    const timestamp = Date.parse(start)
-    if (!['Fajr', 'Soloppgang', 'Dhuhr', 'Asr', 'Solnedgang', 'Maghrib', 'Isha'].includes(title) || !externalId || row.raw?.source !== 'aladhan' ||
-        row.raw?.type !== 'prayer_time' || !Number.isFinite(timestamp) ||
-        timestamp <= now.getTime()) return []
-    const occurrenceDate = isoToYmdInTimeZone(start, timeZone)
-    const displayTime = isoToHmInTimeZone(start, timeZone)
-    if (!occurrenceDate || !displayTime || occurrenceDate < todayYmd ||
-        occurrenceDate > horizonEndYmd) return []
-    return [{
-      reminder_id: 'aladhan:' + externalId,
-      title,
-      occurrence_date: occurrenceDate,
-      display_date: formatDisplayDate(occurrenceDate, todayYmd),
-      days_until: diffDaysFromYmd(todayYmd, occurrenceDate),
-      is_overdue: false,
-      repeat: 'none' as ReminderRepeatKey,
-      due_time: displayTime,
-      display_time: displayTime,
-      source: 'aladhan' as const,
-      external_id: externalId,
-    }]
-  })
-  // Show one upcoming occurrence of each prayer and solar event before
-  // the physical display cap; sunset and Maghrib remain distinct.
-  return nextAladhanOccurrences(upcoming, item => item.title,
-    item => item.occurrence_date + 'T' + (item.display_time || ''))
-}
-
-/** Calculated Islamic occasions are all-day calendar entries, not prayer deadlines. */
-export function buildAladhanHolidayItems(
-  rows: IntegrationItemRow[],
-  todayYmd: string,
-  horizonEndYmd: string
-): DeviceReminderItem[] {
   return rows.flatMap(row => {
-    const raw = row.raw && typeof row.raw === 'object' ? row.raw : {}
-    const date = typeof raw.date === 'string' ? raw.date.slice(0, 10) : ''
     const title = String(row.title || '').trim()
     const externalId = String(row.external_id || '').trim()
-    if (row.provider !== 'aladhan' || raw.type !== 'islamic_holiday' ||
-        raw.all_day !== true || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-        date < todayYmd || date > horizonEndYmd || !title || !externalId) return []
+    const raw = row.raw || {}
+    const kind = raw.type
+    if (!title || !externalId || raw.source !== 'bonnetid' ||
+        (kind !== 'prayer_time' && kind !== 'holiday' && kind !== 'event')) return []
+
+    // Official provider calendar items are shared with prayer times under IRN.
+    // This supports a future endpoint, but does not invent holiday dates.
+    const allDay = kind === 'holiday' || raw.all_day === true || raw.allDay === true
+    const rawDate = typeof raw.date === 'string' ? raw.date : ''
+    const startsAt = String(row.starts_at || '')
+    const timestamp = Date.parse(startsAt)
+    if (!allDay && (!Number.isFinite(timestamp) || timestamp <= now.getTime())) return []
+
+    const date = allDay
+      ? (/^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : Number.isFinite(timestamp) ? isoToYmdInTimeZone(startsAt, timeZone) : '')
+      : isoToYmdInTimeZone(startsAt, timeZone)
+    const time = allDay ? null : isoToHmInTimeZone(startsAt, timeZone)
+    if (!date || (!allDay && !time) || date > horizonEndYmd || date < todayYmd) return []
+
     return [{
-      reminder_id: 'aladhan:' + externalId,
+      reminder_id: 'bonnetid:' + externalId,
       title,
       occurrence_date: date,
       display_date: formatDisplayDate(date, todayYmd),
       days_until: diffDaysFromYmd(todayYmd, date),
       is_overdue: false,
-      is_all_day: true,
       repeat: 'none' as ReminderRepeatKey,
-      due_time: null,
-      display_time: null,
-      source: 'aladhan' as const,
+      due_time: time,
+      display_time: time,
+      source: 'bonnetid' as const,
+      is_all_day: allDay,
       external_id: externalId,
-      raw: { ...raw },
     }]
   })
 }
+
+/** @deprecated The IRN source also supports holidays and events. */
+export const buildBonnetidPrayerItems = buildIrnReminderItems
 
 export function buildWasteCollectionItems(
   rows: IntegrationItemRow[],
