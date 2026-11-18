@@ -2739,19 +2739,75 @@ export default function HomePage() {
     try{await saveCustomLayout(name,cells)}catch(error){setLayoutDraftError(error instanceof Error?error.message:'Unable to save layout.')}finally{setLayoutDraftSaving(false)}
   }
   async function saveCustomLayout(name:string,cells:CustomLayoutCell[]) {
+    let nextDynamic = dynamicLayout
     if(layoutFlow?.mode==='edit'){
       const json=await customLayoutRequest(`/api/custom-layouts/${layoutFlow.layout.id}`,{method:'PATCH',body:JSON.stringify({name,cells})})
-      setCustomLayouts(items=>items.map(item=>item.id===json.layout.id?json.layout:item));setCarouselItemId(json.layout.id);setActiveCustomLayoutId(json.layout.id);setActiveTab('frame')
-      setCustomAssignments(items=>({...items,[json.layout.id]:remapAssignmentsAfterGeometryEdit(layoutFlow.layout.cells,cells,items[json.layout.id]||{})}))
+      const currentAssignments = remapAssignmentsAfterGeometryEdit(
+        layoutFlow.layout.cells, cells, customAssignments[json.layout.id] || {},
+      )
+      setCustomLayouts(items=>items.map(item=>item.id===json.layout.id?json.layout:item))
+      setCarouselItemId(json.layout.id)
+      setActiveCustomLayoutId(json.layout.id)
+      setActiveTab('frame')
+      setCustomAssignments(items=>({...items,[json.layout.id]:currentAssignments}))
+      if (dynamicLayout) {
+        const periods = { ...dynamicLayout.periods }
+        for (const period of ['morning','afternoon','evening','night'] as const) {
+          const current = periods[period]
+          if (current.layout !== 'custom' || current.custom_layout_id !== json.layout.id) continue
+          const existing = Object.fromEntries(current.cells.map(cell=>[cell.slot,baseModuleKeyFromStored(cell.module)]))
+          const assignments = remapAssignmentsAfterGeometryEdit(layoutFlow.layout.cells,cells,existing)
+          const updated = customPhysicalPayload(json.layout,assignments)
+          if (updated) periods[period] = updated
+        }
+        nextDynamic = { ...dynamicLayout, periods }
+        setDynamicLayout(nextDynamic)
+      }
     }else{
       if(!activeDeviceId)throw new Error('Select a frame before creating a layout.')
       const json=await customLayoutRequest('/api/custom-layouts',{method:'POST',body:JSON.stringify({deviceId:activeDeviceId,name,cells})})
-      setCustomLayouts(items=>[...items,json.layout]);setActiveCustomLayoutId(json.layout.id);setCarouselItemId(json.layout.id)
-      setCustomAssignments(items=>({...items,[json.layout.id]:Object.fromEntries(cells.map(cell=>[cell.slot,null]))}))
+      const assignments = Object.fromEntries(cells.map(cell=>[cell.slot,null]))
+      setCustomLayouts(items=>[...items,json.layout])
+      setActiveCustomLayoutId(json.layout.id)
+      setCarouselItemId(json.layout.id)
+      setCustomAssignments(items=>({...items,[json.layout.id]:assignments}))
+      if (dynamicLayout?.enabled) {
+        const payload = customPhysicalPayload(json.layout, assignments)
+        if (payload) {
+          nextDynamic = { ...dynamicLayout, periods: { ...dynamicLayout.periods, [dynamicPeriod]: payload } }
+          setDynamicLayout(nextDynamic)
+        }
+      }
+    }
+    markDirty({ dynamicLayout: nextDynamic })
+    setLayoutFlow(null)
+  }
+
+  async function deleteCustom(layout:CustomLayout) {
+    if (!window.confirm(`Delete “${layout.name}”?`)) return
+    await customLayoutRequest(`/api/custom-layouts/${layout.id}`, { method: 'DELETE' })
+    setCustomLayouts(items=>items.filter(item=>item.id!==layout.id))
+    const fallback = { layout: 'default' as const, cells: cellsMapToArray(emptyCellsFor('default')) }
+    const nextDynamic = dynamicLayout ? {
+      ...dynamicLayout,
+      periods: Object.fromEntries((['morning','afternoon','evening','night'] as const).map(period => [
+        period,
+        dynamicLayout.periods[period].custom_layout_id === layout.id ? fallback : dynamicLayout.periods[period],
+      ])) as DynamicConfig['periods'],
+    } : null
+    if (dynamicLayout) setDynamicLayout(nextDynamic)
+    if (activeCustomLayoutId === layout.id) {
+      const nextCells = { ...cellsByLayout, default: emptyCellsFor('default') }
+      setActiveCustomLayoutId(null)
+      setLayoutKey('default')
+      setCellsByLayout(nextCells)
+      setCarouselItemId('built-in:default')
+      markDirty({ layoutKey: 'default', cellsByLayout: nextCells, dynamicLayout: nextDynamic })
+    } else {
+      markDirty({ dynamicLayout: nextDynamic })
     }
     setLayoutFlow(null)
   }
-  async function deleteCustom(layout:CustomLayout){if(!window.confirm(`Delete “${layout.name}”?`))return;if(activeCustomLayoutId===layout.id&&activeDeviceId){const nextCells={...cellsByLayout,default:projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,'default')};setActiveCustomLayoutId(null);setLayoutKey('default');setCellsByLayout(nextCells);setCarouselItemId('built-in:default');markDirty({layoutKey:'default',cellsByLayout:nextCells})};await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'DELETE'});setCustomLayouts(items=>items.filter(item=>item.id!==layout.id));setLayoutFlow(null)}
 
   // Each period stores a complete layout snapshot. Switching the slider only
   // switches the editor, never requests a physical refresh on its own.
