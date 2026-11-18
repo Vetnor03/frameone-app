@@ -8,6 +8,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { readLaunchPreview, writeLaunchPreview, clearLaunchPreview } from './lib/launchPreviewCache.mjs'
 import { readTabSnapshot, writeTabSnapshot, clearTabSnapshotsForUser } from './lib/tabSnapshotCache.mjs'
+import { readConnectStatusCache, writeConnectStatusCache, clearConnectStatusCacheForUser } from './lib/integrations/connectStatusCache.mjs'
 import { appendCachedModuleTab, planModuleTabWarmup, tabCacheScope, type WarmModuleKey } from './lib/tabWarmup.mjs'
 import { fetchSurfScore } from './lib/fetchSurfScore'
 import { findSpotByLabel } from './lib/surf/spots'
@@ -3259,6 +3260,7 @@ export default function HomePage() {
     if (userId) {
       clearLaunchPreview(window.localStorage, userId)
       clearTabSnapshotsForUser(window.localStorage, userId)
+      clearConnectStatusCacheForUser(window.localStorage, userId)
     }
     router.replace('/login')
   }
@@ -3432,6 +3434,8 @@ async function handleSelectTab(k: TabKey) {
 
               {activeTab === 'connect' && (
                 <ConnectAppsScreen
+                  key={`${userId || ''}:${activeDeviceId || ''}`}
+                  userId={userId}
                   language={language}
                   modulesJson={modulesJson}
                   activeDeviceId={activeDeviceId}
@@ -3685,6 +3689,7 @@ function integrationModulesAfterChange(modulesJson: Record<string, any>, key: Co
 }
 
 function ConnectAppsScreen({
+  userId = null,
   language,
   modulesJson,
   activeDeviceId = null,
@@ -3696,6 +3701,7 @@ function ConnectAppsScreen({
   remindersVisibleOnFrame = true,
   onIntegrationChanged,
 }: {
+  userId?: string | null
   language: AppLanguage
   modulesJson: Record<string, unknown>
   activeDeviceId?: string | null
@@ -3719,6 +3725,26 @@ function ConnectAppsScreen({
     if (initialTeamsOAuthStatus === 'error') return initialTeamsOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Teams' : 'Could not connect Teams')
     return null
   })
+  // Display-only cache: the server stays authoritative for connection actions.
+  // Hydrate before paint to avoid reordering the tab as requests finish.
+  const [cachedConnectionStatus, setCachedConnectionStatus] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
+  const [verifiedConnectionStatus, setVerifiedConnectionStatus] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
+  const [connectionCacheHydrated, setConnectionCacheHydrated] = useState(false)
+  useLayoutEffect(() => {
+    setCachedConnectionStatus(!startup && userId && activeDeviceId
+      ? readConnectStatusCache(window.localStorage, userId, activeDeviceId)
+      : {})
+    setVerifiedConnectionStatus({})
+    setConnectionCacheHydrated(true)
+  }, [userId, activeDeviceId, startup])
+
+  function updateConnectionDisplayStatus(provider: ConnectAppKey, connected: boolean, persist = true) {
+    setVerifiedConnectionStatus(current => ({ ...current, [provider]: connected }))
+    if (persist && !startup && userId && activeDeviceId) {
+      writeConnectStatusCache(window.localStorage, userId, activeDeviceId, provider, connected)
+    }
+  }
+
   const [connectSearch, setConnectSearch] = useState('')
   const [, setSpondConnected] = useState(false)
   const [spondAccount, setSpondAccount] = useState<string | null>(null)
@@ -3769,7 +3795,7 @@ function ConnectAppsScreen({
     void (async () => {
       const token = (await supabase.auth.getSession()).data.session?.access_token || ''
       if (!token) {
-        if (!cancelled) { setBonnetidConnected(false); setBonnetidCity(null); setBonnetidStatusResolved(true) }
+        if (!cancelled) { setBonnetidConnected(false); setBonnetidCity(null); setBonnetidStatusResolved(true); updateConnectionDisplayStatus('bonnetid', false, false) }
         return
       }
       const response = await fetch('/api/integrations/bonnetid/status', {
@@ -3779,6 +3805,7 @@ function ConnectAppsScreen({
       const json = await response.json()
       if (!cancelled) {
         setBonnetidConnected(json.connected === true)
+        updateConnectionDisplayStatus('bonnetid', json.connected === true)
         setBonnetidCity(typeof json.city === 'string' ? json.city : null)
         setBonnetidAsrMethod(json.asrMethod === 1 ? 1 : 2)
         setLocallyDisconnectedApps(current => ({ ...current, bonnetid: false }))
@@ -3796,7 +3823,7 @@ function ConnectAppsScreen({
     void (async () => {
       const token = (await supabase.auth.getSession()).data.session?.access_token || ''
       if (!token) {
-        if (!cancelled) { setWasteConnected(false); setWasteStatusResolved(true) }
+        if (!cancelled) { setWasteConnected(false); setWasteStatusResolved(true); updateConnectionDisplayStatus('waste', false, false) }
         return
       }
       const response = await fetch('/api/integrations/waste/status', {
@@ -3807,6 +3834,7 @@ function ConnectAppsScreen({
       const json = await response.json()
       if (!cancelled) {
         setWasteConnected(json.connected === true)
+        updateConnectionDisplayStatus('waste', json.connected === true)
         setLocallyDisconnectedApps(current => ({ ...current, waste: false }))
         setWasteStatusResolved(true)
       }
@@ -3833,7 +3861,7 @@ function ConnectAppsScreen({
 
   async function fetchSpondStatus() {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-    if (!accessToken) { setSpondStatusResolved(true); setSpondConnected(false); return }
+    if (!accessToken) { setSpondStatusResolved(true); setSpondConnected(false); updateConnectionDisplayStatus('spond', false, false); return }
     const resp = await fetch('/api/integrations/spond/status', {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
@@ -3844,6 +3872,7 @@ function ConnectAppsScreen({
     setSpondStatusFailed(false)
     setLocallyDisconnectedApps((current) => ({ ...current, spond: json?.connected === true ? false : current.spond }))
     setSpondAccountConnected(json?.connected === true)
+    updateConnectionDisplayStatus('spond', json?.connected === true)
     setSpondConnected(modulesJson?.integration_selection_explicit === true ? frameUsesIntegration(modulesJson, 'spond') && json?.connected === true : json?.connected === true)
     setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : null)
     if (typeof json?.setup_error?.message === 'string' && json.setup_error.message) {
@@ -3856,7 +3885,7 @@ function ConnectAppsScreen({
 
   async function fetchTeamsStatus() {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-    if (!accessToken) { setTeamsStatusResolved(true); setTeamsConnected(false); return }
+    if (!accessToken) { setTeamsStatusResolved(true); setTeamsConnected(false); updateConnectionDisplayStatus('teams', false, false); return }
     const resp = await fetch('/api/integrations/teams/status', {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
@@ -3867,6 +3896,7 @@ function ConnectAppsScreen({
     setTeamsStatusFailed(false)
     setLocallyDisconnectedApps((current) => ({ ...current, teams: json?.connected === true ? false : current.teams }))
     setTeamsAccountConnected(json?.connected === true)
+    updateConnectionDisplayStatus('teams', json?.connected === true)
     setTeamsConnected(modulesJson?.integration_selection_explicit === true ? frameUsesIntegration(modulesJson, 'teams') && json?.connected === true : json?.connected === true)
     setTeamsAccount(typeof json?.account === 'string' && json.account ? json.account : null)
     if (typeof json?.setup_error?.message === 'string' && json.setup_error.message) {
@@ -3879,7 +3909,7 @@ function ConnectAppsScreen({
 
   async function fetchGoogleCalendarStatus() {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-    if (!accessToken) { setGoogleStatusResolved(true); setGoogleConnected(false); return }
+    if (!accessToken) { setGoogleStatusResolved(true); setGoogleConnected(false); updateConnectionDisplayStatus('google-calendar', false, false); return }
     const response = await fetch('/api/integrations/google-calendar/status', {
       headers: { Authorization: 'Bearer ' + accessToken },
       cache: 'no-store',
@@ -3890,6 +3920,7 @@ function ConnectAppsScreen({
     setGoogleStatusFailed(false)
     setLocallyDisconnectedApps(current => ({ ...current, 'google-calendar': json?.connected === true ? false : current['google-calendar'] }))
     setGoogleAccountConnected(json?.connected === true)
+    updateConnectionDisplayStatus('google-calendar', json?.connected === true)
     setGoogleConnected(modulesJson?.integration_selection_explicit === true ? frameUsesIntegration(modulesJson, 'google-calendar') && json?.connected === true : json?.connected === true)
     setGoogleAccount(typeof json?.account === 'string' ? json.account : null)
     setIntegrationSetupErrors(current => ({ ...current, 'google-calendar': typeof json?.setup_error?.message === 'string' ? json.setup_error.message : undefined }))
@@ -4019,6 +4050,7 @@ function ConnectAppsScreen({
       setLocallyDisconnectedApps((current) => ({ ...current, spond: false }))
       setSpondConnected(true)
       setSpondAccountConnected(true)
+      updateConnectionDisplayStatus('spond', true)
       changeFrameIntegration('spond', { enabled: true })
       setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : username)
       setSpondPassword('')
@@ -4040,6 +4072,7 @@ function ConnectAppsScreen({
   async function fetchLocalEventsStatus(deviceId: string, requestGeneration: number) {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
     if (!accessToken || !deviceId) {
+      updateConnectionDisplayStatus('local-events', false, false)
       setLocalEventsSavedArea(null)
       setLocalEventsCanManage(false)
       setLocalEventsStatusResolved(true)
@@ -4056,7 +4089,11 @@ function ConnectAppsScreen({
     const area = normalizeLocalEventAreaPreference(json?.areaPreference)
     setLocalEventsAccountConnected(json?.connected === true)
     setLocalEventsSyncIssue(json?.syncPending ? (json?.syncError || (language === 'no' ? 'Arrangementskilden oppdateres ikke ennå' : 'Events source not updating yet')) : null)
-    if (frameUsesIntegration(modulesJson, 'local-events')) setLocalEventsSavedArea(json?.connected === true ? area : null)
+    // This endpoint validates the selected frame's connection itself; do not
+    // render it disconnected while main-tab frame settings hydrate.
+    const enabled = json?.connected === true && !!area && (!startup || frameUsesIntegration(modulesJson, 'local-events'))
+    setLocalEventsSavedArea(enabled ? area : null)
+    updateConnectionDisplayStatus('local-events', enabled)
     setLocalEventsCanManage(json?.canManage === true)
     if (area) setLocalEventsDraftArea(area)
     // A stored connection is not the same as a successful Events import.
@@ -4117,6 +4154,7 @@ function ConnectAppsScreen({
       const saved = normalizeLocalEventAreaPreference(json?.areaPreference) || areaPreference
       setLocalEventsSavedArea(saved)
       setLocalEventsAccountConnected(true)
+      updateConnectionDisplayStatus('local-events', true)
       setLocalEventsStatusDeviceId(connectingDeviceId)
       setLocalEventsStatusResolved(true)
       setLocalEventsStatusFailed(false)
@@ -4157,6 +4195,7 @@ function ConnectAppsScreen({
       if (!resp.ok) throw new Error(json?.error || 'Could not disconnect Local Events')
       setLocalEventsSavedArea(null)
       setLocalEventsAccountConnected(false)
+      updateConnectionDisplayStatus('local-events', false)
       setLocalEventsSyncIssue(null)
       changeFrameIntegration('local-events', { enabled: false })
       setLocalEventsDraftArea(DEFAULT_LOCAL_EVENT_AREA)
@@ -4215,6 +4254,7 @@ function ConnectAppsScreen({
         changeFrameIntegration('bonnetid', { enabled: false })
         window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
       }
+      updateConnectionDisplayStatus(provider, false)
       setLocallyDisconnectedApps((current) => ({ ...current, [provider]: true }))
       setDisconnectConfirmApp(null)
       setStatusTone('success')
@@ -4360,6 +4400,8 @@ function ConnectAppsScreen({
   function getAppConnected(app: { key: ConnectAppKey; connectable: boolean }) {
     if (!app.connectable) return false
     if (locallyDisconnectedApps[app.key]) return false
+    if (!startup && verifiedConnectionStatus[app.key] !== undefined) return verifiedConnectionStatus[app.key] === true
+    if (!startup && cachedConnectionStatus[app.key] !== undefined) return cachedConnectionStatus[app.key] === true
     // Existing account authorization is not an explicit selection for this new frame.
     if (startup && !frameUsesIntegration(modulesJson, app.key)) return false
     if (app.key === 'spond') return spondAccountConnected
@@ -4372,6 +4414,14 @@ function ConnectAppsScreen({
   }
 
   const sortedApps = sortConnectedAppsFirst(apps.map(app => ({ app, connected: getAppConnected(app) })))
+  const statusDiscoveryPending = !startup && (
+    (!spondStatusResolved && !spondStatusFailed) || (!teamsStatusResolved && !teamsStatusFailed) ||
+    (!googleStatusResolved && !googleStatusFailed) || !wasteStatusResolved || !bonnetidStatusResolved ||
+    (!!activeDeviceId && !localEventsStatusResolved && !localEventsStatusFailed)
+  )
+  // On the very first visit, avoid showing an incorrectly disconnected list.
+  const showConnectPlaceholders = !startup && (!connectionCacheHydrated ||
+    (Object.keys(cachedConnectionStatus).length === 0 && statusDiscoveryPending))
 
   const renderLocalEventsModal = () => {
     const area = localEventsDraftArea
@@ -4490,7 +4540,18 @@ function ConnectAppsScreen({
               <p className="mt-1 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Prøv et annet søk, eller foreslå en integrasjon nedenfor.' : 'Try another search, or request an integration below.'}</p>
             </div>
           )}
-          {sortedApps.map(({ app, connected }) => {
+          {showConnectPlaceholders && (
+            <div role="status" aria-label={language === 'no' ? 'Laster tilkoblinger' : 'Loading connections'} className="space-y-2.5">
+              {[0, 1, 2, 3].map(index => (
+                <div key={index} className="h-[72px] animate-pulse rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3">
+                  <div className="h-3 w-2/5 rounded bg-[color:var(--bd-15)]" />
+                  <div className="mt-3 h-2.5 w-3/5 rounded bg-[color:var(--bd-10)]" />
+                </div>
+              ))}
+            </div>
+          )}
+          {!showConnectPlaceholders && sortedApps.map(({ app, connected }) => {
+            const waitingForVerification = connected && !startup && verifiedConnectionStatus[app.key] === undefined
             const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : app.key === 'google-calendar' ? integrationSetupErrors['google-calendar'] : null
             const localEventsSelectedName = localEventsSavedArea ? (localEventsSavedArea.placeLabel || getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || '') : null
             const description = app.key === 'local-events' && localEventsSyncIssue
@@ -4542,19 +4603,19 @@ function ConnectAppsScreen({
                       </div>
                     ) : app.key === 'waste' ? (
                       <div className="shrink-0 flex flex-col items-stretch gap-1.5">
-                        <button type="button" onClick={() => setDisconnectConfirmApp('waste')} disabled={disconnectingApp === 'waste'} className="h-8 rounded-xl border border-[#d94b4b]/40 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
+                        <button type="button" onClick={() => setDisconnectConfirmApp('waste')} disabled={disconnectingApp === 'waste' || waitingForVerification} className="h-8 rounded-xl border border-[#d94b4b]/40 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
                           {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
                         </button>
-                        <button type="button" onClick={() => setWasteModalOpen(true)} disabled={disconnectingApp === 'waste'} className="h-7 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)] disabled:opacity-60">
+                        <button type="button" onClick={() => setWasteModalOpen(true)} disabled={disconnectingApp === 'waste' || waitingForVerification} className="h-7 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)] disabled:opacity-60">
                           {language === 'no' ? 'ENDRE ADRESSE' : 'EDIT ADDRESS'}
                         </button>
                       </div>
                     ) : app.key === 'bonnetid' ? (
                       <div className="shrink-0 flex flex-col items-stretch gap-1.5">
-                        <button type="button" onClick={() => setDisconnectConfirmApp('bonnetid')} disabled={disconnectingApp === 'bonnetid'} className="h-8 rounded-xl border border-[#d94b4b]/40 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
+                        <button type="button" onClick={() => setDisconnectConfirmApp('bonnetid')} disabled={disconnectingApp === 'bonnetid' || waitingForVerification} className="h-8 rounded-xl border border-[#d94b4b]/40 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
                           {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
                         </button>
-                        <button type="button" onClick={() => setBonnetidModalOpen(true)} disabled={disconnectingApp === 'bonnetid'} className="h-7 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)] disabled:opacity-60">
+                        <button type="button" onClick={() => setBonnetidModalOpen(true)} disabled={disconnectingApp === 'bonnetid' || waitingForVerification} className="h-7 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)] disabled:opacity-60">
                           {language === 'no' ? 'ENDRE' : 'EDIT'}
                         </button>
                       </div>
@@ -4562,7 +4623,7 @@ function ConnectAppsScreen({
                       <button
                         type="button"
                         onClick={() => setDisconnectConfirmApp(app.key as DisconnectableConnectAppKey)}
-                        disabled={disconnectingApp === app.key || (app.key === 'spond' && spondLoading) || (app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading)}
+                        disabled={waitingForVerification || disconnectingApp === app.key || (app.key === 'spond' && spondLoading) || (app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading)}
                         className="shrink-0 h-8 rounded-xl border border-[#d94b4b]/35 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60"
                       >
                         {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
@@ -4691,9 +4752,9 @@ function ConnectAppsScreen({
 
 
       {localEventsOpen && renderLocalEventsModal()}
-      {wasteModalOpen && <WasteSetupModal language={language} onClose={() => setWasteModalOpen(false)} onSaved={(connected) => { setWasteConnected(connected); setLocallyDisconnectedApps(current => ({ ...current, waste: false })); changeFrameIntegration('waste', { enabled: connected }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }} />}
+      {wasteModalOpen && <WasteSetupModal language={language} onClose={() => setWasteModalOpen(false)} onSaved={(connected) => { setWasteConnected(connected); updateConnectionDisplayStatus('waste', connected); setLocallyDisconnectedApps(current => ({ ...current, waste: false })); changeFrameIntegration('waste', { enabled: connected }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }} />}
       {bonnetidModalOpen && <BonnetidSetupModal language={language} currentCity={bonnetidCity} currentAsrMethod={bonnetidAsrMethod} onClose={() => setBonnetidModalOpen(false)} onSaved={(connected, city, asrMethod) => {
-        setBonnetidConnected(connected); setBonnetidCity(city); setBonnetidAsrMethod(asrMethod);
+        setBonnetidConnected(connected); updateConnectionDisplayStatus('bonnetid', connected); setBonnetidCity(city); setBonnetidAsrMethod(asrMethod);
         setLocallyDisconnectedApps(current => ({ ...current, bonnetid: false }));
         changeFrameIntegration('bonnetid', { enabled: connected });
         window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
