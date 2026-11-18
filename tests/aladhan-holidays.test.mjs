@@ -44,5 +44,7 @@ test('prayer and holiday source stay separate, with no solar reminders', () => {
   assert.match(backend, /type: 'islamic_holiday'/)
   assert.match(physical, /buildAladhanHolidayItems/)
   assert.match(home, /aladhan-holidays/)
-  assert.doesNotMatch(modal, /aria-expanded=\{advanced\}/)
+  assert.match(modal, /currentCity && <button/)
+  assert.match(modal, /currentCity && advanced &&/)
+  assert.match(modal, /\.filter\(item => item\.name !== 'Sunrise' && item\.name !== 'Sunset'\)/)
 })
