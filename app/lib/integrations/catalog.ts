@@ -51,3 +51,8 @@ export function integrationActiveForPilot(key: ConnectAppKey): boolean {
   const definition = INTEGRATION_CATALOGUE.find(app => app.key === key)
   return definition?.connectable === true && definition.status !== 'under-evaluation'
 }
+
+/** Connected integrations lead Connect; keep catalogue order within both groups. */
+export function sortConnectedAppsFirst<T extends { connected: boolean }>(apps: readonly T[]): T[] {
+  return [...apps].sort((a, b) => Number(b.connected) - Number(a.connected))
+}
