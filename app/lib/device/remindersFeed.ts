@@ -1,6 +1,7 @@
 import { wasteCollectionDisplayTitle, type WasteDisplayLanguage } from '../integrations/waste/display.ts'
 import { localEventGroupKeyFromRaw, groupSkipId } from '../integrations/local-events/grouping.ts'
 import { isTeamsMeetingVisibleAt } from '../integrations/teams/visibility.ts'
+import { nextAladhanOccurrences } from '../integrations/aladhan/nextOccurrence.mjs'
 
 export type ReminderRepeatKey =
   | 'none'
@@ -266,7 +267,7 @@ export function buildAladhanPrayerItems(
   timeZone: string,
   now = new Date()
 ): DeviceReminderItem[] {
-  return rows.flatMap(row => {
+  const upcoming = rows.flatMap(row => {
     const title = String(row.title || '').trim()
     const externalId = String(row.external_id || '').trim()
     const start = String(row.starts_at || '')
@@ -292,6 +293,10 @@ export function buildAladhanPrayerItems(
       external_id: externalId,
     }]
   })
+  // Preserve each distinct prayer/solar event, but show only the closest
+  // upcoming occurrence. Do this before the physical 10-item display cap.
+  return nextAladhanOccurrences(upcoming, item => item.title,
+    item => item.occurrence_date + 'T' + (item.display_time || ''))
 }
 
 export function buildWasteCollectionItems(

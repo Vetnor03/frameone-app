@@ -25,6 +25,7 @@ import { addGroceryItemsCanonical } from './lib/groceries/actions'
 import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, recipeSourceLink, scaleRecipeQuantity, selectedRecipeGroceries, type GroceryRecipeItem, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes.mjs'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { isUpcomingIntegratedCalendarItem } from './lib/device/calendarVisibility'
+import { nextAladhanOccurrences } from './lib/integrations/aladhan/nextOccurrence.mjs'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, getLocalEventPlace, normalizeLocalEventAreaPreference, nationwideLocalEventArea, type LocalEventAreaPreference } from './lib/integrations/local-events/places'
 import { localEventGroupKeyFromRaw, groupSkipId } from './lib/integrations/local-events/grouping'
@@ -15516,9 +15517,16 @@ const manualItems: ReminderUiItem[] = (data || [])
     const now = new Date(eventNowMs)
     const today = toLocalYmd(now)
     const clock = pad2(now.getHours()) + ':' + pad2(now.getMinutes())
-    return reminders.filter((item) => (item.source || 'remind') === sourceFilter).filter((item) =>
+    const upcoming = reminders.filter((item) => (item.source || 'remind') === sourceFilter).filter((item) =>
       isUpcomingIntegratedCalendarItem(item.source, item.date, normalizeReminderTime(item.time), today, clock)
     )
+    // Only one future instance per AlAdhan event. When today's Isha expires,
+    // tomorrow's Isha becomes visible without reloading the saved schedule.
+    if (sourceFilter === 'aladhan') {
+      return nextAladhanOccurrences(upcoming, item => item.title,
+        item => item.date + 'T' + (normalizeReminderTime(item.time) || ''))
+    }
+    return upcoming
   }, [reminders, sourceFilter, eventNowMs])
 
   const visibleOccurrences = useMemo(() => {
