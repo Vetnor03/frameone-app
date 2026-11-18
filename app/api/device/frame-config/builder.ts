@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { spotIdFromLabel } from '@/app/lib/surf/spots'
 import { supportsPhysicalCustomLayout } from '@/app/lib/customLayouts'
 import { getFrameHolidayList } from '@/app/lib/device/frameHolidayCache.mjs'
+import { resolveDynamicFrameSettings } from '@/app/lib/device/dynamicLayout.mjs'
 
 // Keep payload tiny (ESP-friendly)
 const MAX_UPCOMING_HOLIDAYS = 6
@@ -207,7 +208,10 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
       return { device_id, setup_pending: true, status: 'waiting_for_setup', settings_json: null, updated_at: null }
     }
 
-    let settings_json: UnknownRecord = data.settings_json
+    // Resolve the time-of-day layout before calculating active module sources.
+    // The four stored choices never go to firmware; only the effective layout and
+    // its next change deadline are sent, keeping frame-config ESP-friendly.
+    let settings_json: UnknownRecord = resolveDynamicFrameSettings(data.settings_json).settings
 
     if (settings_json.layout === 'custom') {
       const customValidation = supportsPhysicalCustomLayout(settings_json.cells)
