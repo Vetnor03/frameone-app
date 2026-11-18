@@ -15,7 +15,7 @@ export type ReminderRepeatKey =
   | '2years'
   | 'custom'
 
-export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events'
+export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events' | 'aladhan'
 
 export type DeviceReminderItem = {
   reminder_id: string
@@ -250,6 +250,45 @@ export function buildGoogleCalendarItems(
       display_time: displayTime,
       source: 'google-calendar' as const,
       is_all_day: allDay,
+      external_id: externalId,
+    }]
+  })
+}
+
+/** The AlAdhan source is calculated, not an IRN/official mosque timetable.
+ * Only future Norwegian-local times are shown on the e-paper frame.
+ * The existing Reminders boundary scheduler wakes at these start minutes.
+ */
+export function buildAladhanPrayerItems(
+  rows: IntegrationItemRow[],
+  todayYmd: string,
+  horizonEndYmd: string,
+  timeZone: string,
+  now = new Date()
+): DeviceReminderItem[] {
+  return rows.flatMap(row => {
+    const title = String(row.title || '').trim()
+    const externalId = String(row.external_id || '').trim()
+    const start = String(row.starts_at || '')
+    const timestamp = Date.parse(start)
+    if (!title || !externalId || row.raw?.source !== 'aladhan' ||
+        row.raw?.type !== 'prayer_time' || !Number.isFinite(timestamp) ||
+        timestamp <= now.getTime()) return []
+    const occurrenceDate = isoToYmdInTimeZone(start, timeZone)
+    const displayTime = isoToHmInTimeZone(start, timeZone)
+    if (!occurrenceDate || !displayTime || occurrenceDate < todayYmd ||
+        occurrenceDate > horizonEndYmd) return []
+    return [{
+      reminder_id: 'aladhan:' + externalId,
+      title,
+      occurrence_date: occurrenceDate,
+      display_date: formatDisplayDate(occurrenceDate, todayYmd),
+      days_until: diffDaysFromYmd(todayYmd, occurrenceDate),
+      is_overdue: false,
+      repeat: 'none' as ReminderRepeatKey,
+      due_time: displayTime,
+      display_time: displayTime,
+      source: 'aladhan' as const,
       external_id: externalId,
     }]
   })
