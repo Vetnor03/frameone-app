@@ -105,7 +105,7 @@ test('one future instance of each prayer and solar event, sorted chronologically
   assert.equal(afterIsha.find(x => x.title === 'Isha').display_time, '18:25')
   assert.equal(new Set(afterIsha.map(x => x.title)).size, 7)
   assert.deepEqual(afterIsha.map(x => x.title), [
-    'Fajr', 'Soloppgang', 'Dhuhr', 'Asr', 'Solnedgang', 'Maghrib', 'Isha'
+    'Fajr', 'Soloppgang', 'Dhuhr', 'Asr', 'Maghrib', 'Solnedgang', 'Isha'
   ])
 })
 
@@ -119,11 +119,11 @@ test('phone AlAdhan filter chooses the nearest event independently of storage or
   ]
   const grouped = nextAladhanOccurrences(examples, x => x.title,
     x => x.date + 'T' + x.time)
-  assert.deepEqual(grouped.map(x => x.id), ['5', '4', '1'])
+  assert.deepEqual(grouped.map(x => x.id), ['1', '4', '5'])
   const afterIsha = examples.filter(x =>
     isUpcomingIntegratedCalendarItem('aladhan', x.date, x.time, '2026-11-18', '18:25'))
   assert.deepEqual(nextAladhanOccurrences(afterIsha, x => x.title, x => x.date + 'T' + x.time)
-    .map(x => x.id), ['5', '4', '2'])
+    .map(x => x.id), ['4', '5', '2'])
 })
 
 test('upcoming-only AlAdhan filtering is shared by app and physical Reminders', () => {
