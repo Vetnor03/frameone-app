@@ -20,6 +20,8 @@ type TeamsOAuthState = {
   user_id: string
   time_zone: string
   created_at: string
+  purpose?: 'microsoft-todo'
+  nonce?: string
 }
 
 export function publicTeamsIntegrationStatus(row: Record<string, unknown> | null) {
@@ -101,12 +103,13 @@ export async function getAuthenticatedTeamsUserId(req: Request) {
   return data.user.id
 }
 
-export function buildTeamsOAuthState(userId: string, timeZone: string) {
+export function buildTeamsOAuthState(userId: string, timeZone: string, purpose?: 'microsoft-todo', nonce?: string) {
   return Buffer.from(JSON.stringify(encryptJson({
     v: 1,
     user_id: userId,
     time_zone: normalizeTimeZone(timeZone),
     created_at: new Date().toISOString(),
+    ...(purpose ? { purpose, nonce } : {}),
   } satisfies TeamsOAuthState)), 'utf8').toString('base64url')
 }
 
@@ -114,6 +117,7 @@ export function parseTeamsOAuthState(raw: string) {
   const encrypted = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'))
   const state = decryptJson<TeamsOAuthState>(encrypted)
   if (state.v !== 1 || !state.user_id) throw new Error('Invalid Microsoft OAuth state')
+  if (state.purpose && (state.purpose !== 'microsoft-todo' || !state.nonce)) throw new Error('Invalid Microsoft OAuth purpose')
   const createdAt = new Date(state.created_at).getTime()
   if (!Number.isFinite(createdAt) || Date.now() - createdAt > 15 * 60 * 1000) throw new Error('Microsoft OAuth state expired')
   return { ...state, time_zone: normalizeTimeZone(state.time_zone) }
