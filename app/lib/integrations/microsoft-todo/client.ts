@@ -9,10 +9,6 @@ export class MicrosoftTodoApiError extends Error {
   }
 }
 
-async function getPages<T>(start: string, maxPages: number): Promise<T[]> {
-  throw new Error('Missing authorization token')
-}
-
 // Microsoft returns absolute @odata.nextLink values. Never follow URLs to another host.
 async function graphPages<T>(accessToken: string, path: string, maxPages: number): Promise<T[]> {
   let nextUrl: string | null = GRAPH + path
