@@ -54,6 +54,7 @@ test('Connect Apps puts connected apps first, alphabetically within each status'
   assert.deepEqual(keys(sortConnectedAppsFirst(afterDisconnect)), [
     'spond', 'waste',
     'google-calendar', 'bonnetid', 'local-events', 'teams',
+    'todoist',
     'planta', 'transponder', 'vigilo',
   ])
 })
