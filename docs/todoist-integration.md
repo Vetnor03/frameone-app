@@ -3,7 +3,7 @@
 ## Status
 Implementation in a feature branch. Requires Todoist OAuth application credentials before live login can be tested. Uses Todoist **unified API v1** (not retired /rest/v2 or /sync/v9).
 
-The existing Reminders module displays dated Todoist tasks. Todoist is a **Connect** provider, not a separate module. The provider is marked **Experimental** while piloting.
+The existing Reminders module displays dated Todoist tasks. Todoist is a **Connect** provider, not a separate module. The provider is listed as a normal available Connect integration.
 
 ## Setup (server only)
 1. Create a Todoist OAuth integration in the [Todoist App Management Console](https://app.todoist.com/app/settings/integrations/developer) with read-only permissions.
@@ -21,7 +21,8 @@ The existing Reminders module displays dated Todoist tasks. Todoist is a **Conne
 - Every consenting account authorizes Todoist via OAuth with browser-bound 15-minute encrypted state; tokens are stored encrypted server-side.
 - Active tasks are loaded from `GET https://api.todoist.com/api/v1/tasks` using bounded cursor pagination. Only tasks that actually have a due date/time become reminders. Undated tasks are **not assigned artificial dates**.
 - Completed/deleted tasks disappear at the next successful sync. Recurring tasks follow Todoist's new due date. RE:MIND never edits, completes or deletes a Todoist task.
-- Date-only tasks are all-day reminders and retain their Todoist date across time zones; time-specific tasks retain their actual time. A timed task does not disappear merely because its due minute passed.
+- Date-only tasks are all-day reminders. For **floating timed dues** (no UTC suffix), Todoist's local clock is authoritative: 14:00 remains 14:00, regardless of DST. The Todoist account's IANA timezone is read at OAuth and cached with encrypted credentials; existing connections upgrade automatically on the next sync.
+- **Fixed timezone dues** (UTC or explicit offset) retain their absolute instant and are rendered in the viewing timezone. A timed task does not disappear merely because its due minute passed.
 - Only a frame that opted in to the Todoist integration fetches it for the physical display; source filtering is available in the Reminders app.
 - Server synchronization is limited to stale connections (15-minute TTL), with failed provider calls returning cached data where possible. Integration deltas avoid unnecessary frame refreshes. No direct calls from frames to Todoist.
 - Disconnect revokes the Todoist access token best-effort, clears local credentials and cache, and disables Todoist on the selected frame.
