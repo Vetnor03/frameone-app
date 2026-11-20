@@ -43,7 +43,7 @@ test('Connect Apps puts connected apps first, alphabetically within each status'
 
   assert.deepEqual(keys(sortConnectedAppsFirst(apps)), [
     'google-calendar', 'spond', 'waste', // connected (alphabetical, regardless of status)
-    'bonnetid', 'google-tasks', 'local-events', 'microsoft-todo', 'teams', 'todoist', // available
+    'google-tasks', 'bonnetid', 'local-events', 'microsoft-todo', 'teams', 'todoist', // available
     'planta', 'transponder', 'vigilo', // under evaluation
   ])
   assert.deepEqual(keys(apps), INTEGRATION_CATALOGUE.map(item => item.key), 'does not mutate the catalogue order')
