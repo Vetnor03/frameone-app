@@ -122,8 +122,8 @@ function TermsPageContent() {
             ),
           },
           {
-            title: 'TILKOBLEDE TJENESTER OG GOOGLE CALENDAR',
-            text: 'Integrasjoner i Connect er valgfrie. Når du velger å koble til Google Calendar, gir du RE:MIND tillatelse til å lese hendelser fra Google-kalenderne dine for å vise dem i appen og på tilkoblede rammer. Integrasjonen har kun lesetilgang og oppretter, endrer eller sletter ikke Google-hendelser. Dersom rammen brukes i et fellesrom eller deles med andre, må du selv vurdere hvilke kalenderopplysninger som er egnet for visning. Du kan koble fra tjenesten i Connect. Google-kontoen og kalenderne dine forblir hos Google, og Googles egne vilkår gjelder også for bruk av Google Calendar. Se personvernerklæringen for detaljer om databruk og sletting.',
+            title: 'TILKOBLEDE TJENESTER, GOOGLE CALENDAR OG GOOGLE TASKS',
+            text: 'Integrasjoner i Connect er valgfrie. Når du kobler til Google Calendar eller Google Tasks, gir du RE:MIND lesetilgang til henholdsvis kalenderhendelser eller oppgavelister og oppgaver for visning i appen og på tilkoblede rammer. Tilgangene er kun for lesing: RE:MIND oppretter, endrer eller sletter ikke kalenderhendelser eller oppgaver hos Google. For Google Tasks vises kun ufullførte oppgaver med forfallsdato, som heldagspåminnelser. Dersom rammen brukes i et fellesrom eller deles med andre, må du vurdere om innholdet er egnet for visning. Du kan koble fra tjenestene i Connect. Google-kontoen, kalenderne og oppgavene dine forblir hos Google, og Googles egne vilkår gjelder også. Se personvernerklæringen for detaljer om databruk og sletting.',
           },
           {
             title: 'ENHET OG TILKOBLING',
@@ -175,8 +175,8 @@ function TermsPageContent() {
             ),
           },
           {
-            title: 'CONNECTED SERVICES AND GOOGLE CALENDAR',
-            text: 'Integrations in Connect are optional. When you connect Google Calendar, you authorize RE:MIND to read events from your Google calendars for display in the app and on connected frames. This is read-only access: the integration does not create, edit or delete Google events. If a frame is used in a shared space or shared with others, you are responsible for choosing calendar information that is appropriate to display. You can disconnect the service in Connect. Your Google Account and calendars remain with Google, and Google’s own terms continue to apply to your use of Google Calendar. See our Privacy Policy for details of data use and deletion.',
+            title: 'CONNECTED SERVICES, GOOGLE CALENDAR AND GOOGLE TASKS',
+            text: 'Integrations in Connect are optional. When you connect Google Calendar or Google Tasks, you authorize RE:MIND to read calendar events or task lists and tasks, respectively, for display in the app and on connected frames. Access is read-only: RE:MIND does not create, edit or delete Google calendar events or tasks. For Google Tasks, only unfinished tasks with due dates appear, as all-day reminders. If a frame is used in a shared space or shared with others, you are responsible for choosing information that is appropriate to display. You can disconnect these services in Connect. Your Google Account, calendars and tasks remain with Google, and Google’s own terms continue to apply. See our Privacy Policy for details of data use and deletion.',
           },
           {
             title: 'DEVICE AND CONNECTIVITY',

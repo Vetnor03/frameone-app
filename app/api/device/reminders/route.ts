@@ -8,8 +8,9 @@ import { syncTeamsIfStaleForUser } from '@/app/lib/integrations/teams/server'
 import { syncGoogleCalendarFromStoredConnection } from '@/app/lib/integrations/google-calendar/server'
 import { syncTodoistFromStoredConnection } from '@/app/lib/integrations/todoist/server'
 import { syncMicrosoftTodoFromStoredConnection } from '@/app/lib/integrations/microsoft-todo/server'
+import { syncGoogleTasksFromStoredConnection } from '@/app/lib/integrations/google-tasks/server'
 import { syncBonnetidIfStale } from '@/app/lib/integrations/bonnetid/server'
-import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildTodoistReminderItems, buildMicrosoftTodoReminderItems, buildWasteCollectionItems, buildIrnReminderItems, preferTomorrowAfterSingleAllDayEvent, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
+import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildTodoistReminderItems, buildMicrosoftTodoReminderItems, buildGoogleTasksReminderItems, buildWasteCollectionItems, buildIrnReminderItems, preferTomorrowAfterSingleAllDayEvent, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
 import { reminderClockBoundaryReached } from '@/app/lib/device/reminderClockBoundary'
@@ -653,6 +654,7 @@ export async function GET(req: Request) {
     let googleCalendarItems: DeviceReminderItem[] = []
     let todoistItems: DeviceReminderItem[] = []
     let microsoftTodoItems: DeviceReminderItem[] = []
+    let googleTasksItems: DeviceReminderItem[] = []
     let wasteItems: DeviceReminderItem[] = []
     let bonnetidItems: DeviceReminderItem[] = []
     let localEventItems: DeviceReminderItem[] = []
@@ -680,6 +682,7 @@ export async function GET(req: Request) {
             Promise.allSettled((providerEnabled('google-calendar') ? memberUserIds : []).map((userId) => syncGoogleCalendarFromStoredConnection(userId))),
             Promise.allSettled((selectedIntegrations.todoist?.enabled === true ? memberUserIds : []).map((userId) => syncTodoistFromStoredConnection(userId))),
             Promise.allSettled((selectedIntegrations['microsoft-todo']?.enabled === true ? memberUserIds : []).map((userId) => syncMicrosoftTodoFromStoredConnection(userId))),
+            Promise.allSettled((selectedIntegrations['google-tasks']?.enabled === true ? memberUserIds : []).map((userId) => syncGoogleTasksFromStoredConnection(userId))),
             Promise.allSettled((providerEnabled('bonnetid') ? memberUserIds : []).map(userId => syncBonnetidIfStale(userId))),
           ])
           syncResults.forEach((result) => {
@@ -770,6 +773,19 @@ export async function GET(req: Request) {
         )
       } catch (error) {
         logOptionalReminderProviderFailure('microsoft-todo', error)
+      } })(), (async () => { try {
+        // Task imports are opt-in per physical frame, including legacy frames.
+        if (selectedIntegrations['google-tasks']?.enabled !== true) return
+        const { data, error } = await supabase.from('integration_items')
+          .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
+          .eq('provider', 'google-tasks').in('user_id', memberUserIds)
+          .order('starts_at', { ascending: true, nullsFirst: false })
+        if (error) throw error
+        googleTasksItems = buildGoogleTasksReminderItems(
+          Array.isArray(data) ? data as IntegrationItemRow[] : [], todayYmd, horizonEndYmd, timeZone, includeOverdue
+        )
+      } catch (error) {
+        logOptionalReminderProviderFailure('google-tasks', error)
       } })(), (async () => { try {
         if (!integrationActiveForPilot('waste') || !providerEnabled('waste')) return
 
@@ -866,6 +882,7 @@ export async function GET(req: Request) {
       ...googleCalendarItems,
       ...todoistItems,
       ...microsoftTodoItems,
+      ...googleTasksItems,
       ...wasteItems,
       ...bonnetidItems,
       ...localEventItems,

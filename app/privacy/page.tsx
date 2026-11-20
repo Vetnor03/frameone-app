@@ -98,7 +98,7 @@ function PrivacyPageContent() {
 
   const pageTitle = language === 'no' ? 'PERSONVERNERKLÆRING' : 'PRIVACY POLICY'
   const updatedText =
-    language === 'no' ? 'Sist oppdatert: 19. oktober 2026' : 'Last updated: October 19, 2026'
+    language === 'no' ? 'Sist oppdatert: 20. november 2026' : 'Last updated: November 20, 2026'
 
   const sections =
     language === 'no'
@@ -130,8 +130,12 @@ function PrivacyPageContent() {
             text: `Du kan når som helst koble fra Google Calendar i Connect. RE:MIND stanser da videre synkronisering og sletter lagrede Google-tilgangstokens og importerte kalenderhendelser fra den aktive integrasjonsdatabasen. Dette endrer ikke kalenderne dine hos Google. Du kan også trekke tilbake RE:MINDs tilgang fra sikkerhetsinnstillingene i Google-kontoen din. For andre forespørsler om sletting, kontakt ${CONTACT_EMAIL}.`,
           },
           {
+            title: 'GOOGLE TASKS – TILGANG, LAGRING OG FRAKOBLING',
+            text: `Hvis du selv kobler Google Tasks til RE:MIND via Connect, ber vi bare om lesetilgang til oppgavelister og oppgaver (Google Tasks API: tasks.readonly). Vi henter titler, eventuelle notater, forfallsdatoer og oppgaveidentifikatorer fra listene dine. Kun ufullførte oppgaver med forfallsdato vises som heldagspåminnelser i appen og på rammer der Google Tasks er aktivert. Google Tasks oppgir ikke et pålitelig klokkeslett, og RE:MIND legger derfor ikke til et slikt klokkeslett. Tilgangs- og oppdateringstokens lagres kryptert; importerte oppgaver mellomlagres i RE:MINDs database. Oppgaver på en delt ramme kan sees av andre i husstanden. Du kan når som helst koble fra Google Tasks i Connect. Da stopper synkroniseringen og vi sletter lagrede tilkoblingstokens og importerte Google Tasks-oppgaver fra den aktive integrasjonsdatabasen. Dette endrer eller sletter ikke oppgaver hos Google. Du kan også trekke tilbake tilgangen i Google-kontoen din. For andre forespørsler om sletting, kontakt ${CONTACT_EMAIL}.`,
+          },
+          {
             title: 'GOOGLE API-DATA OG BEGRENSET BRUK',
-            text: 'RE:MINDs bruk og eventuell overføring av opplysninger mottatt fra Google API-er følger Google API Services User Data Policy, inkludert kravene til Limited Use (begrenset bruk). Google-data brukes kun til den kalenderfunksjonen du uttrykkelig har koblet til, og deles bare med nødvendige tekniske tjenesteleverandører for å levere og sikre funksjonen eller når loven krever det.',
+            text: 'RE:MINDs bruk og eventuell overføring av opplysninger mottatt fra Google API-er følger Google API Services User Data Policy, inkludert kravene til Limited Use (begrenset bruk). Google-data brukes kun til Google Calendar- eller Google Tasks-funksjonen du uttrykkelig har koblet til, og deles bare med nødvendige tekniske tjenesteleverandører for å levere og sikre disse funksjonene eller når loven krever det.',
           },
           {
             title: 'EKSTERN KI-BEHANDLING FOR AI FOLLOW',
@@ -208,8 +212,12 @@ function PrivacyPageContent() {
             text: `You may disconnect Google Calendar at any time in Connect. RE:MIND then stops future synchronization and deletes stored Google access tokens and imported calendar events from its active integration database. This does not change your calendars at Google. You may also revoke RE:MIND access in your Google Account security settings. For other data deletion requests, contact ${CONTACT_EMAIL}.`,
           },
           {
+            title: 'GOOGLE TASKS – ACCESS, STORAGE AND DISCONNECTING',
+            text: `If you choose to connect Google Tasks through RE:MIND Connect, we request read-only access to your task lists and tasks (Google Tasks API: tasks.readonly). We retrieve task titles, optional notes, due dates and task identifiers from your lists. Only unfinished tasks with due dates appear as all-day reminders in the app and on frames where Google Tasks is enabled. Google Tasks does not provide a reliable time of day, so RE:MIND does not invent one. Access and refresh tokens are stored encrypted; imported tasks are cached in the RE:MIND database. Tasks shown on a shared frame may be visible to other household members. You can disconnect Google Tasks at any time in Connect. This stops synchronization and deletes stored connection tokens and imported Google Tasks entries from the active integration database, without changing or deleting your tasks at Google. You can also revoke access from your Google Account. For other deletion requests, contact ${CONTACT_EMAIL}.`,
+          },
+          {
             title: 'GOOGLE API DATA AND LIMITED USE',
-            text: 'RE:MIND’s use and transfer of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements. Google data is used only to provide the calendar feature you expressly connect, and is shared only with technical service providers necessary to operate and protect that feature or when required by law.',
+            text: 'RE:MIND’s use and transfer of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements. Google data is used only to provide the Google Calendar or Google Tasks feature you expressly connect, and is shared only with technical service providers necessary to operate and protect those features or when required by law.',
           },
           {
             title: 'EXTERNAL AI PROCESSING FOR AI FOLLOW',

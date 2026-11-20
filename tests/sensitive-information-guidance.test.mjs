@@ -19,8 +19,8 @@ test('legal pages contain localized sensitive-information guidance and current d
   assert.match(privacy, /title: 'INNHOLD DU OPPRETTER'/)
   assert.match(privacy, /title: 'EXTERNAL AI PROCESSING FOR AI FOLLOW'/)
   assert.match(privacy, /title: 'EKSTERN KI-BEHANDLING FOR AI FOLLOW'/)
-  assert.match(privacy, /Last updated: October 19, 2026/)
-  assert.match(privacy, /Sist oppdatert: 19. oktober 2026/)
+  assert.match(privacy, /Last updated: November 20, 2026/)
+  assert.match(privacy, /Sist oppdatert: 20. november 2026/)
 })
 
 test('one localized helper is reused for user-created free text', () => {
