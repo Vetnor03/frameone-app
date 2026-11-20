@@ -4853,7 +4853,7 @@ function ConnectAppsScreen({
           )}
           {!showConnectPlaceholders && sortedApps.map(({ app, connected }) => {
             const waitingForVerification = connected && !startup && verifiedConnectionStatus[app.key] === undefined
-            const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : app.key === 'google-calendar' ? integrationSetupErrors['google-calendar'] : app.key === 'todoist' ? integrationSetupErrors.todoist : app.key === 'microsoft-todo' ? integrationSetupErrors['microsoft-todo'] : null
+            const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : app.key === 'google-calendar' ? integrationSetupErrors['google-calendar'] : app.key === 'todoist' ? integrationSetupErrors.todoist : app.key === 'microsoft-todo' ? integrationSetupErrors['microsoft-todo'] : app.key === 'google-tasks' ? integrationSetupErrors['google-tasks'] : null
             const localEventsSelectedName = localEventsSavedArea ? (localEventsSavedArea.placeLabel || getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || '') : null
             const description = app.key === 'local-events' && localEventsSyncIssue
               ? (language === 'no' ? `Events valgt, men ingen synkronisering ennå: ${localEventsSyncIssue}` : `Events selected but not synced yet: ${localEventsSyncIssue}`)
@@ -4862,8 +4862,8 @@ function ConnectAppsScreen({
               : app.key === 'bonnetid' && bonnetidCity
               ? (language === 'no' ? 'Bønnetider for ' : 'Prayer times for ') + bonnetidCity
               : app.description
-            const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar' || app.key === 'todoist' || app.key === 'microsoft-todo'
-            const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : app.key === 'todoist' ? todoistAccount : app.key === 'microsoft-todo' ? microsoftTodoAccount : null
+            const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar' || app.key === 'todoist' || app.key === 'microsoft-todo' || app.key === 'google-tasks'
+            const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : app.key === 'todoist' ? todoistAccount : app.key === 'microsoft-todo' ? microsoftTodoAccount : app.key === 'google-tasks' ? googleTasksAccount : null
             return (
               <div
                 key={app.key}
@@ -4924,7 +4924,7 @@ function ConnectAppsScreen({
                       <button
                         type="button"
                         onClick={() => setDisconnectConfirmApp(app.key as DisconnectableConnectAppKey)}
-                        disabled={waitingForVerification || disconnectingApp === app.key || (app.key === 'spond' && spondLoading) || (app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading) || (app.key === 'todoist' && todoistLoading) || (app.key === 'microsoft-todo' && microsoftTodoLoading)}
+                        disabled={waitingForVerification || disconnectingApp === app.key || (app.key === 'spond' && spondLoading) || (app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading) || (app.key === 'todoist' && todoistLoading) || (app.key === 'microsoft-todo' && microsoftTodoLoading) || (app.key === 'google-tasks' && googleTasksLoading)}
                         className="shrink-0 h-8 rounded-xl border border-[#d94b4b]/35 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60"
                       >
                         {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
@@ -4937,7 +4937,7 @@ function ConnectAppsScreen({
                   ) : (
                     <button
                       type="button"
-                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved) || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved)) || (app.key === 'todoist' && (todoistLoading || !todoistStatusResolved)) || (app.key === 'microsoft-todo' && (microsoftTodoLoading || !microsoftTodoStatusResolved))}
+                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved) || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved)) || (app.key === 'todoist' && (todoistLoading || !todoistStatusResolved)) || (app.key === 'microsoft-todo' && (microsoftTodoLoading || !microsoftTodoStatusResolved)) || (app.key === 'google-tasks' && (googleTasksLoading || !googleTasksStatusResolved))}
                       onClick={() => {
                         if (app.key === 'spond') {
                           if (spondAccountConnected) { setSpondConnected(true); changeFrameIntegration('spond', { enabled: true }) }
@@ -4956,6 +4956,12 @@ function ConnectAppsScreen({
                             updateConnectionDisplayStatus('microsoft-todo', true)
                             window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
                           } else void connectMicrosoftTodo()
+                        } else if (app.key === 'google-tasks') {
+                          if (googleTasksAccountConnected) {
+                            changeFrameIntegration('google-tasks', { enabled: true })
+                            updateConnectionDisplayStatus('google-tasks', true)
+                            window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
+                          } else void connectGoogleTasks()
                         } else if (app.key === 'todoist') {
                           if (todoistAccountConnected) {
                             changeFrameIntegration('todoist', { enabled: true })
@@ -4975,9 +4981,9 @@ function ConnectAppsScreen({
                     >
                       {app.key === 'local-events'
                         ? (language === 'no' ? 'KOBLE TIL' : 'CONNECT')
-                        : (app.key === 'google-calendar' && !googleStatusResolved) || (app.key === 'teams' && !teamsStatusResolved) || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved) || (app.key === 'todoist' && !todoistStatusResolved) || (app.key === 'microsoft-todo' && !microsoftTodoStatusResolved)
+                        : (app.key === 'google-calendar' && !googleStatusResolved) || (app.key === 'teams' && !teamsStatusResolved) || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved) || (app.key === 'todoist' && !todoistStatusResolved) || (app.key === 'microsoft-todo' && !microsoftTodoStatusResolved) || (app.key === 'google-tasks' && !googleTasksStatusResolved)
                           ? (language === 'no' ? 'SJEKKER…' : 'CHECKING…')
-                          : ((app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading) || (app.key === 'todoist' && todoistLoading) || (app.key === 'microsoft-todo' && microsoftTodoLoading))
+                          : ((app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading) || (app.key === 'todoist' && todoistLoading) || (app.key === 'microsoft-todo' && microsoftTodoLoading) || (app.key === 'google-tasks' && googleTasksLoading))
                             ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…')
                             : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
                     </button>
@@ -11608,7 +11614,7 @@ type ReminderRepeatKey =
   | 'custom'
 
 type ReminderTag = 'work' | 'personal' | 'sports' | 'chores' | 'event'
-type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'todoist' | 'microsoft-todo' | 'waste' | 'local-events' | 'bonnetid'
+type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'todoist' | 'microsoft-todo' | 'google-tasks' | 'waste' | 'local-events' | 'bonnetid'
 type ReminderSourceFilter = ReminderSource
 
 type ReminderUiItem = {
@@ -11712,7 +11718,7 @@ function isReminderTag(v: any): v is ReminderTag {
 function integrationProviderToReminderSource(provider: any): ReminderSource | null {
   const value = String(provider ?? '').trim().toLowerCase()
   if (value === 'edge-of-norway') return 'local-events'
-  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'todoist' || value === 'microsoft-todo' || value === 'waste' || value === 'bonnetid') return value
+  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'todoist' || value === 'microsoft-todo' || value === 'google-tasks' || value === 'waste' || value === 'bonnetid') return value
   return null
 }
 
@@ -11749,7 +11755,7 @@ function integrationReminderTitle(row: any, source: ReminderSource, language: Ap
 function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
   if (source === 'teams') return 'work'
   if (source === 'google-calendar') return 'event'
-  if (source === 'todoist' || source === 'microsoft-todo') return 'personal'
+  if (source === 'todoist' || source === 'microsoft-todo' || source === 'google-tasks') return 'personal'
   if (source === 'spond') return 'sports'
   if (source === 'waste') return 'chores'
   if (source === 'local-events') return 'event'
@@ -11762,6 +11768,7 @@ function integrationReminderSourceLabel(language: AppLanguage, source?: Reminder
   if (source === 'google-calendar') return 'Google Calendar'
   if (source === 'todoist') return 'Todoist'
   if (source === 'microsoft-todo') return 'Microsoft To Do'
+  if (source === 'google-tasks') return 'Google Tasks'
   if (source === 'spond') return 'Spond'
   if (source === 'waste') return language === 'no' ? 'Renovasjon' : 'Waste'
   if (source === 'local-events') return 'Events'
@@ -15661,7 +15668,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           const source = integrationProviderToReminderSource(connection.provider)
           if (source) connectedSources.add(source)
         }
-        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'todoist', 'microsoft-todo', 'spond', 'local-events', 'waste', 'bonnetid'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
+        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'todoist', 'microsoft-todo', 'google-tasks', 'spond', 'local-events', 'waste', 'bonnetid'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
         // Provider chips do not depend on potentially slow upstream event refreshes.
         if (generation !== requestGenerationRef.current) return
         setAvailableSources(nextAvailableSources)
@@ -15727,6 +15734,20 @@ const manualItems: ReminderUiItem[] = (data || [])
           }
         }
 
+        if (isActive && !skipProviderSync && connectedSources.has('google-tasks')) {
+          try {
+            const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+            if (token) {
+              const response = await fetch('/api/integrations/google-tasks/sync', {
+                method: 'POST', headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
+              })
+              if (!response.ok) console.warn('[reminders] Google Tasks refresh failed', response.status)
+            }
+          } catch (error) {
+            console.warn('[reminders] Google Tasks refresh failed', error)
+          }
+        }
+
         if (isActive && !skipProviderSync && connectedSources.has('bonnetid')) {
           // Render the saved timetable now. A stale-provider sync can involve
           // multiple upstream requests and must never block the source chip.
@@ -15756,9 +15777,9 @@ const manualItems: ReminderUiItem[] = (data || [])
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
-          .in('provider', ['spond', 'teams', 'google-calendar', 'todoist', 'microsoft-todo', 'waste', 'edge-of-norway', 'bonnetid'])
+          .in('provider', ['spond', 'teams', 'google-calendar', 'todoist', 'microsoft-todo', 'google-tasks', 'waste', 'edge-of-norway', 'bonnetid'])
           .or(activeDeviceId ? `user_id.eq.${sessionUserId},device_id.eq.${activeDeviceId}` : `user_id.eq.${sessionUserId}`)
-          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.bonnetid,provider.eq.todoist,provider.eq.microsoft-todo`)
+          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.bonnetid,provider.eq.todoist,provider.eq.microsoft-todo,provider.eq.google-tasks`
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (integrationError) {
