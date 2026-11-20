@@ -15779,7 +15779,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           .select('id, provider, external_id, title, starts_at, due_at, raw')
           .in('provider', ['spond', 'teams', 'google-calendar', 'todoist', 'microsoft-todo', 'google-tasks', 'waste', 'edge-of-norway', 'bonnetid'])
           .or(activeDeviceId ? `user_id.eq.${sessionUserId},device_id.eq.${activeDeviceId}` : `user_id.eq.${sessionUserId}`)
-          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.bonnetid,provider.eq.todoist,provider.eq.microsoft-todo,provider.eq.google-tasks`
+          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.bonnetid,provider.eq.todoist,provider.eq.microsoft-todo,provider.eq.google-tasks`)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (integrationError) {
