@@ -1,30 +1,40 @@
-# Bønnetid (IRN) — Experimental
+# IRN — Norwegian prayer times (official PostgREST API)
 
-Bønnetid appears **last among connectable integrations**, immediately before apps under evaluation. A user selects an official city from IRN's provider list and an explicit Asr shadow method (**1x or 2x**), and the connection is shared at account level. After connection, the button becomes **Disconnect**; **Change city** remains available.
+The account-level integration keeps provider id `bonnetid` to preserve existing IRN Reminders filters, frame configuration, and user connections. It remains Experimental until the live authenticated endpoint is validated.
 
-Prayer times and future official IRN calendar events share the **IRN** source filter in Reminders, and as ordinary dated events on the physical frame when enabled for that frame. They are stored in `integration_items`, **not** in user-created `reminders` (the personal 20-item limit is unaffected). Only future times are displayed, with app time filtering updated at minute boundaries. Sunrise (IRN's `shuruq_sunrise`) is included when returned by the official API. Maghrib is used for sunset unless IRN returns a distinct sunset field. Disconnect removes all stored IRN items.
+## Secret configuration
 
-## Deployment prerequisite
+Configure **both** sensitive server-only Vercel environment variables in Preview / Production:
 
-IRN's Zebra API requires a licensed `Api-Token`. Configure server-side `BONNETID_API_TOKEN` in the deployment environment **only after authorization from IRN**. Never expose it in `NEXT_PUBLIC_` variables, frontend assets, source control, screenshots or logs.
+- `IRN_API_KEY` — exact IRN `apikey` header value
+- `IRN_AUTHORIZATION` — complete IRN `Authorization` header value (including `Bearer ` prefix if supplied)
 
-* Official API: https://api.bonnetid.no/
-* City list: `GET /meta/locations/`
-* Monthly timetable: `GET /meta/prayertimes/{location_id}/{year}/{month}/`
-* Alternate monthly collection: `GET /prayertimes/{location_id}/{year}/{month}/` (the final segment on the detail endpoint is a record ID, not the day of month)
+Never use a `NEXT_PUBLIC_` key, commit secrets, reveal secrets in logs/errors, or expose the upstream endpoint to the client. After editing environment variables, deploy again so the new deployment receives them.
 
-This integration intentionally **fails closed** when token is missing or data cannot be verified. It must not invent times, select a location automatically, or use a third-party prayer calculation with potentially different results. Connection only succeeds once official times have been fetched and stored.
+## Official upstream
 
-Times are normalized as Norway-local wall clock and converted to instants using `Europe/Oslo` (DST-aware); the selected Asr method controls both the API query and which of the 1x / 2x fields is used. New connections require an explicit method selection; existing connections continue to default to the previous 2x behavior. Upstream responses are not yet validated against a licensed production account; confirm schema, method and rate limits with IRN before promoting from Experimental.
+Base: `https://disp-api.bonnetider.eu/rest/v1/`
 
-Server refresh is debounced to 12 hours and can be triggered by an active Reminders tab or deferred physical-frame refresh. The initial cache covers ten calendar days. No end-user credentials are requested.
+- `GET location_t?select=location_iso,fylke_name,location_name,prayer_method,asr_method`: Norwegian municipalities with ISO codes such as `NO3201` and their official calculation settings. No favorites or automatic location selection.
+- `GET prayertime?select=date,location_iso,prayer_method,fajr,duhr,asr,maghrib,isha&and=(date.gte.YYYY-MM-DD,date.lte.YYYY-MM-DD)&location_iso=eq.NO3201&prayer_method=eq.3`: one server-side request for a rolling ten-day window. Five daily prayer entries only; the chosen city's `prayer_method` comes from IRN. No client-selected Asr multiplier: this endpoint returns the official `asr` field for its method.
+- The provider also documents `hijri_dates`, `hijri_month`, `hijri_yearly_events`, `hijri_date_mapping`, `mosque_t`, `mosque_jamatperiode`, and `mosque_jummah`. **Not yet imported**; event title / row structure has not been provided or validated. Never guess religious dates or represent incomplete calendar support as live.
 
-The physical Reminders integration uses its existing hard reminder-time scheduler. Each prayer event at an exact minute prompts the next scheduled frame wake in both modes, without adding another polling loop. IRN names are retained verbatim and excluded from AI title rewriting.
+The source returns Norway-local clock times. We convert them to UTC instants with `Europe/Oslo` (DST-aware) before storing.
 
-## Future official calendar support
+## Sync and display
 
-Keep the internal provider ID `bonnetid` for existing connections, settings and saved events; only its user-facing Reminders source label becomes **IRN**. All IRN prayer times, holidays and provider events belong to that one filter.
+User connects by selecting a municipality (no technical method selection). The backend fetches and verifies the ten-day prayer schedule before marking the integration connected, and refreshes at most every 12 hours per connected account. A stale refresh re-reads IRN's location settings in case its prayer method changes.
 
-The feed accepts authoritative `raw.source = 'bonnetid'` records of `raw.type = 'prayer_time' | 'holiday' | 'event'`. A holiday with an official `raw.date = 'YYYY-MM-DD'` is all-day and persists through the entire date. Timed events with `starts_at` expire at the start minute. A prayer refresh only removes expired `prayer_time` records, preserving other official IRN calendar items. Disconnect removes all provider items.
+Prayers go to `integration_items`, not personal `reminders`, so the user's 20-reminder limit is unaffected. Prayer events are displayed only until their exact due minute and remain eligible for physical frame hard-wake boundaries. All IRN items share the existing IRN filter; no second filtering namespace.
 
-**Still pending:** IRN holiday/activities API permission, documented response schema and data import. Their public product has a Hijri calendar and events, but we have not verified a programmatic calendar endpoint. Never generate guessed religious dates or claim the holiday import is live. Future external IDs must be namespaced to avoid collisions with prayer IDs.
+A successful refresh upserts official prayer items and deletes only previous `raw.type = 'prayer_time'` items that were not returned. It does not delete official calendar/holiday items, which will be added in a later step. Disconnect removes all provider items.
+
+## Verification checklist
+
+- Preview deployment includes both sensitive variables without showing their values.
+- Authenticated Connect → IRN lists Norwegian municipalities and includes Oslo, Bærum etc. Return `NO3201` for Bærum, not numeric city IDs from the legacy Zebra API.
+- A selected city connects only if today's five complete official prayers are returned.
+- For Bærum on 2026-11-20 using prayer method 3, IRN's sample response has Fajr 06:11, Dhuhr 12:08, Asr 13:46, Maghrib 15:44 and Isha 17:46. Verify against the live response, not hardcoded fallbacks.
+- Events render in the existing IRN reminder filter and on frames, and are filtered after their minute boundary.
+- On failure, no invented times, no client-side API credentials, and no imported holidays claimed.
+- Existing old numeric city connections must explicitly reconnect with the new official `NO####` code.
