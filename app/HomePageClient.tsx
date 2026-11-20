@@ -3787,7 +3787,6 @@ function ConnectAppsScreen({
   const [bonnetidModalOpen, setBonnetidModalOpen] = useState(false)
   const [bonnetidConnected, setBonnetidConnected] = useState(false)
   const [bonnetidCity, setBonnetidCity] = useState<string | null>(null)
-  const [bonnetidAsrMethod, setBonnetidAsrMethod] = useState<1 | 2>(2)
   const [bonnetidStatusResolved, setBonnetidStatusResolved] = useState(false)
   useEffect(() => {
     let cancelled = false
@@ -3807,7 +3806,6 @@ function ConnectAppsScreen({
         setBonnetidConnected(json.connected === true)
         updateConnectionDisplayStatus('bonnetid', json.connected === true)
         setBonnetidCity(typeof json.city === 'string' ? json.city : null)
-        setBonnetidAsrMethod(json.asrMethod === 1 ? 1 : 2)
         setLocallyDisconnectedApps(current => ({ ...current, bonnetid: false }))
         setBonnetidStatusResolved(true)
       }
@@ -4560,7 +4558,7 @@ function ConnectAppsScreen({
               : app.key === 'local-events' && localEventsSelectedName
               ? (language === 'no' ? `Arrangementer nær ${localEventsSelectedName}` : `Events near ${localEventsSelectedName}`)
               : app.key === 'bonnetid' && bonnetidCity
-              ? (language === 'no' ? 'Bønnetider for ' : 'Prayer times for ') + bonnetidCity + ' · Asr ' + bonnetidAsrMethod + 'x'
+              ? (language === 'no' ? 'Bønnetider for ' : 'Prayer times for ') + bonnetidCity
               : app.description
             const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar'
             const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : null
@@ -4754,8 +4752,8 @@ function ConnectAppsScreen({
 
       {localEventsOpen && renderLocalEventsModal()}
       {wasteModalOpen && <WasteSetupModal language={language} onClose={() => setWasteModalOpen(false)} onSaved={(connected) => { setWasteConnected(connected); updateConnectionDisplayStatus('waste', connected); setLocallyDisconnectedApps(current => ({ ...current, waste: false })); changeFrameIntegration('waste', { enabled: connected }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }} />}
-      {bonnetidModalOpen && <BonnetidSetupModal language={language} currentCity={bonnetidCity} currentAsrMethod={bonnetidAsrMethod} onClose={() => setBonnetidModalOpen(false)} onSaved={(connected, city, asrMethod) => {
-        setBonnetidConnected(connected); updateConnectionDisplayStatus('bonnetid', connected); setBonnetidCity(city); setBonnetidAsrMethod(asrMethod);
+      {bonnetidModalOpen && <BonnetidSetupModal language={language} currentCity={bonnetidCity} onClose={() => setBonnetidModalOpen(false)} onSaved={(connected, city) => {
+        setBonnetidConnected(connected); updateConnectionDisplayStatus('bonnetid', connected); setBonnetidCity(city);
         setLocallyDisconnectedApps(current => ({ ...current, bonnetid: false }));
         changeFrameIntegration('bonnetid', { enabled: connected });
         window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))

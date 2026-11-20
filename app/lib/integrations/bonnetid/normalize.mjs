@@ -118,3 +118,40 @@ export function bonnetidLocalToIso(date, time) {
   if (p.year + '-' + p.month + '-' + p.day !== date || p.hour + ':' + p.minute !== normalized) return null
   return new Date(instant).toISOString()
 }
+
+
+// Official IRN PostgREST API (disp-api.bonnetider.eu), distinct from the old Zebra API.
+// No prayer calculation or guessing: accept only published city settings and complete days.
+export function normalizeIrnLocations(payload) {
+  if (!Array.isArray(payload)) return []
+  const seen = new Set()
+  return payload.map(value => {
+    const row = record(value)
+    const id = String(row.location_iso ?? '').trim().toUpperCase()
+    const name = String(row.location_name ?? '').trim()
+    const prayerMethod = Number(row.prayer_method)
+    const asrMethod = String(row.asr_method ?? '').trim()
+    if (!/^NO[0-9]{4}$/.test(id) || !name || ![2, 3].includes(prayerMethod) || seen.has(id)) return null
+    seen.add(id)
+    return { id, name, prayerMethod, asrMethod }
+  }).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name, 'nb-NO'))
+}
+
+export function normalizeIrnPrayerRows(payload, city, dates) {
+  if (!Array.isArray(payload) || !city || !Array.isArray(dates)) return []
+  const allowedDates = new Set(dates)
+  const validLocation = String(city.id ?? '')
+  const validMethod = Number(city.prayerMethod)
+  if (!/^NO[0-9]{4}$/.test(validLocation) || ![2, 3].includes(validMethod)) return []
+  const byDate = new Map()
+  for (const value of payload) {
+    const row = record(value)
+    const date = String(row.date ?? '')
+    if (!allowedDates.has(date) || row.location_iso !== validLocation || Number(row.prayer_method) !== validMethod) continue
+    const prayers = normalizeBonnetidDay(row, date)
+    // The published prayer table has only five daily prayers; no invented sunrise/sunset.
+    if (prayers.length !== 5 || byDate.has(date)) continue
+    byDate.set(date, prayers)
+  }
+  return dates.flatMap(date => byDate.get(date) ?? [])
+}
