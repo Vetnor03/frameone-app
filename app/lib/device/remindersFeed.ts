@@ -271,10 +271,13 @@ export function buildTodoistReminderItems(
     if (!title || !externalId) return []
     const allDay = row.raw.all_day === true
     const rawDate = typeof row.raw.date === 'string' ? row.raw.date : ''
-    const occurrenceDate = allDay && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
+    const floatingTime = typeof row.raw.floating_time === 'string' && /^\d{2}:\d{2}$/.test(row.raw.floating_time)
+      ? row.raw.floating_time : null
+    const floatingDate = floatingTime && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null
+    const occurrenceDate = (allDay && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)) || floatingDate
       ? rawDate : row.starts_at ? isoToYmdInTimeZone(row.starts_at, timeZone) : null
     if (!occurrenceDate || occurrenceDate > horizonEndYmd || (!includeOverdue && occurrenceDate < todayYmd)) return []
-    const displayTime = allDay || !row.starts_at ? null : isoToHmInTimeZone(row.starts_at, timeZone)
+    const displayTime = allDay ? null : floatingTime || (row.starts_at ? isoToHmInTimeZone(row.starts_at, timeZone) : null)
     const daysUntil = diffDaysFromYmd(todayYmd, occurrenceDate)
     return [{
       reminder_id: 'todoist:' + externalId,
