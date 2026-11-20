@@ -81,7 +81,7 @@ test('Google Tasks rejects an incomplete upstream page rather than silently losi
       if (url.pathname.endsWith('/users/@me/lists')) return Response.json({ items: [{ id: 'first' }] })
       return Response.json({ error: 'upstream unavailable' }, { status: 503 })
     }
-    await assert.rejects(fetchGoogleTaskListsAndTasks('token'), /Google Tasks API failed \\(503\\)/)
+    await assert.rejects(fetchGoogleTaskListsAndTasks('token'), /Google Tasks API failed \(503\)/)
   } finally {
     globalThis.fetch = previousFetch
   }
