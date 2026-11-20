@@ -14,8 +14,16 @@ test('Microsoft To Do preserves reminder time on the due date with DST', () => {
     id:'42',title:'Submit report',dueDateTime:due('2026-11-21T00:00:00'),
     isReminderOn:true,reminderDateTime:due('2026-11-21T14:30:00')
   },'list',{timeZone:'Europe/Oslo'})
-  assert.equal(task.raw.floating_time,'14:30')
+  assert.equal(task.raw.all_day,false)
+  assert.equal(task.raw.floating_time,undefined)
   assert.equal(task.starts_at,'2026-11-21T13:30:00.000Z')
+})
+test('UTC task times must not be interpreted as floating local times', () => {
+  const task=normalizeMicrosoftTodoTask({
+    id:'utc',title:'Call',dueDateTime:due('2026-11-21T14:00:00','UTC')
+  },'list',{timeZone:'Europe/Oslo'})
+  assert.equal(task.starts_at,'2026-11-21T14:00:00.000Z')
+  assert.equal(task.raw.floating_time,undefined)
 })
 test('different due dates and reminder dates do not change the due date', () => {
   const task = normalizeMicrosoftTodoTask({
