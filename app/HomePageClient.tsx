@@ -3660,7 +3660,7 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'bonnetid'
+type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'todoist' | 'waste' | 'bonnetid'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -11392,7 +11392,7 @@ type ReminderRepeatKey =
   | 'custom'
 
 type ReminderTag = 'work' | 'personal' | 'sports' | 'chores' | 'event'
-type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'waste' | 'local-events' | 'bonnetid'
+type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'todoist' | 'waste' | 'local-events' | 'bonnetid'
 type ReminderSourceFilter = ReminderSource
 
 type ReminderUiItem = {
@@ -11496,7 +11496,7 @@ function isReminderTag(v: any): v is ReminderTag {
 function integrationProviderToReminderSource(provider: any): ReminderSource | null {
   const value = String(provider ?? '').trim().toLowerCase()
   if (value === 'edge-of-norway') return 'local-events'
-  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'waste' || value === 'bonnetid') return value
+  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'todoist' || value === 'waste' || value === 'bonnetid') return value
   return null
 }
 
@@ -11528,6 +11528,7 @@ function integrationReminderTitle(row: any, source: ReminderSource, language: Ap
 function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
   if (source === 'teams') return 'work'
   if (source === 'google-calendar') return 'event'
+  if (source === 'todoist') return 'personal'
   if (source === 'spond') return 'sports'
   if (source === 'waste') return 'chores'
   if (source === 'local-events') return 'event'
@@ -11538,6 +11539,7 @@ function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
 function integrationReminderSourceLabel(language: AppLanguage, source?: ReminderSource) {
   if (source === 'teams') return 'Teams'
   if (source === 'google-calendar') return 'Google Calendar'
+  if (source === 'todoist') return 'Todoist'
   if (source === 'spond') return 'Spond'
   if (source === 'waste') return language === 'no' ? 'Renovasjon' : 'Waste'
   if (source === 'local-events') return 'Events'
@@ -15437,7 +15439,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           const source = integrationProviderToReminderSource(connection.provider)
           if (source) connectedSources.add(source)
         }
-        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste', 'bonnetid'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
+        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'todoist', 'spond', 'local-events', 'waste', 'bonnetid'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
         // Provider chips do not depend on potentially slow upstream event refreshes.
         if (generation !== requestGenerationRef.current) return
         setAvailableSources(nextAvailableSources)
@@ -15475,6 +15477,20 @@ const manualItems: ReminderUiItem[] = (data || [])
           }
         }
 
+        if (isActive && !skipProviderSync && connectedSources.has('todoist')) {
+          try {
+            const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+            if (token) {
+              const response = await fetch('/api/integrations/todoist/sync', {
+                method: 'POST', headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
+              })
+              if (!response.ok) console.warn('[reminders] Todoist refresh failed', response.status)
+            }
+          } catch (error) {
+            console.warn('[reminders] Todoist refresh failed', error)
+          }
+        }
+
         if (isActive && !skipProviderSync && connectedSources.has('bonnetid')) {
           // Render the saved timetable now. A stale-provider sync can involve
           // multiple upstream requests and must never block the source chip.
@@ -15504,9 +15520,9 @@ const manualItems: ReminderUiItem[] = (data || [])
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
-          .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway', 'bonnetid'])
+          .in('provider', ['spond', 'teams', 'google-calendar', 'todoist', 'waste', 'edge-of-norway', 'bonnetid'])
           .or(activeDeviceId ? `user_id.eq.${sessionUserId},device_id.eq.${activeDeviceId}` : `user_id.eq.${sessionUserId}`)
-          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.bonnetid`)
+          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.bonnetid,provider.eq.todoist`)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (integrationError) {
