@@ -63,7 +63,7 @@ test('Unconnected apps sort alphabetically with Done, Experimental and Under Eva
     connected: false,
   }))
   assert.deepEqual(sortConnectedAppsFirst(apps).map(item => item.app.key), [
-    'google-calendar', 'bonnetid', 'local-events', 'teams', // available / Done
+    'google-calendar', 'bonnetid', 'local-events', 'teams', 'todoist', // available / Done
     'waste', 'spond', // experimental: Renovasjon before Spond
     'planta', 'transponder', 'vigilo', // under evaluation
   ])
