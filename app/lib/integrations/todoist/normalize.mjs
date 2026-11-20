@@ -60,7 +60,7 @@ export function normalizeTodoistTask(task, options = {}) {
     starts_at: startsAt.toISOString(), due_at: startsAt.toISOString(),
     priority: 0,
     raw: {
-      source: 'todoist', type: 'task', all_day,
+      source: 'todoist', type: 'task', all_day: allDay,
       date: allDay || floating ? date : null,
       ...(floating ? { floating_time: floatingSource.slice(11, 16) } : {}),
       recurring: due?.is_recurring === true,
