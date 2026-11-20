@@ -23,6 +23,18 @@ export default function BonnetidSetupModal({ language, currentCity, onClose, onS
     cities.filter(city => city.name.toLocaleLowerCase('nb-NO').includes(query.trim().toLocaleLowerCase('nb-NO'))).slice(0, 60),
     [cities, query])
 
+  // The selected city is the canonical visible value. Never keep the typing
+  // fragment alongside it (e.g. "erStavanger" from late mobile input events).
+  const visibleCity = selected?.name ?? query
+  function selectCity(city: City) {
+    setSelected(city)
+    setQuery('')
+  }
+  function editCity() {
+    setSelected(null)
+    setQuery('')
+  }
+
   useEffect(() => {
     let alive = true
     void (async () => {
@@ -52,7 +64,7 @@ export default function BonnetidSetupModal({ language, currentCity, onClose, onS
       })
       const json = await response.json()
       if (!response.ok) throw new Error(json.error || 'Could not connect IRN')
-      onSaved(true, json.city || selected.name)
+      onSaved(true, selected.name)
       onClose()
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not connect IRN') }
     finally { setSaving(false) }
@@ -74,15 +86,34 @@ export default function BonnetidSetupModal({ language, currentCity, onClose, onS
       </p>
       {currentCity && <p className="mt-2 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Nåværende lokasjon' : 'Current location'}: {currentCity}</p>}
       <label htmlFor="bonnetid-city-search" className="mt-5 block text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'VELG LOKASJON' : 'CHOOSE LOCATION'}</label>
-      <input id="bonnetid-city-search" value={query} onChange={event => { setQuery(event.target.value); setSelected(null) }} placeholder={language === 'no' ? 'Søk etter kommune' : 'Search for a municipality'} className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-3 text-base" />
-      {loading ? <p className="mt-3 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Henter lokasjoner…' : 'Loading locations…'}</p> : (
+      <div className="mt-2 flex items-center gap-2">
+        <input
+          id="bonnetid-city-search"
+          type="search"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          readOnly={!!selected}
+          value={visibleCity}
+          onChange={event => { if (!selected) setQuery(event.target.value) }}
+          placeholder={language === 'no' ? 'Søk etter kommune' : 'Search for a municipality'}
+          className="h-11 min-w-0 flex-1 rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-3 text-base"
+        />
+        {selected && (
+          <button type="button" onClick={editCity} className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-3 text-xs text-[color:var(--fg-70)]">
+            {language === 'no' ? 'ENDRE' : 'CHANGE'}
+          </button>
+        )}
+      </div>
+      {!selected && (loading ? <p className="mt-3 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Henter lokasjoner…' : 'Loading locations…'}</p> : (
         <div className="mt-2 max-h-56 overflow-y-auto rounded-2xl border border-[color:var(--bd-15)]">
-          {filtered.map(city => <button key={city.id} type="button" onClick={() => { setSelected(city); setQuery(city.name) }} className={'block w-full border-b border-[color:var(--bd-10)] px-3 py-3 text-left text-sm last:border-b-0 ' + (selected?.id === city.id ? 'text-[#2aa3ff]' : 'text-[color:var(--fg-80)]')}>{city.name}</button>)}
+          {filtered.map(city => <button key={city.id} type="button" onClick={() => selectCity(city)} className="block w-full border-b border-[color:var(--bd-10)] px-3 py-3 text-left text-sm text-[color:var(--fg-80)] last:border-b-0">{city.name}</button>)}
           {!filtered.length && !error && <p className="px-3 py-4 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Ingen lokasjoner funnet' : 'No locations found'}</p>}
         </div>
-      )}
+      ))}
       {error && <div role="alert" className="mt-3 rounded-xl bg-[#d94b4b]/10 p-3 text-xs text-[#ff7a7a]">{error}{!saving && <button type="button" onClick={() => setRetry(value => value + 1)} className="ml-2 underline">{language === 'no' ? 'Prøv igjen' : 'Retry'}</button>}</div>}
-      <p className="mt-3 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Eksperimentell integrasjon · offisielle bønnetider fra IRN' : 'Experimental integration · official prayer times from IRN'}</p>
+      <p className="mt-3 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Offisielle bønnetider og merkedager fra IRN' : 'Official prayer times and occasions from IRN'}</p>
     </AppSheet>
   )
 }
