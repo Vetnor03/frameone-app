@@ -1,6 +1,6 @@
 export type IntegrationStatus = 'available' | 'experimental' | 'under-evaluation'
 
-export type ConnectAppKey = 'waste' | 'teams' | 'google-calendar' | 'local-events' | 'spond' | 'vigilo' | 'transponder' | 'planta' | 'bonnetid'
+export type ConnectAppKey = 'waste' | 'teams' | 'google-calendar' | 'local-events' | 'spond' | 'vigilo' | 'transponder' | 'planta' | 'bonnetid' | 'homey'
 
 export type IntegrationDefinition = {
   key: ConnectAppKey
@@ -21,6 +21,7 @@ export const INTEGRATION_CATALOGUE: readonly IntegrationDefinition[] = [
   { key: 'vigilo', name: { en: 'Vigilo', no: 'Vigilo' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },
   { key: 'transponder', name: { en: 'Transponder', no: 'Transponder' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },
   { key: 'planta', name: { en: 'PLANTA', no: 'PLANTA' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },
+  { key: 'homey', name: { en: 'Homey', no: 'Homey' }, description: { en: 'Read-only smart home sensors and energy data — in evaluation', no: 'Smarthussensorer og energidata (kun visning) – under vurdering' }, status: 'under-evaluation', connectable: false },
 ]
 
 export function integrationStatusLabel(status: IntegrationStatus, language: 'en' | 'no') {
