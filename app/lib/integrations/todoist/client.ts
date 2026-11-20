@@ -109,7 +109,7 @@ export async function fetchTodoistTasks(token: string): Promise<TodoistTask[]> {
     const url = new URL(API + '/tasks')
     url.searchParams.set('limit', '200')
     if (cursor) url.searchParams.set('cursor', cursor)
-    const data: { results?: TodoistTask[]; next_cursor?: string | null } = await todoistGet(url.pathname + url.search, token)
+    const data: { results?: TodoistTask[]; next_cursor?: string | null } = await todoistGet('/tasks' + url.search, token)
     if (!Array.isArray(data.results)) throw new Error('Unexpected Todoist tasks response')
     for (const task of data.results) {
       if (typeof task?.id === 'string' && task.id) byId.set(task.id, task)
