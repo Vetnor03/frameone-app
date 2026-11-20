@@ -6,8 +6,9 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsIfStaleForUser } from '@/app/lib/integrations/teams/server'
 import { syncGoogleCalendarFromStoredConnection } from '@/app/lib/integrations/google-calendar/server'
+import { syncTodoistFromStoredConnection } from '@/app/lib/integrations/todoist/server'
 import { syncBonnetidIfStale } from '@/app/lib/integrations/bonnetid/server'
-import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildWasteCollectionItems, buildIrnReminderItems, preferTomorrowAfterSingleAllDayEvent, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
+import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildTodoistReminderItems, buildWasteCollectionItems, buildIrnReminderItems, preferTomorrowAfterSingleAllDayEvent, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
 import { reminderClockBoundaryReached } from '@/app/lib/device/reminderClockBoundary'
@@ -649,6 +650,7 @@ export async function GET(req: Request) {
     let spondItems: DeviceReminderItem[] = []
     let teamsItems: DeviceReminderItem[] = []
     let googleCalendarItems: DeviceReminderItem[] = []
+    let todoistItems: DeviceReminderItem[] = []
     let wasteItems: DeviceReminderItem[] = []
     let bonnetidItems: DeviceReminderItem[] = []
     let localEventItems: DeviceReminderItem[] = []
@@ -674,6 +676,7 @@ export async function GET(req: Request) {
             providerEnabled('spond') ? syncSpondIfStaleForUsers(memberUserIds) : Promise.resolve(),
             Promise.allSettled((providerEnabled('teams') ? memberUserIds : []).map((userId) => syncTeamsIfStaleForUser(userId, { horizonDays }))),
             Promise.allSettled((providerEnabled('google-calendar') ? memberUserIds : []).map((userId) => syncGoogleCalendarFromStoredConnection(userId))),
+            Promise.allSettled((selectedIntegrations.todoist?.enabled === true ? memberUserIds : []).map((userId) => syncTodoistFromStoredConnection(userId))),
             Promise.allSettled((providerEnabled('bonnetid') ? memberUserIds : []).map(userId => syncBonnetidIfStale(userId))),
           ])
           syncResults.forEach((result) => {
@@ -738,6 +741,19 @@ export async function GET(req: Request) {
         )
       } catch (error) {
         logOptionalReminderProviderFailure('google-calendar', error)
+      } })(), (async () => { try {
+        // Home-screen task widgets are opt-in per frame, including legacy frames.
+        if (selectedIntegrations.todoist?.enabled !== true) return
+        const { data, error } = await supabase.from('integration_items')
+          .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
+          .eq('provider', 'todoist').in('user_id', memberUserIds)
+          .order('starts_at', { ascending: true, nullsFirst: false })
+        if (error) throw error
+        todoistItems = buildTodoistReminderItems(
+          Array.isArray(data) ? data as IntegrationItemRow[] : [], todayYmd, horizonEndYmd, timeZone, includeOverdue
+        )
+      } catch (error) {
+        logOptionalReminderProviderFailure('todoist', error)
       } })(), (async () => { try {
         if (!integrationActiveForPilot('waste') || !providerEnabled('waste')) return
 
@@ -832,6 +848,7 @@ export async function GET(req: Request) {
       ...spondItems,
       ...teamsItems,
       ...googleCalendarItems,
+      ...todoistItems,
       ...wasteItems,
       ...bonnetidItems,
       ...localEventItems,
