@@ -43,10 +43,16 @@ export function normalizeTodoistTask(task, options = {}) {
   const date = dateValue.slice(0, 10) || (datetime ? datetime.slice(0, 10) : '')
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
   const allDay = !datetime
-  const floating = Boolean(datetime) && FLOATING_DATE_TIME.test(datetime) && !EXPLICIT_OFFSET.test(datetime)
+  // Todoist's due.date is authoritative for floating clock-time dues.
+  // Some API representations can include an additional normalized datetime;
+  // it must not override the floating due.date's wall clock semantics.
+  const floatingSource = FLOATING_DATE_TIME.test(dateValue) && !due?.timezone
+    ? dateValue
+    : (!due?.timezone && FLOATING_DATE_TIME.test(datetime) ? datetime : '')
+  const floating = Boolean(floatingSource)
   const startsAt = allDay
     ? new Date(date + 'T12:00:00Z')
-    : floating ? floatingDueToUtc(datetime, options.timeZone)
+    : floating ? floatingDueToUtc(floatingSource, options.timeZone)
     : new Date(datetime)
   if (!startsAt || Number.isNaN(startsAt.getTime())) return null
   return {
@@ -56,7 +62,7 @@ export function normalizeTodoistTask(task, options = {}) {
     raw: {
       source: 'todoist', type: 'task', all_day,
       date: allDay || floating ? date : null,
-      ...(floating ? { floating_time: datetime.slice(11, 16) } : {}),
+      ...(floating ? { floating_time: floatingSource.slice(11, 16) } : {}),
       recurring: due?.is_recurring === true,
     },
   }
