@@ -28,10 +28,47 @@ export function verifyTodoistOAuthState(state: string, nonce: string) {
 }
 
 
+function profileTimeZone(profile: {tz_info?: {timezone?: string}}) {
+  const timeZone = String(profile.tz_info?.timezone || '').trim()
+  if (!timeZone) throw new Error('Todoist did not provide an account timezone')
+  // Intl validates IANA zone identifiers and applies DST at the task's due date.
+  new Intl.DateTimeFormat('en', {timeZone})
+  return timeZone
+}
+
+/** Resolve and cache Todoist's account timezone once for connections created before this fix. */
+async function withTodoistTimeZone(userId: string, credentials: TodoistCredentials) {
+  if (credentials.time_zone) return credentials
+  const profile = await fetchTodoistProfile(credentials.access_token)
+  const timeZone = profileTimeZone(profile)
+  const admin = getSupabaseAdmin()
+  const {data: row, error} = await admin.from('user_integrations')
+    .select('encrypted_credentials').eq('user_id', userId).eq('provider', TODOIST_PROVIDER)
+    .eq('status', 'connected').maybeSingle()
+  if (error || !row) throw new Error('Todoist connection changed during timezone sync')
+  const latest = decryptJson<TodoistCredentials>(row.encrypted_credentials)
+  const updated = {...latest, time_zone: timeZone}
+  const {data: saved, error: saveError} = await admin.from('user_integrations')
+    .update({encrypted_credentials: encryptJson(updated), updated_at: new Date().toISOString()})
+    .eq('user_id', userId).eq('provider', TODOIST_PROVIDER).eq('status', 'connected')
+    .eq('encrypted_credentials', JSON.stringify(row.encrypted_credentials))
+    .select('id').maybeSingle()
+  if (saveError) throw new Error(saveError.message)
+  if (saved) return updated
+  // Another worker refreshed credentials; read its winner rather than overwriting tokens.
+  const {data: winner, error: winnerError} = await admin.from('user_integrations')
+    .select('encrypted_credentials').eq('user_id', userId).eq('provider', TODOIST_PROVIDER)
+    .eq('status', 'connected').maybeSingle()
+  if (winnerError || !winner) throw new Error('Todoist connection changed during timezone sync')
+  const latestCredentials = decryptJson<TodoistCredentials>(winner.encrypted_credentials)
+  if (!latestCredentials.time_zone) throw new Error('Todoist timezone update needs retry')
+  return latestCredentials
+}
+
 async function writeTodoistItems(userId: string, credentials: TodoistCredentials) {
   const tasks = await fetchTodoistTasks(credentials.access_token)
   const now = new Date().toISOString()
-  const incoming = tasks.map(normalizeTodoistTask).filter((row): row is NonNullable<typeof row> => row !== null)
+  const incoming = tasks.map(task => normalizeTodoistTask(task, {timeZone: credentials.time_zone})).filter((row): row is NonNullable<typeof row> => row !== null)
     .map(row => ({ ...row, user_id: userId, provider: TODOIST_PROVIDER, updated_at: now }))
   if (incoming.length > 3000) throw new Error('Too many Todoist tasks to cache')
   const admin = getSupabaseAdmin()
@@ -61,10 +98,9 @@ export async function connectTodoistForUser(userId: string, code: string) {
   if (credentials.scope && !credentials.scope.split(/[ ,]+/).includes('data:read')) {
     throw new Error('Todoist did not grant read access')
   }
-  const [profile, synced] = await Promise.all([
-    fetchTodoistProfile(credentials.access_token).catch(() => ({ id: undefined, full_name: undefined, email: undefined })),
-    writeTodoistItems(userId, credentials),
-  ])
+  const profile = await fetchTodoistProfile(credentials.access_token)
+  credentials.time_zone = profileTimeZone(profile)
+  const synced = await writeTodoistItems(userId, credentials)
   const admin = getSupabaseAdmin()
   const accountId = typeof profile.id === 'string' ? profile.id : String(profile.id || '')
   const label = typeof profile.full_name === 'string' && profile.full_name.trim() ? profile.full_name.trim()
@@ -127,16 +163,21 @@ export async function syncTodoistFromStoredConnection(userId: string, options: {
   if (error) throw new Error(error.message)
   if (!row || row.status !== 'connected') return { connected: false, refreshed: false }
   const age = Date.now() - Date.parse(String(row.last_sync_at || ''))
-  if (!options.force && Number.isFinite(age) && age >= 0 && age < STALE_AFTER_MS) return { connected: true, refreshed: false }
+  // Existing credentials predate the floating-time fix. Migrate on the next sync
+  // even if the usual 15-minute cache is still fresh.
+  const needsTimeZone = !decryptJson<TodoistCredentials>(row.encrypted_credentials).time_zone
+  if (!options.force && !needsTimeZone && Number.isFinite(age) && age >= 0 && age < STALE_AFTER_MS) return { connected: true, refreshed: false }
   try {
     let credentials = await validTodoistCredentials(userId, row)
     let synced
     try {
+      credentials = await withTodoistTimeZone(userId, credentials)
       synced = await writeTodoistItems(userId, credentials)
     } catch (requestError) {
       if (!(requestError instanceof TodoistApiError) || requestError.status !== 401) throw requestError
       // Token may have expired at the provider despite its stated expiry.
       credentials = await validTodoistCredentials(userId, { encrypted_credentials: encryptJson(credentials) }, true)
+      credentials = await withTodoistTimeZone(userId, credentials)
       synced = await writeTodoistItems(userId, credentials)
     }
     const { error: updateError } = await admin.from('user_integrations')
