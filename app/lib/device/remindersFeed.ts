@@ -15,7 +15,7 @@ export type ReminderRepeatKey =
   | '2years'
   | 'custom'
 
-export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events' | 'bonnetid' | 'todoist'
+export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events' | 'bonnetid' | 'todoist' | 'microsoft-todo'
 
 export type DeviceReminderItem = {
   reminder_id: string
@@ -257,15 +257,16 @@ export function buildGoogleCalendarItems(
 
 
 /** A Todoist task remains a task after its clock time; only completion removes it. */
-export function buildTodoistReminderItems(
+function buildImportedTaskReminderItems(
   rows: IntegrationItemRow[],
   todayYmd: string,
   horizonEndYmd: string,
   timeZone: string,
-  includeOverdue: boolean
+  includeOverdue: boolean,
+  source: 'todoist' | 'microsoft-todo'
 ): DeviceReminderItem[] {
   return rows.flatMap(row => {
-    if (row.raw?.source !== 'todoist' || row.raw?.type !== 'task') return []
+    if (row.raw?.source !== source || row.raw?.type !== 'task') return []
     const title = String(row.title || '').trim()
     const externalId = String(row.external_id || '').trim()
     if (!title || !externalId) return []
@@ -280,7 +281,7 @@ export function buildTodoistReminderItems(
     const displayTime = allDay ? null : floatingTime || (row.starts_at ? isoToHmInTimeZone(row.starts_at, timeZone) : null)
     const daysUntil = diffDaysFromYmd(todayYmd, occurrenceDate)
     return [{
-      reminder_id: 'todoist:' + externalId,
+      reminder_id: source + ':' + externalId,
       title,
       occurrence_date: occurrenceDate,
       display_date: formatDisplayDate(occurrenceDate, todayYmd),
@@ -289,11 +290,25 @@ export function buildTodoistReminderItems(
       repeat: 'none' as ReminderRepeatKey,
       due_time: displayTime,
       display_time: displayTime,
-      source: 'todoist' as const,
+      source,
       is_all_day: allDay,
       external_id: externalId,
     }]
   })
+}
+
+export function buildTodoistReminderItems(
+  rows: IntegrationItemRow[], todayYmd: string, horizonEndYmd: string,
+  timeZone: string, includeOverdue: boolean
+): DeviceReminderItem[] {
+  return buildImportedTaskReminderItems(rows, todayYmd, horizonEndYmd, timeZone, includeOverdue, 'todoist')
+}
+
+export function buildMicrosoftTodoReminderItems(
+  rows: IntegrationItemRow[], todayYmd: string, horizonEndYmd: string,
+  timeZone: string, includeOverdue: boolean
+): DeviceReminderItem[] {
+  return buildImportedTaskReminderItems(rows, todayYmd, horizonEndYmd, timeZone, includeOverdue, 'microsoft-todo')
 }
 
 export function buildIrnReminderItems(
