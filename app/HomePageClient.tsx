@@ -1685,7 +1685,7 @@ export default function HomePage() {
       setAssistantDeepLink({ watchId, updateId: searchParams?.get('update')?.trim() || null })
       return
     }
-    if (tab === 'connect' || searchParams?.has('teams') || searchParams?.has('google_calendar')) {
+    if (tab === 'connect' || searchParams?.has('teams') || searchParams?.has('google_calendar') || searchParams?.has('todoist') || searchParams?.has('microsoft_todo')) {
       preferInstantScrollRef.current = true
       setActiveTab('connect')
       return
@@ -2461,6 +2461,8 @@ export default function HomePage() {
       if (onboardingDraftUser && onboardingDraftUser !== session.user.id) {
         sessionStorage.removeItem('remind:teams-oauth-device')
         sessionStorage.removeItem('remind:teams-oauth-result')
+        sessionStorage.removeItem('remind:microsoft-todo-oauth-device')
+        sessionStorage.removeItem('remind:microsoft-todo-oauth-result')
       }
       sessionStorage.setItem('remind:onboarding-user', session.user.id)
       setAuthReady(true)
@@ -2497,6 +2499,8 @@ export default function HomePage() {
           sessionStorage.removeItem('remind:onboarding-user')
           sessionStorage.removeItem('remind:teams-oauth-device')
           sessionStorage.removeItem('remind:teams-oauth-result')
+        sessionStorage.removeItem('remind:microsoft-todo-oauth-device')
+        sessionStorage.removeItem('remind:microsoft-todo-oauth-result')
           setShouldRenderApp(false)
           setShowSplash(true)
           setBooting(true)
