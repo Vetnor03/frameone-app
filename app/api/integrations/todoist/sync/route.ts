@@ -1,0 +1,13 @@
+import { NextResponse } from 'next/server'
+import { getAuthenticatedUserId } from '@/app/lib/integrations/spond/server'
+import { syncTodoistFromStoredConnection } from '@/app/lib/integrations/todoist/server'
+export const runtime = 'nodejs'
+export async function POST(req: Request) {
+  const userId = await getAuthenticatedUserId(req)
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    return NextResponse.json(await syncTodoistFromStoredConnection(userId))
+  } catch {
+    return NextResponse.json({ error: 'Could not refresh Todoist tasks. Reconnect if this continues.' }, { status: 502 })
+  }
+}

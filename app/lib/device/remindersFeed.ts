@@ -15,7 +15,7 @@ export type ReminderRepeatKey =
   | '2years'
   | 'custom'
 
-export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events' | 'bonnetid'
+export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events' | 'bonnetid' | 'todoist'
 
 export type DeviceReminderItem = {
   reminder_id: string
@@ -249,6 +249,44 @@ export function buildGoogleCalendarItems(
       due_time: displayTime,
       display_time: displayTime,
       source: 'google-calendar' as const,
+      is_all_day: allDay,
+      external_id: externalId,
+    }]
+  })
+}
+
+
+/** A Todoist task remains a task after its clock time; only completion removes it. */
+export function buildTodoistReminderItems(
+  rows: IntegrationItemRow[],
+  todayYmd: string,
+  horizonEndYmd: string,
+  timeZone: string,
+  includeOverdue: boolean
+): DeviceReminderItem[] {
+  return rows.flatMap(row => {
+    if (row.raw?.source !== 'todoist' || row.raw?.type !== 'task') return []
+    const title = String(row.title || '').trim()
+    const externalId = String(row.external_id || '').trim()
+    if (!title || !externalId) return []
+    const allDay = row.raw.all_day === true
+    const rawDate = typeof row.raw.date === 'string' ? row.raw.date : ''
+    const occurrenceDate = allDay && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
+      ? rawDate : row.starts_at ? isoToYmdInTimeZone(row.starts_at, timeZone) : null
+    if (!occurrenceDate || occurrenceDate > horizonEndYmd || (!includeOverdue && occurrenceDate < todayYmd)) return []
+    const displayTime = allDay || !row.starts_at ? null : isoToHmInTimeZone(row.starts_at, timeZone)
+    const daysUntil = diffDaysFromYmd(todayYmd, occurrenceDate)
+    return [{
+      reminder_id: 'todoist:' + externalId,
+      title,
+      occurrence_date: occurrenceDate,
+      display_date: formatDisplayDate(occurrenceDate, todayYmd),
+      days_until: daysUntil,
+      is_overdue: daysUntil < 0,
+      repeat: 'none' as ReminderRepeatKey,
+      due_time: displayTime,
+      display_time: displayTime,
+      source: 'todoist' as const,
       is_all_day: allDay,
       external_id: externalId,
     }]

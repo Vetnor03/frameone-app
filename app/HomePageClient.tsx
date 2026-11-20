@@ -3660,7 +3660,7 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'bonnetid'
+type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'todoist' | 'waste' | 'bonnetid'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -3717,8 +3717,12 @@ function ConnectAppsScreen({
   const initialTeamsOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
   const initialGoogleOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('google_calendar')
   const initialGoogleOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
-  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>(() => initialTeamsOAuthStatus === 'error' || initialGoogleOAuthStatus === 'error' ? 'error' : 'info')
+  const initialTodoistOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('todoist')
+  const initialTodoistOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
+  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>(() => initialTeamsOAuthStatus === 'error' || initialGoogleOAuthStatus === 'error' || initialTodoistOAuthStatus === 'error' ? 'error' : 'info')
   const [status, setStatus] = useState<string | null>(() => {
+    if (initialTodoistOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Todoist-tilkobling…' : 'Finishing Todoist connection…'
+    if (initialTodoistOAuthStatus === 'error') return initialTodoistOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Todoist' : 'Could not connect Todoist')
     if (initialGoogleOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Google Calendar-tilkobling…' : 'Finishing Google Calendar connection…'
     if (initialGoogleOAuthStatus === 'error') return initialGoogleOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Google Calendar' : 'Could not connect Google Calendar')
     if (initialTeamsOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Teams-tilkobling…' : 'Finishing Teams connection…'
@@ -3778,10 +3782,20 @@ function ConnectAppsScreen({
     return sessionStorage.getItem('remind:google-oauth-device') === activeDeviceId &&
       new URLSearchParams(window.location.search).get('google_calendar') === 'connected'
   })
+  const [todoistAccountConnected, setTodoistAccountConnected] = useState(false)
+  const [todoistAccount, setTodoistAccount] = useState<string | null>(null)
+  const [todoistStatusResolved, setTodoistStatusResolved] = useState(false)
+  const [todoistStatusFailed, setTodoistStatusFailed] = useState(false)
+  const [todoistLoading, setTodoistLoading] = useState(false)
+  const [pendingTodoistEnableAfterOAuth, setPendingTodoistEnableAfterOAuth] = useState(() => {
+    if (typeof window === 'undefined' || !activeDeviceId) return false
+    return sessionStorage.getItem('remind:todoist-oauth-device') === activeDeviceId &&
+      (initialTodoistOAuthStatus === 'connected' || sessionStorage.getItem('remind:todoist-oauth-result') === 'connected')
+  })
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
   const [disconnectConfirmApp, setDisconnectConfirmApp] = useState<DisconnectableConnectAppKey | null>(null)
-  const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams' | 'google-calendar', string>>>({})
+  const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams' | 'google-calendar' | 'todoist', string>>>({})
   const [localEventsOpen, setLocalEventsOpen] = useState(false)
   const [wasteModalOpen, setWasteModalOpen] = useState(false)
   const [bonnetidModalOpen, setBonnetidModalOpen] = useState(false)
@@ -3924,11 +3938,29 @@ function ConnectAppsScreen({
     setIntegrationSetupErrors(current => ({ ...current, 'google-calendar': typeof json?.setup_error?.message === 'string' ? json.setup_error.message : undefined }))
   }
 
+  async function fetchTodoistStatus() {
+    const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+    if (!token) { setTodoistStatusResolved(true); setTodoistAccountConnected(false); updateConnectionDisplayStatus('todoist', false, false); return }
+    const response = await fetch('/api/integrations/todoist/status', {
+      headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
+    })
+    if (!response.ok) { setTodoistStatusResolved(true); setTodoistStatusFailed(true); return }
+    const json = await response.json()
+    setTodoistAccountConnected(json?.connected === true)
+    setTodoistAccount(typeof json?.account === 'string' ? json.account : null)
+    setTodoistStatusResolved(true)
+    setTodoistStatusFailed(false)
+    setLocallyDisconnectedApps(current => ({ ...current, todoist: json?.connected === true ? false : current.todoist }))
+    updateConnectionDisplayStatus('todoist', json?.connected === true && frameUsesIntegration(modulesJson, 'todoist'))
+    setIntegrationSetupErrors(current => ({ ...current, todoist: typeof json?.setup_error?.message === 'string' ? json.setup_error.message : undefined }))
+  }
+
   function legacyEnabledIntegrations(): ConnectAppKey[] {
     return [
       ...(spondAccountConnected ? ['spond' as const] : []),
       ...(teamsAccountConnected ? ['teams' as const] : []),
       ...(googleAccountConnected ? ['google-calendar' as const] : []),
+      ...(todoistAccountConnected && frameUsesIntegration(modulesJson, 'todoist') ? ['todoist' as const] : []),
       ...(localEventsAccountConnected && localEventsStatusDeviceId === activeDeviceId ? ['local-events' as const] : []),
       ...(connectAppIsConnected(modulesJson, 'waste') ? ['waste' as const] : []),
     ]
@@ -3958,7 +3990,32 @@ function ConnectAppsScreen({
     if (!spondStatusResolved) void fetchSpondStatus().catch(() => setSpondStatusFailed(true))
     if (!teamsStatusResolved) void fetchTeamsStatus().catch(() => setTeamsStatusFailed(true))
     if (!googleStatusResolved) void fetchGoogleCalendarStatus().catch(() => setGoogleStatusFailed(true))
+    if (!todoistStatusResolved) void fetchTodoistStatus().catch(() => { setTodoistStatusFailed(true); setTodoistStatusResolved(true) })
     if (!localEventsResolvedForActiveDevice && activeDeviceId) void fetchLocalEventsStatus(activeDeviceId, localEventsRequestGenerationRef.current).catch(() => setLocalEventsStatusFailed(true))
+  }
+
+  async function connectTodoist() {
+    if (todoistLoading) return
+    const setupError = integrationSetupErrors.todoist
+    if (setupError) { setStatusTone('error'); setStatus(setupError); return }
+    setTodoistLoading(true)
+    setStatus(null)
+    try {
+      const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+      if (!token || !activeDeviceId) throw new Error(language === 'no' ? 'Logg inn og velg ramme først' : 'Sign in and select a frame first')
+      sessionStorage.setItem('remind:todoist-oauth-device', activeDeviceId)
+      sessionStorage.removeItem('remind:todoist-oauth-result')
+      const response = await fetch('/api/integrations/todoist/connect', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok || !payload.url) throw new Error(payload.error || 'Could not start Todoist authorization')
+      window.location.assign(payload.url)
+    } catch (error) {
+      setStatusTone('error')
+      setStatus(error instanceof Error ? error.message : 'Todoist connection failed')
+      setTodoistLoading(false)
+    }
   }
 
   async function connectGoogleCalendar() {
@@ -4211,8 +4268,8 @@ function ConnectAppsScreen({
   }
 
   async function disconnectIntegration(provider: DisconnectableConnectAppKey) {
-    const appName = provider === 'teams' ? 'Microsoft Calendar' : provider === 'google-calendar' ? 'Google Calendar' : provider === 'waste' ? (language === 'no' ? 'Renovasjon' : 'Waste collection') : provider === 'bonnetid' ? 'IRN' : 'Spond'
-    const setProviderLoading = provider === 'teams' ? setTeamsLoading : provider === 'google-calendar' ? setGoogleLoading : provider === 'spond' ? setSpondLoading : null
+    const appName = provider === 'todoist' ? 'Todoist' : provider === 'teams' ? 'Microsoft Calendar' : provider === 'google-calendar' ? 'Google Calendar' : provider === 'waste' ? (language === 'no' ? 'Renovasjon' : 'Waste collection') : provider === 'bonnetid' ? 'IRN' : 'Spond'
+    const setProviderLoading = provider === 'teams' ? setTeamsLoading : provider === 'google-calendar' ? setGoogleLoading : provider === 'todoist' ? setTodoistLoading : provider === 'spond' ? setSpondLoading : null
     if (disconnectingApp === provider) return
     setProviderLoading?.(true)
     setDisconnectingApp(provider)
@@ -4237,6 +4294,11 @@ function ConnectAppsScreen({
         setGoogleAccountConnected(false)
         changeFrameIntegration('google-calendar', { enabled: false })
         setGoogleAccount(null)
+      } else if (provider === 'todoist') {
+        setTodoistAccountConnected(false)
+        setTodoistAccount(null)
+        changeFrameIntegration('todoist', { enabled: false })
+        window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
       } else if (provider === 'spond') {
         setSpondConnected(false)
         setSpondAccountConnected(false)
@@ -4268,10 +4330,11 @@ function ConnectAppsScreen({
   }
 
   useEffect(() => {
-    void Promise.allSettled([fetchSpondStatus(), fetchTeamsStatus(), fetchGoogleCalendarStatus()]).then(results => {
+    void Promise.allSettled([fetchSpondStatus(), fetchTeamsStatus(), fetchGoogleCalendarStatus(), fetchTodoistStatus()]).then(results => {
       if (results[0].status === 'rejected') setSpondStatusFailed(true)
       if (results[1].status === 'rejected') setTeamsStatusFailed(true)
       if (results[2].status === 'rejected') setGoogleStatusFailed(true)
+      if (results[3].status === 'rejected') { setTodoistStatusFailed(true); setTodoistStatusResolved(true) }
     })
     const params = new URLSearchParams(window.location.search)
     if (initialTeamsOAuthStatus === 'connected') {
@@ -4288,7 +4351,14 @@ function ConnectAppsScreen({
       sessionStorage.removeItem('remind:google-oauth-device')
       setPendingGoogleEnableAfterOAuth(false)
     }
-    if (params.has('teams') || params.has('google_calendar')) window.history.replaceState({}, '', window.location.pathname)
+    if (initialTodoistOAuthStatus === 'connected') {
+      sessionStorage.setItem('remind:todoist-oauth-result', 'connected')
+    } else if (initialTodoistOAuthStatus === 'error') {
+      sessionStorage.removeItem('remind:todoist-oauth-result')
+      sessionStorage.removeItem('remind:todoist-oauth-device')
+      setPendingTodoistEnableAfterOAuth(false)
+    }
+    if (params.has('teams') || params.has('google_calendar') || params.has('todoist')) window.history.replaceState({}, '', window.location.pathname)
     // Run OAuth callback handling once: functions and URL state intentionally reflect the initial page load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -4303,6 +4373,12 @@ function ConnectAppsScreen({
     const initiatingDeviceId = sessionStorage.getItem('remind:google-oauth-device')
     const result = sessionStorage.getItem('remind:google-oauth-result')
     setPendingGoogleEnableAfterOAuth(!!activeDeviceId && initiatingDeviceId === activeDeviceId && result === 'connected')
+  }, [activeDeviceId])
+
+  useEffect(() => {
+    const device = sessionStorage.getItem('remind:todoist-oauth-device')
+    const result = sessionStorage.getItem('remind:todoist-oauth-result')
+    setPendingTodoistEnableAfterOAuth(!!activeDeviceId && device === activeDeviceId && result === 'connected')
   }, [activeDeviceId])
 
   useEffect(() => {
@@ -4372,6 +4448,21 @@ function ConnectAppsScreen({
   }, [pendingGoogleEnableAfterOAuth, googleStatusResolved, googleAccountConnected, legacyIntegrationDiscoveryPending, modulesJson?.integration_selection_explicit, language])
 
   useEffect(() => {
+    if (!pendingTodoistEnableAfterOAuth || !todoistStatusResolved || !todoistAccountConnected) return
+    if (modulesJson?.integration_selection_explicit !== true && legacyIntegrationDiscoveryPending) return
+    changeFrameIntegration('todoist', { enabled: true })
+    updateConnectionDisplayStatus('todoist', true)
+    setStatusTone('success')
+    setStatus(language === 'no' ? 'Todoist er tilkoblet' : 'Todoist connected')
+    sessionStorage.removeItem('remind:todoist-oauth-device')
+    sessionStorage.removeItem('remind:todoist-oauth-result')
+    setPendingTodoistEnableAfterOAuth(false)
+    window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
+    // Enable the specific frame only after successful OAuth verification.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingTodoistEnableAfterOAuth, todoistStatusResolved, todoistAccountConnected, legacyIntegrationDiscoveryPending, modulesJson?.integration_selection_explicit, language])
+
+  useEffect(() => {
     const requestGeneration = ++localEventsRequestGenerationRef.current
     setLocalEventsStatusResolved(false)
     setLocalEventsStatusFailed(false)
@@ -4405,6 +4496,7 @@ function ConnectAppsScreen({
     if (app.key === 'spond') return spondAccountConnected
     if (app.key === 'teams') return teamsAccountConnected
     if (app.key === 'google-calendar') return googleAccountConnected
+    if (app.key === 'todoist') return todoistAccountConnected && frameUsesIntegration(modulesJson, 'todoist')
     if (app.key === 'local-events') return !!localEventsSavedArea
     if (app.key === 'waste') return wasteConnected
     if (app.key === 'bonnetid') return bonnetidConnected
@@ -4414,12 +4506,12 @@ function ConnectAppsScreen({
   const sortedApps = sortConnectedAppsFirst(apps.map(app => ({ app, connected: getAppConnected(app) })))
   const statusDiscoveryPending = !startup && (
     (!spondStatusResolved && !spondStatusFailed) || (!teamsStatusResolved && !teamsStatusFailed) ||
-    (!googleStatusResolved && !googleStatusFailed) || !wasteStatusResolved || !bonnetidStatusResolved ||
+    (!googleStatusResolved && !googleStatusFailed) || (!todoistStatusResolved && !todoistStatusFailed) || !wasteStatusResolved || !bonnetidStatusResolved ||
     (!!activeDeviceId && !localEventsStatusResolved && !localEventsStatusFailed)
   )
   // On the very first visit, avoid showing an incorrectly disconnected list.
   const showConnectPlaceholders = !startup && (!connectionCacheHydrated ||
-    (['teams', 'google-calendar', 'spond', 'local-events', 'waste', 'bonnetid'] as const)
+    (['teams', 'google-calendar', 'spond', 'local-events', 'waste', 'bonnetid', 'todoist'] as const)
       .some(provider => cachedConnectionStatus[provider] === undefined) && statusDiscoveryPending)
 
   const renderLocalEventsModal = () => {
@@ -4551,7 +4643,7 @@ function ConnectAppsScreen({
           )}
           {!showConnectPlaceholders && sortedApps.map(({ app, connected }) => {
             const waitingForVerification = connected && !startup && verifiedConnectionStatus[app.key] === undefined
-            const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : app.key === 'google-calendar' ? integrationSetupErrors['google-calendar'] : null
+            const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : app.key === 'google-calendar' ? integrationSetupErrors['google-calendar'] : app.key === 'todoist' ? integrationSetupErrors.todoist : null
             const localEventsSelectedName = localEventsSavedArea ? (localEventsSavedArea.placeLabel || getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || '') : null
             const description = app.key === 'local-events' && localEventsSyncIssue
               ? (language === 'no' ? `Events valgt, men ingen synkronisering ennå: ${localEventsSyncIssue}` : `Events selected but not synced yet: ${localEventsSyncIssue}`)
@@ -4560,8 +4652,8 @@ function ConnectAppsScreen({
               : app.key === 'bonnetid' && bonnetidCity
               ? (language === 'no' ? 'Bønnetider for ' : 'Prayer times for ') + bonnetidCity
               : app.description
-            const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar'
-            const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : null
+            const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar' || app.key === 'todoist'
+            const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : app.key === 'todoist' ? todoistAccount : null
             return (
               <div
                 key={app.key}
@@ -4622,7 +4714,7 @@ function ConnectAppsScreen({
                       <button
                         type="button"
                         onClick={() => setDisconnectConfirmApp(app.key as DisconnectableConnectAppKey)}
-                        disabled={waitingForVerification || disconnectingApp === app.key || (app.key === 'spond' && spondLoading) || (app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading)}
+                        disabled={waitingForVerification || disconnectingApp === app.key || (app.key === 'spond' && spondLoading) || (app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading) || (app.key === 'todoist' && todoistLoading)}
                         className="shrink-0 h-8 rounded-xl border border-[#d94b4b]/35 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60"
                       >
                         {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
@@ -4635,7 +4727,7 @@ function ConnectAppsScreen({
                   ) : (
                     <button
                       type="button"
-                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved) || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved))}
+                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved) || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved)) || (app.key === 'todoist' && (todoistLoading || !todoistStatusResolved))}
                       onClick={() => {
                         if (app.key === 'spond') {
                           if (spondAccountConnected) { setSpondConnected(true); changeFrameIntegration('spond', { enabled: true }) }
@@ -4648,6 +4740,12 @@ function ConnectAppsScreen({
                         } else if (app.key === 'google-calendar') {
                           if (googleAccountConnected) { setGoogleConnected(true); changeFrameIntegration('google-calendar', { enabled: true }) }
                           else void connectGoogleCalendar()
+                        } else if (app.key === 'todoist') {
+                          if (todoistAccountConnected) {
+                            changeFrameIntegration('todoist', { enabled: true })
+                            updateConnectionDisplayStatus('todoist', true)
+                            window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
+                          } else void connectTodoist()
                         } else if (app.key === 'local-events') {
                           setLocalEventsDraftArea(localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA)
                           setLocalEventsOpen(true)
@@ -4661,9 +4759,9 @@ function ConnectAppsScreen({
                     >
                       {app.key === 'local-events'
                         ? (language === 'no' ? 'KOBLE TIL' : 'CONNECT')
-                        : (app.key === 'google-calendar' && !googleStatusResolved) || (app.key === 'teams' && !teamsStatusResolved) || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved)
+                        : (app.key === 'google-calendar' && !googleStatusResolved) || (app.key === 'teams' && !teamsStatusResolved) || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved) || (app.key === 'todoist' && !todoistStatusResolved)
                           ? (language === 'no' ? 'SJEKKER…' : 'CHECKING…')
-                          : ((app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading))
+                          : ((app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading) || (app.key === 'todoist' && todoistLoading))
                             ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…')
                             : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
                     </button>
@@ -11294,7 +11392,7 @@ type ReminderRepeatKey =
   | 'custom'
 
 type ReminderTag = 'work' | 'personal' | 'sports' | 'chores' | 'event'
-type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'waste' | 'local-events' | 'bonnetid'
+type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'todoist' | 'waste' | 'local-events' | 'bonnetid'
 type ReminderSourceFilter = ReminderSource
 
 type ReminderUiItem = {
@@ -11398,7 +11496,7 @@ function isReminderTag(v: any): v is ReminderTag {
 function integrationProviderToReminderSource(provider: any): ReminderSource | null {
   const value = String(provider ?? '').trim().toLowerCase()
   if (value === 'edge-of-norway') return 'local-events'
-  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'waste' || value === 'bonnetid') return value
+  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'todoist' || value === 'waste' || value === 'bonnetid') return value
   return null
 }
 
@@ -11430,6 +11528,7 @@ function integrationReminderTitle(row: any, source: ReminderSource, language: Ap
 function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
   if (source === 'teams') return 'work'
   if (source === 'google-calendar') return 'event'
+  if (source === 'todoist') return 'personal'
   if (source === 'spond') return 'sports'
   if (source === 'waste') return 'chores'
   if (source === 'local-events') return 'event'
@@ -11440,6 +11539,7 @@ function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
 function integrationReminderSourceLabel(language: AppLanguage, source?: ReminderSource) {
   if (source === 'teams') return 'Teams'
   if (source === 'google-calendar') return 'Google Calendar'
+  if (source === 'todoist') return 'Todoist'
   if (source === 'spond') return 'Spond'
   if (source === 'waste') return language === 'no' ? 'Renovasjon' : 'Waste'
   if (source === 'local-events') return 'Events'
@@ -15339,7 +15439,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           const source = integrationProviderToReminderSource(connection.provider)
           if (source) connectedSources.add(source)
         }
-        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'spond', 'local-events', 'waste', 'bonnetid'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
+        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'todoist', 'spond', 'local-events', 'waste', 'bonnetid'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
         // Provider chips do not depend on potentially slow upstream event refreshes.
         if (generation !== requestGenerationRef.current) return
         setAvailableSources(nextAvailableSources)
@@ -15377,6 +15477,20 @@ const manualItems: ReminderUiItem[] = (data || [])
           }
         }
 
+        if (isActive && !skipProviderSync && connectedSources.has('todoist')) {
+          try {
+            const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+            if (token) {
+              const response = await fetch('/api/integrations/todoist/sync', {
+                method: 'POST', headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
+              })
+              if (!response.ok) console.warn('[reminders] Todoist refresh failed', response.status)
+            }
+          } catch (error) {
+            console.warn('[reminders] Todoist refresh failed', error)
+          }
+        }
+
         if (isActive && !skipProviderSync && connectedSources.has('bonnetid')) {
           // Render the saved timetable now. A stale-provider sync can involve
           // multiple upstream requests and must never block the source chip.
@@ -15406,9 +15520,9 @@ const manualItems: ReminderUiItem[] = (data || [])
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
-          .in('provider', ['spond', 'teams', 'google-calendar', 'waste', 'edge-of-norway', 'bonnetid'])
+          .in('provider', ['spond', 'teams', 'google-calendar', 'todoist', 'waste', 'edge-of-norway', 'bonnetid'])
           .or(activeDeviceId ? `user_id.eq.${sessionUserId},device_id.eq.${activeDeviceId}` : `user_id.eq.${sessionUserId}`)
-          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.bonnetid`)
+          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.bonnetid,provider.eq.todoist`)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (integrationError) {
