@@ -58,7 +58,7 @@ async function writeTodoistItems(userId: string, credentials: TodoistCredentials
 
 export async function connectTodoistForUser(userId: string, code: string) {
   const credentials = await exchangeTodoistCode(code)
-  if (!credentials.scope?.split(/[ ,]+/).includes('data:read') && !credentials.scope?.split(/[ ,]+/).includes('data:read_write')) {
+  if (credentials.scope && !credentials.scope.split(/[ ,]+/).includes('data:read')) {
     throw new Error('Todoist did not grant read access')
   }
   const [profile, synced] = await Promise.all([
