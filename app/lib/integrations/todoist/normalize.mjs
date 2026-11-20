@@ -48,7 +48,7 @@ export function normalizeTodoistTask(task, options = {}) {
   // it must not override the floating due.date's wall clock semantics.
   const floatingSource = FLOATING_DATE_TIME.test(dateValue) && !due?.timezone
     ? dateValue
-    : (!due?.timezone && FLOATING_DATE_TIME.test(datetime) ? datetime : '')
+    : (!due?.timezone && !EXPLICIT_OFFSET.test(dateValue) && FLOATING_DATE_TIME.test(datetime) ? datetime : '')
   const floating = Boolean(floatingSource)
   const startsAt = allDay
     ? new Date(date + 'T12:00:00Z')
