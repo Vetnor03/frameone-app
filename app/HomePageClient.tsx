@@ -11504,6 +11504,11 @@ function integrationItemDateTime(row: any) {
   const raw = row?.raw && typeof row.raw === 'object' ? row.raw : {}
   const rawDate = typeof raw.date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw.date) ? raw.date.slice(0, 10) : ''
   if (raw.all_day === true || raw.allDay === true) return { date: rawDate, time: null }
+  // A Todoist floating due is a wall-clock time, not a timestamp to convert.
+  // Keep its date/time exactly as Todoist displays it on the user's account.
+  if (row?.provider === 'todoist' && /^\d{2}:\d{2}$/.test(raw.floating_time || '') && rawDate) {
+    return { date: rawDate, time: raw.floating_time as string }
+  }
   const timestamp = String(row?.starts_at || row?.due_at || '').trim()
   if (timestamp) {
     const dt = new Date(timestamp)
