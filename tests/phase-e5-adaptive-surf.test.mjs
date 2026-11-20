@@ -91,18 +91,52 @@ test('physical and app Surf instance contracts accept only numeric 1..255 suffix
  assert.deepEqual(execFileSync(bin,{encoding:'utf8'}).trim().split('\n').map(Number),[1,1,1,0,0,0,0])
 })
 
-test('firmware keeps legacy dispatch/fetch needs and allocates every disclosed adaptive region',async()=>{
- const source=await readFile(new URL('../frame/src/modules/ModuleSurf.cpp',import.meta.url),'utf8')
- assert.match(source,/needs\.dayparts = size == CELL_MEDIUM \|\| size == CELL_LARGE;/)
- assert.match(source,/needs\.daily = size == CELL_XL;/)
- for(const size of ['CELL_SMALL','CELL_MEDIUM','CELL_LARGE','CELL_XL'])assert.match(source,new RegExp(`if \\(c\\.size == ${size}\\)`))
- const geometry=source.slice(source.indexOf('// BEGIN ADAPTIVE SURF GEOMETRY'),source.indexOf('// END ADAPTIVE SURF GEOMETRY'))
- assert.match(geometry,/SHALLOW_WIDE && comp\.showDetails[\s\S]*details = AdaptiveSurfRect/)
- assert.match(geometry,/STACKED && comp\.showDetails[\s\S]*details = AdaptiveSurfRect/)
- assert.match(geometry,/comp\.daypartCount > 0[\s\S]*dayparts = AdaptiveSurfRect/)
- assert.match(geometry,/comp\.dailyCount > 0[\s\S]*AdaptiveSurfRect daily/)
- assert.match(source,/if \(comp\.showDirections[\s\S]*drawSurfDirectionArrow/)
- assert.match(source,/if \(comp\.showTodaysBestLabel\)[\s\S]*Best next 4hrs/)
+test('physical Surf preserves locked renderers and adaptive cell-family disclosures',async()=>{
+  const source=await readFile(new URL('../frame/src/modules/ModuleSurf.cpp',import.meta.url),'utf8')
+  // Fixed Small/Medium/Large/XL renderers and data-fetch needs are unchanged.
+  assert.match(source,/needs\.dayparts = size == CELL_MEDIUM \|\| size == CELL_LARGE;/)
+  assert.match(source,/needs\.daily = size == CELL_XL;/)
+  for(const size of ['CELL_SMALL','CELL_MEDIUM','CELL_LARGE','CELL_XL']){
+    assert.match(source,new RegExp('if \\(c\\.size == '+size+'\\)'))
+  }
+
+  // Former BEGIN/END ADAPTIVE SURF GEOMETRY markers were removed when the
+  // physical renderer adopted locked Small/Medium/XL-derived cell families.
+  // Verify current branches and data checks, not deleted rectangle symbols.
+  const section=(begin,end)=>{
+    const from=source.indexOf(begin),to=source.indexOf(end,from+begin.length)
+    assert.ok(from>=0 && to>from,'Missing Surf renderer section: '+begin)
+    return source.slice(from,to)
+  }
+  const strip=section('static void renderAdaptiveRatingStrip(', 'static void renderAdaptiveSmallFamily(')
+  assert.match(strip,/if\(showDetails && remain>=150\) detailsH=/)
+  assert.match(strip,/if\(detailsH\) \{/)
+  assert.match(strip,/isfinite\(data\.swellPeriodS\)/)
+  assert.match(strip,/isfinite\(data\.windSpeedMs\)/)
+
+  const small=section('static void renderAdaptiveSmallFamily(', 'static void renderAdaptiveMediumFamily(')
+  assert.match(small,/if\(c\.colSpan==1 && c\.rowSpan==1\)/)
+  assert.match(small,/if\(c\.h<=140 && c\.w>=340\)/)
+  assert.match(small,/renderAdaptiveRatingStrip\(c\.x,c\.y,c\.w,c\.h,data,wave,ink,true,spot,c\.h>=300\)/)
+
+  const medium=section('static void renderAdaptiveMediumFamily(', 'static void renderAdaptiveSurf(')
+  assert.match(medium,/if\(addDaily\) extraH=/)
+  assert.match(medium,/else if\(addDayparts\) extraH=/)
+  assert.match(medium,/if\(addDaily\) \{[\s\S]*?validDailyCount\(data\)-1/)
+  assert.match(medium,/if\(!data\.daily\[i\]\.valid\)continue/)
+  assert.match(medium,/const int count=min\(maxDayparts,validDaypartCount\(data\)\)/)
+  assert.match(medium,/if\(!data\.day\[i\]\.valid\)continue/)
+  assert.match(medium,/drawSurfDirectionArrow\(rightX\+rightW\/4/)
+  assert.match(medium,/drawSurfDirectionArrow\(rightX\+rightW\*3\/4/)
+
+  const dispatch=section('static void renderAdaptiveSurf(', 'static void renderCommon(')
+  assert.match(dispatch,/if\(c\.rowSpan==1\) \{[\s\S]*?renderAdaptiveSmallFamily/)
+  assert.match(dispatch,/if\(c\.colSpan==1\) \{[\s\S]*?renderAdaptiveSmallFamily/)
+  assert.match(dispatch,/if\(c\.colSpan==2\) \{[\s\S]*?renderAdaptiveMediumFamily\(c,data,spot,wave,ink,c\.rowSpan>=3,false\)/)
+  assert.match(dispatch,/if\(c\.colSpan==3\) \{[\s\S]*?renderAdaptiveMediumFamily\(c,data,spot,wave,ink,c\.rowSpan>=3,c\.rowSpan>=4\)/)
+  assert.match(dispatch,/renderAdaptiveMediumFamily\(c,data,spot,wave,ink,true,false\)/)
+  assert.match(source,/SurfAdaptivePolicy::compose\(input\)/)
+  assert.match(source,/renderAdaptiveSurf\(c, data, composition, spot, wave\)/)
 })
 
 test('Studio allocates every daypart, daily, and Today’s Best disclosure',()=>{
