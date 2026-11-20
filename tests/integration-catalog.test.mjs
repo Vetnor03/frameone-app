@@ -31,18 +31,38 @@ test('Connect Apps search matches names, localizations and evaluation statuses',
 })
 
 
-test('Connect Apps shows connected integrations first without rearranging the rest', () => {
-  const apps = [
-    { key: 'teams', connected: false },
-    { key: 'google-calendar', connected: true },
-    { key: 'local-events', connected: false },
-    { key: 'spond', connected: true },
-    { key: 'waste', connected: false },
-  ]
-  assert.deepEqual(sortConnectedAppsFirst(apps).map(item => item.key), ['google-calendar', 'spond', 'teams', 'local-events', 'waste'])
-  assert.deepEqual(apps.map(item => item.key), ['teams', 'google-calendar', 'local-events', 'spond', 'waste'])
+test('Connect Apps puts connected apps first, alphabetically within each status', () => {
+  const connected = new Set(['google-calendar', 'spond', 'waste'])
+  const apps = INTEGRATION_CATALOGUE.map(definition => ({
+    app: { ...definition, name: definition.name.en },
+    connected: connected.has(definition.key),
+  }))
+  const keys = (items) => items.map(item => item.app.key)
 
-  // Once an integration disconnects, it returns to its catalogue position in the remaining group.
-  const afterDisconnect = apps.map(item => item.key === 'google-calendar' ? { ...item, connected: false } : item)
-  assert.deepEqual(sortConnectedAppsFirst(afterDisconnect).map(item => item.key), ['spond', 'teams', 'google-calendar', 'local-events', 'waste'])
+  assert.deepEqual(keys(sortConnectedAppsFirst(apps)), [
+    'google-calendar', 'spond', 'waste', // connected (alphabetical, regardless of status)
+    'bonnetid', 'local-events', 'teams', // available
+    'planta', 'transponder', 'vigilo', // under evaluation
+  ])
+  assert.deepEqual(keys(apps), INTEGRATION_CATALOGUE.map(item => item.key), 'does not mutate the catalogue order')
+
+  // Disconnecting returns the app to its alphabetical position within its status group.
+  const afterDisconnect = apps.map(item => item.app.key === 'google-calendar' ? { ...item, connected: false } : item)
+  assert.deepEqual(keys(sortConnectedAppsFirst(afterDisconnect)), [
+    'spond', 'waste',
+    'google-calendar', 'bonnetid', 'local-events', 'teams',
+    'planta', 'transponder', 'vigilo',
+  ])
+})
+
+test('Unconnected apps sort alphabetically with Done, Experimental and Under Evaluation groups', () => {
+  const apps = INTEGRATION_CATALOGUE.map(definition => ({
+    app: { ...definition, name: definition.name.no },
+    connected: false,
+  }))
+  assert.deepEqual(sortConnectedAppsFirst(apps).map(item => item.app.key), [
+    'google-calendar', 'bonnetid', 'local-events', 'teams', // available / Done
+    'waste', 'spond', // experimental: Renovasjon before Spond
+    'planta', 'transponder', 'vigilo', // under evaluation
+  ])
 })
