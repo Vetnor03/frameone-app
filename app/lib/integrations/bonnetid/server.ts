@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '../spond/server'
 import { bonnetidLocalToIso, normalizeIrnLocations, normalizeIrnPrayerRows, type BonnetidCity } from './normalize.mjs'
 import { buildIrnCalendarOccurrences, type IrnCalendarOccasion } from './calendar.mjs'
+import { sharedIrnCache } from './sharedCache'
 
 const PROVIDER = 'bonnetid' // Stable internal key for existing Reminders filters and frames
 const API_BASE = 'https://disp-api.bonnetider.eu/rest/v1/'
@@ -53,12 +54,15 @@ async function apiGet(table: 'location_t' | 'prayertime' | 'hijri_month' | 'hijr
 }
 
 export async function getBonnetidCities(): Promise<BonnetidCity[]> {
-  const cities = normalizeIrnLocations(await apiGet('location_t', {
-    select: 'location_iso,fylke_name,location_name,prayer_method,asr_method',
-    order: 'location_name.asc',
-  }))
-  if (!cities.length) throw new BonnetidError('upstream_unavailable', 'IRN returnerte ingen støttede lokasjoner.')
-  return cities
+  // One official location catalogue shared across all RE:MIND users.
+  return sharedIrnCache('irn:locations:v1', 24 * 60 * 60, async () => {
+    const cities = normalizeIrnLocations(await apiGet('location_t', {
+      select: 'location_iso,fylke_name,location_name,prayer_method,asr_method',
+      order: 'location_name.asc',
+    }))
+    if (!cities.length) throw new BonnetidError('upstream_unavailable', 'IRN returnerte ingen støttede lokasjoner.')
+    return cities
+  })
 }
 
 function osloYmd(now = new Date()) {
@@ -81,18 +85,22 @@ function upcomingDates() {
 async function officialPrayerSchedule(city: BonnetidCity) {
   const dates = upcomingDates()
   // PostgREST range filters fetch all ten days in ONE request, rather than one request per day.
-  const response = await apiGet('prayertime', {
-    select: 'date,location_iso,prayer_method,fajr,duhr,asr,maghrib,isha',
-    and: '(date.gte.' + dates[0] + ',date.lte.' + dates[dates.length - 1] + ')',
-    location_iso: 'eq.' + city.id,
-    prayer_method: 'eq.' + city.prayerMethod,
-    order: 'date.asc',
+  // Keyed by municipality, IRN calculation method and first requested day.
+  // 100 users in the same municipality receive the same validated dataset.
+  return sharedIrnCache('irn:prayers:v1:' + city.id + ':' + city.prayerMethod + ':' + dates[0], 12 * 60 * 60, async () => {
+    const response = await apiGet('prayertime', {
+      select: 'date,location_iso,prayer_method,fajr,duhr,asr,maghrib,isha',
+      and: '(date.gte.' + dates[0] + ',date.lte.' + dates[dates.length - 1] + ')',
+      location_iso: 'eq.' + city.id,
+      prayer_method: 'eq.' + city.prayerMethod,
+      order: 'date.asc',
+    })
+    const prayers = normalizeIrnPrayerRows(response, city, dates)
+    if (prayers.length < 5 || !prayers.some(item => item.date === dates[0])) {
+      throw new BonnetidError('no_times', 'IRN har ikke komplette bønnetider for denne lokasjonen i dag.')
+    }
+    return prayers
   })
-  const prayers = normalizeIrnPrayerRows(response, city, dates)
-  if (prayers.length < 5 || !prayers.some(item => item.date === dates[0])) {
-    throw new BonnetidError('no_times', 'IRN har ikke komplette bønnetider for denne lokasjonen i dag.')
-  }
-  return prayers
 }
 
 
@@ -105,21 +113,25 @@ async function officialCalendarSchedule(): Promise<IrnCalendarOccasion[]> {
   const horizonEnd = addGregorianDays(today, CALENDAR_HORIZON_DAYS)
   // Request one month before the visible horizon and one after so events require
   // both actual IRN month boundaries. Do not use client-side Hijri calculations.
-  const [mapping, months, events] = await Promise.all([
-    apiGet('hijri_date_mapping', {
-      select: 'hijri_date_day,hijri_date_month,hijri_date_year,gregorian_date,remark',
-      and: '(gregorian_date.gte.' + addGregorianDays(today, -40) + ',gregorian_date.lte.' + addGregorianDays(horizonEnd, 40) + ')',
-      order: 'gregorian_date.asc',
-      limit: '100',
-    }),
-    apiGet('hijri_month', { select: 'hijri_date_month,name_short,name_long,no,en,ar' }),
-    apiGet('hijri_yearly_events', { select: 'hijri_date_month,hijri_date_day,no,en,ar' }),
-  ])
-  const occasions = buildIrnCalendarOccurrences({ mapping, months, events, today, horizonEnd })
-  if (occasions.length === 0) {
-    throw new BonnetidError('upstream_unavailable', 'IRN har ingen bekreftede kalenderdatoer for perioden.')
-  }
-  return occasions
+  // The Hijri dates have no municipality-specific inputs, so all users reuse
+  // the same confirmed 366-day window for the whole Norwegian calendar day.
+  return sharedIrnCache('irn:calendar:v1:' + today, 24 * 60 * 60, async () => {
+    const [mapping, months, events] = await Promise.all([
+      apiGet('hijri_date_mapping', {
+        select: 'hijri_date_day,hijri_date_month,hijri_date_year,gregorian_date,remark',
+        and: '(gregorian_date.gte.' + addGregorianDays(today, -40) + ',gregorian_date.lte.' + addGregorianDays(horizonEnd, 40) + ')',
+        order: 'gregorian_date.asc',
+        limit: '100',
+      }),
+      apiGet('hijri_month', { select: 'hijri_date_month,name_short,name_long,no,en,ar' }),
+      apiGet('hijri_yearly_events', { select: 'hijri_date_month,hijri_date_day,no,en,ar' }),
+    ])
+    const occasions = buildIrnCalendarOccurrences({ mapping, months, events, today, horizonEnd })
+    if (occasions.length === 0) {
+      throw new BonnetidError('upstream_unavailable', 'IRN har ingen bekreftede kalenderdatoer for perioden.')
+    }
+    return occasions
+  })
 }
 
 export async function getBonnetidStatus(userId: string) {
