@@ -88,13 +88,13 @@ export function getMicrosoftRedirectUri(req?: Request) {
   return new URL('/api/integrations/teams/callback', req.url).toString()
 }
 
-export function buildMicrosoftAuthUrl(state: string, redirectUri: string) {
+export function buildMicrosoftAuthUrl(state: string, redirectUri: string, scopes: readonly string[] = TEAMS_SCOPES) {
   const url = new URL(`${MICROSOFT_AUTHORITY}/oauth2/v2.0/authorize`)
   url.searchParams.set('client_id', requiredEnv('MICROSOFT_CLIENT_ID'))
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('redirect_uri', redirectUri)
   url.searchParams.set('response_mode', 'query')
-  url.searchParams.set('scope', TEAMS_SCOPES.join(' '))
+  url.searchParams.set('scope', scopes.join(' '))
   url.searchParams.set('state', state)
   url.searchParams.set('prompt', 'select_account')
   return url.toString()
@@ -122,14 +122,14 @@ function toStoredTokenSet(data: TokenResponse, existingRefreshToken?: string): T
   }
 }
 
-export async function exchangeMicrosoftCode(code: string, redirectUri: string): Promise<TeamsTokenSet> {
+export async function exchangeMicrosoftCode(code: string, redirectUri: string, scopes: readonly string[] = TEAMS_SCOPES): Promise<TeamsTokenSet> {
   const body = new URLSearchParams({
     client_id: requiredEnv('MICROSOFT_CLIENT_ID'),
     client_secret: requiredEnv('MICROSOFT_CLIENT_SECRET'),
     code,
     redirect_uri: redirectUri,
     grant_type: 'authorization_code',
-    scope: TEAMS_SCOPES.join(' '),
+    scope: scopes.join(' '),
   })
 
   const resp = await fetch(`${MICROSOFT_AUTHORITY}/oauth2/v2.0/token`, {
@@ -140,14 +140,14 @@ export async function exchangeMicrosoftCode(code: string, redirectUri: string): 
   return toStoredTokenSet(await parseTokenResponse(resp))
 }
 
-export async function refreshMicrosoftToken(credentials: TeamsStoredCredentials): Promise<TeamsTokenSet> {
+export async function refreshMicrosoftToken(credentials: TeamsStoredCredentials, scopes: readonly string[] = TEAMS_SCOPES): Promise<TeamsTokenSet> {
   if (!credentials.refresh_token) throw new Error('Microsoft connection is missing a refresh token')
   const body = new URLSearchParams({
     client_id: requiredEnv('MICROSOFT_CLIENT_ID'),
     client_secret: requiredEnv('MICROSOFT_CLIENT_SECRET'),
     refresh_token: credentials.refresh_token,
     grant_type: 'refresh_token',
-    scope: TEAMS_SCOPES.join(' '),
+    scope: scopes.join(' '),
   })
 
   const resp = await fetch(`${MICROSOFT_AUTHORITY}/oauth2/v2.0/token`, {
