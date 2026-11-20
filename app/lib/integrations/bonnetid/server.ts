@@ -1,10 +1,12 @@
 import { getSupabaseAdmin } from '../spond/server'
 import { bonnetidLocalToIso, normalizeIrnLocations, normalizeIrnPrayerRows, type BonnetidCity } from './normalize.mjs'
+import { buildIrnCalendarOccurrences, type IrnCalendarOccasion } from './calendar.mjs'
 
 const PROVIDER = 'bonnetid' // Stable internal key for existing Reminders filters and frames
 const API_BASE = 'https://disp-api.bonnetider.eu/rest/v1/'
 const REFRESH_INTERVAL = 12 * 60 * 60 * 1000
 const WINDOW_DAYS = 10
+const CALENDAR_HORIZON_DAYS = 366
 
 export class BonnetidError extends Error {
   constructor(public code: 'setup_required' | 'upstream_unavailable' | 'invalid_city' | 'no_times', message: string) {
@@ -23,7 +25,7 @@ function apiHeaders(): HeadersInit {
   return { apikey: apiKey, Authorization: authorization, Accept: 'application/json' }
 }
 
-async function apiGet(table: 'location_t' | 'prayertime', filters: Record<string, string>): Promise<unknown> {
+async function apiGet(table: 'location_t' | 'prayertime' | 'hijri_month' | 'hijri_yearly_events' | 'hijri_date_mapping', filters: Record<string, string>): Promise<unknown> {
   const url = new URL(table, API_BASE)
   for (const [key, value] of Object.entries(filters)) url.searchParams.set(key, value)
   let response: Response
@@ -94,6 +96,32 @@ async function officialPrayerSchedule(city: BonnetidCity) {
 }
 
 
+function addGregorianDays(ymd: string, offset: number) {
+  return new Date(Date.parse(ymd + 'T12:00:00Z') + offset * 86400000).toISOString().slice(0, 10)
+}
+
+async function officialCalendarSchedule(): Promise<IrnCalendarOccasion[]> {
+  const today = osloYmd()
+  const horizonEnd = addGregorianDays(today, CALENDAR_HORIZON_DAYS)
+  // Request one month before the visible horizon and one after so events require
+  // both actual IRN month boundaries. Do not use client-side Hijri calculations.
+  const [mapping, months, events] = await Promise.all([
+    apiGet('hijri_date_mapping', {
+      select: 'hijri_date_day,hijri_date_month,hijri_date_year,gregorian_date,remark',
+      and: '(gregorian_date.gte.' + addGregorianDays(today, -40) + ',gregorian_date.lte.' + addGregorianDays(horizonEnd, 40) + ')',
+      order: 'gregorian_date.asc',
+      limit: '100',
+    }),
+    apiGet('hijri_month', { select: 'hijri_date_month,name_short,name_long,no,en,ar' }),
+    apiGet('hijri_yearly_events', { select: 'hijri_date_month,hijri_date_day,no,en,ar' }),
+  ])
+  const occasions = buildIrnCalendarOccurrences({ mapping, months, events, today, horizonEnd })
+  if (occasions.length === 0) {
+    throw new BonnetidError('upstream_unavailable', 'IRN har ingen bekreftede kalenderdatoer for perioden.')
+  }
+  return occasions
+}
+
 export async function getBonnetidStatus(userId: string) {
   const { data, error } = await getSupabaseAdmin().from('user_integrations')
     .select('status,external_account_id,external_account_label,last_sync_at,last_error')
@@ -156,6 +184,48 @@ export async function refreshBonnetidForUser(userId: string, chosenCity?: Bonnet
     const removed = await db.from('integration_items').delete().eq('user_id', userId).eq('provider', PROVIDER).in('external_id', staleIds)
     if (removed.error) throw new Error(removed.error.message)
   }
+
+  // IRN all-day calendar occasions share the provider and display filter with prayers.
+  // This is best-effort: a temporarily incomplete Hijri table must not block prayer sync
+  // or delete previously verified calendar records.
+  let calendarCount = 0
+  let calendarAvailable = false
+  try {
+    const occasions = await officialCalendarSchedule()
+    const calendarRows = occasions.map(occasion => ({
+      user_id: userId,
+      provider: PROVIDER,
+      external_id: 'calendar:' + occasion.id,
+      title: occasion.no,
+      body: null,
+      starts_at: null,
+      due_at: null,
+      priority: 5,
+      raw: {
+        source: PROVIDER, type: 'holiday', all_day: true, event_origin: 'irn_calendar',
+        date: occasion.date, hijri_date_year: occasion.year,
+        hijri_date_month: occasion.month, hijri_date_day: occasion.day,
+        kind: occasion.kind, title_no: occasion.no, title_en: occasion.en, title_ar: occasion.ar,
+      },
+      updated_at: now,
+    }))
+    const updatedCalendar = await db.from('integration_items').upsert(calendarRows, { onConflict: 'user_id,provider,external_id' })
+    if (updatedCalendar.error) throw new Error('IRN calendar storage unavailable')
+    const currentIds = new Set(calendarRows.map(row => row.external_id))
+    const staleCalendarIds = (previous.data || [])
+      .filter(row => row.raw?.event_origin === 'irn_calendar')
+      .map(row => row.external_id)
+      .filter(id => !currentIds.has(id))
+    if (staleCalendarIds.length) {
+      const removed = await db.from('integration_items').delete().eq('user_id', userId).eq('provider', PROVIDER).in('external_id', staleCalendarIds)
+      if (removed.error) throw new Error('IRN calendar cleanup unavailable')
+    }
+    calendarCount = calendarRows.length
+    calendarAvailable = true
+  } catch {
+    // The verified prayer timetable remains connected; keep old calendar items on failure.
+    console.warn('[IRN] Calendar sync unavailable; retaining existing verified occasions')
+  }
   const saved = await db.from('user_integrations').upsert({
     user_id: userId,
     provider: PROVIDER,
@@ -171,7 +241,7 @@ export async function refreshBonnetidForUser(userId: string, chosenCity?: Bonnet
     updated_at: now,
   }, { onConflict: 'user_id,provider' })
   if (saved.error) throw new Error(saved.error.message)
-  return { connected: true, city: city.name, itemCount: rows.length }
+  return { connected: true, city: city.name, itemCount: rows.length, calendarCount, calendarAvailable }
 }
 
 export async function connectBonnetidForUser(userId: string, cityId: string) {

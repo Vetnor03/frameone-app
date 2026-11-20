@@ -11420,6 +11420,10 @@ function integrationReminderTitle(row: any, source: ReminderSource, language: Ap
   if (source === 'teams') return title
   if (source === 'spond') return title
   if (source === 'waste') return wasteCollectionDisplayTitle(row?.raw?.normalized_type || row?.raw?.waste_fraction, language, row?.raw?.original_provider_label) || title
+  if (source === 'bonnetid' && row?.raw?.event_origin === 'irn_calendar') {
+    const localized = language === 'no' ? row.raw?.title_no : row.raw?.title_en
+    return typeof localized === 'string' && localized.trim() ? localized.trim() : title
+  }
   return title
 }
 
