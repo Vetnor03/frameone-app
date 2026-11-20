@@ -13,8 +13,10 @@ const GOOGLE_TASKS_API = 'https://tasks.googleapis.com/tasks/v1'
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 
 export class GoogleTasksApiError extends Error {
-  constructor(public readonly status: number) {
+  readonly status: number
+  constructor(status: number) {
     super('Google Tasks API failed (' + status + ')')
+    this.status = status
   }
 }
 
