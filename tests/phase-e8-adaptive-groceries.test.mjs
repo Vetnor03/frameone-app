@@ -54,20 +54,45 @@ test('exact groceries capability and atomic custom-layout preflight',async()=>{
  const capability=await readFile(new URL('../frame/src/modules/AdaptiveModuleCapability.h',import.meta.url),'utf8');assert.match(capability,/exactOnly\(module, "groceries"\)/)
 })
 
-test('adaptive dispatch is additive and fixed renderers remain protected',async()=>{
- const firmware=await readFile(new URL('../frame/src/modules/ModuleGroceries.cpp',import.meta.url),'utf8')
- assert.match(firmware,/if \(c\.size == CELL_ADAPTIVE\)[\s\S]{0,100}renderAdaptiveGroceries\(c\)/)
- for(const name of ['renderSmall','renderMedium','renderLarge','renderXL'])assert.match(firmware,new RegExp(`static void ${name}\\(`))
- assert.match(firmware,/BEGIN ADAPTIVE GROCERIES RENDERER[\s\S]*END ADAPTIVE GROCERIES RENDERER/)
- assert.equal((firmware.match(/static GroceryCache g_cache;/g)||[]).length,1)
- const adaptive=firmware.slice(firmware.indexOf('// BEGIN ADAPTIVE GROCERIES RENDERER'),firmware.indexOf('// END ADAPTIVE GROCERIES RENDERER'))
- assert.match(adaptive,/adaptiveHeading[\s\S]*fillRect/)
- assert.match(adaptive,/adaptiveCenteredLine\(x, y, width, raw, FONT_B12\)/)
- assert.match(adaptive,/adaptiveCenteredLine\(innerX,[\s\S]*more, FONT_B9\)/)
- assert.match(adaptive,/char quantity\[16\][\s\S]*textWidth\(quantity[\s\S]*item\.name/)
- assert.match(adaptive,/runningLowMode\([\s\S]*RUNNING_FULL \? full : g_cache\.runningLow\[i\]\.name/)
- assert.match(adaptive,/mealMissingCount\([\s\S]*missing == 2 \? two : \(missing == 1 \? one : g_cache\.recipes\[i\]\.name\)/)
- assert.match(adaptive,/family == GroceriesAdaptivePolicy::EMPTY[\s\S]*adaptiveHeading[\s\S]*adaptiveCenteredLine/)
+test('adaptive Groceries uses the approved News heading and protects data disclosure',async()=>{
+  const firmware=await readFile(new URL('../frame/src/modules/ModuleGroceries.cpp',import.meta.url),'utf8')
+  const newsStyle=await readFile(new URL('../frame/src/modules/GroceriesNewsStyle.h',import.meta.url),'utf8')
+  assert.match(firmware,/if \(c\.size == CELL_ADAPTIVE\)[\s\S]{0,100}renderAdaptiveGroceries\(c\)/)
+  for(const name of ['renderSmall','renderMedium','renderLarge','renderXL'])
+    assert.match(firmware,new RegExp('static void '+name+'\\('))
+  assert.equal((firmware.match(/static GroceryCache g_cache;/g)||[]).length,1)
+  assert.match(firmware,/#include "GroceriesNewsStyle.h"/)
+  assert.match(firmware,/BEGIN ADAPTIVE GROCERIES RENDERER[\s\S]*END ADAPTIVE GROCERIES RENDERER/)
+
+  const adaptive=firmware.slice(
+    firmware.indexOf('// BEGIN ADAPTIVE GROCERIES RENDERER'),
+    firmware.indexOf('// END ADAPTIVE GROCERIES RENDERER'))
+  const heading=adaptive.slice(adaptive.indexOf('static void adaptiveHeading('),
+    adaptive.indexOf('static void renderAdaptiveGroceries('))
+  const sharedHeading=newsStyle.slice(newsStyle.indexOf('static void groceriesNewsAdaptiveHeading('))
+  assert.match(heading,/groceriesNewsAdaptiveHeading\(x,top,width,height,value\)/)
+  assert.match(sharedHeading,/if\(width<8 \|\| height<8\)return/)
+  assert.match(sharedHeading,/fitTextToWidth\(value,fit,sizeof\(fit\),width,font\)/)
+  assert.match(sharedHeading,/if\(!tw \|\| !th \|\| \(int\)tw>width \|\| \(int\)th>height\)continue/)
+  assert.match(sharedHeading,/drawLeft\(x\+\(width-\(int\)tw\)\/2-ox,/)
+  // Approved News heading is text-only; it intentionally has no underline.
+  assert.doesNotMatch(sharedHeading,/fillRect|drawFastHLine/)
+
+  // Both filled and empty layouts still call the shared heading.
+  assert.match(adaptive,/layout\.family == GroceriesAdaptivePolicy::EMPTY[\s\S]*?adaptiveHeading\([\s\S]*?adaptiveCenteredLine\(/)
+  assert.match(adaptive,/const char\* heading = todayHeading \? g_cache\.dinners\[todayDinner\]\.title : g_cache\.header/)
+  assert.match(adaptive,/adaptiveHeading\(innerX,[\s\S]*?groceryW,[\s\S]*?heading\)/)
+  assert.match(adaptive,/adaptiveHeading\(menuX, c\.y \+ pad, menuW, 32, menuHeading\)/)
+
+  // Quantity prefix, ordered items, ellipsis and optional insights survive the design change.
+  assert.match(firmware,/if \(item\.qty > 1\)[\s\S]*?snprintf\(out, outSize, "%dx %s", item\.qty, item\.name\)/)
+  assert.match(adaptive,/const GroceryItem& item=g_cache\.items\[wrapIndex\(rotation\+i,g_cache\.count\)\]/)
+  assert.match(adaptive,/formatItem\(item,raw,sizeof\(raw\)\)/)
+  assert.match(adaptive,/groceriesNewsItem\(raw,x,y,width,height,layout\.horizontal,capacity\)/)
+  assert.match(adaptive,/if \(g_cache\.count > capacity && listH >= overflowH\)/)
+  assert.match(adaptive,/adaptiveCenteredLine\(innerX,[\s\S]*?more, FONT_B9\)/)
+  assert.match(adaptive,/runningLowMode\([\s\S]*?RUNNING_FULL \? full : g_cache\.runningLow\[i\]\.name/)
+  assert.match(adaptive,/mealMissingCount\([\s\S]*?missing == 2 \? two : \(missing == 1 \? one : g_cache\.recipes\[i\]\.name\)/)
 })
 
 test('host policy helpers enforce optional-fact disclosure order',async()=>{
