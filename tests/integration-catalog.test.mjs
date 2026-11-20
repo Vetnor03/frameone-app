@@ -3,14 +3,14 @@ import test from 'node:test'
 import { INTEGRATION_CATALOGUE, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst } from '../app/lib/integrations/catalog.ts'
 
 test('shared integrations are ordered and expose lifecycle capabilities', () => {
-  assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'google-calendar', 'local-events', 'spond', 'waste', 'bonnetid', 'vigilo', 'transponder', 'planta'])
+  assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'google-calendar', 'bonnetid', 'local-events', 'spond', 'waste', 'vigilo', 'transponder', 'planta'])
   const waste = INTEGRATION_CATALOGUE.find(item => item.key === 'waste')
   assert.deepEqual({ status: waste.status, connectable: waste.connectable }, { status: 'experimental', connectable: true })
   assert.equal(waste.description.en, 'Find your address and see upcoming waste collections')
   assert.equal(INTEGRATION_CATALOGUE.find(item => item.key === 'teams').name.en, 'Teams')
   const spond = INTEGRATION_CATALOGUE.find(item => item.key === 'spond')
   assert.deepEqual({ status: spond.status, connectable: spond.connectable }, { status: 'experimental', connectable: true })
-  assert.deepEqual(INTEGRATION_CATALOGUE.find(item => item.key === 'bonnetid') && (({ status, connectable }) => ({ status, connectable }))(INTEGRATION_CATALOGUE.find(item => item.key === 'bonnetid')), { status: 'experimental', connectable: true })
+  assert.deepEqual(INTEGRATION_CATALOGUE.find(item => item.key === 'bonnetid') && (({ status, connectable }) => ({ status, connectable }))(INTEGRATION_CATALOGUE.find(item => item.key === 'bonnetid')), { status: 'available', connectable: true })
   for (const key of ['vigilo', 'transponder', 'planta']) {
     const integration = INTEGRATION_CATALOGUE.find(item => item.key === key)
     assert.deepEqual({ status: integration.status, connectable: integration.connectable }, { status: 'under-evaluation', connectable: false })
@@ -23,7 +23,7 @@ test('Connect Apps search matches names, localizations and evaluation statuses',
   const keys = (query) => INTEGRATION_CATALOGUE.filter(item => integrationMatchesSearch(item, query)).map(item => item.key)
   assert.deepEqual(keys(' PLanTa '), ['planta'])
   assert.deepEqual(keys('Renovasjon'), ['waste'])
-  assert.deepEqual(keys('calendar'), ['google-calendar'])
+  assert.deepEqual(keys('calendar'), ['google-calendar', 'bonnetid'])
   assert.deepEqual(keys('under evaluation'), ['vigilo', 'transponder', 'planta'])
   assert.deepEqual(keys('under vurdering'), ['vigilo', 'transponder', 'planta'])
   assert.deepEqual(keys('not a real integration'), [])
