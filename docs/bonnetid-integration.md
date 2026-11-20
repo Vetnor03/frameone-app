@@ -51,3 +51,19 @@ Calendar sync adds three upstream requests at most once per account per 12-hour 
 ## Connect UX polish
 
 The IRN Connect modal binds the visible location field to the chosen provider location after selection (not the previous search text). The field is read-only until the user taps Change, avoiding mobile keyboard composition / autocomplete tails such as `erStavanger`. IRN is displayed immediately after Google Calendar among available providers; the connected-first ordering still takes priority on the main Connect tab.
+
+## Shared upstream cache (2026-11-20)
+
+The IRN API is **never called from a physical frame**. All data first reaches RE:MIND's Vercel backend, and individual users/frames read their stored `integration_items` in Supabase as before.
+
+A new server-only Supabase `irn_shared_cache` table keeps provider datasets globally, with atomic, short-lived Postgres leases for concurrency. No secret or user-specific data is stored in shared cache. The cache and 3 service-only RPCs are RLS-protected and cannot be called from the browser.
+
+- `irn:locations:v1`: shared municipality list, 24h TTL, 1 upstream call on miss.
+- `irn:prayers:v1:<location_iso>:<prayer_method>:<today>`: one official 10-day timetable per municipality/method/day, 12h TTL, 1 upstream call on miss.
+- `irn:calendar:v1:<today>`: one shared 366-day Hijri calendar per Norway day, 24h TTL, 3 upstream calls on miss.
+
+If 100 users share Stavanger, their staggered 12h **account** syncs all hit the same shared provider data; they do not cause 100 upstream calls. Concurrent cold-cache requests acquire a single lease; other requests wait for the first (up to ~15s). A failed upstream request has a 60s per-key cooldown to prevent thundering herd retries. Cache failure never falls back to fetching IRN directly, preserving rate-limit promises. Already stored per-user prayers still render on frames during upstream/cache outages.
+
+*Expected steady state with one active municipality:* roughly 2 prayer requests + 3 calendar requests + 1 municipality lookup per Norway day (plus one-time cold starts), not ~1,000 for 100 users. Actual totals vary by daily activity and cache expirations. Keys include today's date to keep all 10-day timetables current and avoid distributing last day's window as a fresh cache hit.
+
+Deployment requires Supabase migration `irn_shared_provider_cache` to be applied **before** the server code is promoted to Production.
