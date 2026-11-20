@@ -3660,7 +3660,7 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'todoist' | 'waste' | 'bonnetid'
+type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'todoist' | 'microsoft-todo' | 'waste' | 'bonnetid'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -3719,8 +3719,11 @@ function ConnectAppsScreen({
   const initialGoogleOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
   const initialTodoistOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('todoist')
   const initialTodoistOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
-  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>(() => initialTeamsOAuthStatus === 'error' || initialGoogleOAuthStatus === 'error' || initialTodoistOAuthStatus === 'error' ? 'error' : 'info')
+  const initialMicrosoftTodoOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('microsoft_todo')
+  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>(() => initialTeamsOAuthStatus === 'error' || initialGoogleOAuthStatus === 'error' || initialTodoistOAuthStatus === 'error' || initialMicrosoftTodoOAuthStatus === 'error' ? 'error' : 'info')
   const [status, setStatus] = useState<string | null>(() => {
+    if (initialMicrosoftTodoOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Microsoft To Do-tilkobling…' : 'Finishing Microsoft To Do connection…'
+    if (initialMicrosoftTodoOAuthStatus === 'error') return language === 'no' ? 'Kunne ikke koble til Microsoft To Do. Prøv igjen.' : 'Could not connect Microsoft To Do. Try again.'
     if (initialTodoistOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Todoist-tilkobling…' : 'Finishing Todoist connection…'
     if (initialTodoistOAuthStatus === 'error') return initialTodoistOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Todoist' : 'Could not connect Todoist')
     if (initialGoogleOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Google Calendar-tilkobling…' : 'Finishing Google Calendar connection…'
@@ -3792,10 +3795,20 @@ function ConnectAppsScreen({
     return sessionStorage.getItem('remind:todoist-oauth-device') === activeDeviceId &&
       (initialTodoistOAuthStatus === 'connected' || sessionStorage.getItem('remind:todoist-oauth-result') === 'connected')
   })
+  const [microsoftTodoAccountConnected, setMicrosoftTodoAccountConnected] = useState(false)
+  const [microsoftTodoAccount, setMicrosoftTodoAccount] = useState<string | null>(null)
+  const [microsoftTodoStatusResolved, setMicrosoftTodoStatusResolved] = useState(false)
+  const [microsoftTodoStatusFailed, setMicrosoftTodoStatusFailed] = useState(false)
+  const [microsoftTodoLoading, setMicrosoftTodoLoading] = useState(false)
+  const [pendingMicrosoftTodoEnableAfterOAuth, setPendingMicrosoftTodoEnableAfterOAuth] = useState(() => {
+    if (typeof window === 'undefined' || !activeDeviceId) return false
+    return sessionStorage.getItem('remind:microsoft-todo-oauth-device') === activeDeviceId &&
+      (initialMicrosoftTodoOAuthStatus === 'connected' || sessionStorage.getItem('remind:microsoft-todo-oauth-result') === 'connected')
+  })
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
   const [disconnectConfirmApp, setDisconnectConfirmApp] = useState<DisconnectableConnectAppKey | null>(null)
-  const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams' | 'google-calendar' | 'todoist', string>>>({})
+  const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams' | 'google-calendar' | 'todoist' | 'microsoft-todo', string>>>({})
   const [localEventsOpen, setLocalEventsOpen] = useState(false)
   const [wasteModalOpen, setWasteModalOpen] = useState(false)
   const [bonnetidModalOpen, setBonnetidModalOpen] = useState(false)
@@ -3955,12 +3968,38 @@ function ConnectAppsScreen({
     setIntegrationSetupErrors(current => ({ ...current, todoist: typeof json?.setup_error?.message === 'string' ? json.setup_error.message : undefined }))
   }
 
+  async function fetchMicrosoftTodoStatus() {
+    const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+    if (!token) {
+      setMicrosoftTodoStatusResolved(true)
+      setMicrosoftTodoAccountConnected(false)
+      updateConnectionDisplayStatus('microsoft-todo', false, false)
+      return
+    }
+    const response = await fetch('/api/integrations/microsoft-todo/status', {
+      headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
+    })
+    if (!response.ok) { setMicrosoftTodoStatusResolved(true); setMicrosoftTodoStatusFailed(true); return }
+    const json = await response.json()
+    setMicrosoftTodoAccountConnected(json?.connected === true)
+    setMicrosoftTodoAccount(typeof json?.account === 'string' ? json.account : null)
+    setMicrosoftTodoStatusResolved(true)
+    setMicrosoftTodoStatusFailed(false)
+    setLocallyDisconnectedApps(current => ({ ...current, 'microsoft-todo': json?.connected === true ? false : current['microsoft-todo'] }))
+    updateConnectionDisplayStatus('microsoft-todo', json?.connected === true && frameUsesIntegration(modulesJson, 'microsoft-todo'))
+    setIntegrationSetupErrors(current => ({
+      ...current,
+      'microsoft-todo': typeof json?.setup_error?.message === 'string' ? json.setup_error.message : undefined,
+    }))
+  }
+
   function legacyEnabledIntegrations(): ConnectAppKey[] {
     return [
       ...(spondAccountConnected ? ['spond' as const] : []),
       ...(teamsAccountConnected ? ['teams' as const] : []),
       ...(googleAccountConnected ? ['google-calendar' as const] : []),
       ...(todoistAccountConnected && frameUsesIntegration(modulesJson, 'todoist') ? ['todoist' as const] : []),
+      ...(microsoftTodoAccountConnected && frameUsesIntegration(modulesJson, 'microsoft-todo') ? ['microsoft-todo' as const] : []),
       ...(localEventsAccountConnected && localEventsStatusDeviceId === activeDeviceId ? ['local-events' as const] : []),
       ...(connectAppIsConnected(modulesJson, 'waste') ? ['waste' as const] : []),
     ]
@@ -3991,6 +4030,7 @@ function ConnectAppsScreen({
     if (!teamsStatusResolved) void fetchTeamsStatus().catch(() => setTeamsStatusFailed(true))
     if (!googleStatusResolved) void fetchGoogleCalendarStatus().catch(() => setGoogleStatusFailed(true))
     if (!todoistStatusResolved) void fetchTodoistStatus().catch(() => { setTodoistStatusFailed(true); setTodoistStatusResolved(true) })
+    if (!microsoftTodoStatusResolved) void fetchMicrosoftTodoStatus().catch(() => { setMicrosoftTodoStatusFailed(true); setMicrosoftTodoStatusResolved(true) })
     if (!localEventsResolvedForActiveDevice && activeDeviceId) void fetchLocalEventsStatus(activeDeviceId, localEventsRequestGenerationRef.current).catch(() => setLocalEventsStatusFailed(true))
   }
 
@@ -4015,6 +4055,32 @@ function ConnectAppsScreen({
       setStatusTone('error')
       setStatus(error instanceof Error ? error.message : 'Todoist connection failed')
       setTodoistLoading(false)
+    }
+  }
+
+  async function connectMicrosoftTodo() {
+    if (microsoftTodoLoading) return
+    const setupError = integrationSetupErrors['microsoft-todo']
+    if (setupError) { setStatusTone('error'); setStatus(setupError); return }
+    setMicrosoftTodoLoading(true)
+    setStatus(null)
+    try {
+      const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+      if (!token || !activeDeviceId) throw new Error(language === 'no' ? 'Logg inn og velg ramme først' : 'Sign in and select a frame first')
+      sessionStorage.setItem('remind:microsoft-todo-oauth-device', activeDeviceId)
+      sessionStorage.removeItem('remind:microsoft-todo-oauth-result')
+      const response = await fetch('/api/integrations/microsoft-todo/connect', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, 'x-remind-timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Oslo' },
+        cache: 'no-store',
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok || !payload.url) throw new Error(payload.error || 'Could not start Microsoft To Do authorization')
+      window.location.assign(payload.url)
+    } catch (error) {
+      setStatusTone('error')
+      setStatus(error instanceof Error ? error.message : 'Microsoft To Do connection failed')
+      setMicrosoftTodoLoading(false)
     }
   }
 
