@@ -62,7 +62,7 @@ export async function connectTodoistForUser(userId: string, code: string) {
     throw new Error('Todoist did not grant read access')
   }
   const [profile, synced] = await Promise.all([
-    fetchTodoistProfile(credentials.access_token).catch(() => ({})),
+    fetchTodoistProfile(credentials.access_token).catch(() => ({ id: undefined, full_name: undefined, email: undefined })),
     writeTodoistItems(userId, credentials),
   ])
   const admin = getSupabaseAdmin()
