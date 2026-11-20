@@ -7,8 +7,9 @@ import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsIfStaleForUser } from '@/app/lib/integrations/teams/server'
 import { syncGoogleCalendarFromStoredConnection } from '@/app/lib/integrations/google-calendar/server'
 import { syncTodoistFromStoredConnection } from '@/app/lib/integrations/todoist/server'
+import { syncMicrosoftTodoFromStoredConnection } from '@/app/lib/integrations/microsoft-todo/server'
 import { syncBonnetidIfStale } from '@/app/lib/integrations/bonnetid/server'
-import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildTodoistReminderItems, buildWasteCollectionItems, buildIrnReminderItems, preferTomorrowAfterSingleAllDayEvent, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
+import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildTodoistReminderItems, buildMicrosoftTodoReminderItems, buildWasteCollectionItems, buildIrnReminderItems, preferTomorrowAfterSingleAllDayEvent, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
 import { reminderClockBoundaryReached } from '@/app/lib/device/reminderClockBoundary'
@@ -651,6 +652,7 @@ export async function GET(req: Request) {
     let teamsItems: DeviceReminderItem[] = []
     let googleCalendarItems: DeviceReminderItem[] = []
     let todoistItems: DeviceReminderItem[] = []
+    let microsoftTodoItems: DeviceReminderItem[] = []
     let wasteItems: DeviceReminderItem[] = []
     let bonnetidItems: DeviceReminderItem[] = []
     let localEventItems: DeviceReminderItem[] = []
@@ -677,6 +679,7 @@ export async function GET(req: Request) {
             Promise.allSettled((providerEnabled('teams') ? memberUserIds : []).map((userId) => syncTeamsIfStaleForUser(userId, { horizonDays }))),
             Promise.allSettled((providerEnabled('google-calendar') ? memberUserIds : []).map((userId) => syncGoogleCalendarFromStoredConnection(userId))),
             Promise.allSettled((selectedIntegrations.todoist?.enabled === true ? memberUserIds : []).map((userId) => syncTodoistFromStoredConnection(userId))),
+            Promise.allSettled((selectedIntegrations['microsoft-todo']?.enabled === true ? memberUserIds : []).map((userId) => syncMicrosoftTodoFromStoredConnection(userId))),
             Promise.allSettled((providerEnabled('bonnetid') ? memberUserIds : []).map(userId => syncBonnetidIfStale(userId))),
           ])
           syncResults.forEach((result) => {
@@ -754,6 +757,19 @@ export async function GET(req: Request) {
         )
       } catch (error) {
         logOptionalReminderProviderFailure('todoist', error)
+      } })(), (async () => { try {
+        // Tasks from all Microsoft To Do lists appear in the existing Reminders module.
+        if (selectedIntegrations['microsoft-todo']?.enabled !== true) return
+        const { data, error } = await supabase.from('integration_items')
+          .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
+          .eq('provider', 'microsoft-todo').in('user_id', memberUserIds)
+          .order('starts_at', { ascending: true, nullsFirst: false })
+        if (error) throw error
+        microsoftTodoItems = buildMicrosoftTodoReminderItems(
+          Array.isArray(data) ? data as IntegrationItemRow[] : [], todayYmd, horizonEndYmd, timeZone, includeOverdue
+        )
+      } catch (error) {
+        logOptionalReminderProviderFailure('microsoft-todo', error)
       } })(), (async () => { try {
         if (!integrationActiveForPilot('waste') || !providerEnabled('waste')) return
 
@@ -849,6 +865,7 @@ export async function GET(req: Request) {
       ...teamsItems,
       ...googleCalendarItems,
       ...todoistItems,
+      ...microsoftTodoItems,
       ...wasteItems,
       ...bonnetidItems,
       ...localEventItems,

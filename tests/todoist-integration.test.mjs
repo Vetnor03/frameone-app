@@ -136,7 +136,7 @@ test('Todoist sync stays per-user and frame selection is opt-in, with no new mod
   assert.match(app, /integrationProviderToReminderSource/)
   assert.match(app, /source === 'todoist'/)
   assert.match(app, /fetch\('\/api\/integrations\/todoist\/sync'/)
-  assert.match(feed, /source: 'todoist' as const/)
+  assert.match(feed, /buildImportedTaskReminderItems\(rows, todayYmd, horizonEndYmd, timeZone, includeOverdue, 'todoist'\)/)
   assert.doesNotMatch(read('app/lib/device/calendarVisibility.ts'), /source !== 'todoist'/)
 })
 
