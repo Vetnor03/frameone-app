@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import { normalizeTodoistTask } from '../app/lib/integrations/todoist/normalize.mjs'
+import { fetchTodoistTasks, TodoistApiError } from '../app/lib/integrations/todoist/client.ts'
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8')
 
@@ -83,4 +84,48 @@ test('Todoist Connect uses the existing catalog and disconnect flow', () => {
   assert.match(app, /connectTodoist\(\)/)
   assert.match(app, /remind:todoist-oauth-device/)
   assert.match(app, /changeFrameIntegration\('todoist', \{ enabled: true \}\)/)
+})
+
+test('Todoist API v1 task requests follow cursors and never use write methods', async () => {
+  const oldFetch = globalThis.fetch
+  const requests = []
+  try {
+    globalThis.fetch = async (rawUrl, options) => {
+      const url = new URL(String(rawUrl))
+      requests.push(url)
+      assert.equal(url.origin, 'https://api.todoist.com')
+      assert.equal(url.pathname, '/api/v1/tasks')
+      assert.equal(url.searchParams.get('limit'), '200')
+      assert.equal(options?.headers?.Authorization, 'Bearer mock-token')
+      assert.equal(options?.method, undefined, 'uses the GET default')
+      const cursor = url.searchParams.get('cursor')
+      return new Response(JSON.stringify(cursor
+        ? { results: [{id:'task-b',content:'Second',due:{date:'2026-11-22'}}],next_cursor:null }
+        : { results: [{id:'task-a',content:'First',due:{date:'2026-11-21'}}],next_cursor:'page-two' }
+      ), {status:200,headers:{'Content-Type':'application/json'}})
+    }
+    const tasks = await fetchTodoistTasks('mock-token')
+    assert.deepEqual(tasks.map(task=>task.id),['task-a','task-b'])
+    assert.equal(requests.length,2)
+    assert.equal(requests[1].searchParams.get('cursor'),'page-two')
+  } finally {
+    globalThis.fetch = oldFetch
+  }
+})
+
+test('Todoist API errors do not delete or replace cached tasks', async () => {
+  const oldFetch = globalThis.fetch
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: 'unauthorized' }), {status:401})
+    await assert.rejects(fetchTodoistTasks('expired-token'), error => {
+      assert.ok(error instanceof TodoistApiError)
+      assert.equal(error.status,401)
+      return true
+    })
+  } finally {
+    globalThis.fetch = oldFetch
+  }
+  const server = read('app/lib/integrations/todoist/server.ts')
+  assert.ok(server.indexOf('const tasks = await fetchTodoistTasks') < server.indexOf("const { data: existing, error }"),
+    'upstream fetch must finish before any integration row mutation')
 })
