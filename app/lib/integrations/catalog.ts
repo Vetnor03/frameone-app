@@ -52,7 +52,23 @@ export function integrationActiveForPilot(key: ConnectAppKey): boolean {
   return definition?.connectable === true && definition.status !== 'under-evaluation'
 }
 
-/** Connected integrations lead Connect; keep catalogue order within both groups. */
-export function sortConnectedAppsFirst<T extends { connected: boolean }>(apps: readonly T[]): T[] {
-  return [...apps].sort((a, b) => Number(b.connected) - Number(a.connected))
+/** Show connected apps first, then available, experimental, and under-evaluation.
+ * Alphabetize each group by its localized display name rather than catalogue position.
+ */
+export function sortConnectedAppsFirst<T extends {
+  connected: boolean
+  app: { name: string; status: IntegrationStatus }
+}>(apps: readonly T[]): T[] {
+  const statusOrder: Record<IntegrationStatus, number> = {
+    available: 0,
+    experimental: 1,
+    'under-evaluation': 2,
+  }
+  const alphabetic = new Intl.Collator('nb', { sensitivity: 'base', numeric: true })
+
+  return [...apps].sort((a, b) =>
+    Number(b.connected) - Number(a.connected) ||
+    statusOrder[a.app.status] - statusOrder[b.app.status] ||
+    alphabetic.compare(a.app.name, b.app.name)
+  )
 }
