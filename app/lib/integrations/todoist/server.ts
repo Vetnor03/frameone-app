@@ -2,7 +2,8 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { encryptJson, decryptJson } from '@/app/lib/integrations/credentialsCrypto'
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
 import { integrationSyncDelta } from '@/app/lib/integrations/integrationSyncDelta'
-import { exchangeTodoistCode, fetchTodoistProfile, fetchTodoistTasks, refreshTodoistToken, TodoistApiError, type TodoistCredentials, type TodoistTask } from './client'
+import { exchangeTodoistCode, fetchTodoistProfile, fetchTodoistTasks, refreshTodoistToken, TodoistApiError, type TodoistCredentials } from './client'
+import { normalizeTodoistTask } from './normalize.mjs'
 
 export const TODOIST_PROVIDER = 'todoist'
 export const TODOIST_OAUTH_COOKIE = 'remind_todoist_oauth'
@@ -26,28 +27,6 @@ export function verifyTodoistOAuthState(state: string, nonce: string) {
   return decoded.user_id
 }
 
-export function normalizeTodoistTask(task: TodoistTask) {
-  const id = typeof task.id === 'string' ? task.id.trim() : ''
-  const title = typeof task.content === 'string' ? task.content.trim().slice(0, 300) : ''
-  if (!id || id.length > 128 || !title || task.checked === true || task.is_deleted === true) return null
-  const due = task.due
-  const dateValue = typeof due?.date === 'string' ? due.date : ''
-  const datetime = typeof due?.datetime === 'string' ? due.datetime : (/T/.test(dateValue) ? dateValue : '')
-  const date = dateValue.slice(0, 10) || (datetime ? datetime.slice(0, 10) : '')
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
-  // Calendar-only Todoist tasks are anchored at midday UTC; raw.date stays authoritative.
-  const allDay = !datetime
-  const startsAt = allDay ? new Date(date + 'T12:00:00Z') : new Date(datetime)
-  if (Number.isNaN(startsAt.getTime())) return null
-  return {
-    external_id: id, title,
-    body: null,
-    starts_at: startsAt.toISOString(),
-    due_at: startsAt.toISOString(),
-    priority: 0,
-    raw: { source: 'todoist', type: 'task', all_day: allDay, date: allDay ? date : null, recurring: due?.is_recurring === true },
-  }
-}
 
 async function writeTodoistItems(userId: string, credentials: TodoistCredentials) {
   const tasks = await fetchTodoistTasks(credentials.access_token)
@@ -108,9 +87,9 @@ export async function connectTodoistForUser(userId: string, code: string) {
 // Refresh is single-flight in this server instance. The database compare-and-swap also
 // prevents overwriting a refresh token already rotated by another instance.
 const inFlight = new Map<string, Promise<TodoistCredentials>>()
-async function validTodoistCredentials(userId: string, stored: {encrypted_credentials: unknown}): Promise<TodoistCredentials> {
+async function validTodoistCredentials(userId: string, stored: {encrypted_credentials: unknown}, forceRefresh = false): Promise<TodoistCredentials> {
   const credentials = decryptJson<TodoistCredentials>(stored.encrypted_credentials)
-  if (Number.isFinite(Date.parse(credentials.expires_at)) && Date.parse(credentials.expires_at) - Date.now() > 120000) return credentials
+  if (!forceRefresh && Number.isFinite(Date.parse(credentials.expires_at)) && Date.parse(credentials.expires_at) - Date.now() > 120000) return credentials
   const existing = inFlight.get(userId)
   if (existing) return existing
   const promise = (async () => {
@@ -119,7 +98,7 @@ async function validTodoistCredentials(userId: string, stored: {encrypted_creden
       .select('encrypted_credentials').eq('user_id', userId).eq('provider', TODOIST_PROVIDER).eq('status', 'connected').maybeSingle()
     if (error || !latest) throw new Error('Todoist connection is missing')
     const previous = decryptJson<TodoistCredentials>(latest.encrypted_credentials)
-    if (Date.parse(previous.expires_at) - Date.now() > 120000) return previous
+    if (!forceRefresh && Date.parse(previous.expires_at) - Date.now() > 120000) return previous
     const refreshed = await refreshTodoistToken(previous)
     // A successful refresh must never be lost: do not save a consumed refresh token
     // when Todoist returns 200 in its retry grace window without a refresh_token.
@@ -157,7 +136,7 @@ export async function syncTodoistFromStoredConnection(userId: string, options: {
     } catch (requestError) {
       if (!(requestError instanceof TodoistApiError) || requestError.status !== 401) throw requestError
       // Token may have expired at the provider despite its stated expiry.
-      credentials = await validTodoistCredentials(userId, {encrypted_credentials: encryptJson({...credentials, expires_at: '1970-01-01T00:00:00Z'})})
+      credentials = await validTodoistCredentials(userId, { encrypted_credentials: encryptJson(credentials) }, true)
       synced = await writeTodoistItems(userId, credentials)
     }
     const { error: updateError } = await admin.from('user_integrations')
