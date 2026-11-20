@@ -32,6 +32,71 @@ test('Todoist respects the actual due timestamp and never invents a due date', (
   assert.equal(normalizeTodoistTask({id:'t', content:'Bad date',due:{date:'nonsense'}}), null)
 })
 
+test('Todoist floating 14:00 stays 14:00 in Norway in both winter and summer', () => {
+  const winter = normalizeTodoistTask({
+    id: 'floating-winter', content: 'Kronen gård',
+    due: {date: '2026-11-21T14:00:00', timezone: null},
+  }, {timeZone: 'Europe/Oslo'})
+  assert.equal(winter?.starts_at, '2026-11-21T13:00:00.000Z')
+  assert.deepEqual(winter?.raw, {
+    source: 'todoist', type: 'task', all_day: false,
+    date: '2026-11-21', floating_time: '14:00', recurring: false,
+  })
+
+  const floatingWithExtraTimestamp = normalizeTodoistTask({
+    id: 'floating-aux', content: 'Due at 14:00',
+    due: {date: '2026-11-21T14:00:00', datetime: '2026-11-21T14:00:00Z', timezone: null},
+  }, {timeZone: 'Europe/Oslo'})
+  assert.equal(floatingWithExtraTimestamp?.starts_at, '2026-11-21T13:00:00.000Z')
+  assert.equal(floatingWithExtraTimestamp?.raw.floating_time, '14:00')
+
+  const summer = normalizeTodoistTask({
+    id: 'floating-summer', content: 'Summer surf',
+    due: {date: '2026-07-21T14:00:00', timezone: null},
+  }, {timeZone: 'Europe/Oslo'})
+  assert.equal(summer?.starts_at, '2026-07-21T12:00:00.000Z')
+  assert.equal(summer?.raw.floating_time, '14:00')
+})
+
+test('Todoist fixed UTC and offset dues remain absolute instants', () => {
+  const fixedUtc = normalizeTodoistTask({
+    id: 'fixed-utc', content: 'Meeting', due: {date:'2026-11-21T14:00:00Z', timezone:'Europe/Oslo'},
+  }, {timeZone:'Europe/Oslo'})
+  assert.equal(fixedUtc?.starts_at, '2026-11-21T14:00:00.000Z')
+  assert.equal(fixedUtc?.raw.floating_time, undefined)
+
+  const fixedOffset = normalizeTodoistTask({
+    id: 'fixed-offset', content: 'Meeting', due: {datetime:'2026-11-21T14:00:00+01:00', date:'2026-11-21'},
+  }, {timeZone:'Europe/Oslo'})
+  assert.equal(fixedOffset?.starts_at, '2026-11-21T13:00:00.000Z')
+  assert.equal(fixedOffset?.raw.floating_time, undefined)
+  assert.throws(() => normalizeTodoistTask({
+    id:'floating',content:'Missing account timezone',due:{date:'2026-11-21T14:00:00'},
+  }), /user timezone/)
+  assert.equal(normalizeTodoistTask({
+    id:'dst-gap',content:'Impossible time',due:{date:'2026-03-29T02:30:00'},
+  }, {timeZone:'Europe/Oslo'}), null)
+})
+
+test('Todoist app and frame show provider floating clock values rather than converting from UTC', () => {
+  const app = read('app/HomePageClient.tsx')
+  const feed = read('app/lib/device/remindersFeed.ts')
+  assert.match(app, /row\?\.provider === 'todoist'/)
+  assert.match(app, /raw\.floating_time as string/)
+  assert.match(feed, /floatingTime \|\| \(row\.starts_at/)
+  assert.match(feed, /const floatingDate = floatingTime/)
+})
+
+test('Todoist account timezone is read and saved for existing connections', () => {
+  const client = read('app/lib/integrations/todoist/client.ts')
+  const server = read('app/lib/integrations/todoist/server.ts')
+  assert.match(client, /tz_info\?: \{timezone\?: string\}/)
+  assert.match(server, /profileTimeZone\(profile\)/)
+  assert.match(server, /withTodoistTimeZone\(userId, credentials\)/)
+  assert.match(server, /const needsTimeZone = !decryptJson/)
+  assert.match(client, /time_zone: previous\?\.time_zone/)
+})
+
 test('Todoist requests only read scope with current API v1 and cursor pagination', () => {
   const code = read('app/lib/integrations/todoist/client.ts')
   assert.match(code, /TODOIST_SCOPE = 'data:read'/)
@@ -79,7 +144,7 @@ test('Todoist Connect uses the existing catalog and disconnect flow', () => {
   const catalog = read('app/lib/integrations/catalog.ts')
   const disconnect = read('app/lib/integrations/disconnect.ts')
   const app = read('app/HomePageClient.tsx')
-  assert.match(catalog, /key: 'todoist'[^\n]*status: 'experimental', connectable: true/)
+  assert.match(catalog, /key: 'todoist'[^\n]*status: 'available', connectable: true/)
   assert.match(disconnect, /'todoist'/)
   assert.match(app, /connectTodoist\(\)/)
   assert.match(app, /remind:todoist-oauth-device/)
