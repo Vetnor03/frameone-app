@@ -11499,7 +11499,7 @@ type ReminderRepeatKey =
   | 'custom'
 
 type ReminderTag = 'work' | 'personal' | 'sports' | 'chores' | 'event'
-type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'todoist' | 'waste' | 'local-events' | 'bonnetid'
+type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'todoist' | 'microsoft-todo' | 'waste' | 'local-events' | 'bonnetid'
 type ReminderSourceFilter = ReminderSource
 
 type ReminderUiItem = {
@@ -11603,7 +11603,7 @@ function isReminderTag(v: any): v is ReminderTag {
 function integrationProviderToReminderSource(provider: any): ReminderSource | null {
   const value = String(provider ?? '').trim().toLowerCase()
   if (value === 'edge-of-norway') return 'local-events'
-  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'todoist' || value === 'waste' || value === 'bonnetid') return value
+  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'todoist' || value === 'microsoft-todo' || value === 'waste' || value === 'bonnetid') return value
   return null
 }
 
@@ -11613,7 +11613,7 @@ function integrationItemDateTime(row: any) {
   if (raw.all_day === true || raw.allDay === true) return { date: rawDate, time: null }
   // A Todoist floating due is a wall-clock time, not a timestamp to convert.
   // Keep its date/time exactly as Todoist displays it on the user's account.
-  if (row?.provider === 'todoist' && /^\d{2}:\d{2}$/.test(raw.floating_time || '') && rawDate) {
+  if ((row?.provider === 'todoist' || row?.provider === 'microsoft-todo') && /^\d{2}:\d{2}$/.test(raw.floating_time || '') && rawDate) {
     return { date: rawDate, time: raw.floating_time as string }
   }
   const timestamp = String(row?.starts_at || row?.due_at || '').trim()
@@ -11640,7 +11640,7 @@ function integrationReminderTitle(row: any, source: ReminderSource, language: Ap
 function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
   if (source === 'teams') return 'work'
   if (source === 'google-calendar') return 'event'
-  if (source === 'todoist') return 'personal'
+  if (source === 'todoist' || source === 'microsoft-todo') return 'personal'
   if (source === 'spond') return 'sports'
   if (source === 'waste') return 'chores'
   if (source === 'local-events') return 'event'
@@ -11652,6 +11652,7 @@ function integrationReminderSourceLabel(language: AppLanguage, source?: Reminder
   if (source === 'teams') return 'Teams'
   if (source === 'google-calendar') return 'Google Calendar'
   if (source === 'todoist') return 'Todoist'
+  if (source === 'microsoft-todo') return 'Microsoft To Do'
   if (source === 'spond') return 'Spond'
   if (source === 'waste') return language === 'no' ? 'Renovasjon' : 'Waste'
   if (source === 'local-events') return 'Events'
@@ -15551,7 +15552,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           const source = integrationProviderToReminderSource(connection.provider)
           if (source) connectedSources.add(source)
         }
-        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'todoist', 'spond', 'local-events', 'waste', 'bonnetid'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
+        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'todoist', 'microsoft-todo', 'spond', 'local-events', 'waste', 'bonnetid'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
         // Provider chips do not depend on potentially slow upstream event refreshes.
         if (generation !== requestGenerationRef.current) return
         setAvailableSources(nextAvailableSources)
@@ -15603,6 +15604,20 @@ const manualItems: ReminderUiItem[] = (data || [])
           }
         }
 
+        if (isActive && !skipProviderSync && connectedSources.has('microsoft-todo')) {
+          try {
+            const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+            if (token) {
+              const response = await fetch('/api/integrations/microsoft-todo/sync', {
+                method: 'POST', headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
+              })
+              if (!response.ok) console.warn('[reminders] Microsoft To Do refresh failed', response.status)
+            }
+          } catch (error) {
+            console.warn('[reminders] Microsoft To Do refresh failed', error)
+          }
+        }
+
         if (isActive && !skipProviderSync && connectedSources.has('bonnetid')) {
           // Render the saved timetable now. A stale-provider sync can involve
           // multiple upstream requests and must never block the source chip.
@@ -15632,9 +15647,9 @@ const manualItems: ReminderUiItem[] = (data || [])
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
-          .in('provider', ['spond', 'teams', 'google-calendar', 'todoist', 'waste', 'edge-of-norway', 'bonnetid'])
+          .in('provider', ['spond', 'teams', 'google-calendar', 'todoist', 'microsoft-todo', 'waste', 'edge-of-norway', 'bonnetid'])
           .or(activeDeviceId ? `user_id.eq.${sessionUserId},device_id.eq.${activeDeviceId}` : `user_id.eq.${sessionUserId}`)
-          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.bonnetid,provider.eq.todoist`)
+          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.bonnetid,provider.eq.todoist,provider.eq.microsoft-todo`)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (integrationError) {
