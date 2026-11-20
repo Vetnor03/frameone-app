@@ -8,6 +8,7 @@ export type TodoistCredentials = {
   refresh_token?: string
   expires_at: string
   scope?: string
+  time_zone?: string
 }
 export type TodoistTask = {
   id?: string
@@ -67,6 +68,7 @@ async function tokenRequest(params: URLSearchParams, previous?: TodoistCredentia
     refresh_token: json.refresh_token || previous?.refresh_token,
     expires_at: new Date(Date.now() + Math.max(1, seconds - 60) * 1000).toISOString(),
     scope: json.scope || previous?.scope,
+    time_zone: previous?.time_zone,
   }
 }
 export function exchangeTodoistCode(code: string) {
@@ -119,6 +121,6 @@ export async function fetchTodoistTasks(token: string): Promise<TodoistTask[]> {
   }
   throw new Error('Todoist has too many tasks to sync safely')
 }
-export async function fetchTodoistProfile(token: string): Promise<{id?: string; full_name?: string; email?: string}> {
+export async function fetchTodoistProfile(token: string): Promise<{id?: string; full_name?: string; email?: string; tz_info?: {timezone?: string}}> {
   return todoistGet('/user', token)
 }
