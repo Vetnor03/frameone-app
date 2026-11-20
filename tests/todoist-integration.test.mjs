@@ -43,6 +43,13 @@ test('Todoist floating 14:00 stays 14:00 in Norway in both winter and summer', (
     date: '2026-11-21', floating_time: '14:00', recurring: false,
   })
 
+  const floatingWithExtraTimestamp = normalizeTodoistTask({
+    id: 'floating-aux', content: 'Due at 14:00',
+    due: {date: '2026-11-21T14:00:00', datetime: '2026-11-21T14:00:00Z', timezone: null},
+  }, {timeZone: 'Europe/Oslo'})
+  assert.equal(floatingWithExtraTimestamp?.starts_at, '2026-11-21T13:00:00.000Z')
+  assert.equal(floatingWithExtraTimestamp?.raw.floating_time, '14:00')
+
   const summer = normalizeTodoistTask({
     id: 'floating-summer', content: 'Summer surf',
     due: {date: '2026-07-21T14:00:00', timezone: null},
