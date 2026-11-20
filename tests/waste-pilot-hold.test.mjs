@@ -66,5 +66,5 @@ test('Waste items are visible in app and physical frame after connection is enab
   assert.match(device, /if \(!integrationActiveForPilot\('waste'\) \|\| !providerEnabled\('waste'\)\) return/)
   assert.match(ui, /provider\.eq\.waste/)
   assert.match(ui, /String\(row\.raw\?\.collection_date \|\| row\.raw\?\.date \|\| ''\) >= todayYmd/)
-  assert.match(ui, /nextAvailableSources = \['remind', 'teams', 'google-calendar', 'todoist', 'spond', 'local-events', 'waste', 'bonnetid'\]/)
+  assert.match(ui, /nextAvailableSources = \['remind', 'teams', 'google-calendar', 'todoist', 'microsoft-todo', 'spond', 'local-events', 'waste', 'bonnetid'\]/)
 })
