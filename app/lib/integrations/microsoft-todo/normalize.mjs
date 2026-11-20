@@ -63,6 +63,8 @@ export function normalizeMicrosoftTodoTask(task, listId, options = {}) {
     ? localToUtc(localDate, timed.time, zone)
     : new Date(localDate + 'T12:00:00.000Z').toISOString()
   if (!startsAt) return null
+  // Timed tasks use starts_at as an absolute instant; never label a UTC
+  // time as a floating local wall-clock time (which shifts it by an hour).
   const reminderLabel = reminder ? reminder.date + ' ' + reminder.time : null
   return {
     external_id: listId + ':' + id,
@@ -71,7 +73,6 @@ export function normalizeMicrosoftTodoTask(task, listId, options = {}) {
     raw: {
       source: 'microsoft-todo', type: 'task',
       all_day: !timed, date: localDate,
-      ...(timed ? { floating_time: timed.time } : {}),
       ...(reminderLabel ? { reminder_at: reminderLabel } : {}),
       ...(task.recurrence ? { recurring: true } : {}),
     },
