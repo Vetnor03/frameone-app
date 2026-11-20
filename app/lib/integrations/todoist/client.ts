@@ -87,7 +87,11 @@ export function refreshTodoistToken(credentials: TodoistCredentials) {
   }), credentials)
 }
 export class TodoistApiError extends Error {
-  constructor(public readonly status: number) { super('Todoist API request failed (' + status + ')') }
+  readonly status: number
+  constructor(status: number) {
+    super('Todoist API request failed (' + status + ')')
+    this.status = status
+  }
 }
 async function todoistGet<T>(path: string, token: string): Promise<T> {
   const response = await fetch(API + path, {
