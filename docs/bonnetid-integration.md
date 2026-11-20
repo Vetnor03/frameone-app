@@ -1,6 +1,6 @@
 # IRN — Norwegian prayer times (official PostgREST API)
 
-The account-level integration keeps provider id `bonnetid` to preserve existing IRN Reminders filters, frame configuration, and user connections. It remains Experimental until the live authenticated endpoint is validated.
+The account-level integration keeps provider id `bonnetid` to preserve existing IRN Reminders filters, frame configuration, and user connections. It is listed as Available in the Connect catalogue following working pilot validation; provider outages still fail closed without calculated substitutes.
 
 ## Secret configuration
 
@@ -47,3 +47,7 @@ A successful refresh upserts official prayer items and deletes only previous `ra
 The provider samples confirm 12 months and 8 annual occasions. Notably, Islamic New Year, Ramadan start, and Eid ul-Fitr are included in the month table, not the eight-event table. Month beginnings are imported alongside event rows and displayed all-day in IRN Reminders. Event day N is Gregorian mapped month start + (N-1) days, **only** when both boundaries are present, consecutive, and 29/30 days apart. Exact source labels are retained; translations are not rewritten. Test sample 1442: Ramadan begins 2021-04-13; 27 Ramadan is 2021-05-09; Shawwal / Eid ul-Fitr begins 2021-05-13.
 
 Calendar sync adds three upstream requests at most once per account per 12-hour refresh, and does not create any new client-side request or require schema changes. Validate real authorized PostgREST responses in Production after deployment; unit tests cover the user-supplied fixtures but not upstream response availability.
+
+## Connect UX polish
+
+The IRN Connect modal binds the visible location field to the chosen provider location after selection (not the previous search text). The field is read-only until the user taps Change, avoiding mobile keyboard composition / autocomplete tails such as `erStavanger`. IRN is displayed immediately after Google Calendar among available providers; the connected-first ordering still takes priority on the main Connect tab.
