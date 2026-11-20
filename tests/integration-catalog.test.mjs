@@ -3,7 +3,7 @@ import test from 'node:test'
 import { INTEGRATION_CATALOGUE, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst } from '../app/lib/integrations/catalog.ts'
 
 test('shared integrations are ordered and expose lifecycle capabilities', () => {
-  assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'google-calendar', 'google-tasks', 'bonnetid', 'local-events', 'spond', 'waste', 'todoist', 'microsoft-todo', 'google-tasks', 'vigilo', 'transponder', 'planta'])
+  assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'google-calendar', 'bonnetid', 'local-events', 'spond', 'waste', 'todoist', 'microsoft-todo', 'google-tasks', 'vigilo', 'transponder', 'planta'])
   const waste = INTEGRATION_CATALOGUE.find(item => item.key === 'waste')
   assert.deepEqual({ status: waste.status, connectable: waste.connectable }, { status: 'experimental', connectable: true })
   assert.equal(waste.description.en, 'Find your address and see upcoming waste collections')
