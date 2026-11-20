@@ -1,0 +1,14 @@
+import { NextResponse } from 'next/server'
+import { getAuthenticatedUserId } from '@/app/lib/integrations/spond/server'
+import { syncGoogleTasksFromStoredConnection } from '@/app/lib/integrations/google-tasks/server'
+
+export const runtime = 'nodejs'
+export async function POST(req: Request) {
+  const userId = await getAuthenticatedUserId(req)
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    return NextResponse.json(await syncGoogleTasksFromStoredConnection(userId))
+  } catch {
+    return NextResponse.json({ error: 'Could not refresh Google Tasks. Reconnect if this continues.' }, { status: 502 })
+  }
+}
