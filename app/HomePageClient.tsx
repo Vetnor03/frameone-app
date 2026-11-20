@@ -16195,6 +16195,7 @@ const ungroupedSortedReminders = useMemo(() => {
                           <div className="mt-0.5 text-[10px] text-[#2aa3ff]">+ {item.alternativeCount} {language === 'no' ? 'andre tidspunkter · trykk for å velge' : 'other performances · tap to choose'}</div>
                         )}
                       </div>
+                      {(item.editable !== false || item.source === 'local-events') && (
                       <div className="shrink-0 self-center">
                         {item.editable === false ? (
                           item.source === 'local-events' ? (
@@ -16220,11 +16221,7 @@ const ungroupedSortedReminders = useMemo(() => {
                               {(item.skippedOnFrame ? (language === 'no' ? 'Hoppet over' : 'Skipped') : (language === 'no' ? 'Hopp over' : 'Skip')).toUpperCase()}
                             </button>
                             </div>
-                          ) : (
-                            <span className="inline-flex h-6.5 items-center px-2.5 rounded-lg border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[10px] tracking-widest text-[#2aa3ff]">
-                              {integrationReminderSourceLabel(language, item.source).toUpperCase()}
-                            </span>
-                          )
+                          ) : null
                         ) : completedOccurrenceKeySet.has(`${item.id}__${item.displayDate}`) ? (
                           <span className="inline-flex h-6.5 items-center px-2.5 rounded-lg border border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[10px] tracking-widest text-[#1f9d4a]">
                             {language === 'no' ? 'FULLFØRT' : 'COMPLETED'}
@@ -16249,6 +16246,7 @@ const ungroupedSortedReminders = useMemo(() => {
                           </div>
                         )}
                       </div>
+                      )}
                     </div>
                   ))}
                 </div>
