@@ -1,6 +1,6 @@
 export type IntegrationStatus = 'available' | 'experimental' | 'under-evaluation'
 
-export type ConnectAppKey = 'waste' | 'teams' | 'google-calendar' | 'local-events' | 'spond' | 'vigilo' | 'transponder' | 'planta' | 'bonnetid' | 'todoist' | 'microsoft-todo'
+export type ConnectAppKey = 'waste' | 'teams' | 'google-calendar' | 'local-events' | 'spond' | 'vigilo' | 'transponder' | 'planta' | 'bonnetid' | 'todoist' | 'microsoft-todo' | 'google-tasks'
 
 export type IntegrationDefinition = {
   key: ConnectAppKey
@@ -20,6 +20,7 @@ export const INTEGRATION_CATALOGUE: readonly IntegrationDefinition[] = [
   { key: 'waste', name: { en: 'Waste collection', no: 'Renovasjon' }, description: { en: 'Find your address and see upcoming waste collections', no: 'Finn adressen din og se kommende tømminger' }, status: 'experimental', connectable: true },
   { key: 'todoist', name: { en: 'Todoist', no: 'Todoist' }, description: { en: 'Show Todoist tasks with due dates in Reminders', no: 'Vis Todoist-oppgaver med forfallsdato i Påminnelser' }, status: 'available', connectable: true },
   { key: 'microsoft-todo', name: { en: 'Microsoft To Do', no: 'Microsoft To Do' }, description: { en: 'Show Microsoft To Do tasks in Reminders', no: 'Vis Microsoft To Do-oppgaver i Påminnelser' }, status: 'available', connectable: true },
+  { key: 'google-tasks', name: { en: 'Google Tasks', no: 'Google Tasks' }, description: { en: 'Show dated Google Tasks in Reminders', no: 'Vis daterte oppgaver fra Google Tasks i Påminnelser' }, status: 'available', connectable: true },
   { key: 'vigilo', name: { en: 'Vigilo', no: 'Vigilo' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },
   { key: 'transponder', name: { en: 'Transponder', no: 'Transponder' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },
   { key: 'planta', name: { en: 'PLANTA', no: 'PLANTA' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },
