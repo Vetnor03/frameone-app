@@ -3434,7 +3434,7 @@ async function handleSelectTab(k: TabKey) {
                 />
               )}
 
-              {activeTab === 'settings' && !appControlsLocked && (
+              {activeTab === 'settings' && (
                 <SettingsTab
                   language={language}
                   appTheme={appTheme}
@@ -3458,7 +3458,7 @@ async function handleSelectTab(k: TabKey) {
                 />
               )}
 
-              {activeTab === 'connect' && !appControlsLocked && (
+              {activeTab === 'connect' && (
                 <ConnectAppsScreen
                   key={`${userId || ''}:${activeDeviceId || ''}`}
                   userId={userId}
