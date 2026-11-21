@@ -15,7 +15,7 @@ export type ReminderRepeatKey =
   | '2years'
   | 'custom'
 
-export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events' | 'bonnetid' | 'todoist' | 'microsoft-todo' | 'google-tasks'
+export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events' | 'bonnetid' | 'todoist' | 'microsoft-todo' | 'google-tasks' | 'calendar-link'
 
 export type DeviceReminderItem = {
   reminder_id: string
@@ -255,6 +255,17 @@ export function buildGoogleCalendarItems(
   })
 }
 
+
+/** Reuse calendar date/expiry semantics; subscription content is never AI-optimized. */
+export function buildCalendarLinkItems(
+  rows: IntegrationItemRow[], todayYmd: string, horizonEndYmd: string,
+  timeZone: string, now = new Date()
+): DeviceReminderItem[] {
+  return buildGoogleCalendarItems(rows, todayYmd, horizonEndYmd, timeZone, now).map(item => ({
+    ...item, source: 'calendar-link' as const,
+    reminder_id: 'calendar-link:' + (item.external_id || ''),
+  }))
+}
 
 /** A Todoist task remains a task after its clock time; only completion removes it. */
 function buildImportedTaskReminderItems(
