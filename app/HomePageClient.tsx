@@ -8,7 +8,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { readLaunchPreview, writeLaunchPreview, clearLaunchPreview } from './lib/launchPreviewCache.mjs'
 import { readTabSnapshot, writeTabSnapshot, clearTabSnapshotsForUser } from './lib/tabSnapshotCache.mjs'
-import { readConnectStatusCache, writeConnectStatusCache, clearConnectStatusCacheForUser } from './lib/integrations/connectStatusCache.mjs'
+import { readConnectStatusCache, writeConnectStatusCache, clearConnectStatusCacheForUser, resolveConnectBadge } from './lib/integrations/connectStatusCache.mjs'
 import { appendCachedModuleTab, planModuleTabWarmup, tabCacheScope, type WarmModuleKey } from './lib/tabWarmup.mjs'
 import { fetchSurfScore } from './lib/fetchSurfScore'
 import { findSpotByLabel } from './lib/surf/spots'
@@ -3988,7 +3988,7 @@ function ConnectAppsScreen({
     setTodoistStatusResolved(true)
     setTodoistStatusFailed(false)
     setLocallyDisconnectedApps(current => ({ ...current, todoist: json?.connected === true ? false : current.todoist }))
-    updateConnectionDisplayStatus('todoist', json?.connected === true && frameUsesIntegration(modulesJson, 'todoist'))
+    updateConnectionDisplayStatus('todoist', json?.connected === true)
     setIntegrationSetupErrors(current => ({ ...current, todoist: typeof json?.setup_error?.message === 'string' ? json.setup_error.message : undefined }))
   }
 
@@ -4010,7 +4010,7 @@ function ConnectAppsScreen({
     setMicrosoftTodoStatusResolved(true)
     setMicrosoftTodoStatusFailed(false)
     setLocallyDisconnectedApps(current => ({ ...current, 'microsoft-todo': json?.connected === true ? false : current['microsoft-todo'] }))
-    updateConnectionDisplayStatus('microsoft-todo', json?.connected === true && frameUsesIntegration(modulesJson, 'microsoft-todo'))
+    updateConnectionDisplayStatus('microsoft-todo', json?.connected === true)
     setIntegrationSetupErrors(current => ({
       ...current,
       'microsoft-todo': typeof json?.setup_error?.message === 'string' ? json.setup_error.message : undefined,
@@ -4019,7 +4019,13 @@ function ConnectAppsScreen({
 
   async function fetchGoogleTasksStatus() {
     const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-    if (!token) { setGoogleTasksStatusResolved(true); setGoogleTasksAccountConnected(false); return }
+    if (!token) {
+      setGoogleTasksStatusResolved(true)
+      setGoogleTasksAccountConnected(false)
+      setGoogleTasksAccount(null)
+      updateConnectionDisplayStatus('google-tasks', false, false)
+      return
+    }
     const response = await fetch('/api/integrations/google-tasks/status', {
       headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
     })
@@ -4031,7 +4037,7 @@ function ConnectAppsScreen({
     setGoogleTasksStatusResolved(true)
     setGoogleTasksStatusFailed(false)
     setLocallyDisconnectedApps(current => ({ ...current, 'google-tasks': json?.connected === true ? false : current['google-tasks'] }))
-    updateConnectionDisplayStatus('google-tasks', json?.connected === true && frameUsesIntegration(modulesJson, 'google-tasks'))
+    updateConnectionDisplayStatus('google-tasks', json?.connected === true)
     setIntegrationSetupErrors(current => ({
       ...current,
       'google-tasks': typeof json?.setup_error?.message === 'string' ? json.setup_error.message : undefined,
@@ -4729,23 +4735,28 @@ function ConnectAppsScreen({
   }))
 
   function getAppConnected(app: { key: ConnectAppKey; connectable: boolean }) {
-    if (!app.connectable) return false
-    if (locallyDisconnectedApps[app.key]) return false
-    if (!startup && verifiedConnectionStatus[app.key] !== undefined) return verifiedConnectionStatus[app.key] === true
-    if (!startup && cachedConnectionStatus[app.key] !== undefined) return cachedConnectionStatus[app.key] === true
-    // Existing account authorization is not an explicit selection for this new frame.
-    if (startup && !frameUsesIntegration(modulesJson, app.key)) return false
-    if (app.key === 'spond') return spondAccountConnected
-    if (app.key === 'teams') return teamsAccountConnected
-    if (app.key === 'google-calendar') return googleAccountConnected
-    if (app.key === 'calendar-link') return calendarLinkConnected
-    if (app.key === 'todoist') return todoistAccountConnected && frameUsesIntegration(modulesJson, 'todoist')
-    if (app.key === 'microsoft-todo') return microsoftTodoAccountConnected && frameUsesIntegration(modulesJson, 'microsoft-todo')
-    if (app.key === 'google-tasks') return googleTasksEligible && googleTasksAccountConnected && frameUsesIntegration(modulesJson, 'google-tasks')
-    if (app.key === 'local-events') return !!localEventsSavedArea
-    if (app.key === 'waste') return wasteConnected
-    if (app.key === 'bonnetid') return bonnetidConnected
-    return connectAppIsConnected(modulesJson, app.key)
+    // Server-side authorization is the single source of truth on the Connect tab.
+    // A frame's Reminders-module selection must not make an authorized app look disconnected.
+    const accountConnected = app.key === 'spond' ? spondAccountConnected
+      : app.key === 'teams' ? teamsAccountConnected
+      : app.key === 'google-calendar' ? googleAccountConnected
+      : app.key === 'calendar-link' ? calendarLinkConnected
+      : app.key === 'todoist' ? todoistAccountConnected
+      : app.key === 'microsoft-todo' ? microsoftTodoAccountConnected
+      : app.key === 'google-tasks' ? googleTasksAccountConnected && googleTasksEligible
+      : app.key === 'local-events' ? !!localEventsSavedArea
+      : app.key === 'waste' ? wasteConnected
+      : app.key === 'bonnetid' ? bonnetidConnected
+      : connectAppIsConnected(modulesJson, app.key)
+    return resolveConnectBadge({
+      connectable: app.connectable,
+      startup,
+      frameEnabled: frameUsesIntegration(modulesJson, app.key),
+      locallyDisconnected: locallyDisconnectedApps[app.key] === true,
+      verified: startup ? undefined : verifiedConnectionStatus[app.key],
+      accountConnected,
+      cached: startup ? undefined : cachedConnectionStatus[app.key],
+    })
   }
 
   const sortedApps = sortConnectedAppsFirst(apps.map(app => ({ app, connected: getAppConnected(app) })))
