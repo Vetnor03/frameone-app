@@ -28,7 +28,7 @@ export function googleTasksStatus(row: Record<string, unknown> | null) {
 }
 
 function requireTaskScope(tokens: GoogleTokenSet) {
-  if (!tokens.scope?.split(/\s+/).includes(GOOGLE_TASKS_SCOPES[0])) {
+  if (tokens.scope && !tokens.scope.split(/\s+/).includes(GOOGLE_TASKS_SCOPES[0])) {
     throw new Error('Google did not grant Google Tasks read-only permission')
   }
 }
