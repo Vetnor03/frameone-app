@@ -1,7 +1,7 @@
 # Calendar Link (ICS/webcal) — pilot implementation
 
 RE:MIND Connect → **Calendar Link** lets a user select Apple/iCloud, Outlook,
-Hoopit, or Other, open the provider's official instructions, paste a calendar
+Hoopit, Vigilo, or Other, open the provider's official instructions, paste a calendar
 subscription URL, and tap Connect. The server checks and imports events before\nshowing Connected. Up to five feeds
 per account are supported. Events go into the existing Reminders source
 filter and physical frame; no new frame module.
@@ -15,6 +15,8 @@ filter and physical frame; no new frame module.
 - Apple/iCloud **Public Calendar** links are publicly readable to anybody
   holding the URL. Do not recommend for sensitive private calendars.
 - No Apple login, app-specific password, URL extraction, or scraping.
+- Vigilo: users can copy their child's timetable subscription link in the web parent portal under **Timeplan** (link icon below timetable), provided their school or municipality has enabled it. Only timetable events are imported, never private messages or notices. Official guide: https://vigilo.zendesk.com/hc/no/articles/5213650785564-Web-Legge-til-timeplan-i-kalender.
+- Transponder: iCal support for parents is unverified; do not advertise it as a supported provider until documented.
 
 ## Security and limitations
 - Private subscription tokens are encrypted in `user_integrations`; APIs
