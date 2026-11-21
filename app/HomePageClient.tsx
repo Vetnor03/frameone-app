@@ -58,6 +58,7 @@ import {
 import { clearManualUpdate, readManualUpdate, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
 import { confirmFrameSaveForRevision, frameSaveFeedbackPhase } from './lib/device/frameSaveFeedback.mjs'
 import { saveFrameSettings } from './lib/device/saveFrameSettings.mjs'
+import { enqueueSerializedSettingsSave } from './lib/device/serialSettingsSave.mjs'
 import { reconcilePersistedDesiredState } from './lib/device/desiredStateReconciliation.mjs'
 import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, geometryWithAssignments, supportsPhysicalCustomLayout, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
 import { projectSlotMemoryIntoBuiltInLayout, sanitizeLayoutModuleMemory as sanitizeCanonicalLayoutModuleMemory, serializeBuiltInLayoutCells } from './lib/frameLayoutTransition'
@@ -881,7 +882,7 @@ function modulesRecordFromUnknown(value: unknown): Record<string, unknown> {
 }
 
 
-const SHARED_USER_MODULE_KEYS: ModuleKey[] = ['reminders', 'countdown', 'groceries', 'surf']
+const SHARED_USER_MODULE_KEYS: ModuleKey[] = ['reminders', 'countdown', 'groceries', 'surf', 'weather']
 
 function mergeReusableUserModules(current: Record<string, any>, reusable: Record<string, any>) {
   const next = { ...current }
@@ -1300,6 +1301,10 @@ export default function HomePage() {
   const [pickerSlot, setPickerSlot] = useState<number | null>(null)
 
   const [modulesJson, setModulesJson] = useState<Record<string, any>>({})
+  // Keep rapid edits from different module tabs from overwriting one another.
+  const latestModulesJsonRef = useRef(modulesJson)
+  latestModulesJsonRef.current = modulesJson
+  const settingsSaveQueueRef = useRef<Promise<unknown>>(Promise.resolve())
   const [persisting, setPersisting] = useState(false)
   const [frameUpdateError, setFrameUpdateError] = useState('')
   const [frameSaveFeedback, setFrameSaveFeedback] = useState<{ deviceId: string; savedAt: string; phase: 'waiting' | 'confirmed' } | null>(null)
@@ -3108,6 +3113,23 @@ export default function HomePage() {
     }
   }
 
+  // Location and integration changes persist without requesting a physical redraw.
+  // Serialize all settings writes so the last choice wins even on slow connections.
+  function enqueueSettingsSave(deviceId: string, overrides: { powerSaver?: boolean; modulesJson?: Record<string, unknown> } = {}): Promise<boolean> {
+    return enqueueSerializedSettingsSave(settingsSaveQueueRef, () => performSettingsSave(deviceId, overrides))
+  }
+
+  function onModuleLocationChanged(key: 'surf' | 'surf_forecast' | 'weather', value: unknown) {
+    const nextModules = normalizeModulesForSave({ ...latestModulesJsonRef.current, [key]: value })
+    latestModulesJsonRef.current = nextModules
+    setModulesJson(nextModules)
+    markDirty({ modulesJson: nextModules })
+    const deviceId = activeDeviceId
+    if (deviceId && loadedSettingsDeviceId === deviceId) {
+      void enqueueSettingsSave(deviceId, { modulesJson: nextModules })
+    }
+  }
+
   async function handlePowerSaverChange(next: boolean) {
     const deviceId = activeDeviceId
     if (!deviceId || powerSaverSaving || next === powerSaver) return
@@ -3118,7 +3140,7 @@ export default function HomePage() {
     markDirty({ powerSaver: next })
     setPowerSaverSaving(true)
 
-    const saved = await performSettingsSave(deviceId, { powerSaver: next })
+    const saved = await enqueueSettingsSave(deviceId, { powerSaver: next })
     if (!saved || activeDeviceIdRef.current !== deviceId) {
       if (activeDeviceIdRef.current === deviceId) {
         setPowerSaver(previous)
@@ -3183,7 +3205,7 @@ export default function HomePage() {
     const operationId = ++updateOperationIdRef.current
     setExplicitUpdateStatus('saving')
 
-    const saved = await performSettingsSave(deviceId)
+    const saved = await enqueueSettingsSave(deviceId)
     const savedAtForRevision = pendingFrameConfigUpdatedAtRef.current
     if (!saved || activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) {
       if (activeDeviceIdRef.current === deviceId && updateOperationIdRef.current === operationId) setExplicitUpdateStatus('idle')
@@ -3487,7 +3509,7 @@ async function handleSelectTab(k: TabKey) {
                     // Enabling an already-authorized account must survive reopening the app.
                     // Save the exact next integration state; React has not applied setModulesJson yet.
                     // This stores settings without requesting a physical frame redraw.
-                    if (activeDeviceId) void performSettingsSave(activeDeviceId, { modulesJson: nextModules })
+                    if (activeDeviceId) void enqueueSettingsSave(activeDeviceId, { modulesJson: nextModules })
                   }}
                 />
               )}
@@ -3556,6 +3578,7 @@ async function handleSelectTab(k: TabKey) {
                           modulesJson={modulesJson}
                           setModulesJson={setModulesJson}
                           markDirty={markDirty}
+                          onLocationChanged={onModuleLocationChanged}
                           activeDeviceId={activeDeviceId}
                         />
                       </React.Suspense>
@@ -12185,6 +12208,7 @@ function ModuleSettingsTab({
   modulesJson,
   setModulesJson,
   markDirty,
+  onLocationChanged,
   activeDeviceId,
 }: {
   language: AppLanguage
@@ -12196,6 +12220,7 @@ function ModuleSettingsTab({
   modulesJson: Record<string, any>
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
   markDirty: (next?: { modulesJson?: Record<string, any> }) => void
+  onLocationChanged: (key: 'surf' | 'surf_forecast' | 'weather', value: unknown) => void
   activeDeviceId: string | null
 }) {
   if (module === 'surf') {
@@ -12205,8 +12230,7 @@ function ModuleSettingsTab({
         layoutKey={layoutKey}
         cells={cells}
         modulesJson={modulesJson}
-        setModulesJson={setModulesJson}
-        markDirty={markDirty}
+        onLocationChanged={onLocationChanged}
       />
     )
   }
@@ -12218,8 +12242,7 @@ function ModuleSettingsTab({
         layoutKey={layoutKey}
         cells={cells}
         modulesJson={modulesJson}
-        setModulesJson={setModulesJson}
-        markDirty={markDirty}
+        onLocationChanged={onLocationChanged}
       />
     )
   }
@@ -17707,15 +17730,13 @@ function SurfModuleSettingsTab({
   layoutKey,
   cells,
   modulesJson,
-  setModulesJson,
-  markDirty,
+  onLocationChanged,
 }: {
   language: AppLanguage
   layoutKey: LayoutKey
   cells: Record<number, ModuleKey | null>
   modulesJson: Record<string, any>
-  setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
-  markDirty: (next?: { modulesJson?: Record<string, any> }) => void
+  onLocationChanged: (key: 'surf' | 'surf_forecast' | 'weather', value: unknown) => void
 }) {
   const [surfView, setSurfView] = useState<'main' | 'log'>('main')
   const [, setSurfViewTitle] = useState('SURF')
@@ -17828,10 +17849,7 @@ function SurfModuleSettingsTab({
       })
       .filter((x) => Number.isFinite(x.id) && x.id >= 1 && x.id <= 255)
 
-    const nextModules = normalizeModulesForSave({ ...modulesJson, surf: fixed })
-
-    setModulesJson(nextModules)
-    markDirty({ modulesJson: nextModules })
+    onLocationChanged('surf', fixed)
   }
 
   function upsertSurf(id: number, patch: Partial<SurfCfg>) {
@@ -17866,10 +17884,7 @@ function SurfModuleSettingsTab({
       : picked
     const nextForecast = sanitizeSurfForecastCfg(forecastPatch)
 
-    const nextModules = normalizeModulesForSave({ ...modulesJson, surf_forecast: nextForecast || undefined })
-
-    setModulesJson(nextModules)
-    markDirty({ modulesJson: nextModules })
+    onLocationChanged('surf_forecast', nextForecast || undefined)
   }
 
   return (
@@ -18255,15 +18270,13 @@ function WeatherModuleSettingsTab({
   layoutKey,
   cells,
   modulesJson,
-  setModulesJson,
-  markDirty,
+  onLocationChanged,
 }: {
   language: AppLanguage
   layoutKey: LayoutKey
   cells: Record<number, ModuleKey | null>
   modulesJson: Record<string, any>
-  setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
-  markDirty: (next?: { modulesJson?: Record<string, any> }) => void
+  onLocationChanged: (key: 'surf' | 'surf_forecast' | 'weather', value: unknown) => void
 }) {
   const weatherSlots = Object.entries(cells)
     .filter(([, m]) => m === 'weather')
@@ -18293,9 +18306,7 @@ function WeatherModuleSettingsTab({
       }))
       .filter((x) => Number.isFinite(x.id) && x.id >= 1 && x.id <= 255 && Number.isFinite(x.lat) && Number.isFinite(x.lon))
 
-    const nextModules = { ...modulesJson, weather: fixed }
-    setModulesJson(nextModules)
-    markDirty({ modulesJson: nextModules })
+    onLocationChanged('weather', fixed)
   }
 
   function upsertLocation(id: number, patch: any) {
