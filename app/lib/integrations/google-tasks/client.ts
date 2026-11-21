@@ -12,7 +12,11 @@ export type GoogleTasksEntry = {
 export type GoogleTaskList = { id?: string; title?: string }
 
 export class GoogleTasksApiError extends Error {
-  constructor(public readonly status: number) { super('Google Tasks API failed (' + status + ')') }
+  readonly status: number
+  constructor(status: number) {
+    super('Google Tasks API failed (' + status + ')')
+    this.status = status
+  }
 }
 
 async function fetchGooglePages<T>(token: string, path: string, maxPages: number): Promise<T[]> {
