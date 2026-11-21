@@ -35,6 +35,7 @@ const WasteSetupModal = dynamic(() => import('./components/WasteSetupModal'))
 const BonnetidSetupModal = dynamic(() => import('./components/BonnetidSetupModal'))
 const CalendarLinkSetup = dynamic(() => import('./components/CalendarLinkSetup'))
 const IntegrationRequestCard = dynamic(() => import('./components/IntegrationRequestCard'))
+import ConnectAppLogo from './components/ConnectAppLogo'
 import AppSheet, { AppSheetVisibilityContext } from './components/AppSheet'
 import { StartupSplash } from './components/StartupSplash'
 const NewsModuleSettingsTab = dynamic(() => import('./components/NewsModuleSettingsTab'))
@@ -4932,9 +4933,12 @@ function ConnectAppsScreen({
           {showConnectPlaceholders && (
             <div role="status" aria-label={language === 'no' ? 'Laster tilkoblinger' : 'Loading connections'} className="space-y-2.5">
               {[0, 1, 2, 3].map(index => (
-                <div key={index} className="h-[72px] animate-pulse rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3">
-                  <div className="h-3 w-2/5 rounded bg-[color:var(--bd-15)]" />
-                  <div className="mt-3 h-2.5 w-3/5 rounded bg-[color:var(--bd-10)]" />
+                <div key={index} className="flex h-[72px] animate-pulse items-center gap-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3">
+                  <div className="h-9 w-9 shrink-0 rounded-xl bg-[color:var(--bd-15)]" />
+                  <div className="min-w-0 flex-1">
+                    <div className="h-3 w-2/5 rounded bg-[color:var(--bd-15)]" />
+                    <div className="mt-3 h-2.5 w-3/5 rounded bg-[color:var(--bd-10)]" />
+                  </div>
                 </div>
               ))}
             </div>
@@ -4966,7 +4970,9 @@ function ConnectAppsScreen({
                 className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3.5"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <ConnectAppLogo appKey={app.key} />
+                    <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 text-sm font-medium text-[color:var(--fg-90)]"><span>{app.name}</span>{app.status === 'experimental' && <span className="rounded-full border border-[#2aa3ff]/35 px-2 py-0.5 text-[9px] uppercase tracking-wider text-[#2aa3ff]">{integrationStatusLabel(app.status, language)}</span>}</div>
                     <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">{app.description}</div>
                     {connectionDetail && <div className="mt-2 text-xs leading-snug text-[color:var(--fg-60)]">{connectionDetail}</div>}
@@ -4986,6 +4992,7 @@ function ConnectAppsScreen({
                         )}
                       </div>
                     )}
+                    </div>
                   </div>
 
                   <div className="flex shrink-0 flex-col items-stretch gap-1.5">
