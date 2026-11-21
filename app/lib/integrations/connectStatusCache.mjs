@@ -40,10 +40,11 @@ export function writeConnectStatusCache(storage, userId, deviceId, provider, con
 export function clearConnectStatusCacheForUser(storage, userId) {
   if (!validId(userId) || !storage) return
   try {
-    const prefix = CONNECT_STATUS_CACHE_PREFIX + userId + ':'
+    const prefixes = [CONNECT_STATUS_CACHE_PREFIX, 'remind:connect-status:v1:']
+      .map(prefix => prefix + userId + ':')
     for (let i = storage.length - 1; i >= 0; i--) {
       const key = storage.key(i)
-      if (key?.startsWith(prefix)) storage.removeItem(key)
+      if (key && prefixes.some(prefix => key.startsWith(prefix))) storage.removeItem(key)
     }
   } catch { /* browser storage may be unavailable */ }
 }
