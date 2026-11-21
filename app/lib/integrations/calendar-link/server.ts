@@ -44,21 +44,6 @@ export async function calendarLinkStatus(userId: string) {
   }
 }
 
-export async function previewCalendarLink(rawUrl: unknown, rawLabel: unknown) {
-  const url = normalizeCalendarUrl(rawUrl)
-  const label = safeLabel(rawLabel)
-  const text = await fetchCalendarText(url)
-  const events = parseCalendarEvents(text, 'preview', label) as ImportRow[]
-  return {
-    label,
-    count: events.length,
-    events: events.slice(0, 5).map(event => ({
-      title: event.title, starts_at: event.starts_at,
-      all_day: event.raw.all_day, date: event.raw.date,
-    })),
-  }
-}
-
 async function fetchFeed(feed: Feed): Promise<ImportRow[]> {
   const text = await fetchCalendarText(feed.url)
   return parseCalendarEvents(text, feed.id, feed.label) as ImportRow[]

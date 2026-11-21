@@ -4062,7 +4062,7 @@ function ConnectAppsScreen({
     setCalendarLinkStatusResolved(true)
     setCalendarLinkStatusFailed(false)
     setLocallyDisconnectedApps(current => ({ ...current, 'calendar-link': connected ? false : current['calendar-link'] }))
-    updateConnectionDisplayStatus('calendar-link', connected && frameUsesIntegration(modulesJson, 'calendar-link'))
+    updateConnectionDisplayStatus('calendar-link', connected)
   }
 
   function legacyEnabledIntegrations(): ConnectAppKey[] {
@@ -4738,7 +4738,7 @@ function ConnectAppsScreen({
     if (app.key === 'spond') return spondAccountConnected
     if (app.key === 'teams') return teamsAccountConnected
     if (app.key === 'google-calendar') return googleAccountConnected
-    if (app.key === 'calendar-link') return calendarLinkConnected && frameUsesIntegration(modulesJson, 'calendar-link')
+    if (app.key === 'calendar-link') return calendarLinkConnected
     if (app.key === 'todoist') return todoistAccountConnected && frameUsesIntegration(modulesJson, 'todoist')
     if (app.key === 'microsoft-todo') return microsoftTodoAccountConnected && frameUsesIntegration(modulesJson, 'microsoft-todo')
     if (app.key === 'google-tasks') return googleTasksEligible && googleTasksAccountConnected && frameUsesIntegration(modulesJson, 'google-tasks')
@@ -4931,10 +4931,15 @@ function ConnectAppsScreen({
                         {language === 'no' ? 'FJERN' : 'REMOVE'}
                       </button>
                     ) : app.key === 'calendar-link' ? (
-                      <button type="button" onClick={() => setCalendarLinkOpen(true)}
-                        className="shrink-0 h-8 rounded-xl border border-[color:var(--bd-20)] px-3 text-[11px] tracking-widest text-[color:var(--fg-70)]">
-                        {language === 'no' ? 'ADMINISTRER' : 'MANAGE'}
-                      </button>
+                      <div className="shrink-0 flex flex-col items-center gap-1">
+                        <span className="text-[10px] font-medium tracking-widest text-[#1f9d4a]">
+                          {language === 'no' ? 'TILKOBLET' : 'CONNECTED'}
+                        </span>
+                        <button type="button" onClick={() => setCalendarLinkOpen(true)}
+                          className="h-8 rounded-xl border border-[color:var(--bd-20)] px-3 text-[11px] tracking-widest text-[color:var(--fg-70)]">
+                          {language === 'no' ? 'ADMINISTRER' : 'MANAGE'}
+                        </button>
+                      </div>
                     ) : app.key === 'local-events' ? (
                       <div className="shrink-0 flex flex-col items-stretch gap-1.5">
                         <button type="button" onClick={disconnectLocalEvents} disabled={localEventsLoading || !localEventsCanManage} className="h-8 rounded-xl border border-[#d94b4b]/45 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
