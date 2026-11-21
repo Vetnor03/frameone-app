@@ -1302,7 +1302,7 @@ export default function HomePage() {
 
   const [modulesJson, setModulesJson] = useState<Record<string, any>>({})
   // Keep rapid edits from different module tabs from overwriting one another.
-  const latestModulesJsonRef = useRef<Record<string, any>>(modulesJson)
+  const latestModulesJsonRef = useRef(modulesJson)
   latestModulesJsonRef.current = modulesJson
   const settingsSaveQueueRef = useRef<Promise<unknown>>(Promise.resolve())
   const [persisting, setPersisting] = useState(false)
