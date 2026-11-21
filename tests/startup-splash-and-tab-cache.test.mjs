@@ -31,20 +31,34 @@ test('cached frame remains hidden behind splash until membership verification',(
   assert.match(home,/setActiveDeviceId\(selected\)[\s\S]*setBooting\(false\)/)
   assert.match(home,/inert=\{!framesLoaded \|\| booting \|\| showSplash\}/)
   assert.match(home,/aria-hidden=\{!shouldRenderApp \|\| !framesLoaded \|\| booting \|\| showSplash/)
-  // Settings-dependent content is inert, not the tab bar itself.
-  assert.match(home,/inert=\{appControlsLocked\} aria-hidden=\{appControlsLocked\}/)
+  // Only settings-dependent views remain locked during frame-settings hydration.
+  assert.match(home,/const activeContentLocked = appControlsLocked && !independentDataTab/)
+  assert.match(home,/inert=\{activeContentLocked\} aria-hidden=\{activeContentLocked\}/)
   assert.doesNotMatch(home,/inert=\{appControlsLocked \|\| booting \|\| showSplash\}/)
   assert.doesNotMatch(home,/if \(!stickySettingsRef\.current\) setActiveTab\('frame'\)/)
 })
 
-test('tab snapshot renders while refreshing but is inert until fresh data is verified',()=>{
-  for(const prop of ['showingSavedGroceries','showingSavedReminders']){
-    assert.match(home,new RegExp('inert=\\{'+prop+'\\}'))
-  }
-  assert.match(home,/writeTabSnapshot\(window\.localStorage, userId, activeDeviceId, 'countdown'/)
-  assert.match(home,/writeTabSnapshot\(window\.localStorage, userId, activeDeviceId, 'reminders'/)
-  assert.match(home,/writeTabSnapshot\(window\.localStorage, userId, activeDeviceId, 'groceries'/)
-  assert.match(home,/clearTabSnapshotsForUser\(window\.localStorage, session\.user\.id\)/)
+test('authenticated data tabs mount before frame settings, with non-blocking saved views',()=>{
+  assert.match(home,/const verifiedModuleTabsReady = !!moduleTabScope && authReady && framesLoaded/)
+  assert.match(home,/frames.some\(\(frame\) => frame.device_id === activeDeviceId\)/)
+  assert.match(home,/const independentDataTab = activeTab === 'reminders' \|\| activeTab === 'groceries' \|\| activeTab === 'countdown'/)
+  assert.doesNotMatch(home,/inert=\{showingSavedGroceries\}/)
+  assert.doesNotMatch(home,/inert=\{showingSavedReminders\}/)
+  assert.doesNotMatch(home,/showingSaved \? 'pointer-events-none'/)
+  assert.match(home,/disabled=\{showingSavedGroceries\}/)
+  assert.match(home,/disabled=\{showingSavedReminders\}/)
+  assert.match(home,/disabled=\{showingSaved\}/)
+  assert.match(home,/writeTabSnapshot\(window.localStorage, userId, activeDeviceId, 'countdown'/)
+  assert.match(home,/writeTabSnapshot\(window.localStorage, userId, activeDeviceId, 'reminders'/)
+  assert.match(home,/writeTabSnapshot\(window.localStorage, userId, activeDeviceId, 'groceries'/)
+  assert.match(home,/clearTabSnapshotsForUser\(window.localStorage, session.user.id\)/)
+})
+
+test('heavy hidden-tab warmup yields to navigation and skips already mounted panels',()=>{
+  assert.match(home,/planModuleTabWarmup\(configuredModuleKeys, cachedModuleKeys, activeTab\)/)
+  assert.match(home,/6500 \+ index \* 1600/)
+  assert.match(home,/\[moduleTabScope, verifiedModuleTabsReady, loadedSettingsDeviceId, activeDeviceId, configuredModuleKeys, activeTab, moduleTabCache\]/)
+  assert.match(home,/if \(!verifiedModuleTabsReady \|\| loadedSettingsDeviceId !== activeDeviceId\) return/)
 })
 
 test('ready app appears only after a two-phase splash handoff without logo ghosting',()=>{

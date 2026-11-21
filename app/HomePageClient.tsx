@@ -1731,7 +1731,10 @@ export default function HomePage() {
   }, [dynamicTabs, language])
 
   const moduleTabScope = tabCacheScope(userId, activeDeviceId)
-  const verifiedModuleTabsReady = !!moduleTabScope && framesLoaded && loadedSettingsDeviceId === activeDeviceId
+  // Authenticated frame membership unlocks separately scoped display snapshots,
+  // without waiting for the independent frame-layout/settings request.
+  const verifiedModuleTabsReady = !!moduleTabScope && authReady && framesLoaded &&
+    frames.some((frame) => frame.device_id === activeDeviceId)
   const cachedModuleKeys = moduleTabCache.scope === moduleTabScope ? moduleTabCache.keys : []
   const configuredModuleKeys = useMemo(() => dynamicTabs.map((tab) => tab.key), [dynamicTabs])
 
@@ -1741,10 +1744,13 @@ export default function HomePage() {
   }, [activeTab, moduleTabScope, verifiedModuleTabsReady])
 
   useEffect(() => {
-    if (!verifiedModuleTabsReady) return
+    // Only the tab the user opens may load early from authenticated snapshots.
+    // Hidden warmups wait for verified configuration to avoid starting stale
+    // settings-dependent requests while the launch is still settling.
+    if (!verifiedModuleTabsReady || loadedSettingsDeviceId !== activeDeviceId) return
     // Warm configured module tabs progressively after the frame is ready.
     // Avoid starting all Supabase requests at once during initial launch.
-    const pending = planModuleTabWarmup(configuredModuleKeys, [], activeTab)
+    const pending = planModuleTabWarmup(configuredModuleKeys, cachedModuleKeys, activeTab)
     let timers: number[] = []
     const schedule = () => {
       timers.forEach((timer) => window.clearTimeout(timer))
@@ -1757,7 +1763,7 @@ export default function HomePage() {
         React.startTransition(() => {
           setModuleTabCache((cache) => appendCachedModuleTab(cache, moduleTabScope, key))
         })
-      }, 2500 + index * 1200))
+      }, 6500 + index * 1600))
     }
     schedule()
     document.addEventListener('visibilitychange', schedule)
@@ -1765,9 +1771,9 @@ export default function HomePage() {
       document.removeEventListener('visibilitychange', schedule)
       timers.forEach((timer) => window.clearTimeout(timer))
     }
-    // A warmed tab entering cache must not restart the entire queue.
+    // User navigation cancels pending warmups, preserving the tap's priority.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moduleTabScope, verifiedModuleTabsReady, configuredModuleKeys])
+  }, [moduleTabScope, verifiedModuleTabsReady, loadedSettingsDeviceId, activeDeviceId, configuredModuleKeys, activeTab, moduleTabCache])
 
   const renderedModuleKeys = verifiedModuleTabsReady
     ? configuredModuleKeys.filter((key) => key === activeTab || cachedModuleKeys.includes(key as WarmModuleKey))
@@ -3337,6 +3343,10 @@ async function handleSelectTab(k: TabKey) {
   )
   const configurationNotReady = !!activeDeviceId && loadedSettingsDeviceId !== activeDeviceId
   const appControlsLocked = isCachedLaunchPreview || configurationNotReady
+  // Frame configuration remains locked until verified. Independent data tabs
+  // can load and revalidate after account/frame membership is confirmed.
+  const independentDataTab = activeTab === 'reminders' || activeTab === 'groceries' || activeTab === 'countdown'
+  const activeContentLocked = appControlsLocked && !independentDataTab
 
   const isPlainFrameAssistantSurface = activeTab === 'frame'
     && !appControlsLocked && !layoutFlow && !pickerOpen && !languagePickerOpen
@@ -3387,14 +3397,14 @@ async function handleSelectTab(k: TabKey) {
             {/* Tab navigation is safe after membership verification, even while
                 settings are pending. Editing stays locked until verified. */}
             <div className="relative flex flex-1 min-h-0 flex-col">
-              {appControlsLocked && framesLoaded && (
+              {activeContentLocked && framesLoaded && (
                 <div role="status" aria-live="polite" className="pointer-events-none absolute inset-x-0 top-2 z-30 text-center text-[11px] tracking-wide text-[color:var(--fg-60)]">
                   {cachedPreviewSyncFailed
                     ? (language === 'no' ? 'Frakoblet forhåndsvisning · Koble til for å redigere' : 'Offline preview · Reconnect to edit')
                     : (language === 'no' ? 'Laster rammeinnstillinger…' : 'Loading frame settings…')}
                 </div>
               )}
-              <div className={`flex flex-1 min-h-0 flex-col ${appControlsLocked ? 'opacity-60' : ''}`} inert={appControlsLocked} aria-hidden={appControlsLocked}>
+              <div className={`flex flex-1 min-h-0 flex-col ${activeContentLocked ? 'opacity-60' : ''}`} inert={activeContentLocked} aria-hidden={activeContentLocked}>
                 <div className="mt-6 flex-1 min-h-0">
               {activeTab === 'frame' && (
                 <FrameTab
@@ -12367,7 +12377,7 @@ function CountdownModuleSettingsTab({
   }
 
   async function togglePinned(item: CountdownItem) {
-    if (!activeDeviceId) return
+    if (!activeDeviceId || showingSaved) return
 
     const nextPinned = !item.pinned
 
@@ -12454,7 +12464,7 @@ function CountdownModuleSettingsTab({
   return (
     <>
       {showingSaved && <div role="status" className="text-[11px] text-[color:var(--fg-45)]">{language === 'no' ? 'Lagrede nedtellinger · oppdateres' : 'Saved countdowns · refreshing'}</div>}
-      <div className={`h-full flex flex-col min-h-0 ${showingSaved ? 'pointer-events-none' : ''}`}>
+      <div className="h-full flex flex-col min-h-0">
         <div className="mt-4 flex-1 min-h-0 flex flex-col">
           {!activeDeviceId ? (
             <div className="text-sm text-[color:var(--fg-50)]">{t.selectFrameFirst}</div>
@@ -12493,6 +12503,7 @@ function CountdownModuleSettingsTab({
                         <div className="shrink-0 flex items-center gap-2">
                           <button
                             onClick={() => togglePinned(item)}
+                            disabled={showingSaved}
                             className={`h-8 w-8 rounded-full border flex items-center justify-center ${
                               item.pinned
                                 ? 'border-[#2aa3ff]'
@@ -12518,9 +12529,11 @@ function CountdownModuleSettingsTab({
 
                           <button
                             onClick={() => {
+                              if (showingSaved) return
                               setEditingItem(item)
                               setSheetOpen(true)
                             }}
+                            disabled={showingSaved}
                             className="h-7 px-3 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
                           >
                             {t.edit}
@@ -12545,7 +12558,7 @@ function CountdownModuleSettingsTab({
                 })
                 setSheetOpen(true)
               }}
-              disabled={!activeDeviceId}
+              disabled={!activeDeviceId || showingSaved}
               className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
                 !activeDeviceId
                   ? 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]'
@@ -14684,6 +14697,7 @@ function GroceriesModuleSettingsTab({
   }
 
   async function toggleChecked(item: GroceryItem) {
+    if (showingSavedGroceries) return
     if (isDinnerVirtualId(item.id)) {
       const nextChecked = !item.isChecked
       const nowIso = new Date().toISOString()
@@ -14731,6 +14745,7 @@ function GroceriesModuleSettingsTab({
   }
 
   async function adjustQuantity(item: GroceryItem, delta: number) {
+    if (showingSavedGroceries) return
     if (isDinnerVirtualId(item.id)) {
       const target = findDinnerTarget(item)
       if (!target) return
@@ -14856,7 +14871,7 @@ function GroceriesModuleSettingsTab({
     {showingSavedGroceries && (
       <div role="status" className="text-[11px] text-[color:var(--fg-45)]">{language === 'no' ? 'Lagret handleliste · oppdateres' : 'Saved grocery list · refreshing'}</div>
     )}
-    <div className="h-full flex flex-col min-h-0" inert={showingSavedGroceries}>
+    <div className="h-full flex flex-col min-h-0">
       <div ref={listScrollRef} className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
           <div className="p-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
@@ -14876,6 +14891,7 @@ function GroceriesModuleSettingsTab({
                 key={item.id}
                 className="px-4 py-3 flex items-start gap-3 cursor-pointer"
                 onClick={() => {
+                  if (showingSavedGroceries) return
                   if (isDinnerVirtualId(item.id)) {
                     const target = findDinnerTarget(item)
                     if (target) setDinnerPlanMainEditTarget(target)
@@ -14891,6 +14907,7 @@ function GroceriesModuleSettingsTab({
                     e.stopPropagation()
                     toggleChecked(item)
                   }}
+                  disabled={showingSavedGroceries}
                   className={`mt-0.5 h-6 w-6 shrink-0 rounded-full border ${item.isChecked ? 'border-[color:var(--fg-35)] bg-[color:var(--fg-35)]/20' : 'border-[color:var(--fg-55)]'} flex items-center justify-center`}
                   aria-label={item.isChecked ? `${t.groceriesCheckedLabel}: ${item.name}` : item.name}
                 >
@@ -14914,6 +14931,7 @@ function GroceriesModuleSettingsTab({
                       e.stopPropagation()
                       adjustQuantity(item, -1)
                     }}
+                    disabled={showingSavedGroceries}
                     className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]"
                   >
                     −
@@ -14926,6 +14944,7 @@ function GroceriesModuleSettingsTab({
                       e.stopPropagation()
                       adjustQuantity(item, +1)
                     }}
+                    disabled={showingSavedGroceries}
                     className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]"
                   >
                     +
@@ -14949,7 +14968,7 @@ function GroceriesModuleSettingsTab({
             setEditingItem(null)
             setSheetOpen(true)
           }}
-          disabled={!activeDeviceId}
+          disabled={!activeDeviceId || showingSavedGroceries}
           className={`mt-3 w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
             !activeDeviceId ? 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]' : 'border-[#2aa3ff] text-[#2aa3ff]'
           }`}
@@ -14961,7 +14980,7 @@ function GroceriesModuleSettingsTab({
           <button
             data-ui="secondary-control"
             onClick={() => setRecipeOpen(true)}
-            disabled={!activeDeviceId}
+            disabled={!activeDeviceId || showingSavedGroceries}
             className="h-[44px] w-full rounded-2xl border text-[10px] tracking-widest transition"
           >
             {language === 'no' ? 'OPPSKRIFTER' : 'RECIPES'}
@@ -16305,6 +16324,7 @@ const ungroupedSortedReminders = useMemo(() => {
 
 
   async function toggleLocalEventFrameSkip(item: ReminderUiItem, nextSkipped: boolean) {
+    if (showingSavedReminders) return
     if (!activeDeviceId || item.source !== 'local-events' || !item.externalEventId) return
     const previous = reminders
     setSkipToggleError(null)
@@ -16328,6 +16348,7 @@ const ungroupedSortedReminders = useMemo(() => {
   }
 
   async function markEventPerformanceBooked(item: ReminderUiItem) {
+    if (showingSavedReminders) return
     if (!activeDeviceId || !item.externalEventId || bookingEventId) return
     setBookingError(null)
     setBookingEventId(item.externalEventId)
@@ -16412,7 +16433,7 @@ const ungroupedSortedReminders = useMemo(() => {
         }
       `}</style>
 
-      <div className="absolute inset-0 overflow-y-auto no-scrollbar" inert={showingSavedReminders}>
+      <div className="absolute inset-0 overflow-y-auto no-scrollbar">
         {showingSavedReminders && <div role="status" className="px-1 text-[11px] text-[color:var(--fg-45)]">{language === 'no' ? 'Lagrede påminnelser · oppdateres' : 'Saved reminders · refreshing'}</div>}
         <div className="box-border flex min-h-full flex-col pt-4 max-[420px]:pt-3">
           <div className="shrink-0">
@@ -16595,6 +16616,7 @@ const ungroupedSortedReminders = useMemo(() => {
                               ))}
                             <button
                               type="button"
+                              disabled={showingSavedReminders}
                               onClick={(e) => {
                                 e.stopPropagation()
                                 toggleLocalEventFrameSkip(item, !item.skippedOnFrame)
@@ -16624,9 +16646,11 @@ const ungroupedSortedReminders = useMemo(() => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
+                                if (showingSavedReminders) return
                                 setEditingReminder(item)
                                 setSheetOpen(true)
                               }}
+                              disabled={showingSavedReminders}
                               className="h-6.5 px-2.5 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
                             >
                               {language === 'no' ? 'REDIGER' : 'EDIT'}
@@ -16652,7 +16676,7 @@ const ungroupedSortedReminders = useMemo(() => {
           onClick={() => {
             setComposerOpen(true)
           }}
-          disabled={!activeDeviceId}
+          disabled={!activeDeviceId || showingSavedReminders}
           className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
             !activeDeviceId
               ? 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]'
@@ -16681,7 +16705,7 @@ const ungroupedSortedReminders = useMemo(() => {
                 <div key={option.id} className="py-3 first:pt-0">
                   <div className="text-sm text-[color:var(--fg-95)]">{formatReminderFullDateLabel(language, option.date)}{normalizeReminderTime(option.time) ? ' · ' + normalizeReminderTime(option.time) : ''}</div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button type="button" disabled={!!bookingEventId} onClick={() => markEventPerformanceBooked(option)} className="rounded-xl border border-[#2aa3ff] px-3 py-2 text-xs text-[#2aa3ff] disabled:opacity-40">
+                    <button type="button" disabled={!!bookingEventId || showingSavedReminders} onClick={() => markEventPerformanceBooked(option)} className="rounded-xl border border-[#2aa3ff] px-3 py-2 text-xs text-[#2aa3ff] disabled:opacity-40">
                       {bookingEventId === option.externalEventId ? (language === 'no' ? 'LAGRER…' : 'SAVING…') : (language === 'no' ? 'BESTILT ✓' : 'BOOKED ✓')}
                     </button>
                     {(option.ticketLinks?.length ? option.ticketLinks : option.sourceUrl ? [{ source: 'event', url: option.sourceUrl }] : []).map(link => /^https:\/\//.test(link.url) ? (
