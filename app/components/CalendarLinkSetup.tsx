@@ -67,8 +67,9 @@ export default function CalendarLinkSetup({
     try {
       // Server validates the link and imports the calendar before returning success.
       // Do not mark it connected on a failed fetch, parse, or save.
-      const alreadyWithSameLabel = feeds.filter(feed => feed.label === label || feed.label.startsWith(label + ' (')).length
-      const calendarName = alreadyWithSameLabel ? `${label} (${alreadyWithSameLabel + 1})` : label
+      const usedLabels = new Set(feeds.map(feed => feed.label))
+      let calendarName = label
+      for (let suffix = 2; usedLabels.has(calendarName); suffix++) calendarName = `${label} (${suffix})`
       await post('connect', { url, label: calendarName })
       setUrl('')
       setConnectedMessage(true)
