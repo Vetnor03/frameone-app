@@ -98,7 +98,7 @@ function TermsPageContent() {
 
   const pageTitle = language === 'no' ? 'VILKÅR OG BETINGELSER' : 'TERMS & CONDITIONS'
   const updatedText =
-    language === 'no' ? 'Sist oppdatert: 19. oktober 2026' : 'Last updated: October 19, 2026'
+    language === 'no' ? 'Sist oppdatert: 21. november 2026' : 'Last updated: November 21, 2026'
 
   const sections =
     language === 'no'
