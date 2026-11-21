@@ -1744,7 +1744,10 @@ export default function HomePage() {
   }, [activeTab, moduleTabScope, verifiedModuleTabsReady])
 
   useEffect(() => {
-    if (!verifiedModuleTabsReady) return
+    // Only the tab the user opens may load early from authenticated snapshots.
+    // Hidden warmups wait for verified configuration to avoid starting stale
+    // settings-dependent requests while the launch is still settling.
+    if (!verifiedModuleTabsReady || loadedSettingsDeviceId !== activeDeviceId) return
     // Warm configured module tabs progressively after the frame is ready.
     // Avoid starting all Supabase requests at once during initial launch.
     const pending = planModuleTabWarmup(configuredModuleKeys, cachedModuleKeys, activeTab)
@@ -1770,7 +1773,7 @@ export default function HomePage() {
     }
     // User navigation cancels pending warmups, preserving the tap's priority.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moduleTabScope, verifiedModuleTabsReady, configuredModuleKeys, activeTab, moduleTabCache])
+  }, [moduleTabScope, verifiedModuleTabsReady, loadedSettingsDeviceId, activeDeviceId, configuredModuleKeys, activeTab, moduleTabCache])
 
   const renderedModuleKeys = verifiedModuleTabsReady
     ? configuredModuleKeys.filter((key) => key === activeTab || cachedModuleKeys.includes(key as WarmModuleKey))
