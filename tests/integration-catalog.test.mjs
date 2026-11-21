@@ -3,10 +3,10 @@ import test from 'node:test'
 import { INTEGRATION_CATALOGUE, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst } from '../app/lib/integrations/catalog.ts'
 
 test('shared integrations are ordered and expose lifecycle capabilities', () => {
-  assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'google-calendar', 'bonnetid', 'local-events', 'spond', 'waste', 'todoist', 'google-tasks', 'microsoft-todo', 'vigilo', 'transponder', 'planta'])
+  assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'calendar-link', 'google-calendar', 'bonnetid', 'local-events', 'spond', 'waste', 'todoist', 'google-tasks', 'microsoft-todo', 'vigilo', 'transponder', 'planta'])
   const waste = INTEGRATION_CATALOGUE.find(item => item.key === 'waste')
   assert.deepEqual({ status: waste.status, connectable: waste.connectable }, { status: 'experimental', connectable: true })
-  assert.equal(waste.description.en, 'Find your address and see upcoming waste collections')
+  assert.equal(waste.description.en, 'Show waste collection dates in Reminders')
   assert.equal(INTEGRATION_CATALOGUE.find(item => item.key === 'teams').name.en, 'Teams')
   const todoist = INTEGRATION_CATALOGUE.find(item => item.key === 'todoist')
   assert.deepEqual({ status: todoist.status, connectable: todoist.connectable }, { status: 'available', connectable: true })
@@ -25,7 +25,7 @@ test('Connect Apps search matches names, localizations and evaluation statuses',
   const keys = (query) => INTEGRATION_CATALOGUE.filter(item => integrationMatchesSearch(item, query)).map(item => item.key)
   assert.deepEqual(keys(' PLanTa '), ['planta'])
   assert.deepEqual(keys('Renovasjon'), ['waste'])
-  assert.deepEqual(keys('calendar'), ['google-calendar', 'bonnetid'])
+  assert.deepEqual(keys('calendar'), ['calendar-link', 'google-calendar'])
   assert.deepEqual(keys('under evaluation'), ['google-tasks', 'vigilo', 'transponder', 'planta'])
   assert.deepEqual(keys('under vurdering'), ['google-tasks', 'vigilo', 'transponder', 'planta'])
   assert.deepEqual(keys('not a real integration'), [])
@@ -43,7 +43,7 @@ test('Connect Apps puts connected apps first, alphabetically within each status'
 
   assert.deepEqual(keys(sortConnectedAppsFirst(apps)), [
     'google-calendar', 'spond', 'waste', // connected (alphabetical, regardless of status)
-    'bonnetid', 'local-events', 'microsoft-todo', 'teams', 'todoist', // available
+    'calendar-link', 'bonnetid', 'local-events', 'microsoft-todo', 'teams', 'todoist', // available
     'google-tasks', 'planta', 'transponder', 'vigilo', // under evaluation
   ])
   assert.deepEqual(keys(apps), INTEGRATION_CATALOGUE.map(item => item.key), 'does not mutate the catalogue order')
@@ -52,7 +52,7 @@ test('Connect Apps puts connected apps first, alphabetically within each status'
   const afterDisconnect = apps.map(item => item.app.key === 'google-calendar' ? { ...item, connected: false } : item)
   assert.deepEqual(keys(sortConnectedAppsFirst(afterDisconnect)), [
     'spond', 'waste',
-    'google-calendar', 'bonnetid', 'local-events', 'microsoft-todo', 'teams', 'todoist',
+    'calendar-link', 'google-calendar', 'bonnetid', 'local-events', 'microsoft-todo', 'teams', 'todoist',
     'google-tasks', 'planta', 'transponder', 'vigilo',
   ])
 })
@@ -63,8 +63,17 @@ test('Unconnected apps sort alphabetically with Done, Experimental and Under Eva
     connected: false,
   }))
   assert.deepEqual(sortConnectedAppsFirst(apps).map(item => item.app.key), [
-    'google-calendar', 'bonnetid', 'local-events', 'microsoft-todo', 'teams', 'todoist', // available / Done
+    'google-calendar', 'bonnetid', 'calendar-link', 'local-events', 'microsoft-todo', 'teams', 'todoist', // available / Done
     'waste', 'spond', // experimental: Renovasjon before Spond
     'google-tasks', 'planta', 'transponder', 'vigilo', // under evaluation
   ])
+})
+
+test('all live Connect descriptions share a short, consistent purpose in both languages', () => {
+  for (const integration of INTEGRATION_CATALOGUE.filter(item => item.connectable)) {
+    assert.match(integration.description.en, /^Show .+ in Reminders$/, integration.key)
+    assert.match(integration.description.no, /^Vis .+ i Påminnelser$/, integration.key)
+    assert.ok(integration.description.en.length < 80, integration.key)
+    assert.ok(integration.description.no.length < 90, integration.key)
+  }
 })

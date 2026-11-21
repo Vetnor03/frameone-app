@@ -12,19 +12,19 @@ export type IntegrationDefinition = {
 
 /** Shared catalogue and product ordering used by onboarding and Connect Apps. */
 export const INTEGRATION_CATALOGUE: readonly IntegrationDefinition[] = [
-  { key: 'teams', name: { en: 'Teams', no: 'Teams' }, description: { en: "Show today's meetings on your frame", no: 'Vis dagens møter på framen din' }, status: 'available', connectable: true },
-  { key: 'calendar-link', name: { en: 'Calendar Link', no: 'Kalenderlenke' }, description: { en: 'Subscribe to Apple, Outlook, Hoopit or other iCal calendars', no: 'Abonner på Apple-, Outlook-, Hoopit- eller andre iCal-kalendere' }, status: 'available', connectable: true },
-  { key: 'google-calendar', name: { en: 'Google Calendar', no: 'Google Calendar' }, description: { en: 'Show upcoming events from your Google calendars', no: 'Vis kommende avtaler fra Google-kalenderne dine' }, status: 'available', connectable: true },
-  { key: 'bonnetid', name: { en: 'IRN Prayer Times', no: 'IRN – Bønnetid' }, description: { en: 'Official Norwegian prayer times and Islamic calendar occasions from IRN', no: 'Offisielle bønnetider og islamske merkedager fra IRN' }, status: 'available', connectable: true },
-  { key: 'local-events', name: { en: 'Local Events', no: 'Lokale arrangementer' }, description: { en: 'Choose your local area for nearby events', no: 'Velg nærområdet ditt for lokale arrangementer' }, status: 'available', connectable: true },
-  { key: 'spond', name: { en: 'Spond', no: 'Spond' }, description: { en: 'Show Spond messages on your frame', no: 'Vis Spond-meldinger på framen din' }, status: 'experimental', connectable: true },
-  { key: 'waste', name: { en: 'Waste collection', no: 'Renovasjon' }, description: { en: 'Find your address and see upcoming waste collections', no: 'Finn adressen din og se kommende tømminger' }, status: 'experimental', connectable: true },
-  { key: 'todoist', name: { en: 'Todoist', no: 'Todoist' }, description: { en: 'Show Todoist tasks with due dates in Reminders', no: 'Vis Todoist-oppgaver med forfallsdato i Påminnelser' }, status: 'available', connectable: true },
-  { key: 'google-tasks', name: { en: 'Google Tasks', no: 'Google Tasks' }, description: { en: 'Read-only Google Tasks in Reminders (awaiting Google approval)', no: 'Google Tasks i Påminnelser (venter på godkjenning fra Google)' }, status: 'under-evaluation', connectable: false },
-  { key: 'microsoft-todo', name: { en: 'Microsoft To Do', no: 'Microsoft To Do' }, description: { en: 'Show Microsoft To Do tasks in Reminders', no: 'Vis Microsoft To Do-oppgaver i Påminnelser' }, status: 'available', connectable: true },
-  { key: 'vigilo', name: { en: 'Vigilo', no: 'Vigilo' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },
-  { key: 'transponder', name: { en: 'Transponder', no: 'Transponder' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },
-  { key: 'planta', name: { en: 'PLANTA', no: 'PLANTA' }, description: { en: 'This integration is being evaluated', no: 'Denne integrasjonen er under vurdering' }, status: 'under-evaluation', connectable: false },
+  { key: 'teams', name: { en: 'Teams', no: 'Teams' }, description: { en: "Show upcoming meetings in Reminders", no: "Vis kommende møter i Påminnelser" }, status: 'available', connectable: true },
+  { key: 'calendar-link', name: { en: 'Calendar Link', no: 'Kalenderlenke' }, description: { en: "Show subscribed calendar events in Reminders", no: "Vis hendelser fra kalenderlenker i Påminnelser" }, status: 'available', connectable: true },
+  { key: 'google-calendar', name: { en: 'Google Calendar', no: 'Google Calendar' }, description: { en: "Show Google Calendar events in Reminders", no: "Vis Google Kalender-avtaler i Påminnelser" }, status: 'available', connectable: true },
+  { key: 'bonnetid', name: { en: 'IRN Prayer Times', no: 'IRN – Bønnetid' }, description: { en: "Show prayer times and Islamic occasions in Reminders", no: "Vis bønnetider og islamske merkedager i Påminnelser" }, status: 'available', connectable: true },
+  { key: 'local-events', name: { en: 'Local Events', no: 'Lokale arrangementer' }, description: { en: "Show nearby events in Reminders", no: "Vis lokale arrangementer i Påminnelser" }, status: 'available', connectable: true },
+  { key: 'spond', name: { en: 'Spond', no: 'Spond' }, description: { en: "Show Spond messages in Reminders", no: "Vis Spond-meldinger i Påminnelser" }, status: 'experimental', connectable: true },
+  { key: 'waste', name: { en: 'Waste collection', no: 'Renovasjon' }, description: { en: "Show waste collection dates in Reminders", no: "Vis avfallstømming i Påminnelser" }, status: 'experimental', connectable: true },
+  { key: 'todoist', name: { en: 'Todoist', no: 'Todoist' }, description: { en: "Show Todoist tasks in Reminders", no: "Vis Todoist-oppgaver i Påminnelser" }, status: 'available', connectable: true },
+  { key: 'google-tasks', name: { en: 'Google Tasks', no: 'Google Tasks' }, description: { en: "Show Google Tasks in Reminders", no: "Vis Google Tasks i Påminnelser" }, status: 'under-evaluation', connectable: false },
+  { key: 'microsoft-todo', name: { en: 'Microsoft To Do', no: 'Microsoft To Do' }, description: { en: "Show Microsoft To Do tasks in Reminders", no: "Vis Microsoft To Do-oppgaver i Påminnelser" }, status: 'available', connectable: true },
+  { key: 'vigilo', name: { en: 'Vigilo', no: 'Vigilo' }, description: { en: "School and kindergarten updates", no: "Oppdateringer fra skole og barnehage" }, status: 'under-evaluation', connectable: false },
+  { key: 'transponder', name: { en: 'Transponder', no: 'Transponder' }, description: { en: "Messages from schools and activities", no: "Meldinger fra skole og aktiviteter" }, status: 'under-evaluation', connectable: false },
+  { key: 'planta', name: { en: 'PLANTA', no: 'PLANTA' }, description: { en: "Plant care reminders", no: "Påminnelser om plantestell" }, status: 'under-evaluation', connectable: false },
 ]
 
 export function integrationStatusLabel(status: IntegrationStatus, language: 'en' | 'no') {

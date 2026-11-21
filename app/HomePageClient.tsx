@@ -3688,7 +3688,7 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'google-tasks' | 'todoist' | 'microsoft-todo' | 'waste' | 'bonnetid' | 'calendar-link'
+type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'google-tasks' | 'todoist' | 'microsoft-todo' | 'waste' | 'bonnetid' | 'calendar-link' | 'local-events'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -4433,8 +4433,8 @@ function ConnectAppsScreen({
 
   async function disconnectLocalEvents() {
     if (localEventsLoading) return
-    if (!window.confirm(language === 'no' ? 'Koble fra lokale arrangementer?' : 'Disconnect Local Events?')) return
     setLocalEventsLoading(true)
+    setDisconnectingApp('local-events')
     setStatus(null)
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
@@ -4451,20 +4451,23 @@ function ConnectAppsScreen({
       changeFrameIntegration('local-events', { enabled: false })
       setLocalEventsDraftArea(DEFAULT_LOCAL_EVENT_AREA)
       setLocalEventsOpen(false)
+      setDisconnectConfirmApp(null)
       setLocallyDisconnectedApps((current) => ({ ...current, 'local-events': true }))
       setStatusTone('success')
       setStatus(language === 'no' ? 'Lokale arrangementer er frakoblet' : 'Local Events disconnected')
       window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
     } catch (error: unknown) {
+      setDisconnectConfirmApp(null)
       setStatusTone('error')
       setStatus(error instanceof Error && error.message ? error.message : 'Could not disconnect Local Events')
     } finally {
       setLocalEventsLoading(false)
+      setDisconnectingApp(null)
     }
   }
 
   async function disconnectIntegration(provider: DisconnectableConnectAppKey) {
-    const appName = provider === 'calendar-link' ? 'Calendar Link' : provider === 'google-tasks' ? 'Google Tasks' : provider === 'microsoft-todo' ? 'Microsoft To Do' : provider === 'todoist' ? 'Todoist' : provider === 'teams' ? 'Microsoft Calendar' : provider === 'google-calendar' ? 'Google Calendar' : provider === 'waste' ? (language === 'no' ? 'Renovasjon' : 'Waste collection') : provider === 'bonnetid' ? 'IRN' : 'Spond'
+    const appName = INTEGRATION_CATALOGUE.find(app => app.key === provider)?.name[language] || provider
     const setProviderLoading = provider === 'google-tasks' ? setGoogleTasksLoading : provider === 'teams' ? setTeamsLoading : provider === 'google-calendar' ? setGoogleLoading : provider === 'todoist' ? setTodoistLoading : provider === 'microsoft-todo' ? setMicrosoftTodoLoading : provider === 'spond' ? setSpondLoading : null
     if (disconnectingApp === provider) return
     setProviderLoading?.(true)
@@ -4783,6 +4786,11 @@ function ConnectAppsScreen({
   }
 
   const sortedApps = sortConnectedAppsFirst(apps.map(app => ({ app, connected: getAppConnected(app) })))
+  const disconnectAppName = disconnectConfirmApp
+    ? INTEGRATION_CATALOGUE.find(app => app.key === disconnectConfirmApp)?.name[language] || disconnectConfirmApp
+    : ''
+  const connectActionClass = 'min-h-8 rounded-xl border border-[color:var(--bd-20)] bg-[color:var(--panel-05)] px-3 py-1.5 text-[11px] font-medium tracking-[0.08em] text-[color:var(--fg-70)] disabled:opacity-50'
+  const disconnectActionClass = 'min-h-8 rounded-xl border border-[#d94b4b]/30 bg-[color:var(--panel-05)] px-3 py-1.5 text-[11px] font-medium tracking-[0.08em] text-[#d94b4b] disabled:opacity-50'
   const statusDiscoveryPending = !startup && (
     (!spondStatusResolved && !spondStatusFailed) || (!teamsStatusResolved && !teamsStatusFailed) ||
     (!googleStatusResolved && !googleStatusFailed) || (!calendarLinkStatusResolved && !calendarLinkStatusFailed) || (!googleTasksStatusResolved && !googleTasksStatusFailed) || (!todoistStatusResolved && !todoistStatusFailed) || (!microsoftTodoStatusResolved && !microsoftTodoStatusFailed) || !wasteStatusResolved || !bonnetidStatusResolved ||
@@ -4924,35 +4932,39 @@ function ConnectAppsScreen({
             const waitingForVerification = connected && !startup && verifiedConnectionStatus[app.key] === undefined
             const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : app.key === 'google-calendar' ? integrationSetupErrors['google-calendar'] : app.key === 'todoist' ? integrationSetupErrors.todoist : app.key === 'microsoft-todo' ? integrationSetupErrors['microsoft-todo'] : app.key === 'google-tasks' ? integrationSetupErrors['google-tasks'] : null
             const localEventsSelectedName = localEventsSavedArea ? (localEventsSavedArea.placeLabel || getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || '') : null
-            const description = app.key === 'calendar-link' && calendarLinkConnected
-              ? (language === 'no' ? `${calendarLinkFeeds.length} kalendere synkroniseres til Påminnelser` : `${calendarLinkFeeds.length} calendars sync into Reminders`)
+            // Keep the main description stable. Connection-specific information belongs
+            // on its own detail line so every card follows the same hierarchy.
+            const connectionDetail = !connected ? null
+              : app.key === 'calendar-link' && calendarLinkFeeds.length > 0
+                ? (language === 'no'
+                  ? `${calendarLinkFeeds.length} ${calendarLinkFeeds.length === 1 ? 'kalender' : 'kalendere'} tilkoblet`
+                  : `${calendarLinkFeeds.length} ${calendarLinkFeeds.length === 1 ? 'calendar' : 'calendars'} connected`)
               : app.key === 'local-events' && localEventsSyncIssue
-              ? (language === 'no' ? `Events valgt, men ingen synkronisering ennå: ${localEventsSyncIssue}` : `Events selected but not synced yet: ${localEventsSyncIssue}`)
+                ? (language === 'no' ? `Synkronisering venter: ${localEventsSyncIssue}` : `Sync pending: ${localEventsSyncIssue}`)
               : app.key === 'local-events' && localEventsSelectedName
-              ? (language === 'no' ? `Arrangementer nær ${localEventsSelectedName}` : `Events near ${localEventsSelectedName}`)
+                ? (language === 'no' ? `Område: ${localEventsSelectedName}` : `Area: ${localEventsSelectedName}`)
               : app.key === 'bonnetid' && bonnetidCity
-              ? (language === 'no' ? 'Bønnetider for ' : 'Prayer times for ') + bonnetidCity
-              : app.description
+                ? (language === 'no' ? `Sted: ${bonnetidCity}` : `Location: ${bonnetidCity}`)
+              : null
             const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar' || app.key === 'todoist' || app.key === 'microsoft-todo' || app.key === 'google-tasks'
             const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : app.key === 'todoist' ? todoistAccount : app.key === 'microsoft-todo' ? microsoftTodoAccount : app.key === 'google-tasks' ? googleTasksAccount : null
             const googleTasksMissingAccount = connected && app.key === 'google-tasks' && googleTasksStatusResolved && !googleTasksStatusFailed && !googleTasksAccount
             return (
               <div
                 key={app.key}
-                className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3"
+                className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3.5"
               >
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 text-sm font-medium text-[color:var(--fg-90)]"><span>{app.name}</span>{app.status === 'experimental' && <span className="rounded-full border border-[#2aa3ff]/35 px-2 py-0.5 text-[9px] uppercase tracking-wider text-[#2aa3ff]">{integrationStatusLabel(app.status, language)}</span>}</div>
-                    <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">{description}</div>
-                    {connected && credentialProvider && (
-                      <div className="mt-2 text-xs text-[color:var(--fg-45)]">
+                    <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">{app.description}</div>
+                    {connectionDetail && <div className="mt-2 text-xs leading-snug text-[color:var(--fg-60)]">{connectionDetail}</div>}
+                    {connected && credentialProvider && (accountLabel || googleTasksMissingAccount) && (
+                      <div className="mt-2 text-xs text-[color:var(--fg-60)]">
                         <div className="truncate">
                           {accountLabel
                             ? `${language === 'no' ? 'Konto' : 'Account'}: ${accountLabel}`
-                            : googleTasksMissingAccount
-                              ? (language === 'no' ? 'Google-konto tilkoblet (e-post ikke tilgjengelig)' : 'Google account connected (email unavailable)')
-                              : (language === 'no' ? 'Tilkoblet' : 'Connected')}
+                            : (language === 'no' ? 'Google-konto tilkoblet (e-post ikke tilgjengelig)' : 'Google account connected (email unavailable)')}
                         </div>
                         {!startup && googleTasksMissingAccount && (
                           <button type="button" onClick={() => void connectGoogleTasks()}
@@ -4965,8 +4977,10 @@ function ConnectAppsScreen({
                     )}
                   </div>
 
+                  <div className="flex shrink-0 flex-col items-stretch gap-1.5">
+                  {connected && !startup && <span className="text-center text-[10px] font-semibold tracking-[0.14em] text-[#1f9d4a]">{language === 'no' ? 'TILKOBLET' : 'CONNECTED'}</span>}
                   {!app.connectable ? (
-                    <span className="shrink-0 h-8 px-3 rounded-xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[11px] tracking-widest text-[#2aa3ff] inline-flex items-center">
+                    <span className="inline-flex min-h-8 items-center justify-center rounded-xl border border-[color:var(--bd-20)] px-3 text-[10px] font-medium tracking-[0.06em] text-[color:var(--fg-60)]">
                       {integrationStatusLabel(app.status, language)}
                     </span>
                   ) : connected ? (
@@ -4979,55 +4993,47 @@ function ConnectAppsScreen({
                         {language === 'no' ? 'FJERN' : 'REMOVE'}
                       </button>
                     ) : app.key === 'calendar-link' ? (
-                      <div className="shrink-0 flex flex-col items-center gap-1">
-                        <span className="text-[10px] font-medium tracking-widest text-[#1f9d4a]">
-                          {language === 'no' ? 'TILKOBLET' : 'CONNECTED'}
-                        </span>
-                        <button type="button" onClick={() => setCalendarLinkOpen(true)}
-                          className="h-8 rounded-xl border border-[color:var(--bd-20)] px-3 text-[11px] tracking-widest text-[color:var(--fg-70)]">
-                          {language === 'no' ? 'ADMINISTRER' : 'MANAGE'}
-                        </button>
-                      </div>
+                      <button type="button" onClick={() => setCalendarLinkOpen(true)} className={connectActionClass}>
+                        {language === 'no' ? 'ADMINISTRER' : 'MANAGE'}
+                      </button>
                     ) : app.key === 'local-events' ? (
-                      <div className="shrink-0 flex flex-col items-stretch gap-1.5">
-                        <button type="button" onClick={disconnectLocalEvents} disabled={localEventsLoading || !localEventsCanManage} className="h-8 rounded-xl border border-[#d94b4b]/45 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
+                      <>
+                        <button type="button" onClick={() => { setLocalEventsDraftArea(localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA); setLocalEventsOpen(true) }} disabled={localEventsLoading || !localEventsCanManage} className={connectActionClass}>
+                          {language === 'no' ? 'ENDRE' : 'EDIT'}
+                        </button>
+                        <button type="button" onClick={() => setDisconnectConfirmApp('local-events')} disabled={localEventsLoading || !localEventsCanManage} className={disconnectActionClass}>
                           {localEventsLoading ? (language === 'no' ? 'KOBLER FRA…' : 'DISCONNECTING…') : (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')}
                         </button>
-                        <button type="button" onClick={() => { setLocalEventsDraftArea(localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA); setLocalEventsOpen(true) }} disabled={localEventsLoading || !localEventsCanManage} className="h-7 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)] disabled:opacity-60">
-                          {language === 'no' ? 'ENDRE' : 'EDIT'}
-                        </button>
-                      </div>
+                      </>
                     ) : app.key === 'waste' ? (
-                      <div className="shrink-0 flex flex-col items-stretch gap-1.5">
-                        <button type="button" onClick={() => setDisconnectConfirmApp('waste')} disabled={disconnectingApp === 'waste' || waitingForVerification} className="h-8 rounded-xl border border-[#d94b4b]/40 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
-                          {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
-                        </button>
-                        <button type="button" onClick={() => setWasteModalOpen(true)} disabled={disconnectingApp === 'waste' || waitingForVerification} className="h-7 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)] disabled:opacity-60">
-                          {language === 'no' ? 'ENDRE ADRESSE' : 'EDIT ADDRESS'}
-                        </button>
-                      </div>
-                    ) : app.key === 'bonnetid' ? (
-                      <div className="shrink-0 flex flex-col items-stretch gap-1.5">
-                        <button type="button" onClick={() => setDisconnectConfirmApp('bonnetid')} disabled={disconnectingApp === 'bonnetid' || waitingForVerification} className="h-8 rounded-xl border border-[#d94b4b]/40 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
-                          {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
-                        </button>
-                        <button type="button" onClick={() => setBonnetidModalOpen(true)} disabled={disconnectingApp === 'bonnetid' || waitingForVerification} className="h-7 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)] disabled:opacity-60">
+                      <>
+                        <button type="button" onClick={() => setWasteModalOpen(true)} disabled={disconnectingApp === 'waste' || waitingForVerification} className={connectActionClass}>
                           {language === 'no' ? 'ENDRE' : 'EDIT'}
                         </button>
-                      </div>
+                        <button type="button" onClick={() => setDisconnectConfirmApp('waste')} disabled={disconnectingApp === 'waste' || waitingForVerification} className={disconnectActionClass}>
+                          {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
+                        </button>
+                      </>
+                    ) : app.key === 'bonnetid' ? (
+                      <>
+                        <button type="button" onClick={() => setBonnetidModalOpen(true)} disabled={disconnectingApp === 'bonnetid' || waitingForVerification} className={connectActionClass}>
+                          {language === 'no' ? 'ENDRE' : 'EDIT'}
+                        </button>
+                        <button type="button" onClick={() => setDisconnectConfirmApp('bonnetid')} disabled={disconnectingApp === 'bonnetid' || waitingForVerification} className={disconnectActionClass}>
+                          {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
+                        </button>
+                      </>
                     ) : credentialProvider ? (
                       <button
                         type="button"
                         onClick={() => setDisconnectConfirmApp(app.key as DisconnectableConnectAppKey)}
                         disabled={waitingForVerification || disconnectingApp === app.key || (app.key === 'spond' && spondLoading) || (app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading) || (app.key === 'todoist' && todoistLoading) || (app.key === 'microsoft-todo' && microsoftTodoLoading) || (app.key === 'google-tasks' && googleTasksLoading)}
-                        className="shrink-0 h-8 rounded-xl border border-[#d94b4b]/35 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60"
+                        className={disconnectActionClass}
                       >
                         {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
                       </button>
                     ) : (
-                      <span className="shrink-0 h-8 px-3 rounded-xl border border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[11px] tracking-widest text-[#1f9d4a] inline-flex items-center">
-                        {language === 'no' ? 'TILKOBLET' : 'CONNECTED'}
-                      </span>
+                      startup ? <span className="inline-flex min-h-8 items-center justify-center rounded-xl border border-[#1f9d4a]/30 px-3 text-[11px] tracking-widest text-[#1f9d4a]">{language === 'no' ? 'TILKOBLET' : 'CONNECTED'}</span> : null
                     )
                   ) : (
                     <button
@@ -5074,7 +5080,7 @@ function ConnectAppsScreen({
                           setBonnetidModalOpen(true)
                         }
                       }}
-                      className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-20)] text-[11px] tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
+                      className={connectActionClass}
                     >
                       {app.key === 'local-events'
                         ? (language === 'no' ? 'KOBLE TIL' : 'CONNECT')
@@ -5085,9 +5091,8 @@ function ConnectAppsScreen({
                             : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
                     </button>
                   )}
+                  </div>
                 </div>
-
-
               </div>
             )
           })}
@@ -5134,7 +5139,7 @@ function ConnectAppsScreen({
               </button>
               <button
                 type="button"
-                onClick={() => disconnectIntegration(disconnectConfirmApp)}
+                onClick={() => disconnectConfirmApp === 'local-events' ? void disconnectLocalEvents() : void disconnectIntegration(disconnectConfirmApp) }
                 disabled={disconnectingApp === disconnectConfirmApp}
                 className="h-11 flex-1 rounded-2xl border border-[#d94b4b]/35 bg-[#d94b4b]/10 text-xs tracking-widest text-[#ff7a7a] disabled:opacity-60"
               >
@@ -5146,12 +5151,14 @@ function ConnectAppsScreen({
           }
         >
             <div className="text-base font-semibold text-[color:var(--fg-90)]">
-              {language === 'no'
-                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? 'Renovasjon' : disconnectConfirmApp === 'bonnetid' ? 'IRN' : 'Spond'}?`
-                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'google-calendar' ? 'Google Calendar' : disconnectConfirmApp === 'waste' ? 'Waste collection' : disconnectConfirmApp === 'bonnetid' ? 'IRN' : 'Spond'}?`}
+              {language === 'no' ? `Koble fra ${disconnectAppName}?` : `Disconnect ${disconnectAppName}?`}
             </div>
             <div className="mt-2 text-xs leading-snug text-[color:var(--fg-45)]">
-              {disconnectConfirmApp === 'waste'
+              {disconnectConfirmApp === 'local-events'
+                ? (language === 'no'
+                  ? 'Det valgte området og lokale arrangementer fjernes fra Påminnelser.'
+                  : 'The selected area and local events will be removed from Reminders.')
+                : disconnectConfirmApp === 'waste'
                 ? (language === 'no'
                   ? 'Den valgte adressen og tilhørende tømmedatoer fjernes fra Påminnelser.'
                   : 'The selected address and its collection dates will be removed from Reminders.')
