@@ -15,7 +15,7 @@ export type ReminderRepeatKey =
   | '2years'
   | 'custom'
 
-export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events' | 'bonnetid' | 'todoist' | 'microsoft-todo'
+export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events' | 'bonnetid' | 'todoist' | 'microsoft-todo' | 'google-tasks'
 
 export type DeviceReminderItem = {
   reminder_id: string
@@ -263,7 +263,7 @@ function buildImportedTaskReminderItems(
   horizonEndYmd: string,
   timeZone: string,
   includeOverdue: boolean,
-  source: 'todoist' | 'microsoft-todo'
+  source: 'todoist' | 'microsoft-todo' | 'google-tasks'
 ): DeviceReminderItem[] {
   return rows.flatMap(row => {
     if (row.raw?.source !== source || row.raw?.type !== 'task') return []
@@ -309,6 +309,13 @@ export function buildMicrosoftTodoReminderItems(
   timeZone: string, includeOverdue: boolean
 ): DeviceReminderItem[] {
   return buildImportedTaskReminderItems(rows, todayYmd, horizonEndYmd, timeZone, includeOverdue, 'microsoft-todo')
+}
+
+export function buildGoogleTasksReminderItems(
+  rows: IntegrationItemRow[], todayYmd: string, horizonEndYmd: string,
+  timeZone: string, includeOverdue: boolean
+): DeviceReminderItem[] {
+  return buildImportedTaskReminderItems(rows, todayYmd, horizonEndYmd, timeZone, includeOverdue, 'google-tasks')
 }
 
 export function buildIrnReminderItems(

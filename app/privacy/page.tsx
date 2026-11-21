@@ -98,7 +98,7 @@ function PrivacyPageContent() {
 
   const pageTitle = language === 'no' ? 'PERSONVERNERKLÆRING' : 'PRIVACY POLICY'
   const updatedText =
-    language === 'no' ? 'Sist oppdatert: 19. oktober 2026' : 'Last updated: October 19, 2026'
+    language === 'no' ? 'Sist oppdatert: 21. november 2026' : 'Last updated: November 21, 2026'
 
   const sections =
     language === 'no'
@@ -119,7 +119,7 @@ function PrivacyPageContent() {
           },
           {
             title: 'GOOGLE CALENDAR – TILGANG OG FORMÅL',
-            text: 'Hvis du selv velger å koble Google Calendar til RE:MIND via Connect, ber vi om lesetilgang til Google-kalendere du har tilgang til (Google Calendar API: calendar.readonly). Vi henter kommende hendelser fra kalendere som er valgt for visning i Google, inkludert hendelsestittel, dato, start- og sluttid, heldagsstatus, kalendernavn, sted og lenke til hendelsen der dette finnes. Informasjonen brukes til å synkronisere og vise kalenderavtaler som påminnelser i RE:MIND. Vi kan ikke opprette, endre eller slette hendelser i Google Calendar.',
+            text: 'Hvis du selv velger å koble Google Calendar til RE:MIND via Connect, ber vi om lesetilgang til Google-kalendere du har tilgang til (Google Calendar API: calendar.calendarlist.readonly og calendar.events.readonly). Vi henter kommende hendelser fra kalendere som er valgt for visning i Google, inkludert hendelsestittel, dato, start- og sluttid, heldagsstatus, kalendernavn, sted og lenke til hendelsen der dette finnes. Informasjonen brukes til å synkronisere og vise kalenderavtaler som påminnelser i RE:MIND. Vi kan ikke opprette, endre eller slette hendelser i Google Calendar.',
           },
           {
             title: 'GOOGLE CALENDAR – LAGRING OG SYNLIGHET',
@@ -130,8 +130,12 @@ function PrivacyPageContent() {
             text: `Du kan når som helst koble fra Google Calendar i Connect. RE:MIND stanser da videre synkronisering og sletter lagrede Google-tilgangstokens og importerte kalenderhendelser fra den aktive integrasjonsdatabasen. Dette endrer ikke kalenderne dine hos Google. Du kan også trekke tilbake RE:MINDs tilgang fra sikkerhetsinnstillingene i Google-kontoen din. For andre forespørsler om sletting, kontakt ${CONTACT_EMAIL}.`,
           },
           {
+            title: 'GOOGLE TASKS – TILGANG, LAGRING OG SLETTING',
+            text: 'Hvis du selv kobler Google Tasks til via Connect, ber vi kun om tasks.readonly for å lese oppgavelister, oppgavetitler, forfallsdatoer og fullføringsstatus. Oppgaver med forfallsdato vises som heldagsoppgaver under Påminnelser i appen og på valgte RE:MIND-rammer. Oppgaver uten dato vises ikke i kalenderen. RE:MIND kan ikke opprette, endre eller fullføre oppgavene dine i Google. Tilgangs- og oppdateringstokens lagres kryptert, og importerte oppgaver mellomlagres i databasen. Innholdet kan være synlig for personer som ser en delt ramme. Vi sender ikke Google Tasks-titler til eksterne KI-modeller, bruker dem ikke til reklame, selger dem ikke og bruker dem ikke til å trene KI. Når du kobler fra Google Tasks, stopper synkroniseringen og lagrede tokens og importerte oppgaver slettes fra den aktive integrasjonsdatabasen. Google-oppgavene dine endres ikke.',
+          },
+          {
             title: 'GOOGLE API-DATA OG BEGRENSET BRUK',
-            text: 'RE:MINDs bruk og eventuell overføring av opplysninger mottatt fra Google API-er følger Google API Services User Data Policy, inkludert kravene til Limited Use (begrenset bruk). Google-data brukes kun til den kalenderfunksjonen du uttrykkelig har koblet til, og deles bare med nødvendige tekniske tjenesteleverandører for å levere og sikre funksjonen eller når loven krever det.',
+            text: 'RE:MINDs bruk og eventuell overføring av opplysninger mottatt fra Google API-er følger Google API Services User Data Policy, inkludert kravene til Limited Use (begrenset bruk). Google-data brukes kun til kalender- og oppgavefunksjonene du uttrykkelig har koblet til, og deles bare med nødvendige tekniske tjenesteleverandører for å levere og sikre funksjonen eller når loven krever det.',
           },
           {
             title: 'EKSTERN KI-BEHANDLING FOR AI FOLLOW',
@@ -197,7 +201,7 @@ function PrivacyPageContent() {
           },
           {
             title: 'GOOGLE CALENDAR – ACCESS AND PURPOSE',
-            text: 'If you choose to connect Google Calendar through RE:MIND Connect, we request read-only access to calendars available to your Google Account (Google Calendar API: calendar.readonly). We import upcoming events from calendars selected for display in Google, including event titles, dates, start and end times, all-day status, calendar names, locations and event links where available. We use this information to synchronize and display calendar entries as reminders in RE:MIND. We cannot create, edit or delete events in Google Calendar.',
+            text: 'If you choose to connect Google Calendar through RE:MIND Connect, we request read-only access to calendars available to your Google Account (Google Calendar API: calendar.calendarlist.readonly and calendar.events.readonly). We import upcoming events from calendars selected for display in Google, including event titles, dates, start and end times, all-day status, calendar names, locations and event links where available. We use this information to synchronize and display calendar entries as reminders in RE:MIND. We cannot create, edit or delete events in Google Calendar.',
           },
           {
             title: 'GOOGLE CALENDAR – STORAGE AND VISIBILITY',
@@ -208,8 +212,12 @@ function PrivacyPageContent() {
             text: `You may disconnect Google Calendar at any time in Connect. RE:MIND then stops future synchronization and deletes stored Google access tokens and imported calendar events from its active integration database. This does not change your calendars at Google. You may also revoke RE:MIND access in your Google Account security settings. For other data deletion requests, contact ${CONTACT_EMAIL}.`,
           },
           {
+            title: 'GOOGLE TASKS – ACCESS, STORAGE AND DELETION',
+            text: 'If you choose to connect Google Tasks through Connect, we request only tasks.readonly to read task lists, task titles, due dates, and completion status. Dated tasks appear as all-day items in Reminders in the app and on selected RE:MIND frames; tasks without due dates are not shown in the calendar. RE:MIND cannot create, edit, or complete tasks in Google. Access and refresh tokens are stored encrypted, and imported task details are cached in the integration database. Items on a shared frame can be seen by anyone with access to that display. We do not send Google Tasks titles to external AI, use them for advertising, sell them, or use them to train AI. Disconnecting Google Tasks stops synchronization and deletes stored tokens and imported tasks from the active integration database without changing the original tasks at Google.',
+          },
+          {
             title: 'GOOGLE API DATA AND LIMITED USE',
-            text: 'RE:MIND’s use and transfer of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements. Google data is used only to provide the calendar feature you expressly connect, and is shared only with technical service providers necessary to operate and protect that feature or when required by law.',
+            text: 'RE:MIND’s use and transfer of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements. Google data is used only to provide the calendar and tasks features you expressly connect, and is shared only with technical service providers necessary to operate and protect that feature or when required by law.',
           },
           {
             title: 'EXTERNAL AI PROCESSING FOR AI FOLLOW',

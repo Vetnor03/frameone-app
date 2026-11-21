@@ -4,7 +4,7 @@ export const CONNECT_STATUS_CACHE_PREFIX = 'remind:connect-status:v1:'
 export const CONNECT_STATUS_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 const validId = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{8,128}$/.test(value)
-const PROVIDERS = new Set(['teams', 'google-calendar', 'spond', 'local-events', 'waste', 'bonnetid', 'todoist', 'microsoft-todo'])
+const PROVIDERS = new Set(['teams', 'google-calendar', 'spond', 'local-events', 'waste', 'bonnetid', 'todoist', 'microsoft-todo', 'google-tasks'])
 
 export function connectStatusCacheKey(userId, deviceId) {
   return validId(userId) && validId(deviceId) ? CONNECT_STATUS_CACHE_PREFIX + userId + ':' + deviceId : null

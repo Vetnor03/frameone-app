@@ -9,7 +9,8 @@ test('Privacy Policy discloses Google Calendar usage in both languages', () => {
   for (const text of [
     'GOOGLE CALENDAR – ACCESS AND PURPOSE',
     'GOOGLE CALENDAR – TILGANG OG FORMÅL',
-    'calendar.readonly',
+    'calendar.calendarlist.readonly',
+    'calendar.events.readonly',
     'GOOGLE CALENDAR – DISCONNECTING AND DELETION',
     'GOOGLE CALENDAR – FRAKOBLING OG SLETTING',
     'Google API Services User Data Policy',
