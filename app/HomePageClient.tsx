@@ -1751,8 +1751,13 @@ export default function HomePage() {
       timers = []
       if (document.visibilityState !== 'visible') return
       timers = pending.map((key, index) => window.setTimeout(() => {
-        setModuleTabCache((cache) => appendCachedModuleTab(cache, moduleTabScope, key))
-      }, 550 + index * 450))
+        if (document.visibilityState !== 'visible') return
+        // Hidden tab hydration is background work: do not compete with taps,
+        // swipes or urgent navigation renders on the main thread.
+        React.startTransition(() => {
+          setModuleTabCache((cache) => appendCachedModuleTab(cache, moduleTabScope, key))
+        })
+      }, 2500 + index * 1200))
     }
     schedule()
     document.addEventListener('visibilitychange', schedule)
