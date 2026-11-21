@@ -5,14 +5,18 @@ import { normalizeGoogleTask } from '../app/lib/integrations/google-tasks/normal
 import { fetchGoogleTaskListsAndTasks, GOOGLE_TASKS_SCOPES } from '../app/lib/integrations/google-tasks/client.ts'
 import { googleCalendarAuthUrl, GOOGLE_CALENDAR_SCOPES } from '../app/lib/integrations/google-calendar/client.ts'
 
-test('Google Tasks grants only read-only Tasks access, not Calendar or write', () => {
+test('Google Tasks grants read-only tasks plus basic account email, not Calendar or write', () => {
   const oldId = process.env.GOOGLE_CALENDAR_CLIENT_ID
   const oldUri = process.env.GOOGLE_CALENDAR_REDIRECT_URI
   try {
     process.env.GOOGLE_CALENDAR_CLIENT_ID = 'test-client'
     process.env.GOOGLE_CALENDAR_REDIRECT_URI = 'https://re-mind.no/api/integrations/google-calendar/callback'
     const taskUrl = new URL(googleCalendarAuthUrl('signed-state','challenge',GOOGLE_TASKS_SCOPES))
-    assert.equal(taskUrl.searchParams.get('scope'), 'https://www.googleapis.com/auth/tasks.readonly')
+    assert.deepEqual(taskUrl.searchParams.get('scope').split(' '), [
+      'https://www.googleapis.com/auth/tasks.readonly', 'openid', 'email',
+    ])
+    assert.ok(!taskUrl.searchParams.get('scope').includes('tasks.write'))
+    assert.ok(!taskUrl.searchParams.get('scope').includes('calendar.'))
     assert.equal(taskUrl.searchParams.get('code_challenge_method'),'S256')
     assert.equal(taskUrl.searchParams.get('redirect_uri'),process.env.GOOGLE_CALENDAR_REDIRECT_URI)
     const calendarUrl = new URL(googleCalendarAuthUrl('signed-state','challenge'))
