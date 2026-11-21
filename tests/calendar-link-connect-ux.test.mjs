@@ -17,6 +17,10 @@ test('Calendar Link uses the same Edit and Disconnect actions as other connected
   assert.doesNotMatch(card, /'MANAGE'|'ADMINISTRER'/)
   assert.match(home, /setCalendarLinkFeeds\(\[\]\)/)
   assert.match(home, /disconnectConfirmApp === 'calendar-link'/)
+  // During new-frame onboarding, Remove must only opt out of that frame;
+  // it must not disconnect an existing account-wide subscription.
+  assert.match(home, /const credentialProvider =[^\n]*app.key === 'calendar-link'/)
+  assert.match(home, /startup && credentialProvider \? \(/)
 })
 
 test('Calendar Link setup closes only after confirmed connection, not on errors or individual removal', () => {
