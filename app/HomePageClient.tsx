@@ -4948,8 +4948,8 @@ function ConnectAppsScreen({
             const connectionDetail = !connected ? null
               : app.key === 'calendar-link' && calendarLinkFeeds.length > 0
                 ? (language === 'no'
-                  ? `${calendarLinkFeeds.length} ${calendarLinkFeeds.length === 1 ? 'kalender' : 'kalendere'} tilkoblet`
-                  : `${calendarLinkFeeds.length} ${calendarLinkFeeds.length === 1 ? 'calendar' : 'calendars'} connected`)
+                  ? `${calendarLinkFeeds.length} ${calendarLinkFeeds.length === 1 ? 'kalender' : 'kalendere'}`
+                  : `${calendarLinkFeeds.length} ${calendarLinkFeeds.length === 1 ? 'calendar' : 'calendars'}`)
               : app.key === 'local-events' && localEventsSyncIssue
                 ? (language === 'no' ? `Synkronisering venter: ${localEventsSyncIssue}` : `Sync pending: ${localEventsSyncIssue}`)
               : app.key === 'local-events' && localEventsSelectedName
