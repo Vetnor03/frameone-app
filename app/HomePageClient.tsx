@@ -1731,7 +1731,10 @@ export default function HomePage() {
   }, [dynamicTabs, language])
 
   const moduleTabScope = tabCacheScope(userId, activeDeviceId)
-  const verifiedModuleTabsReady = !!moduleTabScope && framesLoaded && loadedSettingsDeviceId === activeDeviceId
+  // Authenticated frame membership unlocks separately scoped display snapshots,
+  // without waiting for the independent frame-layout/settings request.
+  const verifiedModuleTabsReady = !!moduleTabScope && authReady && framesLoaded &&
+    frames.some((frame) => frame.device_id === activeDeviceId)
   const cachedModuleKeys = moduleTabCache.scope === moduleTabScope ? moduleTabCache.keys : []
   const configuredModuleKeys = useMemo(() => dynamicTabs.map((tab) => tab.key), [dynamicTabs])
 
@@ -1744,7 +1747,7 @@ export default function HomePage() {
     if (!verifiedModuleTabsReady) return
     // Warm configured module tabs progressively after the frame is ready.
     // Avoid starting all Supabase requests at once during initial launch.
-    const pending = planModuleTabWarmup(configuredModuleKeys, [], activeTab)
+    const pending = planModuleTabWarmup(configuredModuleKeys, cachedModuleKeys, activeTab)
     let timers: number[] = []
     const schedule = () => {
       timers.forEach((timer) => window.clearTimeout(timer))
@@ -1757,7 +1760,7 @@ export default function HomePage() {
         React.startTransition(() => {
           setModuleTabCache((cache) => appendCachedModuleTab(cache, moduleTabScope, key))
         })
-      }, 2500 + index * 1200))
+      }, 6500 + index * 1600))
     }
     schedule()
     document.addEventListener('visibilitychange', schedule)
@@ -1765,9 +1768,9 @@ export default function HomePage() {
       document.removeEventListener('visibilitychange', schedule)
       timers.forEach((timer) => window.clearTimeout(timer))
     }
-    // A warmed tab entering cache must not restart the entire queue.
+    // User navigation cancels pending warmups, preserving the tap's priority.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moduleTabScope, verifiedModuleTabsReady, configuredModuleKeys])
+  }, [moduleTabScope, verifiedModuleTabsReady, configuredModuleKeys, activeTab, moduleTabCache])
 
   const renderedModuleKeys = verifiedModuleTabsReady
     ? configuredModuleKeys.filter((key) => key === activeTab || cachedModuleKeys.includes(key as WarmModuleKey))
@@ -3337,6 +3340,10 @@ async function handleSelectTab(k: TabKey) {
   )
   const configurationNotReady = !!activeDeviceId && loadedSettingsDeviceId !== activeDeviceId
   const appControlsLocked = isCachedLaunchPreview || configurationNotReady
+  // Frame configuration remains locked until verified. Independent data tabs
+  // can load and revalidate after account/frame membership is confirmed.
+  const independentDataTab = activeTab === 'reminders' || activeTab === 'groceries' || activeTab === 'countdown'
+  const activeContentLocked = appControlsLocked && !independentDataTab
 
   const isPlainFrameAssistantSurface = activeTab === 'frame'
     && !appControlsLocked && !layoutFlow && !pickerOpen && !languagePickerOpen
@@ -3387,14 +3394,14 @@ async function handleSelectTab(k: TabKey) {
             {/* Tab navigation is safe after membership verification, even while
                 settings are pending. Editing stays locked until verified. */}
             <div className="relative flex flex-1 min-h-0 flex-col">
-              {appControlsLocked && framesLoaded && (
+              {activeContentLocked && framesLoaded && (
                 <div role="status" aria-live="polite" className="pointer-events-none absolute inset-x-0 top-2 z-30 text-center text-[11px] tracking-wide text-[color:var(--fg-60)]">
                   {cachedPreviewSyncFailed
                     ? (language === 'no' ? 'Frakoblet forhåndsvisning · Koble til for å redigere' : 'Offline preview · Reconnect to edit')
                     : (language === 'no' ? 'Laster rammeinnstillinger…' : 'Loading frame settings…')}
                 </div>
               )}
-              <div className={`flex flex-1 min-h-0 flex-col ${appControlsLocked ? 'opacity-60' : ''}`} inert={appControlsLocked} aria-hidden={appControlsLocked}>
+              <div className={`flex flex-1 min-h-0 flex-col ${activeContentLocked ? 'opacity-60' : ''}`} inert={activeContentLocked} aria-hidden={activeContentLocked}>
                 <div className="mt-6 flex-1 min-h-0">
               {activeTab === 'frame' && (
                 <FrameTab
