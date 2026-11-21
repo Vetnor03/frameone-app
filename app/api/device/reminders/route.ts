@@ -6,11 +6,12 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsIfStaleForUser } from '@/app/lib/integrations/teams/server'
 import { syncGoogleCalendarFromStoredConnection } from '@/app/lib/integrations/google-calendar/server'
+import { syncCalendarLinksFromStoredConnection } from '@/app/lib/integrations/calendar-link/server'
 import { syncTodoistFromStoredConnection } from '@/app/lib/integrations/todoist/server'
 import { syncMicrosoftTodoFromStoredConnection } from '@/app/lib/integrations/microsoft-todo/server'
 import { googleTasksAllowedForUser, syncGoogleTasksFromStoredConnection } from '@/app/lib/integrations/google-tasks/server'
 import { syncBonnetidIfStale } from '@/app/lib/integrations/bonnetid/server'
-import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildTodoistReminderItems, buildMicrosoftTodoReminderItems, buildGoogleTasksReminderItems, buildWasteCollectionItems, buildIrnReminderItems, preferTomorrowAfterSingleAllDayEvent, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
+import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildGoogleCalendarItems, buildCalendarLinkItems, buildTodoistReminderItems, buildMicrosoftTodoReminderItems, buildGoogleTasksReminderItems, buildWasteCollectionItems, buildIrnReminderItems, preferTomorrowAfterSingleAllDayEvent, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
 import { reminderClockBoundaryReached } from '@/app/lib/device/reminderClockBoundary'
@@ -652,6 +653,7 @@ export async function GET(req: Request) {
     let spondItems: DeviceReminderItem[] = []
     let teamsItems: DeviceReminderItem[] = []
     let googleCalendarItems: DeviceReminderItem[] = []
+    let calendarLinkItems: DeviceReminderItem[] = []
     let todoistItems: DeviceReminderItem[] = []
     let microsoftTodoItems: DeviceReminderItem[] = []
     let googleTasksItems: DeviceReminderItem[] = []
@@ -680,6 +682,7 @@ export async function GET(req: Request) {
             providerEnabled('spond') ? syncSpondIfStaleForUsers(memberUserIds) : Promise.resolve(),
             Promise.allSettled((providerEnabled('teams') ? memberUserIds : []).map((userId) => syncTeamsIfStaleForUser(userId, { horizonDays }))),
             Promise.allSettled((providerEnabled('google-calendar') ? memberUserIds : []).map((userId) => syncGoogleCalendarFromStoredConnection(userId))),
+            Promise.allSettled((providerEnabled('calendar-link') ? memberUserIds : []).map((userId) => syncCalendarLinksFromStoredConnection(userId))),
             Promise.allSettled((selectedIntegrations.todoist?.enabled === true ? memberUserIds : []).map((userId) => syncTodoistFromStoredConnection(userId))),
             Promise.allSettled((selectedIntegrations['microsoft-todo']?.enabled === true ? memberUserIds : []).map((userId) => syncMicrosoftTodoFromStoredConnection(userId))),
             Promise.allSettled((selectedIntegrations['google-tasks']?.enabled === true ? memberUserIds.filter(googleTasksAllowedForUser) : []).map((userId) => syncGoogleTasksFromStoredConnection(userId))),
@@ -747,6 +750,18 @@ export async function GET(req: Request) {
         )
       } catch (error) {
         logOptionalReminderProviderFailure('google-calendar', error)
+      } })(), (async () => { try {
+        if (!providerEnabled('calendar-link')) return
+        const { data, error } = await supabase.from('integration_items')
+          .select('id,user_id,provider,external_id,title,body,starts_at,due_at,priority,raw')
+          .eq('provider','calendar-link').in('user_id',memberUserIds)
+          .order('starts_at',{ascending:true,nullsFirst:false})
+        if (error) throw error
+        calendarLinkItems = buildCalendarLinkItems(
+          Array.isArray(data) ? data as IntegrationItemRow[] : [], todayYmd, horizonEndYmd, timeZone, now
+        )
+      } catch (error) {
+        logOptionalReminderProviderFailure('calendar-link', error)
       } })(), (async () => { try {
         // Home-screen task widgets are opt-in per frame, including legacy frames.
         if (selectedIntegrations.todoist?.enabled !== true) return
@@ -881,6 +896,7 @@ export async function GET(req: Request) {
       ...spondItems,
       ...teamsItems,
       ...googleCalendarItems,
+      ...calendarLinkItems,
       ...todoistItems,
       ...microsoftTodoItems,
       ...googleTasksItems,

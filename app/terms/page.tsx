@@ -98,7 +98,7 @@ function TermsPageContent() {
 
   const pageTitle = language === 'no' ? 'VILKÅR OG BETINGELSER' : 'TERMS & CONDITIONS'
   const updatedText =
-    language === 'no' ? 'Sist oppdatert: 19. oktober 2026' : 'Last updated: October 19, 2026'
+    language === 'no' ? 'Sist oppdatert: 21. november 2026' : 'Last updated: November 21, 2026'
 
   const sections =
     language === 'no'
@@ -124,6 +124,10 @@ function TermsPageContent() {
           {
             title: 'TILKOBLEDE TJENESTER OG GOOGLE CALENDAR',
             text: 'Integrasjoner i Connect er valgfrie. Når du velger å koble til Google Calendar, gir du RE:MIND tillatelse til å lese hendelser fra Google-kalenderne dine for å vise dem i appen og på tilkoblede rammer. Integrasjonen har kun lesetilgang og oppretter, endrer eller sletter ikke Google-hendelser. Dersom rammen brukes i et fellesrom eller deles med andre, må du selv vurdere hvilke kalenderopplysninger som er egnet for visning. Du kan koble fra tjenesten i Connect. Google-kontoen og kalenderne dine forblir hos Google, og Googles egne vilkår gjelder også for bruk av Google Calendar. Se personvernerklæringen for detaljer om databruk og sletting.',
+          },
+          {
+            title: 'KALENDERLENKER',
+            text: 'Kalenderlenker er et valgfritt abonnement med kun lesetilgang. Bruk bare lenker du har rett til å bruke og vis kalenderinformasjon på delte rammer med omtanke. Hvis du publiserer en iCloud-kalender, kan alle som har lenken lese den. RE:MIND oppdaterer automatisk så langt kilden er tilgjengelig, men garanterer ikke at eksterne kalendere er komplette eller oppdaterte. Du kan fjerne kilden fra Connect når som helst. Se personvernerklæringen for lagring og sletting.',
           },
           {
             title: 'GOOGLE TASKS',
@@ -181,6 +185,10 @@ function TermsPageContent() {
           {
             title: 'CONNECTED SERVICES AND GOOGLE CALENDAR',
             text: 'Integrations in Connect are optional. When you connect Google Calendar, you authorize RE:MIND to read events from your Google calendars for display in the app and on connected frames. This is read-only access: the integration does not create, edit or delete Google events. If a frame is used in a shared space or shared with others, you are responsible for choosing calendar information that is appropriate to display. You can disconnect the service in Connect. Your Google Account and calendars remain with Google, and Google’s own terms continue to apply to your use of Google Calendar. See our Privacy Policy for details of data use and deletion.',
+          },
+          {
+            title: 'CALENDAR LINKS',
+            text: 'Calendar Links is an optional read-only subscription. Only use links you are authorized to access, and consider who can see personal events on shared frames. Publishing an iCloud calendar makes it readable to anyone with the link. RE:MIND syncs while the source is available but cannot guarantee complete or up-to-date external calendars. Remove subscriptions in Connect at any time. See our privacy policy for storage and deletion.',
           },
           {
             title: 'GOOGLE TASKS',
