@@ -23,9 +23,10 @@ type GoogleOAuthState = {
   created_at: string
   nonce: string
   time_zone: string
+  purpose?: 'google-calendar' | 'google-tasks'
 }
 
-export function makeGoogleOAuthState(userId: string, timeZone: string) {
+export function makeGoogleOAuthState(userId: string, timeZone: string, purpose: 'google-calendar' | 'google-tasks' = 'google-calendar') {
   const nonce = randomBytes(24).toString('base64url')
   const raw = encryptJson({
     v: 1,
@@ -33,6 +34,7 @@ export function makeGoogleOAuthState(userId: string, timeZone: string) {
     created_at: new Date().toISOString(),
     nonce,
     time_zone: normalizeTimeZone(timeZone),
+    purpose,
   } satisfies GoogleOAuthState)
   return { state: Buffer.from(JSON.stringify(raw), 'utf8').toString('base64url'), nonce }
 }
@@ -46,7 +48,8 @@ export function verifyGoogleOAuthState(raw: string, cookieNonce: string) {
   if (a.length !== b.length || !timingSafeEqual(a, b)) throw new Error('Google Calendar OAuth state does not match this browser')
   const age = Date.now() - Date.parse(state.created_at)
   if (!Number.isFinite(age) || age < 0 || age > MAX_OAUTH_AGE_MS) throw new Error('Google Calendar OAuth request expired')
-  return { userId: state.user_id, timeZone: normalizeTimeZone(state.time_zone) }
+  if (state.purpose !== undefined && state.purpose !== 'google-calendar' && state.purpose !== 'google-tasks') throw new Error('Invalid Google OAuth purpose')
+  return { userId: state.user_id, timeZone: normalizeTimeZone(state.time_zone), purpose: state.purpose || 'google-calendar' }
 }
 
 export function publicGoogleCalendarStatus(row: Record<string, unknown> | null) {
