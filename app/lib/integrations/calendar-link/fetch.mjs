@@ -40,7 +40,10 @@ export function normalizeCalendarUrl(raw) {
 }
 
 async function pinnedIp(hostname) {
-  const entries = await lookup(hostname, { all: true, family: 4 })
+  const entries = await Promise.race([
+    lookup(hostname, { all: true, family: 4 }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Calendar DNS lookup timed out')), REQUEST_TIMEOUT_MS)),
+  ])
   // Fail closed if ANY A record could route to an internal or reserved address.
   if (!entries.length || entries.some(entry => !isPublicIpv4(entry.address))) throw new Error('Calendar host is not publicly reachable')
   return entries[0].address
@@ -77,6 +80,9 @@ async function requestOnce(url) {
       response.on('end', () => resolve({ body: Buffer.concat(chunks).toString('utf8') }))
       response.on('error', reject)
     })
+    // Inactivity timeout alone is insufficient: a trickle response could last forever.
+    const deadline = setTimeout(() => req.destroy(new Error('Calendar source timed out')), REQUEST_TIMEOUT_MS)
+    req.on('close', () => clearTimeout(deadline))
     req.on('timeout', () => req.destroy(new Error('Calendar source timed out')))
     req.on('error', reject)
     req.end()
