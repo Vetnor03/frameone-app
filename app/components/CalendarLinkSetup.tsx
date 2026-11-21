@@ -39,7 +39,7 @@ export default function CalendarLinkSetup({
   onChanged: (connected: boolean) => void
 }) {
   const [service, setService] = useState<Service>('apple')
-  const [label, setLabel] = useState('Apple / iCloud')
+  const label = SERVICES[service][language]
   const [url, setUrl] = useState('')
   const [busy, setBusy] = useState<'connect' | 'remove' | null>(null)
   const [error, setError] = useState('')
@@ -67,7 +67,9 @@ export default function CalendarLinkSetup({
     try {
       // Server validates the link and imports the calendar before returning success.
       // Do not mark it connected on a failed fetch, parse, or save.
-      await post('connect', { url, label })
+      const alreadyWithSameLabel = feeds.filter(feed => feed.label === label || feed.label.startsWith(label + ' (')).length
+      const calendarName = alreadyWithSameLabel ? `${label} (${alreadyWithSameLabel + 1})` : label
+      await post('connect', { url, label: calendarName })
       setUrl('')
       setConnectedMessage(true)
       onChanged(true)
@@ -125,7 +127,6 @@ export default function CalendarLinkSetup({
               onChange={event => {
                 const next = event.target.value as Service
                 setService(next)
-                setLabel(next === 'other' ? 'My calendar' : SERVICES[next][language])
                 setConnectedMessage(false)
               }}
               className="h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] px-3 text-sm">
@@ -146,19 +147,13 @@ export default function CalendarLinkSetup({
             </p>}
           </div>
           <div>
-            <label htmlFor="calendar-link-name" className="mb-1 block text-[11px] text-[color:var(--fg-65)]">
-              {language === 'no' ? 'NAVN' : 'NAME'}</label>
-            <input id="calendar-link-name" value={label} onChange={event => { setLabel(event.target.value); setConnectedMessage(false) }}
-              maxLength={70} className="h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-3 text-sm"/>
-          </div>
-          <div>
             <label htmlFor="calendar-link-url" className="mb-1 block text-[11px] text-[color:var(--fg-65)]">
               {language === 'no' ? 'KALENDERLENKE' : 'CALENDAR LINK'}</label>
             <input id="calendar-link-url" value={url} onChange={event => { setUrl(event.target.value); setConnectedMessage(false) }}
               type="url" autoCapitalize="off" autoComplete="off" spellCheck={false} placeholder="webcal://…  or  https://…"
               className="h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-3 text-sm"/>
           </div>
-          <button type="button" onClick={() => void connect()} disabled={busy !== null || !url.trim() || !label.trim()}
+          <button type="button" onClick={() => void connect()} disabled={busy !== null || !url.trim()}
             className="h-11 w-full rounded-2xl bg-[#2aa3ff] text-xs font-semibold tracking-wider text-white disabled:opacity-40">
             {busy === 'connect' ? (language === 'no' ? 'KOBLER TIL…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
           </button>
