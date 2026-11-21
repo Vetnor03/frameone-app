@@ -1685,7 +1685,7 @@ export default function HomePage() {
       setAssistantDeepLink({ watchId, updateId: searchParams?.get('update')?.trim() || null })
       return
     }
-    if (tab === 'connect' || searchParams?.has('teams') || searchParams?.has('google_calendar') || searchParams?.has('todoist') || searchParams?.has('microsoft_todo')) {
+    if (tab === 'connect' || searchParams?.has('teams') || searchParams?.has('google_calendar') || searchParams?.has('todoist') || searchParams?.has('microsoft_todo') || searchParams?.has('google_tasks')) {
       preferInstantScrollRef.current = true
       setActiveTab('connect')
       return
@@ -3664,7 +3664,7 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'todoist' | 'microsoft-todo' | 'waste' | 'bonnetid'
+type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'google-tasks' | 'todoist' | 'microsoft-todo' | 'waste' | 'bonnetid'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -3724,8 +3724,11 @@ function ConnectAppsScreen({
   const initialTodoistOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('todoist')
   const initialTodoistOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
   const initialMicrosoftTodoOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('microsoft_todo')
-  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>(() => initialTeamsOAuthStatus === 'error' || initialGoogleOAuthStatus === 'error' || initialTodoistOAuthStatus === 'error' || initialMicrosoftTodoOAuthStatus === 'error' ? 'error' : 'info')
+  const initialGoogleTasksOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('google_tasks')
+  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>(() => initialTeamsOAuthStatus === 'error' || initialGoogleOAuthStatus === 'error' || initialTodoistOAuthStatus === 'error' || initialMicrosoftTodoOAuthStatus === 'error' || initialGoogleTasksOAuthStatus === 'error' ? 'error' : 'info')
   const [status, setStatus] = useState<string | null>(() => {
+    if (initialGoogleTasksOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Google Tasks-tilkobling…' : 'Finishing Google Tasks connection…'
+    if (initialGoogleTasksOAuthStatus === 'error') return language === 'no' ? 'Kunne ikke koble til Google Tasks. Prøv igjen.' : 'Could not connect Google Tasks. Try again.'
     if (initialMicrosoftTodoOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Microsoft To Do-tilkobling…' : 'Finishing Microsoft To Do connection…'
     if (initialMicrosoftTodoOAuthStatus === 'error') return language === 'no' ? 'Kunne ikke koble til Microsoft To Do. Prøv igjen.' : 'Could not connect Microsoft To Do. Try again.'
     if (initialTodoistOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Todoist-tilkobling…' : 'Finishing Todoist connection…'
@@ -3809,10 +3812,21 @@ function ConnectAppsScreen({
     return sessionStorage.getItem('remind:microsoft-todo-oauth-device') === activeDeviceId &&
       (initialMicrosoftTodoOAuthStatus === 'connected' || sessionStorage.getItem('remind:microsoft-todo-oauth-result') === 'connected')
   })
+  const [googleTasksEligible, setGoogleTasksEligible] = useState(false)
+  const [googleTasksAccountConnected, setGoogleTasksAccountConnected] = useState(false)
+  const [googleTasksAccount, setGoogleTasksAccount] = useState<string | null>(null)
+  const [googleTasksStatusResolved, setGoogleTasksStatusResolved] = useState(false)
+  const [googleTasksStatusFailed, setGoogleTasksStatusFailed] = useState(false)
+  const [googleTasksLoading, setGoogleTasksLoading] = useState(false)
+  const [pendingGoogleTasksEnableAfterOAuth, setPendingGoogleTasksEnableAfterOAuth] = useState(() => {
+    if (typeof window === 'undefined' || !activeDeviceId) return false
+    return sessionStorage.getItem('remind:google-tasks-oauth-device') === activeDeviceId &&
+      (initialGoogleTasksOAuthStatus === 'connected' || sessionStorage.getItem('remind:google-tasks-oauth-result') === 'connected')
+  })
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
   const [disconnectConfirmApp, setDisconnectConfirmApp] = useState<DisconnectableConnectAppKey | null>(null)
-  const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams' | 'google-calendar' | 'todoist' | 'microsoft-todo', string>>>({})
+  const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams' | 'google-calendar' | 'todoist' | 'microsoft-todo' | 'google-tasks', string>>>({})
   const [localEventsOpen, setLocalEventsOpen] = useState(false)
   const [wasteModalOpen, setWasteModalOpen] = useState(false)
   const [bonnetidModalOpen, setBonnetidModalOpen] = useState(false)
@@ -3997,6 +4011,27 @@ function ConnectAppsScreen({
     }))
   }
 
+  async function fetchGoogleTasksStatus() {
+    const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+    if (!token) { setGoogleTasksStatusResolved(true); setGoogleTasksAccountConnected(false); return }
+    const response = await fetch('/api/integrations/google-tasks/status', {
+      headers: { Authorization: 'Bearer ' + token }, cache: 'no-store',
+    })
+    if (!response.ok) { setGoogleTasksStatusResolved(true); setGoogleTasksStatusFailed(true); return }
+    const json = await response.json()
+    setGoogleTasksEligible(json?.eligible === true)
+    setGoogleTasksAccountConnected(json?.connected === true)
+    setGoogleTasksAccount(typeof json?.account === 'string' ? json.account : null)
+    setGoogleTasksStatusResolved(true)
+    setGoogleTasksStatusFailed(false)
+    setLocallyDisconnectedApps(current => ({ ...current, 'google-tasks': json?.connected === true ? false : current['google-tasks'] }))
+    updateConnectionDisplayStatus('google-tasks', json?.connected === true && frameUsesIntegration(modulesJson, 'google-tasks'))
+    setIntegrationSetupErrors(current => ({
+      ...current,
+      'google-tasks': typeof json?.setup_error?.message === 'string' ? json.setup_error.message : undefined,
+    }))
+  }
+
   function legacyEnabledIntegrations(): ConnectAppKey[] {
     return [
       ...(spondAccountConnected ? ['spond' as const] : []),
@@ -4004,6 +4039,7 @@ function ConnectAppsScreen({
       ...(googleAccountConnected ? ['google-calendar' as const] : []),
       ...(todoistAccountConnected && frameUsesIntegration(modulesJson, 'todoist') ? ['todoist' as const] : []),
       ...(microsoftTodoAccountConnected && frameUsesIntegration(modulesJson, 'microsoft-todo') ? ['microsoft-todo' as const] : []),
+      ...(googleTasksAccountConnected && frameUsesIntegration(modulesJson, 'google-tasks') ? ['google-tasks' as const] : []),
       ...(localEventsAccountConnected && localEventsStatusDeviceId === activeDeviceId ? ['local-events' as const] : []),
       ...(connectAppIsConnected(modulesJson, 'waste') ? ['waste' as const] : []),
     ]
@@ -4035,6 +4071,7 @@ function ConnectAppsScreen({
     if (!googleStatusResolved) void fetchGoogleCalendarStatus().catch(() => setGoogleStatusFailed(true))
     if (!todoistStatusResolved) void fetchTodoistStatus().catch(() => { setTodoistStatusFailed(true); setTodoistStatusResolved(true) })
     if (!microsoftTodoStatusResolved) void fetchMicrosoftTodoStatus().catch(() => { setMicrosoftTodoStatusFailed(true); setMicrosoftTodoStatusResolved(true) })
+    if (!googleTasksStatusResolved) void fetchGoogleTasksStatus().catch(() => { setGoogleTasksStatusFailed(true); setGoogleTasksStatusResolved(true) })
     if (!localEventsResolvedForActiveDevice && activeDeviceId) void fetchLocalEventsStatus(activeDeviceId, localEventsRequestGenerationRef.current).catch(() => setLocalEventsStatusFailed(true))
   }
 
@@ -4085,6 +4122,31 @@ function ConnectAppsScreen({
       setStatusTone('error')
       setStatus(error instanceof Error ? error.message : 'Microsoft To Do connection failed')
       setMicrosoftTodoLoading(false)
+    }
+  }
+
+  async function connectGoogleTasks() {
+    if (googleTasksLoading || !googleTasksEligible) return
+    const setupError = integrationSetupErrors['google-tasks']
+    if (setupError) { setStatusTone('error'); setStatus(setupError); return }
+    setGoogleTasksLoading(true)
+    setStatus(null)
+    try {
+      const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+      if (!token || !activeDeviceId) throw new Error(language === 'no' ? 'Logg inn og velg ramme først' : 'Sign in and select a frame first')
+      sessionStorage.setItem('remind:google-tasks-oauth-device',activeDeviceId)
+      sessionStorage.removeItem('remind:google-tasks-oauth-result')
+      const response = await fetch('/api/integrations/google-tasks/connect',{
+        method:'POST',headers:{Authorization:'Bearer '+token,'x-remind-timezone':Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Oslo'},
+        cache:'no-store',
+      })
+      const payload = await response.json().catch(() => ({}))
+      if(!response.ok || !payload.url) throw new Error(payload.error || 'Could not start Google Tasks authorization')
+      window.location.assign(payload.url)
+    }catch(error){
+      setStatusTone('error')
+      setStatus(error instanceof Error ? error.message : 'Google Tasks connection failed')
+      setGoogleTasksLoading(false)
     }
   }
 
@@ -4338,8 +4400,8 @@ function ConnectAppsScreen({
   }
 
   async function disconnectIntegration(provider: DisconnectableConnectAppKey) {
-    const appName = provider === 'microsoft-todo' ? 'Microsoft To Do' : provider === 'todoist' ? 'Todoist' : provider === 'teams' ? 'Microsoft Calendar' : provider === 'google-calendar' ? 'Google Calendar' : provider === 'waste' ? (language === 'no' ? 'Renovasjon' : 'Waste collection') : provider === 'bonnetid' ? 'IRN' : 'Spond'
-    const setProviderLoading = provider === 'teams' ? setTeamsLoading : provider === 'google-calendar' ? setGoogleLoading : provider === 'todoist' ? setTodoistLoading : provider === 'microsoft-todo' ? setMicrosoftTodoLoading : provider === 'spond' ? setSpondLoading : null
+    const appName = provider === 'google-tasks' ? 'Google Tasks' : provider === 'microsoft-todo' ? 'Microsoft To Do' : provider === 'todoist' ? 'Todoist' : provider === 'teams' ? 'Microsoft Calendar' : provider === 'google-calendar' ? 'Google Calendar' : provider === 'waste' ? (language === 'no' ? 'Renovasjon' : 'Waste collection') : provider === 'bonnetid' ? 'IRN' : 'Spond'
+    const setProviderLoading = provider === 'google-tasks' ? setGoogleTasksLoading : provider === 'teams' ? setTeamsLoading : provider === 'google-calendar' ? setGoogleLoading : provider === 'todoist' ? setTodoistLoading : provider === 'microsoft-todo' ? setMicrosoftTodoLoading : provider === 'spond' ? setSpondLoading : null
     if (disconnectingApp === provider) return
     setProviderLoading?.(true)
     setDisconnectingApp(provider)
@@ -4364,6 +4426,11 @@ function ConnectAppsScreen({
         setGoogleAccountConnected(false)
         changeFrameIntegration('google-calendar', { enabled: false })
         setGoogleAccount(null)
+      } else if (provider === 'google-tasks') {
+        setGoogleTasksAccountConnected(false)
+        setGoogleTasksAccount(null)
+        changeFrameIntegration('google-tasks', { enabled: false })
+        window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
       } else if (provider === 'microsoft-todo') {
         setMicrosoftTodoAccountConnected(false)
         setMicrosoftTodoAccount(null)
@@ -4405,12 +4472,13 @@ function ConnectAppsScreen({
   }
 
   useEffect(() => {
-    void Promise.allSettled([fetchSpondStatus(), fetchTeamsStatus(), fetchGoogleCalendarStatus(), fetchTodoistStatus(), fetchMicrosoftTodoStatus()]).then(results => {
+    void Promise.allSettled([fetchSpondStatus(), fetchTeamsStatus(), fetchGoogleCalendarStatus(), fetchTodoistStatus(), fetchMicrosoftTodoStatus(), fetchGoogleTasksStatus()]).then(results => {
       if (results[0].status === 'rejected') setSpondStatusFailed(true)
       if (results[1].status === 'rejected') setTeamsStatusFailed(true)
       if (results[2].status === 'rejected') setGoogleStatusFailed(true)
       if (results[3].status === 'rejected') { setTodoistStatusFailed(true); setTodoistStatusResolved(true) }
       if (results[4].status === 'rejected') { setMicrosoftTodoStatusFailed(true); setMicrosoftTodoStatusResolved(true) }
+      if (results[5].status === 'rejected') { setGoogleTasksStatusFailed(true); setGoogleTasksStatusResolved(true) }
     })
     const params = new URLSearchParams(window.location.search)
     if (initialTeamsOAuthStatus === 'connected') {
@@ -4434,6 +4502,13 @@ function ConnectAppsScreen({
       sessionStorage.removeItem('remind:todoist-oauth-device')
       setPendingTodoistEnableAfterOAuth(false)
     }
+    if (initialGoogleTasksOAuthStatus === 'connected') {
+      sessionStorage.setItem('remind:google-tasks-oauth-result', 'connected')
+    } else if (initialGoogleTasksOAuthStatus === 'error') {
+      sessionStorage.removeItem('remind:google-tasks-oauth-result')
+      sessionStorage.removeItem('remind:google-tasks-oauth-device')
+      setPendingGoogleTasksEnableAfterOAuth(false)
+    }
     if (initialMicrosoftTodoOAuthStatus === 'connected') {
       sessionStorage.setItem('remind:microsoft-todo-oauth-result', 'connected')
     } else if (initialMicrosoftTodoOAuthStatus === 'error') {
@@ -4441,7 +4516,7 @@ function ConnectAppsScreen({
       sessionStorage.removeItem('remind:microsoft-todo-oauth-device')
       setPendingMicrosoftTodoEnableAfterOAuth(false)
     }
-    if (params.has('teams') || params.has('google_calendar') || params.has('todoist') || params.has('microsoft_todo')) window.history.replaceState({}, '', window.location.pathname)
+    if (params.has('teams') || params.has('google_calendar') || params.has('todoist') || params.has('microsoft_todo') || params.has('google_tasks')) window.history.replaceState({}, '', window.location.pathname)
     // Run OAuth callback handling once: functions and URL state intentionally reflect the initial page load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -4456,6 +4531,12 @@ function ConnectAppsScreen({
     const initiatingDeviceId = sessionStorage.getItem('remind:google-oauth-device')
     const result = sessionStorage.getItem('remind:google-oauth-result')
     setPendingGoogleEnableAfterOAuth(!!activeDeviceId && initiatingDeviceId === activeDeviceId && result === 'connected')
+  }, [activeDeviceId])
+
+  useEffect(() => {
+    const device = sessionStorage.getItem('remind:google-tasks-oauth-device')
+    const result = sessionStorage.getItem('remind:google-tasks-oauth-result')
+    setPendingGoogleTasksEnableAfterOAuth(!!activeDeviceId && device === activeDeviceId && result === 'connected')
   }, [activeDeviceId])
 
   useEffect(() => {
@@ -4537,6 +4618,20 @@ function ConnectAppsScreen({
   }, [pendingGoogleEnableAfterOAuth, googleStatusResolved, googleAccountConnected, legacyIntegrationDiscoveryPending, modulesJson?.integration_selection_explicit, language])
 
   useEffect(() => {
+    if (!pendingGoogleTasksEnableAfterOAuth || !googleTasksStatusResolved || !googleTasksAccountConnected || !googleTasksEligible) return
+    if (modulesJson?.integration_selection_explicit !== true && legacyIntegrationDiscoveryPending) return
+    changeFrameIntegration('google-tasks', { enabled: true })
+    updateConnectionDisplayStatus('google-tasks', true)
+    setStatusTone('success')
+    setStatus(language === 'no' ? 'Google Tasks er tilkoblet' : 'Google Tasks connected')
+    sessionStorage.removeItem('remind:google-tasks-oauth-device')
+    sessionStorage.removeItem('remind:google-tasks-oauth-result')
+    setPendingGoogleTasksEnableAfterOAuth(false)
+    window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingGoogleTasksEnableAfterOAuth, googleTasksStatusResolved, googleTasksAccountConnected, googleTasksEligible, legacyIntegrationDiscoveryPending, modulesJson?.integration_selection_explicit, language])
+
+  useEffect(() => {
     if (!pendingMicrosoftTodoEnableAfterOAuth || !microsoftTodoStatusResolved || !microsoftTodoAccountConnected) return
     if (modulesJson?.integration_selection_explicit !== true && legacyIntegrationDiscoveryPending) return
     changeFrameIntegration('microsoft-todo', { enabled: true })
@@ -4582,7 +4677,9 @@ function ConnectAppsScreen({
       setLocalEventsStatusFailed(true)
     })
   }, [activeDeviceId])
-  const apps = INTEGRATION_CATALOGUE.filter(definition => !startup || (definition.connectable && (definition.status === 'available' || definition.key === 'spond')))
+  const apps = INTEGRATION_CATALOGUE.map(definition => definition.key === 'google-tasks' && googleTasksEligible
+    ? { ...definition, connectable: true, status: 'available' as const } : definition)
+    .filter(definition => !startup || (definition.connectable && (definition.status === 'available' || definition.key === 'spond')))
     .filter(definition => startup || integrationMatchesSearch(definition, connectSearch))
     .map(definition => ({
     ...definition,
@@ -4602,6 +4699,7 @@ function ConnectAppsScreen({
     if (app.key === 'google-calendar') return googleAccountConnected
     if (app.key === 'todoist') return todoistAccountConnected && frameUsesIntegration(modulesJson, 'todoist')
     if (app.key === 'microsoft-todo') return microsoftTodoAccountConnected && frameUsesIntegration(modulesJson, 'microsoft-todo')
+    if (app.key === 'google-tasks') return googleTasksEligible && googleTasksAccountConnected && frameUsesIntegration(modulesJson, 'google-tasks')
     if (app.key === 'local-events') return !!localEventsSavedArea
     if (app.key === 'waste') return wasteConnected
     if (app.key === 'bonnetid') return bonnetidConnected
@@ -4611,12 +4709,12 @@ function ConnectAppsScreen({
   const sortedApps = sortConnectedAppsFirst(apps.map(app => ({ app, connected: getAppConnected(app) })))
   const statusDiscoveryPending = !startup && (
     (!spondStatusResolved && !spondStatusFailed) || (!teamsStatusResolved && !teamsStatusFailed) ||
-    (!googleStatusResolved && !googleStatusFailed) || (!todoistStatusResolved && !todoistStatusFailed) || (!microsoftTodoStatusResolved && !microsoftTodoStatusFailed) || !wasteStatusResolved || !bonnetidStatusResolved ||
+    (!googleStatusResolved && !googleStatusFailed) || (!googleTasksStatusResolved && !googleTasksStatusFailed) || (!todoistStatusResolved && !todoistStatusFailed) || (!microsoftTodoStatusResolved && !microsoftTodoStatusFailed) || !wasteStatusResolved || !bonnetidStatusResolved ||
     (!!activeDeviceId && !localEventsStatusResolved && !localEventsStatusFailed)
   )
   // On the very first visit, avoid showing an incorrectly disconnected list.
   const showConnectPlaceholders = !startup && (!connectionCacheHydrated ||
-    (['teams', 'google-calendar', 'spond', 'local-events', 'waste', 'bonnetid', 'todoist', 'microsoft-todo'] as const)
+    (['teams', 'google-calendar', 'spond', 'local-events', 'waste', 'bonnetid', 'todoist', 'microsoft-todo', 'google-tasks'] as const)
       .some(provider => cachedConnectionStatus[provider] === undefined) && statusDiscoveryPending)
 
   const renderLocalEventsModal = () => {
@@ -4748,7 +4846,7 @@ function ConnectAppsScreen({
           )}
           {!showConnectPlaceholders && sortedApps.map(({ app, connected }) => {
             const waitingForVerification = connected && !startup && verifiedConnectionStatus[app.key] === undefined
-            const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : app.key === 'google-calendar' ? integrationSetupErrors['google-calendar'] : app.key === 'todoist' ? integrationSetupErrors.todoist : app.key === 'microsoft-todo' ? integrationSetupErrors['microsoft-todo'] : null
+            const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : app.key === 'google-calendar' ? integrationSetupErrors['google-calendar'] : app.key === 'todoist' ? integrationSetupErrors.todoist : app.key === 'microsoft-todo' ? integrationSetupErrors['microsoft-todo'] : app.key === 'google-tasks' ? integrationSetupErrors['google-tasks'] : null
             const localEventsSelectedName = localEventsSavedArea ? (localEventsSavedArea.placeLabel || getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || '') : null
             const description = app.key === 'local-events' && localEventsSyncIssue
               ? (language === 'no' ? `Events valgt, men ingen synkronisering ennå: ${localEventsSyncIssue}` : `Events selected but not synced yet: ${localEventsSyncIssue}`)
@@ -4757,8 +4855,8 @@ function ConnectAppsScreen({
               : app.key === 'bonnetid' && bonnetidCity
               ? (language === 'no' ? 'Bønnetider for ' : 'Prayer times for ') + bonnetidCity
               : app.description
-            const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar' || app.key === 'todoist' || app.key === 'microsoft-todo'
-            const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : app.key === 'todoist' ? todoistAccount : app.key === 'microsoft-todo' ? microsoftTodoAccount : null
+            const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar' || app.key === 'todoist' || app.key === 'microsoft-todo' || app.key === 'google-tasks'
+            const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : app.key === 'todoist' ? todoistAccount : app.key === 'microsoft-todo' ? microsoftTodoAccount : app.key === 'google-tasks' ? googleTasksAccount : null
             return (
               <div
                 key={app.key}
@@ -4819,7 +4917,7 @@ function ConnectAppsScreen({
                       <button
                         type="button"
                         onClick={() => setDisconnectConfirmApp(app.key as DisconnectableConnectAppKey)}
-                        disabled={waitingForVerification || disconnectingApp === app.key || (app.key === 'spond' && spondLoading) || (app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading) || (app.key === 'todoist' && todoistLoading) || (app.key === 'microsoft-todo' && microsoftTodoLoading)}
+                        disabled={waitingForVerification || disconnectingApp === app.key || (app.key === 'spond' && spondLoading) || (app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading) || (app.key === 'todoist' && todoistLoading) || (app.key === 'microsoft-todo' && microsoftTodoLoading) || (app.key === 'google-tasks' && googleTasksLoading)}
                         className="shrink-0 h-8 rounded-xl border border-[#d94b4b]/35 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60"
                       >
                         {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
@@ -4832,7 +4930,7 @@ function ConnectAppsScreen({
                   ) : (
                     <button
                       type="button"
-                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved) || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved)) || (app.key === 'todoist' && (todoistLoading || !todoistStatusResolved)) || (app.key === 'microsoft-todo' && (microsoftTodoLoading || !microsoftTodoStatusResolved))}
+                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved) || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved)) || (app.key === 'todoist' && (todoistLoading || !todoistStatusResolved)) || (app.key === 'microsoft-todo' && (microsoftTodoLoading || !microsoftTodoStatusResolved)) || (app.key === 'google-tasks' && (googleTasksLoading || !googleTasksStatusResolved))}
                       onClick={() => {
                         if (app.key === 'spond') {
                           if (spondAccountConnected) { setSpondConnected(true); changeFrameIntegration('spond', { enabled: true }) }
@@ -4845,6 +4943,12 @@ function ConnectAppsScreen({
                         } else if (app.key === 'google-calendar') {
                           if (googleAccountConnected) { setGoogleConnected(true); changeFrameIntegration('google-calendar', { enabled: true }) }
                           else void connectGoogleCalendar()
+                        } else if (app.key === 'google-tasks') {
+                          if (googleTasksAccountConnected) {
+                            changeFrameIntegration('google-tasks', { enabled: true })
+                            updateConnectionDisplayStatus('google-tasks', true)
+                            window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
+                          } else void connectGoogleTasks()
                         } else if (app.key === 'microsoft-todo') {
                           if (microsoftTodoAccountConnected) {
                             changeFrameIntegration('microsoft-todo', { enabled: true })
