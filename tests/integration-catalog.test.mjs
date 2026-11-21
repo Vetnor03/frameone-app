@@ -17,7 +17,8 @@ test('shared integrations are ordered and expose lifecycle capabilities', () => 
     const integration = INTEGRATION_CATALOGUE.find(item => item.key === key)
     assert.deepEqual({ status: integration.status, connectable: integration.connectable }, { status: 'under-evaluation', connectable: false })
   }
-  assert.deepEqual(({ status, connectable }) => ({ status, connectable }))(INTEGRATION_CATALOGUE.find(item => item.key === 'vigilo')), { status: 'experimental', connectable: false })
+  const vigilo = INTEGRATION_CATALOGUE.find(item => item.key === 'vigilo')
+  assert.deepEqual({ status: vigilo.status, connectable: vigilo.connectable }, { status: 'experimental', connectable: false })
   assert.equal(integrationStatusLabel('experimental', 'en'), 'Experimental')
   assert.equal(integrationStatusLabel('under-evaluation', 'en'), 'Under evaluation')
 })
@@ -57,7 +58,8 @@ test('Connect Apps puts connected apps first, alphabetically within each status'
   assert.deepEqual(keys(sortConnectedAppsFirst(afterDisconnect)), [
     'spond', 'waste',
     'calendar-link', 'google-calendar', 'bonnetid', 'local-events', 'microsoft-todo', 'teams', 'todoist',
-    'google-tasks', 'planta', 'transponder', 'vigilo',
+    'vigilo', // experimental
+    'google-tasks', 'planta', 'transponder', // under evaluation
   ])
 })
 
