@@ -34,5 +34,5 @@ test('skipped Events stay in the app with their Skipped state and undo action', 
   assert.match(homePage, /toggleLocalEventFrameSkip\(item, !item\.skippedOnFrame\)/)
   assert.match(homePage, /scope: 'group'/)
   // Ticket booking must remain possible even when an event is skipped on the frame.
-  assert.match(homePage, /disabled=\{!!bookingEventId\} onClick=\{\(\) => markEventPerformanceBooked\(option\)\}/)
+  assert.match(homePage, /disabled=\{!!bookingEventId \|\| showingSavedReminders\} onClick=\{\(\) => markEventPerformanceBooked\(option\)\}/)
 })
