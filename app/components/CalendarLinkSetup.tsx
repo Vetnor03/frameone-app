@@ -126,7 +126,7 @@ export default function CalendarLinkSetup({
               onChange={event => {
                 const next = event.target.value as Service
                 setService(next)
-                          }}
+              }}
               className="h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] px-3 text-sm">
               {(Object.keys(SERVICES) as Service[]).map(key =>
                 <option key={key} value={key}>{SERVICES[key][language]}</option>)}
