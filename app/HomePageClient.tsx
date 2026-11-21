@@ -4506,6 +4506,7 @@ function ConnectAppsScreen({
       } else if (provider === 'calendar-link') {
         setCalendarLinkConnected(false)
         setCalendarLinkFeeds([])
+        setCalendarLinkOpen(false)
         changeFrameIntegration('calendar-link', { enabled: false })
         window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
       } else if (provider === 'google-tasks') {
@@ -5002,9 +5003,14 @@ function ConnectAppsScreen({
                         {language === 'no' ? 'FJERN' : 'REMOVE'}
                       </button>
                     ) : app.key === 'calendar-link' ? (
-                      <button type="button" onClick={() => setCalendarLinkOpen(true)} className={connectActionClass}>
-                        {language === 'no' ? 'ADMINISTRER' : 'MANAGE'}
-                      </button>
+                      <>
+                        <button type="button" onClick={() => setCalendarLinkOpen(true)} disabled={disconnectingApp === 'calendar-link' || waitingForVerification} className={connectActionClass}>
+                          {language === 'no' ? 'ENDRE' : 'EDIT'}
+                        </button>
+                        <button type="button" onClick={() => setDisconnectConfirmApp('calendar-link')} disabled={disconnectingApp === 'calendar-link' || waitingForVerification} className={disconnectActionClass}>
+                          {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
+                        </button>
+                      </>
                     ) : app.key === 'local-events' ? (
                       <>
                         <button type="button" onClick={() => { setLocalEventsDraftArea(localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA); setLocalEventsOpen(true) }} disabled={localEventsLoading || !localEventsCanManage} className={connectActionClass}>
@@ -5163,7 +5169,11 @@ function ConnectAppsScreen({
               {language === 'no' ? `Koble fra ${disconnectAppName}?` : `Disconnect ${disconnectAppName}?`}
             </div>
             <div className="mt-2 text-xs leading-snug text-[color:var(--fg-45)]">
-              {disconnectConfirmApp === 'local-events'
+              {disconnectConfirmApp === 'calendar-link'
+                ? (language === 'no'
+                  ? 'Alle tilkoblede kalenderlenker og synkroniserte hendelser fjernes fra Påminnelser.'
+                  : 'All subscribed calendar links and synced events will be removed from Reminders.')
+                : disconnectConfirmApp === 'local-events'
                 ? (language === 'no'
                   ? 'Det valgte området og lokale arrangementer fjernes fra Påminnelser.'
                   : 'The selected area and local events will be removed from Reminders.')
@@ -5198,6 +5208,7 @@ function ConnectAppsScreen({
               void fetchCalendarLinkStatus()
               window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
             }}
+            onConnected={() => setCalendarLinkOpen(false)}
           />
         </AppSheet>
       )}
