@@ -31,19 +31,19 @@ const SERVICES: Record<Service, { en: string; no: string; help: string; instruct
 }
 
 export default function CalendarLinkSetup({
-  language, feeds, getAccessToken, onChanged,
+  language, feeds, getAccessToken, onChanged, onConnected,
 }: {
   language: 'no' | 'en'
   feeds: Feed[]
   getAccessToken: () => Promise<string>
   onChanged: (connected: boolean) => void
+  onConnected: () => void
 }) {
   const [service, setService] = useState<Service>('apple')
   const label = SERVICES[service][language]
   const [url, setUrl] = useState('')
   const [busy, setBusy] = useState<'connect' | 'remove' | null>(null)
   const [error, setError] = useState('')
-  const [connectedMessage, setConnectedMessage] = useState(false)
 
   async function post(action: string, payload: Record<string, unknown>) {
     const token = await getAccessToken()
@@ -63,7 +63,6 @@ export default function CalendarLinkSetup({
     if (busy !== null || !url.trim() || !label.trim()) return
     setBusy('connect')
     setError('')
-    setConnectedMessage(false)
     try {
       // Server validates the link and imports the calendar before returning success.
       // Do not mark it connected on a failed fetch, parse, or save.
@@ -72,8 +71,8 @@ export default function CalendarLinkSetup({
       for (let suffix = 2; usedLabels.has(calendarName); suffix++) calendarName = `${label} (${suffix})`
       await post('connect', { url, label: calendarName })
       setUrl('')
-      setConnectedMessage(true)
       onChanged(true)
+      onConnected()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Connection failed')
     } finally {
@@ -84,7 +83,6 @@ export default function CalendarLinkSetup({
   async function remove(id: string) {
     setBusy('remove')
     setError('')
-    setConnectedMessage(false)
     try {
       const result = await post('remove', { id })
       onChanged(result.connected === true)
@@ -128,7 +126,6 @@ export default function CalendarLinkSetup({
               onChange={event => {
                 const next = event.target.value as Service
                 setService(next)
-                setConnectedMessage(false)
               }}
               className="h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] px-3 text-sm">
               {(Object.keys(SERVICES) as Service[]).map(key =>
@@ -150,7 +147,7 @@ export default function CalendarLinkSetup({
           <div>
             <label htmlFor="calendar-link-url" className="mb-1 block text-[11px] text-[color:var(--fg-65)]">
               {language === 'no' ? 'KALENDERLENKE' : 'CALENDAR LINK'}</label>
-            <input id="calendar-link-url" value={url} onChange={event => { setUrl(event.target.value); setConnectedMessage(false) }}
+            <input id="calendar-link-url" value={url} onChange={event => setUrl(event.target.value)}
               type="url" autoCapitalize="off" autoComplete="off" spellCheck={false} placeholder="webcal://…  or  https://…"
               className="h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-3 text-sm"/>
           </div>
@@ -160,9 +157,6 @@ export default function CalendarLinkSetup({
           </button>
         </>
       )}
-      {connectedMessage && <p role="status" className="rounded-xl border border-[#1f9d4a]/35 p-3 text-xs text-[#35c76a]">
-        {language === 'no' ? 'Tilkoblet! Kalenderen vises nå under Påminnelser.' : 'Connected! Your calendar is now available in Reminders.'}
-      </p>}
       {error && <p role="alert" className="rounded-xl border border-[#d94b4b]/35 p-3 text-xs text-[#ff7a7a]">{error}</p>}
     </div>
   )
