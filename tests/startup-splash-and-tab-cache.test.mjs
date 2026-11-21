@@ -57,7 +57,8 @@ test('authenticated data tabs mount before frame settings, with non-blocking sav
 test('heavy hidden-tab warmup yields to navigation and skips already mounted panels',()=>{
   assert.match(home,/planModuleTabWarmup\(configuredModuleKeys, cachedModuleKeys, activeTab\)/)
   assert.match(home,/6500 \+ index \* 1600/)
-  assert.match(home,/\[moduleTabScope, verifiedModuleTabsReady, configuredModuleKeys, activeTab, moduleTabCache\]/)
+  assert.match(home,/\[moduleTabScope, verifiedModuleTabsReady, loadedSettingsDeviceId, activeDeviceId, configuredModuleKeys, activeTab, moduleTabCache\]/)
+  assert.match(home,/if \(!verifiedModuleTabsReady \|\| loadedSettingsDeviceId !== activeDeviceId\) return/)
 })
 
 test('ready app appears only after a two-phase splash handoff without logo ghosting',()=>{
