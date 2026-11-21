@@ -3688,7 +3688,7 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'google-tasks' | 'todoist' | 'microsoft-todo' | 'waste' | 'bonnetid' | 'calendar-link'
+type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'google-tasks' | 'todoist' | 'microsoft-todo' | 'waste' | 'bonnetid' | 'calendar-link' | 'local-events'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -4433,8 +4433,8 @@ function ConnectAppsScreen({
 
   async function disconnectLocalEvents() {
     if (localEventsLoading) return
-    if (!window.confirm(language === 'no' ? 'Koble fra lokale arrangementer?' : 'Disconnect Local Events?')) return
     setLocalEventsLoading(true)
+    setDisconnectingApp('local-events')
     setStatus(null)
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
@@ -4451,6 +4451,7 @@ function ConnectAppsScreen({
       changeFrameIntegration('local-events', { enabled: false })
       setLocalEventsDraftArea(DEFAULT_LOCAL_EVENT_AREA)
       setLocalEventsOpen(false)
+      setDisconnectConfirmApp(null)
       setLocallyDisconnectedApps((current) => ({ ...current, 'local-events': true }))
       setStatusTone('success')
       setStatus(language === 'no' ? 'Lokale arrangementer er frakoblet' : 'Local Events disconnected')
@@ -4460,6 +4461,7 @@ function ConnectAppsScreen({
       setStatus(error instanceof Error && error.message ? error.message : 'Could not disconnect Local Events')
     } finally {
       setLocalEventsLoading(false)
+      setDisconnectingApp(null)
     }
   }
 
@@ -4998,7 +5000,7 @@ function ConnectAppsScreen({
                         <button type="button" onClick={() => { setLocalEventsDraftArea(localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA); setLocalEventsOpen(true) }} disabled={localEventsLoading || !localEventsCanManage} className={connectActionClass}>
                           {language === 'no' ? 'ENDRE' : 'EDIT'}
                         </button>
-                        <button type="button" onClick={disconnectLocalEvents} disabled={localEventsLoading || !localEventsCanManage} className={disconnectActionClass}>
+                        <button type="button" onClick={() => setDisconnectConfirmApp('local-events')} disabled={localEventsLoading || !localEventsCanManage} className={disconnectActionClass}>
                           {localEventsLoading ? (language === 'no' ? 'KOBLER FRA…' : 'DISCONNECTING…') : (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')}
                         </button>
                       </>
@@ -5136,7 +5138,7 @@ function ConnectAppsScreen({
               </button>
               <button
                 type="button"
-                onClick={() => disconnectIntegration(disconnectConfirmApp)}
+                onClick={() => disconnectConfirmApp === 'local-events' ? void disconnectLocalEvents() : void disconnectIntegration(disconnectConfirmApp) }
                 disabled={disconnectingApp === disconnectConfirmApp}
                 className="h-11 flex-1 rounded-2xl border border-[#d94b4b]/35 bg-[#d94b4b]/10 text-xs tracking-widest text-[#ff7a7a] disabled:opacity-60"
               >
@@ -5151,7 +5153,11 @@ function ConnectAppsScreen({
               {language === 'no' ? `Koble fra ${disconnectAppName}?` : `Disconnect ${disconnectAppName}?`}
             </div>
             <div className="mt-2 text-xs leading-snug text-[color:var(--fg-45)]">
-              {disconnectConfirmApp === 'waste'
+              {disconnectConfirmApp === 'local-events'
+                ? (language === 'no'
+                  ? 'Det valgte området og lokale arrangementer fjernes fra Påminnelser.'
+                  : 'The selected area and local events will be removed from Reminders.')
+                : disconnectConfirmApp === 'waste'
                 ? (language === 'no'
                   ? 'Den valgte adressen og tilhørende tømmedatoer fjernes fra Påminnelser.'
                   : 'The selected address and its collection dates will be removed from Reminders.')
