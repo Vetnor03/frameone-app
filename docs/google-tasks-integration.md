@@ -11,7 +11,7 @@ Google Tasks uses the same Google OAuth web client and redirect URI already conf
 
 ## Behavior and limitations
 
-- Connect → Google Tasks → Google OAuth consent (Tasks **read-only** scope only) → server sync → Reminders source **Google Tasks** and connected frames.
+- Connect → Google Tasks → Google OAuth consent (Tasks **read-only** + basic identity `openid email`) → server sync → Reminders source **Google Tasks** and connected frames.
 - Google Tasks API provides task due **date** only, not the precise scheduled time. All dated tasks appear as **all-day** Reminders; do not infer or display a 00:00 or shifted clock time. Undated tasks are not projected into the date-based Reminders calendar.
 - Completed and deleted tasks are excluded; completion/removal causes their cached items to disappear on the next sync. Use paginated reads and delta updates without unnecessary e-paper wakeups. Upstream errors preserve the last good cache.
 - Existing `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`, `GOOGLE_CALENDAR_REDIRECT_URI`, and `INTEGRATION_CREDENTIALS_KEY` are reused. Tokens are encrypted in `user_integrations`; normalized task rows live in `integration_items`.
@@ -26,3 +26,11 @@ Google Tasks uses the same Google OAuth web client and redirect URI already conf
 5. When the scope is approved, enable `GOOGLE_TASKS_PUBLIC_ENABLED=true` and redeploy. Do not enable publicly before approval; unapproved scopes can trigger warnings for real users.
 
 Run `node --test tests/google-tasks-integration.test.mjs` and the existing Google Calendar and integration catalogue regression tests. No change to Calendar's requested permissions is required.
+
+## Connection badges and account identity
+
+- Connect's connected badge reflects **account authorization**, not whether a specific frame has the provider enabled. Every provider's status endpoint supersedes the display cache; frame opt-in stays independent.
+- Google Tasks newly requests only basic OIDC `openid email` in addition to the existing read-only Tasks scope so the chosen account can be identified. This is not permission to read Gmail.
+- Existing Tasks-only tokens remain valid; they do not provide email identity. Show **Connected — email unavailable** with an optional **Reconnect once to show account email** action. Never assume the RE:MIND login email or Google Calendar's selected email is the same account.
+- The selected and verified Google email is stored as `user_integrations.external_account_label` on successful authorization, and removed when the integration is disconnected.
+- **Google review in progress:** adding basic identity scopes can change the consent screen shown to reviewers. Check the Google Cloud Data Access permissions and respond if Google asks for an updated demo; do not change the read-only Tasks scope or turn off Google’s existing verification gate.
