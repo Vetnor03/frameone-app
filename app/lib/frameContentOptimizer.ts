@@ -170,7 +170,7 @@ export async function optimizeFrameContent(items: FrameContentInput[], options: 
   // Google Calendar and Google Tasks data stay on RE:MIND infrastructure: never send titles
   // to the external AI title optimizer, even if a long title would otherwise qualify.
   normalized.forEach((item) => {
-    if (item.source === 'google-calendar' || item.source === 'google-tasks') results.set(item.id, fallbackTitle(item.title, maxChars))
+    if (item.source === 'google-calendar' || item.source === 'google-tasks' || item.source === 'calendar-link') results.set(item.id, fallbackTitle(item.title, maxChars))
     else if (item.title.length <= maxChars) results.set(item.id, item.title)
   })
   keys.forEach((key, index) => { if (!results.has(normalized[index].id)) { const hit = titleCache.get(key); if (hit) results.set(normalized[index].id, hit) } })
