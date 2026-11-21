@@ -1751,8 +1751,13 @@ export default function HomePage() {
       timers = []
       if (document.visibilityState !== 'visible') return
       timers = pending.map((key, index) => window.setTimeout(() => {
-        setModuleTabCache((cache) => appendCachedModuleTab(cache, moduleTabScope, key))
-      }, 550 + index * 450))
+        if (document.visibilityState !== 'visible') return
+        // Hidden tab hydration is background work: do not compete with taps,
+        // swipes or urgent navigation renders on the main thread.
+        React.startTransition(() => {
+          setModuleTabCache((cache) => appendCachedModuleTab(cache, moduleTabScope, key))
+        })
+      }, 2500 + index * 1200))
     }
     schedule()
     document.addEventListener('visibilitychange', schedule)
@@ -2351,7 +2356,8 @@ export default function HomePage() {
       })
     }
 
-    if (!stickySettingsRef.current) setActiveTab('frame')
+    // Do not override a tab selected while settings were loading. Navigation
+    // stays user-controlled even when a slow provider finishes after launch.
     const hasOnboardingDraft = typeof window !== 'undefined' && sessionStorage.getItem(`remind:onboarding:${deviceId}`) !== null
     setSetupDeviceId(!hasSavedSettings || hasOnboardingDraft ? deviceId : null)
 
@@ -2587,6 +2593,10 @@ export default function HomePage() {
       restoreManualUpdateState(selected)
       activeDeviceIdRef.current = selected
       setActiveDeviceId(selected)
+      // Membership has been verified. Reveal navigation instead of waiting
+      // for device settings, custom layouts and reusable modules to finish.
+      // Settings-dependent content remains read-only until verified.
+      setBooting(false)
       setFrameStatusLoad(null)
       setLastPhysicalDisplayUpdatedAt(null)
       setPhysicalFrameSnapshot(null)
@@ -3329,7 +3339,7 @@ async function handleSelectTab(k: TabKey) {
   const appControlsLocked = isCachedLaunchPreview || configurationNotReady
 
   const isPlainFrameAssistantSurface = activeTab === 'frame'
-    && !layoutFlow && !pickerOpen && !languagePickerOpen
+    && !appControlsLocked && !layoutFlow && !pickerOpen && !languagePickerOpen
     && shouldRenderApp && !booting && !shouldShowFirstFrameOnboarding && !setupDeviceId
 
   if (isPhoneLandscapeMirror) {
@@ -3363,8 +3373,8 @@ async function handleSelectTab(k: TabKey) {
         )}
         <div
           className={`remind-app-shell ${!shouldRenderApp || shouldShowFirstFrameOnboarding || setupDeviceId ? 'hidden' : ''} ${booting ? 'remind-app-shell-booting' : 'remind-app-shell-ready'} flex flex-col flex-1 min-h-0`}
-          inert={appControlsLocked || booting || showSplash}
-          aria-hidden={!shouldRenderApp || booting || showSplash || shouldShowFirstFrameOnboarding || !!setupDeviceId || appControlsLocked}
+          inert={!framesLoaded || booting || showSplash}
+          aria-hidden={!shouldRenderApp || !framesLoaded || booting || showSplash || shouldShowFirstFrameOnboarding || !!setupDeviceId}
         >
           <>
             <TabBar
@@ -3374,7 +3384,18 @@ async function handleSelectTab(k: TabKey) {
               getScrollBehavior={getTabScrollBehavior}
             />
 
-            <div className="mt-6 flex-1 min-h-0">
+            {/* Tab navigation is safe after membership verification, even while
+                settings are pending. Editing stays locked until verified. */}
+            <div className="relative flex flex-1 min-h-0 flex-col">
+              {appControlsLocked && framesLoaded && (
+                <div role="status" aria-live="polite" className="pointer-events-none absolute inset-x-0 top-2 z-30 text-center text-[11px] tracking-wide text-[color:var(--fg-60)]">
+                  {cachedPreviewSyncFailed
+                    ? (language === 'no' ? 'Frakoblet forhåndsvisning · Koble til for å redigere' : 'Offline preview · Reconnect to edit')
+                    : (language === 'no' ? 'Laster rammeinnstillinger…' : 'Loading frame settings…')}
+                </div>
+              )}
+              <div className={`flex flex-1 min-h-0 flex-col ${appControlsLocked ? 'opacity-60' : ''}`} inert={appControlsLocked} aria-hidden={appControlsLocked}>
+                <div className="mt-6 flex-1 min-h-0">
               {activeTab === 'frame' && (
                 <FrameTab
                   title={layoutMeta.title}
@@ -3635,6 +3656,8 @@ async function handleSelectTab(k: TabKey) {
               />
             )}
 
+              </div>
+            </div>
           </>
         </div>
 

@@ -27,7 +27,14 @@ test('cached frame remains hidden behind splash until membership verification',(
   const hydrate=home.slice(start,end)
   assert.doesNotMatch(hydrate,/setShowSplash\(false\)/)
   assert.match(home,/if \(cached && cached\.deviceId === selected\) \{[\s\S]*setBooting\(false\)/)
-  assert.match(home,/inert=\{appControlsLocked \|\| booting \|\| showSplash\}/)
+  // Navigation is safe after verified frame membership while settings load.
+  assert.match(home,/setActiveDeviceId\(selected\)[\s\S]*setBooting\(false\)/)
+  assert.match(home,/inert=\{!framesLoaded \|\| booting \|\| showSplash\}/)
+  assert.match(home,/aria-hidden=\{!shouldRenderApp \|\| !framesLoaded \|\| booting \|\| showSplash/)
+  // Settings-dependent content is inert, not the tab bar itself.
+  assert.match(home,/inert=\{appControlsLocked\} aria-hidden=\{appControlsLocked\}/)
+  assert.doesNotMatch(home,/inert=\{appControlsLocked \|\| booting \|\| showSplash\}/)
+  assert.doesNotMatch(home,/if \(!stickySettingsRef\.current\) setActiveTab\('frame'\)/)
 })
 
 test('tab snapshot renders while refreshing but is inert until fresh data is verified',()=>{
@@ -52,7 +59,7 @@ test('ready app appears only after a two-phase splash handoff without logo ghost
   assert.match(styles,/\.remind-splash-overlay-hiding\s*\{\s*opacity: 0/)
   assert.match(home,/window\.setTimeout\(\(\) => setShowSplash\(false\), reducedMotion \? 0 : 320\)/)
   assert.match(home,/\[booting, showSplash\]/)
-  assert.match(home,/aria-hidden=\{!shouldRenderApp \|\| booting \|\| showSplash/)
+  assert.match(home,/aria-hidden=\{!shouldRenderApp \|\| !framesLoaded \|\| booting \|\| showSplash/)
   assert.match(styles,/@media \(prefers-reduced-motion: reduce\)/)
   assert.equal((home.match(/setShowSplash\(false\)/g)||[]).length, 1)
 })
