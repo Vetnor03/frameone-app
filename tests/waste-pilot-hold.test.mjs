@@ -20,7 +20,7 @@ test('Renovasjon is connectable while other evaluation-only apps stay disabled',
 
 test('Connect offers waste address search, DISCONNECT and Edit while preserving other gates', () => {
   const ui = read('../app/HomePageClient.tsx')
-  assert.match(ui, /INTEGRATION_CATALOGUE\.filter\(definition => !startup \|\| \(definition\.connectable/)
+  assert.match(ui, /INTEGRATION_CATALOGUE\.map\(definition => definition\.key === 'google-tasks' && googleTasksEligible[\s\S]*?\.filter\(definition => !startup \|\| \(definition\.connectable/)
   assert.match(ui, /!app\.connectable \? \(/)
   assert.match(ui, /app\.key === 'waste' \? \(/)
   assert.match(ui, /setWasteModalOpen\(true\)/)
@@ -66,5 +66,5 @@ test('Waste items are visible in app and physical frame after connection is enab
   assert.match(device, /if \(!integrationActiveForPilot\('waste'\) \|\| !providerEnabled\('waste'\)\) return/)
   assert.match(ui, /provider\.eq\.waste/)
   assert.match(ui, /String\(row\.raw\?\.collection_date \|\| row\.raw\?\.date \|\| ''\) >= todayYmd/)
-  assert.match(ui, /nextAvailableSources = \['remind', 'teams', 'google-calendar', 'todoist', 'microsoft-todo', 'spond', 'local-events', 'waste', 'bonnetid'\]/)
+  assert.match(ui, /nextAvailableSources = \['remind', 'teams', 'google-calendar', 'todoist', 'microsoft-todo', 'google-tasks', 'spond', 'local-events', 'waste', 'bonnetid'\]/)
 })
