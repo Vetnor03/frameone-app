@@ -1,5 +1,13 @@
+import { hasGoogleEmailScope, verifiedGoogleEmail } from './identity.mjs'
+
 // Google Tasks: read-only, date-only tasks. No write requests.
-export const GOOGLE_TASKS_SCOPES = ['https://www.googleapis.com/auth/tasks.readonly'] as const
+// Basic identity scopes are separate from the read-only Tasks permission.
+// They let Connect display the selected Google account rather than a generic label.
+export const GOOGLE_TASKS_SCOPES = [
+  'https://www.googleapis.com/auth/tasks.readonly',
+  'openid',
+  'email',
+] as const
 const TASKS_API_ROOT = 'https://tasks.googleapis.com/tasks/v1'
 
 export type GoogleTasksEntry = {
@@ -53,4 +61,20 @@ export async function fetchGoogleTaskListsAndTasks(token: string) {
     if (entries.length > 3000) throw new Error('Too many Google Tasks to sync')
   }
   return entries
+}
+
+/** Optional account label; never block a valid Tasks connection if userinfo is unavailable. */
+export async function googleTasksAccountEmail(token: string, scopes: string | undefined): Promise<string | null> {
+  if (!hasGoogleEmailScope(scopes)) return null
+  try {
+    const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+      headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!response.ok) return null
+    return verifiedGoogleEmail(await response.json())
+  } catch {
+    return null
+  }
 }

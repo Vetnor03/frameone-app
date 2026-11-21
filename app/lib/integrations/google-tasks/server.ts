@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
 import { integrationSyncDelta } from '@/app/lib/integrations/integrationSyncDelta'
 import { refreshGoogleToken, type GoogleCredentials, type GoogleTokenSet } from '@/app/lib/integrations/google-calendar/client'
 import { normalizeTimeZone } from '@/app/lib/integrations/teams/server'
-import { fetchGoogleTaskListsAndTasks, GOOGLE_TASKS_SCOPES, GoogleTasksApiError } from './client'
+import { fetchGoogleTaskListsAndTasks, googleTasksAccountEmail, GOOGLE_TASKS_SCOPES, GoogleTasksApiError } from './client'
 import { normalizeGoogleTask } from './normalize.mjs'
 
 export const GOOGLE_TASKS_PROVIDER = 'google-tasks'
@@ -18,11 +18,15 @@ export function googleTasksAllowedForUser(userId: string): boolean {
 }
 
 export function googleTasksStatus(row: Record<string, unknown> | null) {
+  const connected = row?.status === 'connected'
+  const legacyLabel = typeof row?.external_account_label === 'string' ? row.external_account_label.trim() : ''
+  const account = legacyLabel && legacyLabel !== 'Google Tasks' ? legacyLabel : null
   return {
     provider: GOOGLE_TASKS_PROVIDER,
-    connected: row?.status === 'connected',
+    connected,
     status: row?.status || 'disconnected',
-    account: row?.external_account_label || null,
+    account,
+    account_reconnect_required: connected && !account,
     last_sync_at: row?.last_sync_at || null,
   }
 }
@@ -66,11 +70,14 @@ export async function connectGoogleTasksForUser(userId: string, tokens: GoogleTo
   requireTaskScope(tokens)
   if (!tokens.refresh_token) throw new Error('Google did not provide offline access. Try reconnecting.')
   const credentials: GoogleCredentials = {...tokens, time_zone: normalizeTimeZone(timeZone)}
-  const synced = await saveTasks(userId,credentials)
+  const [synced, accountEmail] = await Promise.all([
+    saveTasks(userId, credentials),
+    googleTasksAccountEmail(tokens.access_token, tokens.scope),
+  ])
   const {error} = await getSupabaseAdmin().from('user_integrations').upsert({
     user_id:userId,provider:GOOGLE_TASKS_PROVIDER,status:'connected',
     encrypted_credentials:encryptJson(credentials),
-    external_account_id:null,external_account_label:'Google Tasks',
+    external_account_id:null,external_account_label:accountEmail,
     last_sync_at:synced.now,last_error:null,updated_at:synced.now,
   },{onConflict:'user_id,provider'})
   if (error) throw new Error(error.message)
