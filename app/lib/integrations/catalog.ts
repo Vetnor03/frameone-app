@@ -1,6 +1,6 @@
 export type IntegrationStatus = 'available' | 'experimental' | 'under-evaluation'
 
-export type ConnectAppKey = 'waste' | 'teams' | 'google-calendar' | 'local-events' | 'spond' | 'vigilo' | 'transponder' | 'planta' | 'bonnetid' | 'todoist' | 'microsoft-todo' | 'google-tasks'
+export type ConnectAppKey = 'waste' | 'teams' | 'google-calendar' | 'local-events' | 'spond' | 'vigilo' | 'transponder' | 'planta' | 'bonnetid' | 'todoist' | 'microsoft-todo' | 'google-tasks' | 'calendar-link'
 
 export type IntegrationDefinition = {
   key: ConnectAppKey
@@ -13,6 +13,7 @@ export type IntegrationDefinition = {
 /** Shared catalogue and product ordering used by onboarding and Connect Apps. */
 export const INTEGRATION_CATALOGUE: readonly IntegrationDefinition[] = [
   { key: 'teams', name: { en: 'Teams', no: 'Teams' }, description: { en: "Show today's meetings on your frame", no: 'Vis dagens møter på framen din' }, status: 'available', connectable: true },
+  { key: 'calendar-link', name: { en: 'Calendar Link', no: 'Kalenderlenke' }, description: { en: 'Subscribe to Apple, Outlook, Hoopit or other iCal calendars', no: 'Abonner på Apple-, Outlook-, Hoopit- eller andre iCal-kalendere' }, status: 'available', connectable: true },
   { key: 'google-calendar', name: { en: 'Google Calendar', no: 'Google Calendar' }, description: { en: 'Show upcoming events from your Google calendars', no: 'Vis kommende avtaler fra Google-kalenderne dine' }, status: 'available', connectable: true },
   { key: 'bonnetid', name: { en: 'IRN Prayer Times', no: 'IRN – Bønnetid' }, description: { en: 'Official Norwegian prayer times and Islamic calendar occasions from IRN', no: 'Offisielle bønnetider og islamske merkedager fra IRN' }, status: 'available', connectable: true },
   { key: 'local-events', name: { en: 'Local Events', no: 'Lokale arrangementer' }, description: { en: 'Choose your local area for nearby events', no: 'Velg nærområdet ditt for lokale arrangementer' }, status: 'available', connectable: true },
