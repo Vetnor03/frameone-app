@@ -788,7 +788,7 @@ export async function GET(req: Request) {
       } catch (error) {
         logOptionalReminderProviderFailure('google-tasks', error)
       } })(), (async () => { try {
-        if (!integrationActiveForPilot('waste' || !providerEnabled('waste')) return
+        if (!integrationActiveForPilot('waste') || !providerEnabled('waste')) return
 
         const { data: wasteIntegrationItemsData, error: wasteIntegrationItemsError } = await supabase
           .from('integration_items')
