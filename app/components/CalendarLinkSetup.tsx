@@ -2,7 +2,7 @@
 import { useState } from 'react'
 
 type Feed = { id: string; label: string }
-type Service = 'apple' | 'outlook' | 'hoopit' | 'other'
+type Service = 'apple' | 'outlook' | 'hoopit' | 'vigilo' | 'other'
 const SERVICES: Record<Service, { en: string; no: string; help: string; instructions: { en: string; no: string } }> = {
   apple: {
     en: 'Apple / iCloud', no: 'Apple / iCloud',
@@ -21,6 +21,14 @@ const SERVICES: Record<Service, { en: string; no: string; help: string; instruct
     help: 'https://support.hoopit.io/nb/articles/8943085-synkroniser-hoopit-med-kalenderen-din',
     instructions: { en: 'Find your calendar subscription link using Hoopit’s calendar synchronization guide',
       no: 'Finn abonnementslenken i Hoopits veiledning for kalendersynkronisering' },
+  },
+  vigilo: {
+    en: 'Vigilo', no: 'Vigilo',
+    help: 'https://vigilo.zendesk.com/hc/no/articles/5213650785564-Web-Legge-til-timeplan-i-kalender',
+    instructions: {
+      en: 'Open Vigilo.no in a browser → Log in → Select your child → Timetable → Tap the link icon below the timetable. Paste the copied iCal link here.',
+      no: 'Åpne Vigilo.no i nettleseren → Logg inn → Velg barn → Timeplan → Trykk på lenkesymbolet under timeplanen. Lim inn iCal-lenken her.',
+    },
   },
   other: {
     en: 'Other calendar', no: 'Annen kalender',
@@ -138,6 +146,11 @@ export default function CalendarLinkSetup({
               className="mt-2 inline-block text-xs text-[#2aa3ff] underline">
               {language === 'no' ? 'Vis offisiell veiledning' : 'View official instructions'}
             </a>}
+            {service === 'vigilo' && <p className="mt-2 text-[11px] leading-relaxed text-[color:var(--fg-45)]">
+              {language === 'no'
+                ? 'Gjelder bare timeplanen, ikke meldinger eller oppslag. Skolen eller kommunen må ha aktivert kalenderdeling.'
+                : 'Timetable only; messages and notices are not included. Your school or municipality must enable calendar sharing.'}
+            </p>}
             {service === 'apple' && <p className="mt-2 text-[11px] leading-relaxed text-[color:var(--fg-45)]">
               {language === 'no'
                 ? 'Merk: «Offentlig kalender» gjør den lesbar for alle som har lenken. Ikke bruk dette for sensitiv informasjon.'
