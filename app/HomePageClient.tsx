@@ -4912,6 +4912,7 @@ function ConnectAppsScreen({
               : app.description
             const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar' || app.key === 'todoist' || app.key === 'microsoft-todo' || app.key === 'google-tasks'
             const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : app.key === 'todoist' ? todoistAccount : app.key === 'microsoft-todo' ? microsoftTodoAccount : app.key === 'google-tasks' ? googleTasksAccount : null
+            const googleTasksMissingAccount = connected && app.key === 'google-tasks' && !googleTasksAccount
             return (
               <div
                 key={app.key}
@@ -4922,8 +4923,21 @@ function ConnectAppsScreen({
                     <div className="flex items-center gap-2 text-sm font-medium text-[color:var(--fg-90)]"><span>{app.name}</span>{app.status === 'experimental' && <span className="rounded-full border border-[#2aa3ff]/35 px-2 py-0.5 text-[9px] uppercase tracking-wider text-[#2aa3ff]">{integrationStatusLabel(app.status, language)}</span>}</div>
                     <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">{description}</div>
                     {connected && credentialProvider && (
-                      <div className="mt-2 truncate text-xs text-[color:var(--fg-45)]">
-                        {accountLabel ? `${language === 'no' ? 'Konto' : 'Account'}: ${accountLabel}` : (language === 'no' ? 'Tilkoblet' : 'Connected')}
+                      <div className="mt-2 text-xs text-[color:var(--fg-45)]">
+                        <div className="truncate">
+                          {accountLabel
+                            ? `${language === 'no' ? 'Konto' : 'Account'}: ${accountLabel}`
+                            : googleTasksMissingAccount
+                              ? (language === 'no' ? 'Google-konto tilkoblet (e-post ikke tilgjengelig)' : 'Google account connected (email unavailable)')
+                              : (language === 'no' ? 'Tilkoblet' : 'Connected')}
+                        </div>
+                        {!startup && googleTasksMissingAccount && (
+                          <button type="button" onClick={() => void connectGoogleTasks()}
+                            disabled={googleTasksLoading || !googleTasksEligible}
+                            className="mt-1 text-left text-[11px] text-[#2aa3ff] underline underline-offset-2 disabled:opacity-50">
+                            {language === 'no' ? 'Koble til på nytt for å vise e-post' : 'Reconnect once to show account email'}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
