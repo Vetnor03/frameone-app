@@ -4978,7 +4978,6 @@ function ConnectAppsScreen({
                   </div>
 
                   <div className="flex shrink-0 flex-col items-stretch gap-1.5">
-                  {connected && !startup && <span className="text-center text-[10px] font-semibold tracking-[0.14em] text-[#1f9d4a]">{language === 'no' ? 'TILKOBLET' : 'CONNECTED'}</span>}
                   {!app.connectable ? (
                     <span className="inline-flex min-h-8 items-center justify-center rounded-xl border border-[color:var(--bd-20)] px-3 text-[10px] font-medium tracking-[0.06em] text-[color:var(--fg-60)]">
                       {integrationStatusLabel(app.status, language)}
