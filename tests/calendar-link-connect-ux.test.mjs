@@ -34,3 +34,13 @@ test('Calendar Link setup closes only after confirmed connection, not on errors 
   assert.match(remove, /await post\('remove', \{ id \}\)/)
   assert.doesNotMatch(remove, /onConnected\(/)
 })
+
+
+test('Calendar Link offers Vigilo timetable iCal instructions without claiming message access', () => {
+  assert.match(setup, /'vigilo'\s*\|\s*'other'/)
+  assert.match(setup, /en: 'Vigilo', no: 'Vigilo'/)
+  assert.match(setup, /vigilo\.zendesk\.com\/hc\/no\/articles\/5213650785564/)
+  assert.match(setup, /Velg barn → Timeplan → Trykk på lenkesymbolet/)
+  assert.match(setup, /Gjelder bare timeplanen, ikke meldinger eller oppslag/)
+  assert.match(setup, /Skolen eller kommunen må ha aktivert kalenderdeling/)
+})
