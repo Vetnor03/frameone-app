@@ -4457,6 +4457,7 @@ function ConnectAppsScreen({
       setStatus(language === 'no' ? 'Lokale arrangementer er frakoblet' : 'Local Events disconnected')
       window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
     } catch (error: unknown) {
+      setDisconnectConfirmApp(null)
       setStatusTone('error')
       setStatus(error instanceof Error && error.message ? error.message : 'Could not disconnect Local Events')
     } finally {
