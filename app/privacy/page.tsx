@@ -118,6 +118,10 @@ function PrivacyPageContent() {
             ),
           },
           {
+            title: 'KALENDERLENKER (ICS/WEBCAL) – LAGRING OG SLETTING',
+            text: 'Hvis du frivillig kobler til en ekstern kalenderlenke i Connect, henter RE:MIND hendelsestitler, datoer, klokkeslett, kalendernavn og sted fra den valgte kalenderfeeden. Selve abonnementslenken, som kan inneholde en hemmelig tilgangskode, lagres kryptert på serveren og vises ikke til andre brukere. Importerte hendelser mellomlagres i databasen for visning i Påminnelser og på valgte rammer; de kan sees av andre som har tilgang til en delt ramme. Vi sender ikke kalenderhendelsestitler fra slike lenker til ekstern KI-basert forkorting. Du kan fjerne én kalender eller koble fra alle når som helst i Connect. Da slettes de aktuelle lenkene og importerte hendelsene fra den aktive integrasjonsdatabasen. RE:MIND endrer ikke kalenderne hos leverandøren. Merk at en offentlig iCloud-kalender er lesbar for alle som har lenken; ikke publiser sensitive kalendere.',
+          },
+          {
             title: 'GOOGLE CALENDAR – TILGANG OG FORMÅL',
             text: 'Hvis du selv velger å koble Google Calendar til RE:MIND via Connect, ber vi om lesetilgang til Google-kalendere du har tilgang til (Google Calendar API: calendar.calendarlist.readonly og calendar.events.readonly). Vi henter kommende hendelser fra kalendere som er valgt for visning i Google, inkludert hendelsestittel, dato, start- og sluttid, heldagsstatus, kalendernavn, sted og lenke til hendelsen der dette finnes. Informasjonen brukes til å synkronisere og vise kalenderavtaler som påminnelser i RE:MIND. Vi kan ikke opprette, endre eller slette hendelser i Google Calendar.',
           },
@@ -198,6 +202,10 @@ function PrivacyPageContent() {
                 Only provide personal data about other people when you have the right to do so. You can delete user-created content through the app where this functionality is available, or contact us for assistance.
               </>
             ),
+          },
+          {
+            title: 'CALENDAR LINKS (ICS/WEBCAL) – STORAGE AND DELETION',
+            text: 'If you voluntarily connect an external calendar subscription in Connect, RE:MIND imports event titles, dates, times, calendar names and locations from the chosen feed. The subscription URL, which may include a secret access token, is encrypted on the server and is not exposed to other users. Imported events are cached in the database for display in Reminders and on selected frames and may be visible to people sharing a frame. Titles from these calendar links are not sent to external AI shortening services. You may remove one calendar or disconnect all in Connect at any time, deleting associated links and imported events from the active integration database. RE:MIND does not alter calendars at the provider. An iCloud Public Calendar is readable by anyone with its link; do not publish sensitive calendars.',
           },
           {
             title: 'GOOGLE CALENDAR – ACCESS AND PURPOSE',
