@@ -58,6 +58,7 @@ import {
 import { clearManualUpdate, readManualUpdate, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
 import { confirmFrameSaveForRevision, frameSaveFeedbackPhase } from './lib/device/frameSaveFeedback.mjs'
 import { saveFrameSettings } from './lib/device/saveFrameSettings.mjs'
+import { enqueueSerializedSettingsSave } from './lib/device/serialSettingsSave.mjs'
 import { reconcilePersistedDesiredState } from './lib/device/desiredStateReconciliation.mjs'
 import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, geometryWithAssignments, supportsPhysicalCustomLayout, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
 import { projectSlotMemoryIntoBuiltInLayout, sanitizeLayoutModuleMemory as sanitizeCanonicalLayoutModuleMemory, serializeBuiltInLayoutCells } from './lib/frameLayoutTransition'
@@ -3115,9 +3116,7 @@ export default function HomePage() {
   // Location and integration changes persist without requesting a physical redraw.
   // Serialize all settings writes so the last choice wins even on slow connections.
   function enqueueSettingsSave(deviceId: string, overrides: { powerSaver?: boolean; modulesJson?: Record<string, unknown> } = {}): Promise<boolean> {
-    const nextSave = settingsSaveQueueRef.current.catch(() => {}).then(() => performSettingsSave(deviceId, overrides))
-    settingsSaveQueueRef.current = nextSave
-    return nextSave
+    return enqueueSerializedSettingsSave(settingsSaveQueueRef, () => performSettingsSave(deviceId, overrides))
   }
 
   function onModuleLocationChanged(key: 'surf' | 'surf_forecast' | 'weather', value: unknown) {
