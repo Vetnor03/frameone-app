@@ -4957,7 +4957,7 @@ function ConnectAppsScreen({
               : app.key === 'bonnetid' && bonnetidCity
                 ? (language === 'no' ? `Sted: ${bonnetidCity}` : `Location: ${bonnetidCity}`)
               : null
-            const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar' || app.key === 'todoist' || app.key === 'microsoft-todo' || app.key === 'google-tasks'
+            const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar' || app.key === 'calendar-link' || app.key === 'todoist' || app.key === 'microsoft-todo' || app.key === 'google-tasks'
             const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : app.key === 'todoist' ? todoistAccount : app.key === 'microsoft-todo' ? microsoftTodoAccount : app.key === 'google-tasks' ? googleTasksAccount : null
             const googleTasksMissingAccount = connected && app.key === 'google-tasks' && googleTasksStatusResolved && !googleTasksStatusFailed && !googleTasksAccount
             return (
