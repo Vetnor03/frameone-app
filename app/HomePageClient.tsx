@@ -4996,7 +4996,7 @@ function ConnectAppsScreen({
                   <div className="flex min-w-0 flex-1 items-start gap-3">
                     <ConnectAppLogo appKey={app.key} />
                     <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 text-sm font-medium text-[color:var(--fg-90)]"><span>{app.name}</span>{app.status === 'experimental' && <span className="rounded-full border border-[#2aa3ff]/35 px-2 py-0.5 text-[9px] uppercase tracking-wider text-[#2aa3ff]">{integrationStatusLabel(app.status, language)}</span>}</div>
+                    <div className="flex items-center gap-2 text-sm font-medium text-[color:var(--fg-90)]"><span>{app.name}</span>{app.status === 'experimental' && app.connectable && <span className="rounded-full border border-[#2aa3ff]/35 px-2 py-0.5 text-[9px] uppercase tracking-wider text-[#2aa3ff]">{integrationStatusLabel(app.status, language)}</span>}</div>
                     <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">{app.description}</div>
                     {connectionDetail && <div className="mt-2 text-xs leading-snug text-[color:var(--fg-60)]">{connectionDetail}</div>}
                     {connected && credentialProvider && (accountLabel || googleTasksMissingAccount) && (
