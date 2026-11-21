@@ -2,7 +2,7 @@
 
 RE:MIND Connect → **Calendar Link** lets a user select Apple/iCloud, Outlook,
 Hoopit, or Other, open the provider's official instructions, paste a calendar
-subscription URL, preview the next five events, and connect. Up to five feeds
+subscription URL, and tap Connect. The server checks and imports events before\nshowing Connected. Up to five feeds
 per account are supported. Events go into the existing Reminders source
 filter and physical frame; no new frame module.
 
@@ -27,7 +27,7 @@ filter and physical frame; no new frame module.
   5 feeds/user, 1600 upcoming events/feed, 5000 cached events/user, and
   bounded recurrence iteration. Failed sync preserves the last good cache.
 - `ical.js` handles RFC5545 RRULE/RDATE/EXDATE and RECURRENCE-ID overrides,
-  with iCloud VTIMEZONE and IANA TZID fallback. Preview/import horizon:
+  with iCloud VTIMEZONE and IANA TZID fallback. Import horizon:
   past day + 120 days. All-day dates remain dates.
 - Periodic sync is stale-based (30 minutes) and delta-only to avoid
   unnecessary e-paper wakeups. Opening Reminders triggers sync if stale;
