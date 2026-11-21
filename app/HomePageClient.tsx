@@ -4677,9 +4677,9 @@ function ConnectAppsScreen({
       setLocalEventsStatusFailed(true)
     })
   }, [activeDeviceId])
-  const apps = INTEGRATION_CATALOGUE.filter(definition => !startup || (definition.connectable && (definition.status === 'available' || definition.key === 'spond')))
-    .map(definition => definition.key === 'google-tasks' && googleTasksEligible
+  const apps = INTEGRATION_CATALOGUE.map(definition => definition.key === 'google-tasks' && googleTasksEligible
       ? { ...definition, connectable: true, status: 'available' as const } : definition)
+    .filter(definition => !startup || (definition.connectable && (definition.status === 'available' || definition.key === 'spond')))
     .filter(definition => startup || integrationMatchesSearch(definition, connectSearch))
     .map(definition => ({
     ...definition,
