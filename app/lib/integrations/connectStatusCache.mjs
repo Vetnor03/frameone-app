@@ -1,10 +1,10 @@
 // Display-only cache for Connect. Never store auth tokens or integration settings.
 // Scope snapshots to the authenticated account AND selected frame.
-export const CONNECT_STATUS_CACHE_PREFIX = 'remind:connect-status:v1:'
+export const CONNECT_STATUS_CACHE_PREFIX = 'remind:connect-status:v2:'
 export const CONNECT_STATUS_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 const validId = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{8,128}$/.test(value)
-const PROVIDERS = new Set(['teams', 'google-calendar', 'spond', 'local-events', 'waste', 'bonnetid', 'todoist', 'microsoft-todo', 'google-tasks'])
+const PROVIDERS = new Set(['teams', 'google-calendar', 'spond', 'local-events', 'waste', 'bonnetid', 'todoist', 'microsoft-todo', 'google-tasks', 'calendar-link'])
 
 export function connectStatusCacheKey(userId, deviceId) {
   return validId(userId) && validId(deviceId) ? CONNECT_STATUS_CACHE_PREFIX + userId + ':' + deviceId : null
@@ -46,4 +46,20 @@ export function clearConnectStatusCacheForUser(storage, userId) {
       if (key?.startsWith(prefix)) storage.removeItem(key)
     }
   } catch { /* browser storage may be unavailable */ }
+}
+
+/**
+ * Connect is an account-level authorization list, not a per-frame module picker.
+ * Onboarding is the exception: it must never opt a new frame into integrations
+ * the owner has not selected. A server response always supersedes display cache.
+ */
+export function resolveConnectBadge({
+  connectable = true, startup = false, frameEnabled = false,
+  locallyDisconnected = false, verified, accountConnected = false, cached,
+}) {
+  if (!connectable || locallyDisconnected || (startup && !frameEnabled)) return false
+  if (typeof verified === 'boolean') return verified
+  if (accountConnected) return true
+  if (typeof cached === 'boolean') return cached
+  return false
 }
