@@ -31,7 +31,8 @@ test('integration request never forces the keyboard open or hides its submit act
 test('Connect forms share a keyboard-aware sheet with persistent actions', () => {
   assert.match(waste, /<AppSheet/)
   const connect = app.slice(app.indexOf('  const renderLocalEventsModal = () => {'), app.indexOf('\n\n\n\nfunction TabBar', app.indexOf('  const renderLocalEventsModal = () => {')))
-  assert.equal((connect.match(/<AppSheet/g) || []).length, 3)
+  assert.equal((connect.match(/<AppSheet/g) || []).length, 4)
+  assert.match(connect, /<AppSheet title=\{language === 'no' \? 'Kalenderlenke' : 'Calendar Link'\}/)
   assert.doesNotMatch(connect, /className="fixed inset-0 z-50 flex items-end justify-center bg-black\/40/)
   assert.match(connect, /dismissible=\{!spondLoading\}/)
   assert.match(connect, /dismissible=\{!localEventsLoading\}/)

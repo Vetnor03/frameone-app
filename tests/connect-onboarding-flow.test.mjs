@@ -43,7 +43,7 @@ test('Onboarding offers working integrations plus experimental Spond, but hides 
   const catalogue = readFileSync(new URL('../app/lib/integrations/catalog.ts', import.meta.url), 'utf8')
   assert.match(source, /INTEGRATION_CATALOGUE\.map\(definition => definition\.key === 'google-tasks' && googleTasksEligible[\s\S]*?\.filter\(definition => !startup \|\| \(definition\.connectable && \(definition\.status === 'available' \|\| definition\.key === 'spond'\)\)\)/)
   assert.match(catalogue, /key: 'spond'[^\n]*status: 'experimental', connectable: true/)
-  assert.match(source, /app\.status === 'experimental' && <span/)
+  assert.match(source, /app\.status === 'experimental' && app\.connectable && <span/)
   assert.match(source, /\.\.\.dynamicTabs,\s*\{ key: 'connect'/)
 })
 
@@ -87,7 +87,8 @@ test('new frame Connect Apps is opt-in even with previously authorized account i
   const repair = connect.slice(repairStart, connect.indexOf('const apps = INTEGRATION_CATALOGUE', repairStart))
   assert.match(repair, /if \(startup \|\| !frameSettingsReady \|\| !activeDeviceId/)
   const status = connect.slice(connect.indexOf('function getAppConnected('), connect.indexOf('const sortedApps ='))
-  assert.match(status, /if \(startup && !frameUsesIntegration\(modulesJson, app\.key\)\) return false/)
+  assert.match(status, /resolveConnectBadge\(\{/)
+  assert.match(status, /startup,\s*frameEnabled: frameUsesIntegration\(modulesJson, app\.key\)/)
   // The user explicitly selects which connected accounts to reuse.
   assert.match(connect, /if \(teamsAccountConnected\) \{ setTeamsConnected\(true\); changeFrameIntegration\('teams', \{ enabled: true \}\)/)
   assert.match(connect, /if \(googleAccountConnected\) \{ setGoogleConnected\(true\); changeFrameIntegration\('google-calendar', \{ enabled: true \}\)/)
