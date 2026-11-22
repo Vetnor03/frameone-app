@@ -53,7 +53,7 @@ export async function POST(req: Request) {
 
     // A stale or partially loaded app editor must never wipe saved module
     // locations while saving unrelated settings. Valid new choices still win.
-    const protectedLocations = preserveStoredModuleLocations(existing.data?.settings_json, settingsJson)
+    const protectedLocations = preserveStoredModuleLocations(existing.data?.settings_json, settingsRecord)
     const settingsToSave = protectedLocations.settingsJson
 
     const save = existing.data
