@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { preserveStoredModuleLocations } from '../app/lib/device/preserveModuleLocations.mjs'
+import { saveFrameSettings } from '../app/lib/device/saveFrameSettings.mjs'
 
 const weather = [{ id: 1, label: 'Stavanger', lat: 58.97, lon: 5.73 }]
 const surf = [{ id: 1, spot: "Today's Best", spotId: '__todays_best__' }]
@@ -48,4 +49,46 @@ test('Weather and Surf tabs never present empty pickers while server settings lo
   const source = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   assert.match(source, /\(moduleKey === 'weather' \|\| moduleKey === 'surf'\) && loadedSettingsDeviceId !== activeDeviceId/)
   assert.match(source, /cachedPreviewSyncFailed/)
+})
+
+test('a confirmed server location recovery is accepted and returned for app rehydration', async () => {
+  const submitted = { theme: 'light', modules: { weather: [], surf: [], surf_forecast: null } }
+  const saved = preserveStoredModuleLocations(stored, submitted)
+  const result = await saveFrameSettings({
+    deviceId: 'frame-test',
+    settingsJson: submitted,
+    accessToken: 'dummy',
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        saved_settings_json: saved.settingsJson,
+        protected_module_locations: saved.preserved,
+        updated_at: '2026-11-22T12:00:00Z',
+      }),
+    }),
+  })
+  assert.deepEqual(result.saved_settings_json.modules.weather, weather)
+  assert.deepEqual(result.saved_settings_json.modules.surf, surf)
+  assert.deepEqual(result.saved_settings_json.modules.surf_forecast, surfForecast)
+})
+
+test('unexpected Supabase settings drift still fails readback verification', async () => {
+  await assert.rejects(
+    saveFrameSettings({
+      deviceId: 'frame-test',
+      settingsJson: { theme: 'light', modules: { weather } },
+      accessToken: 'dummy',
+      fetchImpl: async () => ({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          saved_settings_json: { theme: 'dark', modules: { weather } },
+          protected_module_locations: [],
+          updated_at: '2026-11-22T12:00:00Z',
+        }),
+      }),
+    }),
+    /did not match/,
+  )
 })
