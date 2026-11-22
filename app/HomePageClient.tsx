@@ -3077,14 +3077,35 @@ export default function HomePage() {
       }
       if (activeDeviceIdRef.current !== deviceId) return false
 
+      // If the server restored locations from a stale partial draft, immediately
+      // hydrate the protected values locally too. Do not clobber a newer user edit
+      // that happened while this save was in flight.
+      const protectedLocationKeys = savedResult.protected_module_locations ?? []
+      const confirmedModules = modulesRecordFromUnknown(savedResult.saved_settings_json?.modules)
+      const restoredModules = { ...draftModules }
+      for (const key of protectedLocationKeys) {
+        if (key === 'weather' || key === 'surf' || key === 'surf_forecast') {
+          restoredModules[key] = confirmedModules[key]
+        }
+      }
+      const committedModules = protectedLocationKeys.length ? normalizeModulesForSave(restoredModules) : draftModules
+      const committedSignature = protectedLocationKeys.length
+        ? serializeComparableState({
+          frameTheme: draftTheme, powerSaver: draftPowerSaver, language: draftLanguage,
+          fontSize: draftFontSize, layoutKey: draftLayoutKey, cellsByLayout: draftCellsByLayout,
+          modulesJson: committedModules, pinnedModuleTabs: draftPinnedTabs, dynamicLayout: draftDynamicLayout,
+        })
+        : persistedSignature
       const nextCellsByLayout = { ...makeEmptyCellsByLayout(), [draftLayoutKey]: { ...currentCells } }
       const reconciliation = reconcilePersistedDesiredState(desiredStateRef.current, persistedSignature)
       if (reconciliation.applyPersistedValues) {
         layoutModuleMemoryRef.current = nextLayoutModuleMemory
         setCellsByLayout(nextCellsByLayout)
-        setModulesJson(draftModules)
+        latestModulesJsonRef.current = committedModules
+        setModulesJson(committedModules)
+        desiredStateRef.current = committedSignature
       }
-      savedStateRef.current = persistedSignature
+      savedStateRef.current = committedSignature
       if (userId && typeof window !== 'undefined') {
         // Save the currently effective daypart, not whichever daypart the
         // user happened to be editing. Avoid a misleading launch preview.
