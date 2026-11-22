@@ -2324,6 +2324,7 @@ export default function HomePage() {
     setActiveCustomLayoutId(storedCustomId)
     setCarouselItemId(storedCustomId || `built-in:${nextLayout}`)
     if (storedCustomId) setCustomAssignments(previous => ({...previous,[storedCustomId]:Object.fromEntries((shownCells||[]).map(cell=>[cell.slot,baseModuleKeyFromStored(cell.module)]))}))
+    latestModulesJsonRef.current = normalizedModules
     setModulesJson(normalizedModules)
     setPinnedModuleTabs(nextPinnedTabs)
 
@@ -3015,6 +3016,8 @@ export default function HomePage() {
   }
 
   async function performSettingsSave(deviceId: string, overrides: { powerSaver?: boolean; modulesJson?: Record<string, unknown> } = {}): Promise<boolean> {
+    // A queued save from another frame must not write into the newly selected frame.
+    if (activeDeviceIdRef.current !== deviceId) return false
     try {
       setPersisting(true)
 
@@ -3025,7 +3028,7 @@ export default function HomePage() {
       const draftFontSize = fontSize
       const draftLayoutKey = layoutKey
       const draftCellsByLayout = cellsByLayout
-      const draftModules = normalizeModulesForSave(overrides.modulesJson ?? modulesJson)
+      const draftModules = normalizeModulesForSave(overrides.modulesJson ?? latestModulesJsonRef.current)
       const draftPinnedTabs = pinnedModuleTabs
       const draftDynamicLayout = dynamicLayout
       const currentCells = draftCellsByLayout[draftLayoutKey] || emptyCellsFor(draftLayoutKey)
@@ -3074,14 +3077,35 @@ export default function HomePage() {
       }
       if (activeDeviceIdRef.current !== deviceId) return false
 
+      // If the server restored locations from a stale partial draft, immediately
+      // hydrate the protected values locally too. Do not clobber a newer user edit
+      // that happened while this save was in flight.
+      const protectedLocationKeys = savedResult.protected_module_locations ?? []
+      const confirmedModules = modulesRecordFromUnknown(savedResult.saved_settings_json?.modules)
+      const restoredModules = { ...draftModules }
+      for (const key of protectedLocationKeys) {
+        if (key === 'weather' || key === 'surf' || key === 'surf_forecast') {
+          restoredModules[key] = confirmedModules[key]
+        }
+      }
+      const committedModules = protectedLocationKeys.length ? normalizeModulesForSave(restoredModules) : draftModules
+      const committedSignature = protectedLocationKeys.length
+        ? serializeComparableState({
+          frameTheme: draftTheme, powerSaver: draftPowerSaver, language: draftLanguage,
+          fontSize: draftFontSize, layoutKey: draftLayoutKey, cellsByLayout: draftCellsByLayout,
+          modulesJson: committedModules, pinnedModuleTabs: draftPinnedTabs, dynamicLayout: draftDynamicLayout,
+        })
+        : persistedSignature
       const nextCellsByLayout = { ...makeEmptyCellsByLayout(), [draftLayoutKey]: { ...currentCells } }
       const reconciliation = reconcilePersistedDesiredState(desiredStateRef.current, persistedSignature)
       if (reconciliation.applyPersistedValues) {
         layoutModuleMemoryRef.current = nextLayoutModuleMemory
         setCellsByLayout(nextCellsByLayout)
-        setModulesJson(draftModules)
+        latestModulesJsonRef.current = committedModules
+        setModulesJson(committedModules)
+        desiredStateRef.current = committedSignature
       }
-      savedStateRef.current = persistedSignature
+      savedStateRef.current = committedSignature
       if (userId && typeof window !== 'undefined') {
         // Save the currently effective daypart, not whichever daypart the
         // user happened to be editing. Avoid a misleading launch preview.
@@ -3120,6 +3144,7 @@ export default function HomePage() {
   }
 
   function onModuleLocationChanged(key: 'surf' | 'surf_forecast' | 'weather', value: unknown) {
+    setFrameUpdateError('')
     const nextModules = normalizeModulesForSave({ ...latestModulesJsonRef.current, [key]: value })
     latestModulesJsonRef.current = nextModules
     setModulesJson(nextModules)
@@ -3503,7 +3528,8 @@ async function handleSelectTab(k: TabKey) {
                   asTab
                   remindersVisibleOnFrame={!activeDeviceId || remindersShownOnFrame}
                   onIntegrationChanged={(key, config = { enabled: true }, legacyEnabled = []) => {
-                    const nextModules = integrationModulesAfterChange(modulesJson, key, config, legacyEnabled)
+                    const nextModules = integrationModulesAfterChange(latestModulesJsonRef.current, key, config, legacyEnabled)
+                    latestModulesJsonRef.current = nextModules
                     setModulesJson(nextModules)
                     markDirty({ modulesJson: nextModules })
                     // Enabling an already-authorized account must survive reopening the app.
@@ -3568,6 +3594,18 @@ async function handleSelectTab(k: TabKey) {
                       <React.Suspense fallback={isActive ? (
                         <div role="status" className="py-5 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Laster fanen…' : 'Loading tab…'}</div>
                       ) : null}>
+                        {(moduleKey === 'weather' || moduleKey === 'surf') && loadedSettingsDeviceId !== activeDeviceId ? (
+                          <div role="status" className="mt-5 text-sm text-[color:var(--fg-60)]">
+                            {cachedPreviewSyncFailed ? (
+                              <div className="space-y-3">
+                                <p>{language === 'no' ? 'Kunne ikke hente lagrede steder. Ingenting er slettet.' : 'Could not load saved locations. Nothing has been deleted.'}</p>
+                                <button type="button" className="rounded-2xl border border-[color:var(--bd-20)] px-4 py-2" onClick={() => { if (activeDeviceId) void loadDeviceSettings(activeDeviceId) }}>
+                                  {language === 'no' ? 'Prøv igjen' : 'Retry'}
+                                </button>
+                              </div>
+                            ) : (language === 'no' ? 'Henter lagrede steder…' : 'Loading saved locations…')}
+                          </div>
+                        ) : (
                         <ModuleSettingsTab
                           language={language}
                           module={moduleKey as ModuleKey}
@@ -3581,6 +3619,10 @@ async function handleSelectTab(k: TabKey) {
                           onLocationChanged={onModuleLocationChanged}
                           activeDeviceId={activeDeviceId}
                         />
+                        )}
+                        {(moduleKey === 'weather' || moduleKey === 'surf') && loadedSettingsDeviceId === activeDeviceId && frameUpdateError && (
+                          <div role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{frameUpdateError}</div>
+                        )}
                       </React.Suspense>
                     </AppSheetVisibilityContext.Provider>
                   )}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { supportsPhysicalCustomLayout } from '@/app/lib/customLayouts'
+import { preserveStoredModuleLocations } from '@/app/lib/device/preserveModuleLocations.mjs'
 
 export const runtime = 'nodejs'
 
@@ -45,21 +46,26 @@ export async function POST(req: Request) {
 
     const existing = await supabase
       .from('device_settings')
-      .select('device_id')
+      .select('device_id, settings_json')
       .eq('device_id', deviceId)
       .maybeSingle()
     if (existing.error) return NextResponse.json({ ok: false, error: existing.error.message }, { status: 500 })
 
+    // A stale or partially loaded app editor must never wipe saved module
+    // locations while saving unrelated settings. Valid new choices still win.
+    const protectedLocations = preserveStoredModuleLocations(existing.data?.settings_json, settingsRecord)
+    const settingsToSave = protectedLocations.settingsJson
+
     const save = existing.data
       ? await supabase
           .from('device_settings')
-          .update({ settings_json: settingsJson })
+          .update({ settings_json: settingsToSave })
           .eq('device_id', deviceId)
           .select('settings_json, updated_at')
           .maybeSingle()
       : await supabase
           .from('device_settings')
-          .insert({ device_id: deviceId, settings_json: settingsJson })
+          .insert({ device_id: deviceId, settings_json: settingsToSave })
           .select('settings_json, updated_at')
           .maybeSingle()
 
@@ -70,6 +76,7 @@ export async function POST(req: Request) {
       storage: { table: 'device_settings', key: `device_id=${deviceId}` },
       saved_settings_json: save.data?.settings_json ?? null,
       updated_at: save.data?.updated_at ?? null,
+      protected_module_locations: protectedLocations.preserved,
     })
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 })
