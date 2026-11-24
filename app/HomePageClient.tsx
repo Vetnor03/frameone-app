@@ -3792,7 +3792,7 @@ function integrationModulesAfterChange(modulesJson: Record<string, any>, key: Co
   return { ...modulesJson, integration_selection_explicit: true, integrations: { ...integrations, [key]: config } }
 }
 
-function OutlookCalendarSelection({ language, onSaved }: { language: AppLanguage; onSaved: (count: number) => void }) {
+function OutlookCalendarSelection({ language, onSaved }: { language: AppLanguage; onSaved: () => void }) {
   const [calendars, setCalendars] = useState<{ id: string; name: string; isDefaultCalendar: boolean }[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -3833,7 +3833,7 @@ function OutlookCalendarSelection({ language, onSaved }: { language: AppLanguage
         body: JSON.stringify({ calendarIds: selected }),
       })
       if (!response.ok) throw new Error('Calendar selection could not be saved')
-      onSaved(selected.length)
+      onSaved()
     } catch {
       setError(no ? 'Kunne ikke lagre kalendervalg. Prøv igjen.' : 'Could not save calendar selection. Try again.')
     } finally { setSaving(false) }
@@ -3944,7 +3944,6 @@ function ConnectAppsScreen({
   })
   const [teamsLoading, setTeamsLoading] = useState(false)
   const [outlookCalendarOpen, setOutlookCalendarOpen] = useState(false)
-  const [outlookCalendarCount, setOutlookCalendarCount] = useState<number | null>(null)
   const [googleConnected, setGoogleConnected] = useState(false)
   const [googleAccountConnected, setGoogleAccountConnected] = useState(false)
   const [googleAccount, setGoogleAccount] = useState<string | null>(null)
@@ -4628,7 +4627,6 @@ function ConnectAppsScreen({
         setTeamsAccountConnected(false)
         changeFrameIntegration('teams', { enabled: false })
         setTeamsAccount(null)
-        setOutlookCalendarCount(null)
       } else if (provider === 'google-calendar') {
         setGoogleConnected(false)
         setGoogleAccountConnected(false)
@@ -5085,8 +5083,6 @@ function ConnectAppsScreen({
                 ? (language === 'no'
                   ? `${calendarLinkFeeds.length} ${calendarLinkFeeds.length === 1 ? 'kalender' : 'kalendere'}`
                   : `${calendarLinkFeeds.length} ${calendarLinkFeeds.length === 1 ? 'calendar' : 'calendars'}`)
-              : app.key === 'teams' && outlookCalendarCount !== null
-                ? (language === 'no' ? `${outlookCalendarCount} valgte kalendere` : `${outlookCalendarCount} selected calendars`)
               : app.key === 'local-events' && localEventsSyncIssue
                 ? (language === 'no' ? `Synkronisering venter: ${localEventsSyncIssue}` : `Sync pending: ${localEventsSyncIssue}`)
               : app.key === 'local-events' && localEventsSelectedName
@@ -5344,8 +5340,7 @@ function ConnectAppsScreen({
 
       {outlookCalendarOpen && (
         <AppSheet title="Outlook Calendar" onClose={() => setOutlookCalendarOpen(false)}>
-          <OutlookCalendarSelection language={language} onSaved={(count) => {
-            setOutlookCalendarCount(count)
+          <OutlookCalendarSelection language={language} onSaved={() => {
             setOutlookCalendarOpen(false)
             window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
           }} />
