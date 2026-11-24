@@ -44,6 +44,10 @@ export async function POST(req: NextRequest) {
   } catch { return result({ error: 'Could not start FamilyWall OAuth probe. Check endpoint discovery and client configuration.' }, 502) }
 }
 export async function GET(req: NextRequest) {
+  if (req.nextUrl.searchParams.get('mode') === 'status') {
+    const userId = await getAuthenticatedUserId(req)
+    return result({ eligible: !!userId && allowed(userId) }, userId ? 200 : 401)
+  }
   if (process.env.FAMILYWALL_MCP_PROBE_ENABLED !== 'true') return result({ error: 'Not found' }, 404)
   const state = req.nextUrl.searchParams.get('state') || ''
   const code = req.nextUrl.searchParams.get('code') || ''
