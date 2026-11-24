@@ -4963,8 +4963,8 @@ function ConnectAppsScreen({
   }, [pendingFamilyWallEnable, familyWallStatusResolved, familyWallConnected, familyWallEligible, activeDeviceId, frameSettingsReady, legacyIntegrationDiscoveryPending])
 
   const apps = INTEGRATION_CATALOGUE.map(definition => (definition.key === 'google-tasks' && googleTasksEligible) || (definition.key === 'familywall' && familyWallEligible)
-      ? { ...definition, connectable: true, status: 'available' as const } : definition)
-    .filter(definition => !startup || (definition.connectable && (definition.status === 'available' || definition.key === 'spond')))
+      ? { ...definition, connectable: true, status: definition.key === 'familywall' ? 'experimental' as const : 'available' as const } : definition)
+    .filter(definition => !startup || (definition.connectable && (definition.status === 'available' || definition.key === 'spond' || definition.key === 'familywall')))
     .filter(definition => startup || integrationMatchesSearch(definition, connectSearch))
     .map(definition => ({
     ...definition,
