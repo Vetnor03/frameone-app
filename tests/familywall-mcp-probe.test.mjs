@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createHash } from 'node:crypto'
-import { FAMILYWALL_RESOURCE, trustedEndpoint, startFamilyWallProbe, exchangeProbeCode, discoverFamilyWallTools } from '../app/lib/integrations/familywall/probe.ts'
+import { FAMILYWALL_RESOURCE, trustedEndpoint, startFamilyWallProbe, exchangeProbeCode, discoverFamilyWallTools, runFamilyWallReadProbe } from '../app/lib/integrations/familywall/probe.ts'
 
 const origin = 'https://mcp.familywall.com'
 const settings = { redirectUri: 'https://example.test/api/integrations/familywall/probe', trustedOrigins: [] }
@@ -77,4 +77,38 @@ test('FamilyWall MCP discovery negotiates the session and only lists tools, neve
   }
   assert.deepEqual(await discoverFamilyWallTools('test-token',fetcher),[{name:'example_list',readOnlyHint:true,inputSchema:{type:'object'}}])
   assert.deepEqual(calls,['initialize','notifications/initialized','tools/list','DELETE'])
+})
+
+test('FamilyWall read probe uses only explicit read tools and never returns personal values or unknown keys', async () => {
+  const calls=[]
+  const fetcher=async (url,init)=>{
+    if(init.method==='DELETE') return new Response(null,{status:204})
+    const body=JSON.parse(init.body)
+    if(body.method==='initialize') return json({jsonrpc:'2.0',id:body.id,result:{protocolVersion:'2025-06-18'}},{'Mcp-Session-Id':'session'})
+    if(body.method==='notifications/initialized') return new Response(null,{status:202})
+    if(body.method==='tools/list') return json({jsonrpc:'2.0',id:body.id,result:{tools:['list_events','list_lists','list_items','delete_event'].map(name=>({name,inputSchema:{type:'object'},annotations:{readOnlyHint:true}}))}})
+    if(body.method==='tools/call') {
+      const {name,arguments:args}=body.params
+      calls.push([name,args])
+      const value=name==='list_events'?{events:[{title:'Private appointment',start_date:'2026-11-25',PrivateDynamicKey:'secret'}]}:name==='list_lists'?{lists:[{id:'taskList/19966_7213',name:'Private shopping'}]}:{items:[{name:'Private item',checked:false}]}
+      return json({jsonrpc:'2.0',id:body.id,result:{content:[{type:'text',text:JSON.stringify(value)}]}})
+    }
+    throw Error('Unexpected method')
+  }
+  const result=await runFamilyWallReadProbe('test-token',fetcher)
+  assert.deepEqual(calls,[['list_events',{days:7}],['list_lists',{}],['list_items',{list_id:'taskList/19966_7213',include_done:false}]])
+  assert.deepEqual(result.map(x=>x.status),['ok','ok','ok'])
+  assert.match(result[0].shape,/events.*title:string/)
+  assert.doesNotMatch(JSON.stringify(result),/Private|secret|19966|2026-11-25/)
+})
+
+test('FamilyWall read probe refuses tools without the read-only annotation', async () => {
+  const fetcher=async (url,init)=>{
+    const body=JSON.parse(init.body)
+    if(body.method==='initialize') return json({jsonrpc:'2.0',id:body.id,result:{protocolVersion:'2025-06-18'}})
+    if(body.method==='notifications/initialized') return new Response(null,{status:202})
+    if(body.method==='tools/list') return json({jsonrpc:'2.0',id:body.id,result:{tools:[{name:'list_events',inputSchema:{type:'object'},annotations:{readOnlyHint:false}}]}})
+    assert.fail('No tool should be executed')
+  }
+  assert.deepEqual((await runFamilyWallReadProbe('test-token',fetcher)).map(x=>x.status),['unavailable','unavailable','skipped'])
 })
