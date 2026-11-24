@@ -15,7 +15,7 @@ export type ReminderRepeatKey =
   | '2years'
   | 'custom'
 
-export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events' | 'bonnetid' | 'todoist' | 'microsoft-todo' | 'google-tasks' | 'calendar-link'
+export type DeviceReminderSource = 'spond' | 'teams' | 'google-calendar' | 'waste' | 'remind' | 'local-events' | 'bonnetid' | 'todoist' | 'microsoft-todo' | 'google-tasks' | 'calendar-link' | 'familywall'
 
 export type DeviceReminderItem = {
   reminder_id: string
@@ -264,6 +264,16 @@ export function buildCalendarLinkItems(
   return buildGoogleCalendarItems(rows, todayYmd, horizonEndYmd, timeZone, now).map(item => ({
     ...item, source: 'calendar-link' as const,
     reminder_id: 'calendar-link:' + (item.external_id || ''),
+  }))
+}
+
+export function buildFamilyWallCalendarItems(
+  rows: IntegrationItemRow[], todayYmd: string, horizonEndYmd: string,
+  timeZone: string, now = new Date()
+): DeviceReminderItem[] {
+  return buildGoogleCalendarItems(rows.filter(row => row.raw?.source === 'familywall' && row.raw?.type === 'event'), todayYmd, horizonEndYmd, timeZone, now).map(item => ({
+    ...item, source: 'familywall' as const,
+    reminder_id: 'familywall:' + (item.external_id || ''),
   }))
 }
 
