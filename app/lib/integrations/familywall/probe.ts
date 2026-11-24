@@ -245,7 +245,43 @@ function firstListId(value: unknown, depth = 0): string | null {
   for (const key of ['id', 'list_id', 'listId']) {
     const candidate = obj[key]
     // FamilyWall's documented list ID format from the live tools/list schema.
-    if (typeof candidate === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,39}\\/[A-Za-z0-9_-]{1,120}$/.test(candidate)) return candidate
+    if (typeof candidate === 'string' && new RegExp('^[A-Za-z][A-Za-z0-9_-]{0,39}/[A-Za-z0-9_-]{1,120}
+  }
+  for (const key of ['lists', 'data', 'result', 'results', 'items', 'taskLists']) {
+    const id = firstListId(obj[key], depth + 1)
+    if (id) return id
+  }
+  return null
+}
+
+/** A one-time, owner-only diagnostic. Never execute a tool outside the explicit allowlist. */
+export async function runFamilyWallReadProbe(accessToken: string, fetcher: Fetcher = fetch) {
+  return withFamilyWallSession(accessToken, fetcher, async rpc => {
+    const tools = await listFamilyWallTools(rpc)
+    const checks: ReadProbeCheck[] = []
+    async function check(tool: ReadProbeCheck['tool'], args: Json) {
+      if (!tools.some(entry => entry.name === tool && entry.readOnlyHint)) {
+        checks.push({ tool, status: 'unavailable' })
+        return null
+      }
+      try {
+        const value = readToolValue(await rpc('tools/call', { name: tool, arguments: args }))
+        checks.push({ tool, status: 'ok', shape: diagnosticShape(value).slice(0, 400) })
+        return value
+      } catch {
+        checks.push({ tool, status: 'failed' })
+        return null
+      }
+    }
+    await check('list_events', { days: 7 })
+    const lists = await check('list_lists', {})
+    const id = firstListId(lists)
+    if (id) await check('list_items', { list_id: id, include_done: false })
+    else checks.push({ tool: 'list_items', status: 'skipped' })
+    return checks
+  })
+}
+).test(candidate)) return candidate
   }
   for (const key of ['lists', 'data', 'result', 'results', 'items', 'taskLists']) {
     const id = firstListId(obj[key], depth + 1)
