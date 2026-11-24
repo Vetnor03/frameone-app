@@ -48,13 +48,19 @@ test('retaining a scheduled event while updating provider-only metadata works', 
 })
 
 test('Teams, Spond and Local Events sync must avoid unconditional delete/reinsert and blind upserts', () => {
-  for (const path of ['teams/server.ts', 'spond/server.ts']) {
-    const code = readFileSync(new URL('../app/lib/integrations/' + path, import.meta.url), 'utf8')
-    assert.match(code, /integrationSyncDelta\(rows, existing \|\| \[\]\)/)
-    assert.match(code, /\.in\('external_id', obsoleteIds\.slice\(/)
-    assert.match(code, /\.upsert\(changed\.slice\(/)
-    assert.doesNotMatch(code, /\.delete\(\)\s*\.eq\('user_id', userId\)\s*\.eq\('provider', (TEAMS_PROVIDER|SPOND_PROVIDER)\)\s*;/)
-  }
+  // Outlook commits the same minimal delta in one revision-guarded transaction.
+  const teams = readFileSync(new URL('../app/lib/integrations/teams/server.ts', import.meta.url), 'utf8')
+  const sql = readFileSync(new URL('../supabase/manual/outlook_calendar_atomic_sync.sql', import.meta.url), 'utf8')
+  assert.match(teams, /integrationSyncDelta\(rows, existing\)/)
+  assert.match(teams, /rpc\('commit_outlook_calendar_sync',\s*\{[\s\S]*?p_changed: changed,\s*p_obsolete_ids: obsoleteIds,/)
+  assert.match(sql, /delete from public\.integration_items\s+where user_id = p_user_id and provider = 'teams' and external_id = any\(p_obsolete_ids\)/i)
+  assert.match(sql, /insert into public\.integration_items[\s\S]*?jsonb_to_recordset\(p_changed\)[\s\S]*?on conflict \(user_id, provider, external_id\) do update/i)
+  assert.doesNotMatch(teams, /\.delete\(\)\s*\.eq\('user_id', userId\)\s*\.eq\('provider', TEAMS_PROVIDER\)/)
+  const spond = readFileSync(new URL('../app/lib/integrations/spond/server.ts', import.meta.url), 'utf8')
+  assert.match(spond, /integrationSyncDelta\(rows, existing \|\| \[\]\)/)
+  assert.match(spond, /\.in\('external_id', obsoleteIds\.slice\(/)
+  assert.match(spond, /\.upsert\(changed\.slice\(/)
+  assert.doesNotMatch(spond, /\.delete\(\)\s*\.eq\('user_id', userId\)\s*\.eq\('provider', SPOND_PROVIDER\)\s*;/)
   const code = readFileSync(new URL('../app/lib/integrations/local-events/server.ts', import.meta.url), 'utf8')
   assert.match(code, /changedIntegrationRows\(rows, previouslyStored \|\| \[\]\)/)
   assert.match(code, /\.upsert\(changed\.slice\(/)
