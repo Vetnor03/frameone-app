@@ -55,3 +55,18 @@ test('selection uses authenticated server storage and existing provider identity
   assert.ok(ui.includes('checked={selected.includes(calendar.id)}'))
   assert.ok(ui.includes('setOutlookCalendarOpen(true)'))
 })
+
+test('calendar selection, sync and disconnect use one revision-guarded database transaction', () => {
+  const source = readFileSync(new URL('../app/lib/integrations/teams/server.ts', import.meta.url), 'utf8')
+  const disconnect = readFileSync(new URL('../app/lib/integrations/disconnect.ts', import.meta.url), 'utf8')
+  const sql = readFileSync(new URL('../supabase/manual/outlook_calendar_atomic_sync.sql', import.meta.url), 'utf8')
+  assert.ok(source.includes("rpc('commit_outlook_calendar_sync'"))
+  assert.ok(source.includes('expectedRevision: data.updated_at'))
+  assert.ok(source.includes('expectedRevision: connection.expectedRevision'))
+  assert.ok(disconnect.includes("rpc('disconnect_outlook_calendar'"))
+  assert.match(sql, /for update;\s*if v_revision is distinct from p_expected_revision then\s*return false;/i)
+  assert.equal((sql.match(/pg_advisory_xact_lock/g) || []).length, 2)
+  assert.match(sql, /revoke all on function public\.commit_outlook_calendar_sync[^;]+from public, anon, authenticated;/i)
+  assert.match(sql, /grant execute on function public\.commit_outlook_calendar_sync[^;]+to service_role;/i)
+  assert.match(sql, /security invoker set search_path = ''/i)
+})
