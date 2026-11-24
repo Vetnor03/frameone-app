@@ -5191,7 +5191,7 @@ function ConnectAppsScreen({
                       <button
                         type="button"
                         onClick={() => setDisconnectConfirmApp(app.key as DisconnectableConnectAppKey)}
-                        disabled={waitingForVerification || disconnectingApp === app.key || (app.key === 'spond' && spondLoading) || (app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading) || (app.key === 'todoist' && todoistLoading) || (app.key === 'microsoft-todo' && microsoftTodoLoading) || (app.key === 'google-tasks' && googleTasksLoading)}
+                        disabled={waitingForVerification || disconnectingApp === app.key || (app.key === 'spond' && spondLoading) || (app.key === 'google-calendar' && googleLoading) || (app.key === 'todoist' && todoistLoading) || (app.key === 'microsoft-todo' && microsoftTodoLoading) || (app.key === 'google-tasks' && googleTasksLoading)}
                         className={disconnectActionClass}
                       >
                         {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
