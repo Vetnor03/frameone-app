@@ -8,6 +8,7 @@ export type TeamsTokenSet = {
 
 export type TeamsStoredCredentials = TeamsTokenSet & {
   time_zone?: string
+  calendar_ids?: string[]
 }
 
 export type TeamsMeeting = {
@@ -64,7 +65,7 @@ export function logMicrosoftOAuthConfigError(context = 'teams') {
 }
 
 export function microsoftOAuthUserMessage() {
-  return 'Teams is not fully configured on the server yet. Contact an administrator to finish Microsoft connection setup.'
+  return 'Outlook Calendar is not fully configured on the server yet. Contact an administrator to finish Microsoft connection setup.'
 }
 
 export function microsoftOAuthSetupError(context = 'teams') {
@@ -203,8 +204,8 @@ export async function fetchMicrosoftProfile(accessToken: string) {
   return data
 }
 
-export async function fetchMicrosoftCalendarView(accessToken: string, startIso: string, endIso: string): Promise<TeamsMeeting[]> {
-  const url = new URL(`${GRAPH_BASE}/me/calendarView`)
+export async function fetchMicrosoftCalendarView(accessToken: string, startIso: string, endIso: string, calendarId?: string): Promise<TeamsMeeting[]> {
+  const url = new URL(calendarId ? `${GRAPH_BASE}/me/calendars/${encodeURIComponent(calendarId)}/calendarView` : `${GRAPH_BASE}/me/calendarView`)
   url.searchParams.set('startDateTime', startIso)
   url.searchParams.set('endDateTime', endIso)
   url.searchParams.set('$select', 'id,subject,start,end,location,isOnlineMeeting,onlineMeeting,onlineMeetingProvider,isCancelled')
@@ -216,6 +217,7 @@ export async function fetchMicrosoftCalendarView(accessToken: string, startIso: 
   let pageCount = 0
 
   while (nextUrl && pageCount < 20) {
+    if (new URL(nextUrl).origin !== new URL(GRAPH_BASE).origin) throw new Error('Invalid Microsoft Graph pagination URL')
     const resp = await fetch(nextUrl, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -229,15 +231,60 @@ export async function fetchMicrosoftCalendarView(accessToken: string, startIso: 
     } & Record<string, unknown>
     if (!resp.ok) throw new Error(data.error?.message || `Microsoft calendar request failed with status ${resp.status}`)
 
-    if (Array.isArray(data.value)) events.push(...data.value)
+    if (!Array.isArray(data.value)) throw new Error('Invalid Microsoft calendar response')
+    events.push(...data.value)
     nextUrl = typeof data['@odata.nextLink'] === 'string' && data['@odata.nextLink']
       ? data['@odata.nextLink']
       : null
     pageCount += 1
   }
 
+  if (nextUrl) throw new Error('Microsoft calendar exceeds safe pagination limit')
   return events
     .map(normalizeGraphEvent)
     .filter((item): item is TeamsMeeting => Boolean(item))
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+}
+
+export type OutlookCalendar = { id: string; name: string; isDefaultCalendar: boolean }
+
+export async function fetchMicrosoftCalendars(accessToken: string): Promise<OutlookCalendar[]> {
+  const url = new URL(`${GRAPH_BASE}/me/calendars`)
+  url.searchParams.set('$select', 'id,name,isDefaultCalendar')
+  url.searchParams.set('$top', '100')
+  let next: string | null = url.toString()
+  const calendars = new Map<string, OutlookCalendar>()
+  for (let page = 0; next && page < 20; page++) {
+    if (new URL(next).origin !== new URL(GRAPH_BASE).origin) throw new Error('Invalid Microsoft Graph pagination URL')
+    const response: Response = await fetch(next, { headers: { Authorization: `Bearer ${accessToken}` } })
+    const data = await response.json()
+    if (!response.ok || !Array.isArray(data.value)) throw new Error('Could not load Outlook calendars')
+    for (const item of data.value) {
+      if (typeof item.id === 'string' && item.id) calendars.set(item.id, {
+        id: item.id, name: typeof item.name === 'string' && item.name ? item.name : 'Calendar',
+        isDefaultCalendar: item.isDefaultCalendar === true,
+      })
+    }
+    next = typeof data['@odata.nextLink'] === 'string' ? data['@odata.nextLink'] : null
+  }
+  if (next) throw new Error('Outlook calendar list exceeds safe pagination limit')
+  // Some Graph accounts do not populate isDefaultCalendar on list results.
+  if (![...calendars.values()].some(calendar => calendar.isDefaultCalendar)) {
+    const response = await fetch(`${GRAPH_BASE}/me/calendar?$select=id,name`, { headers: { Authorization: `Bearer ${accessToken}` } })
+    const data = await response.json()
+    if (!response.ok || typeof data.id !== 'string') throw new Error('Could not identify default Outlook calendar')
+    const existing = calendars.get(data.id)
+    calendars.set(data.id, { id: data.id, name: existing?.name || data.name || 'Calendar', isDefaultCalendar: true })
+  }
+  return [...calendars.values()]
+}
+
+export async function fetchSelectedMicrosoftCalendarEvents(accessToken: string, startIso: string, endIso: string, ids?: string[]): Promise<TeamsMeeting[]> {
+  if (ids === undefined) return fetchMicrosoftCalendarView(accessToken, startIso, endIso)
+  const events = new Map<string, TeamsMeeting>()
+  for (const id of [...new Set(ids)]) {
+    const meetings = await fetchMicrosoftCalendarView(accessToken, startIso, endIso, id)
+    for (const meeting of meetings) events.set(meeting.id, meeting)
+  }
+  return [...events.values()].sort((a, b) => a.starts_at.localeCompare(b.starts_at))
 }
