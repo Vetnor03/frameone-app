@@ -14,6 +14,12 @@ export function normalizeDisconnectableIntegrationProvider(provider: string): Di
 export async function disconnectIntegrationForUser(userId: string, provider: DisconnectableIntegrationProvider) {
   const supabase = getSupabaseAdmin()
 
+  if (provider === 'teams') {
+    const { data, error } = await supabase.rpc('disconnect_outlook_calendar', { p_user_id: userId })
+    if (error || data !== true) throw new Error(error?.message || 'Could not disconnect Outlook Calendar')
+    return { provider, connected: false, status: 'disconnected' as const }
+  }
+
   const { error: itemsError } = await supabase
     .from('integration_items')
     .delete()

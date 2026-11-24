@@ -12,7 +12,7 @@ export type IntegrationDefinition = {
 
 /** Shared catalogue and product ordering used by onboarding and Connect Apps. */
 export const INTEGRATION_CATALOGUE: readonly IntegrationDefinition[] = [
-  { key: 'teams', name: { en: 'Teams', no: 'Teams' }, description: { en: "Show upcoming meetings in Reminders", no: "Vis kommende møter i Påminnelser" }, status: 'available', connectable: true },
+  { key: 'teams', name: { en: 'Outlook Calendar', no: 'Outlook Calendar' }, description: { en: "Show Outlook appointments and Teams meetings in Reminders", no: "Vis Outlook-avtaler og Teams-møter i Påminnelser" }, status: 'available', connectable: true },
   { key: 'calendar-link', name: { en: 'Calendar Link', no: 'Kalenderlenke' }, description: { en: "Show events from iCal calendar links in Reminders", no: "Vis hendelser fra iCal-kalenderlenker i Påminnelser" }, status: 'available', connectable: true },
   { key: 'google-calendar', name: { en: 'Google Calendar', no: 'Google Calendar' }, description: { en: "Show Google Calendar events in Reminders", no: "Vis Google Kalender-avtaler i Påminnelser" }, status: 'available', connectable: true },
   { key: 'bonnetid', name: { en: 'IRN Prayer Times', no: 'IRN – Bønnetid' }, description: { en: "Show prayer times and Islamic occasions in Reminders", no: "Vis bønnetider og islamske merkedager i Påminnelser" }, status: 'available', connectable: true },
