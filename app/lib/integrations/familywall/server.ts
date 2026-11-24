@@ -30,38 +30,27 @@ async function fetchRows(credentials: Credentials) {
   return normalizeFamilyWallCalendar(await readFamilyWallCalendar(credentials.access_token))
 }
 
-async function saveRows(userId: string, rows: Awaited<ReturnType<typeof fetchRows>>, now: string) {
+async function commitRows(userId: string, expectedRevision: string | null, credentials: Credentials, rows: Awaited<ReturnType<typeof fetchRows>>) {
   const db = getSupabaseAdmin()
   const { data: previous, error } = await db.from('integration_items').select('external_id,title,body,starts_at,due_at,priority,raw')
     .eq('user_id', userId).eq('provider', FAMILYWALL_PROVIDER).limit(2001)
   if (error || (previous || []).length > 2000) throw new Error('Could not load FamilyWall cache')
-  const incoming = rows.map(row => ({ ...row, user_id: userId, provider: FAMILYWALL_PROVIDER, updated_at: now }))
-  const { changed, obsoleteIds } = integrationSyncDelta(incoming, previous || [])
-  for (let i = 0; i < changed.length; i += 200) {
-    const { error: writeError } = await db.from('integration_items').upsert(changed.slice(i, i + 200), { onConflict: 'user_id,provider,external_id' })
-    if (writeError) throw new Error('Could not save FamilyWall events')
-  }
-  for (let i = 0; i < obsoleteIds.length; i += 200) {
-    const { error: removeError } = await db.from('integration_items').delete().eq('user_id', userId).eq('provider', FAMILYWALL_PROVIDER).in('external_id', obsoleteIds.slice(i, i + 200))
-    if (removeError) throw new Error('Could not remove old FamilyWall events')
-  }
+  const { changed, obsoleteIds } = integrationSyncDelta(rows, previous || [])
+  const { data, error: writeError } = await db.rpc('commit_familywall_sync', {
+    p_user_id: userId, p_expected_revision: expectedRevision, p_credentials: encryptJson(credentials),
+    p_changed: changed, p_obsolete_ids: obsoleteIds,
+  })
+  if (writeError) throw new Error('Could not save FamilyWall connection')
+  return data === true
 }
 
 export async function connectFamilyWall(userId: string, pending: PendingProbe, token: FamilyWallToken) {
   if (!familyWallAllowed(userId)) throw new Error('FamilyWall not available')
+  const previous = await connection(userId)
+  if (previous?.updated_at && Date.parse(previous.updated_at) > pending.createdAt) throw new Error('FamilyWall connection changed; reconnect')
   const credentials = { ...token, clientId: pending.clientId, tokenEndpoint: pending.tokenEndpoint }
   const rows = await fetchRows(credentials)
-  const now = new Date().toISOString()
-  // Remove the previous authorization before replacing its cache; a newly
-  // selected family must not inherit the previous family's cached events.
-  const db = getSupabaseAdmin()
-  const { error: clearError } = await db.from('user_integrations').upsert({ user_id: userId, provider: FAMILYWALL_PROVIDER, status: 'disconnected', encrypted_credentials: null, external_account_id: null, external_account_label: null, updated_at: now, last_sync_at: null, last_error: null }, { onConflict: 'user_id,provider' })
-  if (clearError) throw new Error('Could not replace FamilyWall connection')
-  await saveRows(userId, rows, now)
-  const { error } = await db.from('user_integrations').update({
-    status: 'connected', encrypted_credentials: encryptJson(credentials), external_account_label: 'FamilyWall', last_sync_at: now, updated_at: now, last_error: null,
-  }).eq('user_id', userId).eq('provider', FAMILYWALL_PROVIDER).eq('updated_at', now)
-  if (error) throw new Error('Could not save FamilyWall connection')
+  if (!await commitRows(userId, previous?.updated_at || null, credentials, rows)) throw new Error('FamilyWall connection changed; reconnect')
   return { connected: true, itemCount: rows.length }
 }
 
@@ -77,26 +66,12 @@ export async function syncFamilyWall(userId: string) {
     const last = Date.parse(String(data.last_sync_at || ''))
     if (Number.isFinite(last) && Date.now() - last < STALE_MS) return { connected: true, refreshed: false }
     let credentials = decryptJson<Credentials>(data.encrypted_credentials)
-    let refreshedToken = false
     try {
       if (credentials.expires_at && credentials.expires_at <= Date.now() + 60000) {
         credentials = { ...credentials, ...await refreshFamilyWallToken(credentials.clientId, credentials.tokenEndpoint, credentials, origins()) }
-        refreshedToken = true
       }
       const rows = await fetchRows(credentials)
-      // Do not publish fetched rows for a revoked/replaced connection.
-      const current = await connection(userId)
-      if (current?.status !== 'connected' || current.updated_at !== data.updated_at) return { connected: false, refreshed: false }
-      const now = new Date().toISOString()
-      if (refreshedToken) {
-        const { error } = await db.from('user_integrations').update({ encrypted_credentials: encryptJson(credentials) })
-          .eq('user_id', userId).eq('provider', FAMILYWALL_PROVIDER).eq('status', 'connected').eq('updated_at', data.updated_at)
-        if (error) throw new Error('Could not save FamilyWall token')
-      }
-      await saveRows(userId, rows, now)
-      const { error } = await db.from('user_integrations').update({ last_sync_at: now, updated_at: now, last_error: null })
-        .eq('user_id', userId).eq('provider', FAMILYWALL_PROVIDER).eq('status', 'connected').eq('updated_at', data.updated_at)
-      if (error) throw new Error('Could not record FamilyWall sync')
+      if (!await commitRows(userId, data.updated_at, credentials, rows)) return { connected: false, refreshed: false }
       return { connected: true, refreshed: true, itemCount: rows.length }
     } catch {
       const expired = credentials.expires_at && credentials.expires_at <= Date.now() + 60000
@@ -110,10 +85,7 @@ export async function syncFamilyWall(userId: string) {
 }
 
 export async function disconnectFamilyWall(userId: string) {
-  const db = getSupabaseAdmin()
-  const { error } = await db.from('user_integrations').upsert({ user_id: userId, provider: FAMILYWALL_PROVIDER, status: 'disconnected', encrypted_credentials: null, external_account_id: null, external_account_label: null, last_sync_at: null, last_error: null, updated_at: new Date().toISOString() }, { onConflict: 'user_id,provider' })
-  if (error) throw new Error('Could not disconnect FamilyWall')
-  const { error: clearError } = await db.from('integration_items').delete().eq('user_id', userId).eq('provider', FAMILYWALL_PROVIDER)
-  if (clearError) throw new Error('Could not clear FamilyWall data')
+  const { data, error } = await getSupabaseAdmin().rpc('disconnect_familywall', { p_user_id: userId })
+  if (error || data !== true) throw new Error('Could not disconnect FamilyWall')
   return { connected: false }
 }
