@@ -39,9 +39,9 @@ test('Skipping is explicit and setup waits for provider discovery and OAuth retu
   assert.match(source, /!teamsStatusResolved && !teamsStatusFailed/)
 })
 
-test('Onboarding offers working integrations plus experimental Spond, but hides unavailable providers', () => {
+test('Onboarding offers working integrations plus experimental Spond and eligible FamilyWall, but hides unavailable providers', () => {
   const catalogue = readFileSync(new URL('../app/lib/integrations/catalog.ts', import.meta.url), 'utf8')
-  assert.match(source, /INTEGRATION_CATALOGUE\.map\(definition => \(definition\.key === 'google-tasks' && googleTasksEligible\) \|\| \(definition\.key === 'familywall' && familyWallEligible\)[\s\S]*?\.filter\(definition => !startup \|\| \(definition\.connectable && \(definition\.status === 'available' \|\| definition\.key === 'spond'\)\)\)/)
+  assert.match(source, /INTEGRATION_CATALOGUE\.map\(definition => \(definition\.key === 'google-tasks' && googleTasksEligible\) \|\| \(definition\.key === 'familywall' && familyWallEligible\)[\s\S]*?status: definition\.key === 'familywall' \? 'experimental' as const : 'available' as const[\s\S]*?\.filter\(definition => !startup \|\| \(definition\.connectable && \(definition\.status === 'available' \|\| definition\.key === 'spond' \|\| definition\.key === 'familywall'\)\)\)/)
   assert.match(catalogue, /key: 'spond'[^\n]*status: 'experimental', connectable: true/)
   assert.match(source, /app\.status === 'experimental' && app\.connectable && <span/)
   assert.match(source, /\.\.\.dynamicTabs,\s*\{ key: 'connect'/)
