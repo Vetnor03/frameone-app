@@ -246,9 +246,15 @@ function readToolValue(result: Json): unknown {
   if (result.isError === true) throw new Error('FamilyWall read tool failed')
   if (result.structuredContent !== undefined) return result.structuredContent
   if (!Array.isArray(result.content) || !result.content.length) throw new Error('Missing FamilyWall tool result')
-  const text = result.content.find(entry => entry && typeof entry === 'object' && entry.type === 'text' && typeof entry.text === 'string')
-  if (!text) throw new Error('Unsupported FamilyWall tool content')
-  try { return JSON.parse(text.text) } catch { return text.text }
+  const blocks = result.content.filter(entry => entry && typeof entry === 'object' && entry.type === 'text' && typeof entry.text === 'string')
+  if (!blocks.length) throw new Error('Unsupported FamilyWall tool content')
+  const values = blocks.map(block => {
+    try { return JSON.parse(block.text) as unknown } catch { return block.text }
+  })
+  if (values.length === 1) return values[0]
+  // Do not silently discard additional content. The calendar reader validates
+  // each block before combining it with the rest of the snapshot.
+  return { content_blocks: values }
 }
 
 function firstListId(value: unknown, depth = 0): string | null {
@@ -305,7 +311,50 @@ export async function runFamilyWallReadProbe(accessToken: string, fetcher: Fetch
 export async function readFamilyWallCalendar(accessToken: string, fetcher: Fetcher = fetch) {
   return withFamilyWallSession(accessToken, fetcher, async rpc => {
     const tools = await listFamilyWallTools(rpc)
-    if (!tools.some(tool => tool.name === 'list_events' && tool.readOnlyHint)) throw new Error('FamilyWall calendar not available')
-    return readToolValue(await rpc('tools/call', { name: 'list_events', arguments: { days: 62 } }))
+    const tool = tools.find(tool => tool.name === 'list_events' && tool.readOnlyHint)
+    if (!tool) throw new Error('FamilyWall calendar not available')
+    const properties = tool.inputSchema.properties ? record(tool.inputSchema.properties) : {}
+    const cursorKey = ['cursor', 'page_cursor', 'pageCursor', 'next_cursor', 'nextCursor'].find(key => Object.hasOwn(properties, key))
+    const rows: unknown[] = []
+    const seen = new Set<string>()
+    let cursor: string | undefined
+    for (let page = 0; page < 20; page++) {
+      const args: Json = { days: 62 }
+      if (cursor && cursorKey) args[cursorKey] = cursor
+      const value = readToolValue(await rpc('tools/call', { name: 'list_events', arguments: args }))
+      const result = calendarPage(value)
+      rows.push(...result.rows)
+      if (rows.length > 2000) throw new Error('FamilyWall calendar exceeds safe limit')
+      if (!result.next) return { events: rows }
+      if (!cursorKey || seen.has(result.next)) throw new Error('Incomplete FamilyWall calendar response')
+      seen.add(result.next)
+      cursor = result.next
+    }
+    throw new Error('FamilyWall calendar pagination exceeds safe limit')
   })
+}
+
+/** Only accept explicit event collections; incomplete snapshots never replace the cache. */
+function calendarPage(value: unknown, depth = 0): { rows: unknown[]; next?: string } {
+  if (depth > 5) throw new Error('Unsupported FamilyWall calendar format')
+  if (Array.isArray(value)) return { rows: value }
+  const data = record(value)
+  const rawNext = data.nextCursor ?? data.next_cursor
+  const next = rawNext == null || rawNext === '' ? undefined : required(rawNext)
+  if (data.has_more === true && !next) throw new Error('Incomplete FamilyWall calendar response')
+  if (Array.isArray(data.content_blocks)) {
+    const parts = data.content_blocks.map(block => calendarPage(block, depth + 1))
+    const cursors = [...new Set([next, ...parts.map(part => part.next)].filter((v): v is string => !!v))]
+    if (cursors.length > 1) throw new Error('Conflicting FamilyWall calendar cursors')
+    return { rows: parts.flatMap(part => part.rows), next: cursors[0] }
+  }
+  for (const key of ['events', 'items', 'data', 'result', 'results', 'entries']) {
+    if (data[key] != null) {
+      const inner = calendarPage(data[key], depth + 1)
+      if (next && inner.next && next !== inner.next) throw new Error('Conflicting FamilyWall calendar cursors')
+      return { rows: inner.rows, next: next || inner.next }
+    }
+  }
+  if (typeof data.id === 'string' && (typeof data.title === 'string' || typeof data.name === 'string' || typeof data.summary === 'string')) return { rows: [data], next }
+  throw new Error('Unsupported FamilyWall calendar format')
 }

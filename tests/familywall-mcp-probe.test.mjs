@@ -146,3 +146,31 @@ test('FamilyWall token exchange retains expiry and refresh token only on the ser
   assert.equal(refreshed.access_token,'new-access')
   assert.equal(refreshed.refresh_token,'refresh')
 })
+
+test('FamilyWall calendar combines every JSON text block and follows advertised pagination', async () => {
+  const calls=[]
+  const event=n=>({id:'event/'+n,title:'Event '+n,start:'2026-11-26T12:00:00+01:00'})
+  const fetcher=async (url,init)=>{
+    const body=JSON.parse(init.body)
+    if(body.method==='initialize') return json({jsonrpc:'2.0',id:body.id,result:{protocolVersion:'2025-06-18'}})
+    if(body.method==='notifications/initialized') return new Response(null,{status:202})
+    if(body.method==='tools/list') return json({jsonrpc:'2.0',id:body.id,result:{tools:[{name:'list_events',inputSchema:{type:'object',properties:{days:{type:'integer'},cursor:{type:'string'}}},annotations:{readOnlyHint:true}}]}})
+    calls.push(body.params.arguments)
+    const values=body.params.arguments.cursor?[{events:[event(3)]}]:[{events:[event(1)]},{events:[event(2)],nextCursor:'next',has_more:true}]
+    return json({jsonrpc:'2.0',id:body.id,result:{content:values.map(value=>({type:'text',text:JSON.stringify(value)}))}})
+  }
+  const result=await readFamilyWallCalendar('test-token',fetcher)
+  assert.deepEqual(result.events.map(event=>event.id),['event/1','event/2','event/3'])
+  assert.deepEqual(calls,[{days:62},{days:62,cursor:'next'}])
+})
+
+test('FamilyWall refuses incomplete snapshots when a continuation is not supported', async () => {
+  const fetcher=async (url,init)=>{
+    const body=JSON.parse(init.body)
+    if(body.method==='initialize') return json({jsonrpc:'2.0',id:body.id,result:{protocolVersion:'2025-06-18'}})
+    if(body.method==='notifications/initialized') return new Response(null,{status:202})
+    if(body.method==='tools/list') return json({jsonrpc:'2.0',id:body.id,result:{tools:[{name:'list_events',inputSchema:{type:'object'},annotations:{readOnlyHint:true}}]}})
+    return json({jsonrpc:'2.0',id:body.id,result:{structuredContent:{events:[],nextCursor:'next'}}})
+  }
+  await assert.rejects(readFamilyWallCalendar('test-token',fetcher),/Incomplete/)
+})
