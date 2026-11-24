@@ -100,7 +100,7 @@ export async function startFamilyWallProbe(config: ProbeConfig, fetcher: Fetcher
     const registration = trustedEndpoint(metadata.registration_endpoint, origins)
     const registered = await json(fetcher, registration, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_name: 'RE:MIND (developer test)', redirect_uris: [config.redirectUri],
+      body: JSON.stringify({ client_name: 'RE:MIND', redirect_uris: [config.redirectUri],
         grant_types: ['authorization_code'], response_types: ['code'], token_endpoint_auth_method: 'none' }),
     })
     if (registered.client_secret || (registered.token_endpoint_auth_method && registered.token_endpoint_auth_method !== 'none')) {
@@ -188,7 +188,7 @@ async function withFamilyWallSession<T>(accessToken: string, fetcher: Fetcher, r
     return rpcResult(await responseText(response), response.headers.get('content-type') || '', id)
   }
   try {
-    const initialized = await rpc('initialize', { protocolVersion: PROTOCOL, capabilities: {}, clientInfo: { name: 'RE:MIND developer probe', version: '0.1.0' } })
+    const initialized = await rpc('initialize', { protocolVersion: PROTOCOL, capabilities: {}, clientInfo: { name: 'RE:MIND', version: '0.1.0' } })
     protocol = required(initialized.protocolVersion)
     if (!['2025-06-18', '2025-11-25', '2025-03-26'].includes(protocol)) throw new Error('Unsupported MCP protocol version')
     await rpc('notifications/initialized', {}, true)
