@@ -25,6 +25,6 @@ test('date-only events remain visible through their date, and manual and waste r
 test('Reminders UI uses the shared integrated-calendar filter and a minute-aligned clock', () => {
   const app = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   assert.match(app, /isUpcomingIntegratedCalendarItem\(item\.source, item\.date, normalizeReminderTime\(item\.time\), today, clock\)/)
-  assert.match(app, /sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'google-calendar' && sourceFilter !== 'calendar-link' && sourceFilter !== 'spond' && sourceFilter !== 'bonnetid'/)
+  assert.match(app, /sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'google-calendar' && sourceFilter !== 'calendar-link' && sourceFilter !== 'familywall' && sourceFilter !== 'spond' && sourceFilter !== 'bonnetid'/)
   assert.match(app, /60_000 - \(Date\.now\(\) % 60_000\)/)
 })

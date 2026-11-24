@@ -100,7 +100,7 @@ export async function startFamilyWallProbe(config: ProbeConfig, fetcher: Fetcher
     const registration = trustedEndpoint(metadata.registration_endpoint, origins)
     const registered = await json(fetcher, registration, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_name: 'RE:MIND (developer test)', redirect_uris: [config.redirectUri],
+      body: JSON.stringify({ client_name: 'RE:MIND', redirect_uris: [config.redirectUri],
         grant_types: ['authorization_code'], response_types: ['code'], token_endpoint_auth_method: 'none' }),
     })
     if (registered.client_secret || (registered.token_endpoint_auth_method && registered.token_endpoint_auth_method !== 'none')) {
@@ -121,8 +121,8 @@ export async function startFamilyWallProbe(config: ProbeConfig, fetcher: Fetcher
   return { url: url.href, pending }
 }
 
-/** The token exists only for this request; never return it to the browser or persist it. */
-export async function exchangeProbeCode(pending: PendingProbe, code: string, origins: string[], fetcher: Fetcher = fetch) {
+/** Token exchange for the server-side connection. Never return tokens to the browser. */
+export async function exchangeFamilyWallCode(pending: PendingProbe, code: string, origins: string[], fetcher: Fetcher = fetch) {
   const tokenEndpoint = trustedEndpoint(pending.tokenEndpoint, [new URL(FAMILYWALL_RESOURCE).origin, ...origins])
   const tokens = await json(fetcher, tokenEndpoint, {
     method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -130,7 +130,26 @@ export async function exchangeProbeCode(pending: PendingProbe, code: string, ori
       redirect_uri: pending.redirectUri, code_verifier: pending.verifier, resource: FAMILYWALL_RESOURCE }),
   })
   if (String(tokens.token_type).toLowerCase() !== 'bearer') throw new Error('Unsupported FamilyWall token type')
-  return required(tokens.access_token)
+  return parseFamilyWallToken(tokens)
+}
+
+export type FamilyWallToken = { access_token: string; refresh_token?: string; expires_at?: number }
+function parseFamilyWallToken(tokens: Json): FamilyWallToken {
+  if (String(tokens.token_type).toLowerCase() !== 'bearer') throw new Error('Unsupported FamilyWall token type')
+  const expires = Number(tokens.expires_in)
+  return { access_token: required(tokens.access_token), ...(typeof tokens.refresh_token === 'string' && tokens.refresh_token ? { refresh_token: required(tokens.refresh_token) } : {}), ...(Number.isFinite(expires) && expires > 0 ? { expires_at: Date.now() + expires * 1000 } : {}) }
+}
+
+export async function exchangeProbeCode(pending: PendingProbe, code: string, origins: string[], fetcher: Fetcher = fetch) {
+  return (await exchangeFamilyWallCode(pending, code, origins, fetcher)).access_token
+}
+
+export async function refreshFamilyWallToken(clientId: string, endpoint: string, token: FamilyWallToken, origins: string[], fetcher: Fetcher = fetch) {
+  if (!token.refresh_token) throw new Error('Reconnect FamilyWall')
+  const url = trustedEndpoint(endpoint, [new URL(FAMILYWALL_RESOURCE).origin, ...origins])
+  const value = await json(fetcher, url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: token.refresh_token, client_id: clientId, resource: FAMILYWALL_RESOURCE }) })
+  const refreshed = parseFamilyWallToken(value)
+  return { ...refreshed, refresh_token: refreshed.refresh_token || token.refresh_token }
 }
 
 function rpcResult(text: string, contentType: string, id: number): Json {
@@ -169,7 +188,7 @@ async function withFamilyWallSession<T>(accessToken: string, fetcher: Fetcher, r
     return rpcResult(await responseText(response), response.headers.get('content-type') || '', id)
   }
   try {
-    const initialized = await rpc('initialize', { protocolVersion: PROTOCOL, capabilities: {}, clientInfo: { name: 'RE:MIND developer probe', version: '0.1.0' } })
+    const initialized = await rpc('initialize', { protocolVersion: PROTOCOL, capabilities: {}, clientInfo: { name: 'RE:MIND', version: '0.1.0' } })
     protocol = required(initialized.protocolVersion)
     if (!['2025-06-18', '2025-11-25', '2025-03-26'].includes(protocol)) throw new Error('Unsupported MCP protocol version')
     await rpc('notifications/initialized', {}, true)
@@ -279,5 +298,14 @@ export async function runFamilyWallReadProbe(accessToken: string, fetcher: Fetch
     if (id) await check('list_items', { list_id: id, include_done: false })
     else checks.push({ tool: 'list_items', status: 'skipped' })
     return checks
+  })
+}
+
+/** Import only the official calendar read operation. No mutation tool calls. */
+export async function readFamilyWallCalendar(accessToken: string, fetcher: Fetcher = fetch) {
+  return withFamilyWallSession(accessToken, fetcher, async rpc => {
+    const tools = await listFamilyWallTools(rpc)
+    if (!tools.some(tool => tool.name === 'list_events' && tool.readOnlyHint)) throw new Error('FamilyWall calendar not available')
+    return readToolValue(await rpc('tools/call', { name: 'list_events', arguments: { days: 62 } }))
   })
 }

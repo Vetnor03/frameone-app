@@ -12,7 +12,7 @@ export function isUpcomingIntegratedCalendarItem(
   todayYmd: string,
   nowHm: string,
 ) {
-  if (source !== 'teams' && source !== 'google-calendar' && source !== 'calendar-link' && source !== 'spond' && source !== 'local-events' && source !== 'bonnetid') return true
+  if (source !== 'teams' && source !== 'google-calendar' && source !== 'calendar-link' && source !== 'familywall' && source !== 'spond' && source !== 'local-events' && source !== 'bonnetid') return true
   if (date < todayYmd) return false
   if (date > todayYmd) return true
   return !time || time > nowHm

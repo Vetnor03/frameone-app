@@ -3,7 +3,7 @@ import test from 'node:test'
 import { INTEGRATION_CATALOGUE, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst } from '../app/lib/integrations/catalog.ts'
 
 test('shared integrations are ordered and expose lifecycle capabilities', () => {
-  assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'calendar-link', 'google-calendar', 'bonnetid', 'local-events', 'spond', 'waste', 'todoist', 'google-tasks', 'microsoft-todo', 'vigilo', 'transponder', 'planta'])
+  assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'calendar-link', 'google-calendar', 'bonnetid', 'local-events', 'spond', 'waste', 'todoist', 'google-tasks', 'microsoft-todo', 'vigilo', 'transponder', 'familywall', 'planta'])
   const waste = INTEGRATION_CATALOGUE.find(item => item.key === 'waste')
   assert.deepEqual({ status: waste.status, connectable: waste.connectable }, { status: 'experimental', connectable: true })
   assert.equal(waste.description.en, 'Show waste collection dates in Reminders')
@@ -14,7 +14,7 @@ test('shared integrations are ordered and expose lifecycle capabilities', () => 
   const spond = INTEGRATION_CATALOGUE.find(item => item.key === 'spond')
   assert.deepEqual({ status: spond.status, connectable: spond.connectable }, { status: 'experimental', connectable: true })
   assert.deepEqual(INTEGRATION_CATALOGUE.find(item => item.key === 'bonnetid') && (({ status, connectable }) => ({ status, connectable }))(INTEGRATION_CATALOGUE.find(item => item.key === 'bonnetid')), { status: 'available', connectable: true })
-  for (const key of ['google-tasks', 'transponder', 'planta']) {
+  for (const key of ['google-tasks', 'transponder', 'familywall', 'planta']) {
     const integration = INTEGRATION_CATALOGUE.find(item => item.key === key)
     assert.deepEqual({ status: integration.status, connectable: integration.connectable }, { status: 'under-evaluation', connectable: false })
   }
@@ -28,11 +28,11 @@ test('Connect Apps search matches names, localizations and evaluation statuses',
   const keys = (query) => INTEGRATION_CATALOGUE.filter(item => integrationMatchesSearch(item, query)).map(item => item.key)
   assert.deepEqual(keys(' PLanTa '), ['planta'])
   assert.deepEqual(keys('Renovasjon'), ['waste'])
-  assert.deepEqual(keys('calendar'), ['teams', 'calendar-link', 'google-calendar'])
+  assert.deepEqual(keys('calendar'), ['teams', 'calendar-link', 'google-calendar', 'familywall'])
   assert.deepEqual(keys('ical'), ['calendar-link'])
   assert.deepEqual(keys('iCal'), ['calendar-link'])
-  assert.deepEqual(keys('under evaluation'), ['google-tasks', 'transponder', 'planta'])
-  assert.deepEqual(keys('under vurdering'), ['google-tasks', 'transponder', 'planta'])
+  assert.deepEqual(keys('under evaluation'), ['google-tasks', 'transponder', 'familywall', 'planta'])
+  assert.deepEqual(keys('under vurdering'), ['google-tasks', 'transponder', 'familywall', 'planta'])
   assert.deepEqual(keys('not a real integration'), [])
   assert.deepEqual(keys('  '), INTEGRATION_CATALOGUE.map(item => item.key))
 })
@@ -50,7 +50,7 @@ test('Connect Apps puts connected apps first, alphabetically within each status'
     'google-calendar', 'spond', 'waste', // connected (alphabetical, regardless of status)
     'calendar-link', 'bonnetid', 'local-events', 'microsoft-todo', 'teams', 'todoist', // available
     'vigilo', // experimental
-    'google-tasks', 'planta', 'transponder', // under evaluation
+    'familywall', 'google-tasks', 'planta', 'transponder', // under evaluation
   ])
   assert.deepEqual(keys(apps), INTEGRATION_CATALOGUE.map(item => item.key), 'does not mutate the catalogue order')
 
@@ -60,7 +60,7 @@ test('Connect Apps puts connected apps first, alphabetically within each status'
     'spond', 'waste',
     'calendar-link', 'google-calendar', 'bonnetid', 'local-events', 'microsoft-todo', 'teams', 'todoist',
     'vigilo', // experimental
-    'google-tasks', 'planta', 'transponder', // under evaluation
+    'familywall', 'google-tasks', 'planta', 'transponder', // under evaluation
   ])
 })
 
@@ -72,7 +72,7 @@ test('Unconnected apps sort alphabetically with Done, Experimental and Under Eva
   assert.deepEqual(sortConnectedAppsFirst(apps).map(item => item.app.key), [
     'google-calendar', 'bonnetid', 'calendar-link', 'local-events', 'microsoft-todo', 'teams', 'todoist', // available / Done
     'waste', 'spond', 'vigilo', // experimental: Renovasjon before Spond, then Vigilo
-    'google-tasks', 'planta', 'transponder', // under evaluation
+    'familywall', 'google-tasks', 'planta', 'transponder', // under evaluation
   ])
 })
 

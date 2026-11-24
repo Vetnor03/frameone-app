@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createHash } from 'node:crypto'
-import { FAMILYWALL_RESOURCE, trustedEndpoint, startFamilyWallProbe, exchangeProbeCode, discoverFamilyWallTools, runFamilyWallReadProbe } from '../app/lib/integrations/familywall/probe.ts'
+import { FAMILYWALL_RESOURCE, trustedEndpoint, startFamilyWallProbe, exchangeProbeCode, discoverFamilyWallTools, runFamilyWallReadProbe, readFamilyWallCalendar, exchangeFamilyWallCode, refreshFamilyWallToken } from '../app/lib/integrations/familywall/probe.ts'
 
 const origin = 'https://mcp.familywall.com'
 const settings = { redirectUri: 'https://example.test/api/integrations/familywall/probe', trustedOrigins: [] }
@@ -111,4 +111,38 @@ test('FamilyWall read probe refuses tools without the read-only annotation', asy
     assert.fail('No tool should be executed')
   }
   assert.deepEqual((await runFamilyWallReadProbe('test-token',fetcher)).map(x=>x.status),['unavailable','unavailable','skipped'])
+})
+
+test('FamilyWall calendar import invokes the confirmed read-only event tool', async () => {
+  const calls=[]
+  const fetcher=async (url,init)=>{
+    const body=JSON.parse(init.body)
+    if(body.method==='initialize') return json({jsonrpc:'2.0',id:body.id,result:{protocolVersion:'2025-06-18'}})
+    if(body.method==='notifications/initialized') return new Response(null,{status:202})
+    if(body.method==='tools/list') return json({jsonrpc:'2.0',id:body.id,result:{tools:[{name:'list_events',inputSchema:{type:'object'},annotations:{readOnlyHint:true}},{name:'delete_event',inputSchema:{type:'object'},annotations:{readOnlyHint:false}}]}})
+    calls.push(body.params)
+    return json({jsonrpc:'2.0',id:body.id,result:{structuredContent:{events:[{id:'event/1',title:'Appointment',start:'2026-11-26T12:00:00+01:00'}]}}})
+  }
+  const result=await readFamilyWallCalendar('test-token',fetcher)
+  assert.equal(result.events[0].title,'Appointment')
+  assert.deepEqual(calls,[{name:'list_events',arguments:{days:62}}])
+})
+
+test('FamilyWall token exchange retains expiry and refresh token only on the server', async () => {
+  const pending={clientId:'client',tokenEndpoint:origin+'/token',redirectUri:settings.redirectUri,verifier:'verifier'}
+  const fetcher=async (url,init)=>{
+    assert.equal(url,origin+'/token')
+    assert.equal(init.body.get('client_id'),'client')
+    return json({token_type:'Bearer',access_token:'access',refresh_token:'refresh',expires_in:3600})
+  }
+  const token=await exchangeFamilyWallCode(pending,'code',[],fetcher)
+  assert.equal(token.refresh_token,'refresh')
+  assert.ok(token.expires_at>Date.now())
+  const refreshed=await refreshFamilyWallToken('client',origin+'/token',token,[],async (url,init)=>{
+    assert.equal(init.body.get('grant_type'),'refresh_token')
+    assert.equal(init.body.get('refresh_token'),'refresh')
+    return json({token_type:'Bearer',access_token:'new-access',expires_in:3600})
+  })
+  assert.equal(refreshed.access_token,'new-access')
+  assert.equal(refreshed.refresh_token,'refresh')
 })

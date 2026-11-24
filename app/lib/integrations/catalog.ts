@@ -1,6 +1,6 @@
 export type IntegrationStatus = 'available' | 'experimental' | 'under-evaluation'
 
-export type ConnectAppKey = 'waste' | 'teams' | 'google-calendar' | 'local-events' | 'spond' | 'vigilo' | 'transponder' | 'planta' | 'bonnetid' | 'todoist' | 'microsoft-todo' | 'google-tasks' | 'calendar-link'
+export type ConnectAppKey = 'waste' | 'teams' | 'google-calendar' | 'local-events' | 'spond' | 'vigilo' | 'transponder' | 'planta' | 'bonnetid' | 'todoist' | 'microsoft-todo' | 'google-tasks' | 'calendar-link' | 'familywall'
 
 export type IntegrationDefinition = {
   key: ConnectAppKey
@@ -24,6 +24,7 @@ export const INTEGRATION_CATALOGUE: readonly IntegrationDefinition[] = [
   { key: 'microsoft-todo', name: { en: 'Microsoft To Do', no: 'Microsoft To Do' }, description: { en: "Show Microsoft To Do tasks in Reminders", no: "Vis Microsoft To Do-oppgaver i Påminnelser" }, status: 'available', connectable: true },
   { key: 'vigilo', name: { en: 'Vigilo', no: 'Vigilo' }, description: { en: "School and kindergarten updates", no: "Oppdateringer fra skole og barnehage" }, status: 'experimental', connectable: false },
   { key: 'transponder', name: { en: 'Transponder', no: 'Transponder' }, description: { en: "Messages from schools and activities", no: "Meldinger fra skole og aktiviteter" }, status: 'under-evaluation', connectable: false },
+  { key: 'familywall', name: { en: 'FamilyWall', no: 'FamilyWall' }, description: { en: 'Show FamilyWall calendar events in Reminders', no: 'Vis FamilyWall-kalenderavtaler i Påminnelser' }, status: 'under-evaluation', connectable: false },
   { key: 'planta', name: { en: 'PLANTA', no: 'PLANTA' }, description: { en: "Plant care reminders", no: "Påminnelser om plantestell" }, status: 'under-evaluation', connectable: false },
 ]
 

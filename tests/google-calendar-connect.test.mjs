@@ -73,7 +73,7 @@ test('Google Calendar is wired to phone, Connect and frame Reminders', () => {
   const catalogue = readFileSync(new URL('../app/lib/integrations/catalog.ts', import.meta.url), 'utf8')
   assert.match(catalogue, /key: 'google-calendar'/)
   assert.match(app, /\/api\/integrations\/google-calendar\/connect/)
-  assert.match(app, /\.in\('provider', \[[^\]]*'google-calendar', 'calendar-link', 'todoist', 'microsoft-todo', 'google-tasks', 'waste', 'edge-of-norway'[^\]]*\]\)/)
+  assert.match(app, /\.in\('provider', \[[^\]]*'google-calendar', 'calendar-link', 'familywall', 'todoist', 'microsoft-todo', 'google-tasks', 'waste', 'edge-of-norway'[^\]]*\]\)/)
   assert.match(physical, /buildGoogleCalendarItems/)
   assert.match(physical, /syncGoogleCalendarFromStoredConnection/)
 })
