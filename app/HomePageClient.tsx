@@ -3792,6 +3792,68 @@ function integrationModulesAfterChange(modulesJson: Record<string, any>, key: Co
   return { ...modulesJson, integration_selection_explicit: true, integrations: { ...integrations, [key]: config } }
 }
 
+function OutlookCalendarSelection({ language, onSaved }: { language: AppLanguage; onSaved: (count: number) => void }) {
+  const [calendars, setCalendars] = useState<{ id: string; name: string; isDefaultCalendar: boolean }[]>([])
+  const [selected, setSelected] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [attempt, setAttempt] = useState(0)
+  const no = language === 'no'
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError('')
+    void (async () => {
+      try {
+        const token = (await supabase.auth.getSession())?.data?.session?.access_token
+        if (!token) throw new Error('Unauthorized')
+        const response = await fetch('/api/integrations/teams/calendars', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
+        if (!response.ok) throw new Error('Calendar list unavailable')
+        const data = await response.json()
+        if (active) {
+          setCalendars(data.calendars)
+          setSelected(data.selectedIds.filter((id: string) => data.calendars.some((calendar: {id: string}) => calendar.id === id)))
+        }
+      } catch {
+        if (active) setError(no ? 'Kunne ikke hente kalendere. Prøv igjen.' : 'Could not load calendars. Try again.')
+      } finally { if (active) setLoading(false) }
+    })()
+    return () => { active = false }
+  }, [attempt, no])
+  async function save() {
+    if (!selected.length || saving) return
+    setSaving(true)
+    setError('')
+    try {
+      const token = (await supabase.auth.getSession())?.data?.session?.access_token
+      if (!token) throw new Error('Unauthorized')
+      const response = await fetch('/api/integrations/teams/calendars', {
+        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ calendarIds: selected }),
+      })
+      if (!response.ok) throw new Error('Calendar selection could not be saved')
+      onSaved(selected.length)
+    } catch {
+      setError(no ? 'Kunne ikke lagre kalendervalg. Prøv igjen.' : 'Could not save calendar selection. Try again.')
+    } finally { setSaving(false) }
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-[color:var(--fg-60)]">{no ? 'Velg hvilke kalendere som skal vises i Påminnelser på dine tilkoblede rammer.' : 'Choose which calendars appear in Reminders on your connected frames.'}</p>
+      {loading ? <p role="status" className="text-sm">{no ? 'Laster kalendere…' : 'Loading calendars…'}</p> : calendars.map(calendar => (
+        <label key={calendar.id} className="flex items-center gap-3 rounded-xl border border-[color:var(--bd-15)] p-3 text-sm">
+          <input type="checkbox" checked={selected.includes(calendar.id)} disabled={saving || (!selected.includes(calendar.id) && selected.length >= 20)} onChange={event => setSelected(current => event.target.checked ? [...current, calendar.id] : current.filter(id => id !== calendar.id))} />
+          <span className="min-w-0 break-words">{calendar.name}{calendar.isDefaultCalendar && <span className="ml-2 text-xs text-[color:var(--fg-45)]">{no ? 'Standard' : 'Default'}</span>}</span>
+        </label>
+      ))}
+      {error && <p role="alert" className="text-xs text-[#ff7a7a]">{error}</p>}
+      {!loading && error && calendars.length === 0 && <button type="button" onClick={() => setAttempt(value => value + 1)} className="text-sm text-[#2aa3ff]">{no ? 'Prøv igjen' : 'Retry'}</button>}
+      <button type="button" disabled={loading || saving || !selected.length} onClick={() => void save()} className="h-11 w-full rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:opacity-40">{saving ? (no ? 'LAGRER…' : 'SAVING…') : (no ? 'LAGRE' : 'SAVE')}</button>
+    </div>
+  )
+}
+
 function ConnectAppsScreen({
   userId = null,
   language,
@@ -3835,8 +3897,8 @@ function ConnectAppsScreen({
     if (initialTodoistOAuthStatus === 'error') return initialTodoistOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Todoist' : 'Could not connect Todoist')
     if (initialGoogleOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Google Calendar-tilkobling…' : 'Finishing Google Calendar connection…'
     if (initialGoogleOAuthStatus === 'error') return initialGoogleOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Google Calendar' : 'Could not connect Google Calendar')
-    if (initialTeamsOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Teams-tilkobling…' : 'Finishing Teams connection…'
-    if (initialTeamsOAuthStatus === 'error') return initialTeamsOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Teams' : 'Could not connect Teams')
+    if (initialTeamsOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Outlook Calendar-tilkobling…' : 'Finishing Outlook Calendar connection…'
+    if (initialTeamsOAuthStatus === 'error') return initialTeamsOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Outlook Calendar' : 'Could not connect Outlook Calendar')
     return null
   })
   // Display-only cache: the server stays authoritative for connection actions.
@@ -3881,6 +3943,8 @@ function ConnectAppsScreen({
     return initiatingDeviceId === activeDeviceId && (initialTeamsOAuthStatus === 'connected' || storedResult === 'connected')
   })
   const [teamsLoading, setTeamsLoading] = useState(false)
+  const [outlookCalendarOpen, setOutlookCalendarOpen] = useState(false)
+  const [outlookCalendarCount, setOutlookCalendarCount] = useState<number | null>(null)
   const [googleConnected, setGoogleConnected] = useState(false)
   const [googleAccountConnected, setGoogleAccountConnected] = useState(false)
   const [googleAccount, setGoogleAccount] = useState<string | null>(null)
@@ -4038,7 +4102,7 @@ function ConnectAppsScreen({
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
     })
-    if (!resp.ok) { setTeamsStatusFailed(true); setTeamsConnected(false); setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere Teams-status' : 'Could not check Teams status'); return }
+    if (!resp.ok) { setTeamsStatusFailed(true); setTeamsConnected(false); setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere Outlook Calendar-status' : 'Could not check Outlook Calendar status'); return }
     const json = await resp.json()
     setTeamsStatusResolved(true)
     setTeamsStatusFailed(false)
@@ -4335,7 +4399,7 @@ function ConnectAppsScreen({
     setStatusTone('info')
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-      if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble til Teams' : 'Sign in to connect Teams')
+      if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble til Outlook Calendar' : 'Sign in to connect Outlook Calendar')
       if (!activeDeviceId) throw new Error(language === 'no' ? 'Velg en frame først' : 'Select a frame first')
       sessionStorage.setItem('remind:teams-oauth-device', activeDeviceId)
       sessionStorage.removeItem('remind:teams-oauth-result')
@@ -4348,7 +4412,7 @@ function ConnectAppsScreen({
       setTeamsLoading(false)
       trackProductEvent({ event: 'connection_failed', surface: 'settings', metadata: { provider: 'teams' } })
       setStatusTone('error')
-      setStatus(message || (language === 'no' ? 'Kunne ikke starte Teams-tilkobling' : 'Could not start Teams connection'))
+      setStatus(message || (language === 'no' ? 'Kunne ikke starte Outlook Calendar-tilkobling' : 'Could not start Outlook Calendar connection'))
     }
   }
 
@@ -4564,6 +4628,7 @@ function ConnectAppsScreen({
         setTeamsAccountConnected(false)
         changeFrameIntegration('teams', { enabled: false })
         setTeamsAccount(null)
+        setOutlookCalendarCount(null)
       } else if (provider === 'google-calendar') {
         setGoogleConnected(false)
         setGoogleAccountConnected(false)
@@ -4745,7 +4810,8 @@ function ConnectAppsScreen({
     if (modulesJson?.integration_selection_explicit !== true && legacyIntegrationDiscoveryPending) return
     setTeamsConnected(true)
     setStatusTone('success')
-    setStatus(language === 'no' ? 'Teams er tilkoblet' : 'Teams connected')
+    setStatus(language === 'no' ? 'Outlook Calendar er tilkoblet' : 'Outlook Calendar connected')
+    setOutlookCalendarOpen(true)
     changeFrameIntegration('teams', { enabled: true })
     sessionStorage.removeItem('remind:teams-oauth-device')
     sessionStorage.removeItem('remind:teams-oauth-result')
@@ -5019,6 +5085,8 @@ function ConnectAppsScreen({
                 ? (language === 'no'
                   ? `${calendarLinkFeeds.length} ${calendarLinkFeeds.length === 1 ? 'kalender' : 'kalendere'}`
                   : `${calendarLinkFeeds.length} ${calendarLinkFeeds.length === 1 ? 'calendar' : 'calendars'}`)
+              : app.key === 'teams' && outlookCalendarCount !== null
+                ? (language === 'no' ? `${outlookCalendarCount} valgte kalendere` : `${outlookCalendarCount} selected calendars`)
               : app.key === 'local-events' && localEventsSyncIssue
                 ? (language === 'no' ? `Synkronisering venter: ${localEventsSyncIssue}` : `Sync pending: ${localEventsSyncIssue}`)
               : app.key === 'local-events' && localEventsSelectedName
@@ -5074,6 +5142,15 @@ function ConnectAppsScreen({
                       >
                         {language === 'no' ? 'FJERN' : 'REMOVE'}
                       </button>
+                    ) : app.key === 'teams' ? (
+                      <>
+                        <button type="button" onClick={() => setOutlookCalendarOpen(true)} disabled={waitingForVerification || teamsLoading} className={connectActionClass}>
+                          {language === 'no' ? 'ENDRE' : 'EDIT'}
+                        </button>
+                        <button type="button" onClick={() => setDisconnectConfirmApp('teams')} disabled={waitingForVerification || teamsLoading || disconnectingApp === 'teams'} className={disconnectActionClass}>
+                          {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
+                        </button>
+                      </>
                     ) : app.key === 'calendar-link' ? (
                       <>
                         <button type="button" onClick={() => setCalendarLinkOpen(true)} disabled={disconnectingApp === 'calendar-link' || waitingForVerification} className={connectActionClass}>
@@ -5134,7 +5211,7 @@ function ConnectAppsScreen({
                             setStatus(setupError)
                           } else setSpondModalOpen(true)
                         } else if (app.key === 'teams') {
-                          if (teamsAccountConnected) { setTeamsConnected(true); changeFrameIntegration('teams', { enabled: true }) } else connectTeams()
+                          if (teamsAccountConnected) { setTeamsConnected(true); changeFrameIntegration('teams', { enabled: true }); setOutlookCalendarOpen(true) } else connectTeams()
                         } else if (app.key === 'google-calendar') {
                           if (googleAccountConnected) { setGoogleConnected(true); changeFrameIntegration('google-calendar', { enabled: true }) }
                           else void connectGoogleCalendar()
@@ -5265,6 +5342,15 @@ function ConnectAppsScreen({
       )}
 
 
+      {outlookCalendarOpen && (
+        <AppSheet title="Outlook Calendar" onClose={() => setOutlookCalendarOpen(false)}>
+          <OutlookCalendarSelection language={language} onSaved={(count) => {
+            setOutlookCalendarCount(count)
+            setOutlookCalendarOpen(false)
+            window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
+          }} />
+        </AppSheet>
+      )}
       {calendarLinkOpen && (
         <AppSheet title={language === 'no' ? 'Kalenderlenke' : 'Calendar Link'}
           onClose={() => setCalendarLinkOpen(false)} dismissible>
