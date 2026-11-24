@@ -19,6 +19,7 @@ const ICONS: Record<ConnectAppKey, { background: string; viewBox: string; path: 
   "microsoft-todo": { background: "#2564CF", viewBox: "0 0 24 24", path: "M0.41,13.41L6,19L7.41,17.58L1.83,12M22.24,5.58L11.66,16.17L7.5,12L6.07,13.41L11.66,19L23.66,7M18,7L16.59,5.58L10.24,11.93L11.66,13.34L18,7Z" },
   "vigilo": { background: "#5B6E8E", viewBox: "0 0 24 24", path: "M12,3L1,9L12,15L21,10.09V17H23V9M5,13.18V17.18L12,21L19,17.18V13.18L12,17L5,13.18Z" },
   "transponder": { background: "#655D8A", viewBox: "0 0 24 24", path: "M20,2H4A2,2 0 0,0 2,4V22L6,18H20A2,2 0 0,0 22,16V4A2,2 0 0,0 20,2M6,9H18V11H6M14,14H6V12H14M18,8H6V6H18" },
+  "familywall": { background: "#527DDA", viewBox: "0 0 24 24", path: "M12 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM5 6a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Zm14 0a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5ZM7 20v-5a5 5 0 0 1 10 0v5H7ZM2 19v-4a3 3 0 0 1 4-2.8V19H2Zm16 0v-6.8a3 3 0 0 1 4 2.8v4h-4Z" },
   "planta": { background: "#498065", viewBox: "0 0 24 24", path: "M17,8C8,10 5.9,16.17 3.82,21.34L5.71,22L6.66,19.7C7.14,19.87 7.64,20 8,20C19,20 22,3 22,3C21,5 14,5.25 9,6.25C4,7.25 2,11.5 2,13.5C2,15.5 3.75,17.25 3.75,17.25C7,8 17,8 17,8Z" },
 }
 
