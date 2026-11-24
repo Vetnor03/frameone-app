@@ -1,12 +1,12 @@
 import { decryptJson, encryptJson } from '@/app/lib/integrations/credentialsCrypto'
 import { getAuthenticatedUserId, getBearerToken, getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
 import {
-  fetchMicrosoftCalendarView,
+  fetchMicrosoftCalendars,
+  fetchSelectedMicrosoftCalendarEvents,
   fetchMicrosoftProfile,
   refreshMicrosoftToken,
   type TeamsMeeting,
   type TeamsStoredCredentials,
-  type TeamsTokenSet,
 } from './client'
 import { isTeamsMeetingVisibleAt } from './visibility'
 import { integrationSyncDelta } from '../integrationSyncDelta'
@@ -139,14 +139,14 @@ async function refreshIfNeeded(userId: string, credentials: TeamsStoredCredentia
   return next
 }
 
-export async function syncTeamsForUser(userId: string, tokenSet: TeamsTokenSet, timeZone: string, options: { horizonDays?: number } = {}) {
+export async function syncTeamsForUser(userId: string, tokenSet: TeamsStoredCredentials, timeZone: string, options: { horizonDays?: number } = {}) {
   const supabase = getSupabaseAdmin()
   const safeTimeZone = normalizeTimeZone(timeZone)
   const credentials: TeamsStoredCredentials = { ...tokenSet, time_zone: safeTimeZone }
   const profile = await fetchMicrosoftProfile(credentials.access_token)
   const horizonDays = options.horizonDays ?? DEFAULT_TEAMS_CALENDAR_HORIZON_DAYS
   const { startIso, endIso } = calendarUtcRange(safeTimeZone, horizonDays)
-  const meetings = await fetchMicrosoftCalendarView(credentials.access_token, startIso, endIso)
+  const meetings = await fetchSelectedMicrosoftCalendarEvents(credentials.access_token, startIso, endIso, credentials.calendar_ids)
   const now = new Date().toISOString()
 
   const rows = meetings.map((meeting) => ({
@@ -302,4 +302,34 @@ export async function getTeamsMeetingsForUser(userId: string, shouldSync = true,
 
 export function bearerOrQueryAccessToken(req: Request) {
   return getBearerToken(req) || new URL(req.url).searchParams.get('access_token') || ''
+}
+
+async function getOutlookCalendarCredentials(userId: string) {
+  const { data, error } = await getSupabaseAdmin().from('user_integrations')
+    .select('encrypted_credentials,status').eq('user_id', userId).eq('provider', TEAMS_PROVIDER).maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data || data.status !== 'connected') return null
+  return refreshIfNeeded(userId, decryptJson<TeamsStoredCredentials>(data.encrypted_credentials))
+}
+
+export async function getOutlookCalendarSelection(userId: string) {
+  const credentials = await getOutlookCalendarCredentials(userId)
+  if (!credentials) return null
+  const calendars = await fetchMicrosoftCalendars(credentials.access_token)
+  const selectedIds = credentials.calendar_ids ?? calendars.filter(calendar => calendar.isDefaultCalendar).map(calendar => calendar.id)
+  return { calendars, selectedIds }
+}
+
+export async function saveOutlookCalendarSelection(userId: string, ids: string[]) {
+  const credentials = await getOutlookCalendarCredentials(userId)
+  if (!credentials) return null
+  const calendars = await fetchMicrosoftCalendars(credentials.access_token)
+  const selectedIds = [...new Set(ids)]
+  if (!selectedIds.length || selectedIds.length > 20 || selectedIds.some(id => !calendars.some(calendar => calendar.id === id))) {
+    return { invalid: true as const }
+  }
+  // Fetch every chosen calendar successfully before reconciling the cached events.
+  // The persisted selection lives in the existing encrypted provider credentials.
+  await syncTeamsForUser(userId, { ...credentials, calendar_ids: selectedIds }, credentials.time_zone || DEFAULT_TZ)
+  return { calendars, selectedIds }
 }
