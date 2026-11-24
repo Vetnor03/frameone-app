@@ -36,7 +36,6 @@ const BonnetidSetupModal = dynamic(() => import('./components/BonnetidSetupModal
 const CalendarLinkSetup = dynamic(() => import('./components/CalendarLinkSetup'))
 const IntegrationRequestCard = dynamic(() => import('./components/IntegrationRequestCard'))
 import ConnectAppLogo from './components/ConnectAppLogo'
-import FamilyWallConnectCard, { matchesFamilyWallSearch } from './components/FamilyWallConnectCard'
 import AppSheet, { AppSheetVisibilityContext } from './components/AppSheet'
 import { StartupSplash } from './components/StartupSplash'
 const NewsModuleSettingsTab = dynamic(() => import('./components/NewsModuleSettingsTab'))
@@ -3765,7 +3764,7 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'google-tasks' | 'todoist' | 'microsoft-todo' | 'waste' | 'bonnetid' | 'calendar-link' | 'local-events'
+type DisconnectableConnectAppKey = 'spond' | 'teams' | 'google-calendar' | 'google-tasks' | 'todoist' | 'microsoft-todo' | 'waste' | 'bonnetid' | 'calendar-link' | 'local-events' | 'familywall'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -3987,6 +3986,14 @@ function ConnectAppsScreen({
     return sessionStorage.getItem('remind:google-tasks-oauth-device') === activeDeviceId &&
       (initialGoogleTasksOAuthStatus === 'connected' || sessionStorage.getItem('remind:google-tasks-oauth-result') === 'connected')
   })
+  const [familyWallEligible, setFamilyWallEligible] = useState(false)
+  const [familyWallConnected, setFamilyWallConnected] = useState(false)
+  const [familyWallLoading, setFamilyWallLoading] = useState(false)
+  const [familyWallStatusResolved, setFamilyWallStatusResolved] = useState(false)
+  const [pendingFamilyWallEnable, setPendingFamilyWallEnable] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return new URLSearchParams(window.location.search).get('familywall') === 'connected' || sessionStorage.getItem('remind:familywall-oauth-result') === 'connected'
+  })
   const [calendarLinkOpen, setCalendarLinkOpen] = useState(false)
   const [calendarLinkFeeds, setCalendarLinkFeeds] = useState<Array<{ id: string; label: string }>>([])
   const [calendarLinkConnected, setCalendarLinkConnected] = useState(false)
@@ -4207,6 +4214,39 @@ function ConnectAppsScreen({
     }))
   }
 
+  async function fetchFamilyWallStatus() {
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token
+      if (!token) return
+      const response = await fetch('/api/integrations/familywall/probe?mode=status', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' })
+      if (!response.ok) return
+      const json = await response.json()
+      setFamilyWallEligible(json.eligible === true)
+      setFamilyWallConnected(json.connected === true)
+      updateConnectionDisplayStatus('familywall', json.connected === true)
+    } finally { setFamilyWallStatusResolved(true) }
+  }
+
+  async function connectFamilyWall() {
+    if (familyWallLoading || !familyWallEligible) return
+    setFamilyWallLoading(true)
+    setStatus(null)
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token
+      if (!token || !activeDeviceId) throw new Error()
+      sessionStorage.setItem('remind:familywall-oauth-device', activeDeviceId)
+      sessionStorage.removeItem('remind:familywall-oauth-result')
+      const response = await fetch('/api/integrations/familywall/probe', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' })
+      const json = await response.json()
+      if (!response.ok || typeof json.url !== 'string' || new URL(json.url).protocol !== 'https:') throw new Error()
+      window.location.assign(json.url)
+    } catch {
+      setFamilyWallLoading(false)
+      setStatusTone('error')
+      setStatus(language === 'no' ? 'Kunne ikke koble til FamilyWall. Prøv igjen.' : 'Could not connect FamilyWall. Try again.')
+    }
+  }
+
   async function fetchCalendarLinkStatus() {
     const token = (await supabase.auth.getSession())?.data?.session?.access_token || ''
     if (!token) {
@@ -4240,6 +4280,7 @@ function ConnectAppsScreen({
       ...(teamsAccountConnected ? ['teams' as const] : []),
       ...(googleAccountConnected ? ['google-calendar' as const] : []),
       ...(calendarLinkConnected && frameUsesIntegration(modulesJson, 'calendar-link') ? ['calendar-link' as const] : []),
+      ...(familyWallConnected && frameUsesIntegration(modulesJson, 'familywall') ? ['familywall' as const] : []),
       ...(todoistAccountConnected && frameUsesIntegration(modulesJson, 'todoist') ? ['todoist' as const] : []),
       ...(microsoftTodoAccountConnected && frameUsesIntegration(modulesJson, 'microsoft-todo') ? ['microsoft-todo' as const] : []),
       ...(googleTasksAccountConnected && frameUsesIntegration(modulesJson, 'google-tasks') ? ['google-tasks' as const] : []),
@@ -4617,7 +4658,7 @@ function ConnectAppsScreen({
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
       if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble fra appen' : 'Sign in to disconnect this app')
-      const resp = await fetch(`/api/integrations/${provider}/disconnect`, {
+      const resp = await fetch(provider === 'familywall' ? '/api/integrations/familywall/probe?mode=disconnect' : `/api/integrations/${provider}/disconnect`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
       })
@@ -4633,6 +4674,10 @@ function ConnectAppsScreen({
         setGoogleAccountConnected(false)
         changeFrameIntegration('google-calendar', { enabled: false })
         setGoogleAccount(null)
+      } else if (provider === 'familywall') {
+        setFamilyWallConnected(false)
+        changeFrameIntegration('familywall', { enabled: false })
+        window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
       } else if (provider === 'calendar-link') {
         setCalendarLinkConnected(false)
         setCalendarLinkFeeds([])
@@ -4694,7 +4739,18 @@ function ConnectAppsScreen({
       if (results[5].status === 'rejected') { setGoogleTasksStatusFailed(true); setGoogleTasksStatusResolved(true) }
       if (results[6].status === 'rejected') { setCalendarLinkStatusFailed(true); setCalendarLinkStatusResolved(true) }
     })
+    void fetchFamilyWallStatus().catch(() => setFamilyWallStatusResolved(true))
     const params = new URLSearchParams(window.location.search)
+    if (params.get('familywall') === 'connected') {
+      sessionStorage.setItem('remind:familywall-oauth-result', 'connected')
+      setPendingFamilyWallEnable(true)
+    } else if (params.get('familywall') === 'error') {
+      sessionStorage.removeItem('remind:familywall-oauth-result')
+      sessionStorage.removeItem('remind:familywall-oauth-device')
+      setPendingFamilyWallEnable(false)
+      setStatusTone('error')
+      setStatus(language === 'no' ? 'Kunne ikke koble til FamilyWall. Prøv igjen.' : 'Could not connect FamilyWall. Try again.')
+    }
     if (initialTeamsOAuthStatus === 'connected') {
       sessionStorage.setItem('remind:teams-oauth-result', 'connected')
     } else if (initialTeamsOAuthStatus === 'error') {
@@ -4730,7 +4786,7 @@ function ConnectAppsScreen({
       sessionStorage.removeItem('remind:microsoft-todo-oauth-device')
       setPendingMicrosoftTodoEnableAfterOAuth(false)
     }
-    if (params.has('teams') || params.has('google_calendar') || params.has('todoist') || params.has('microsoft_todo') || params.has('google_tasks')) window.history.replaceState({}, '', window.location.pathname)
+    if (params.has('teams') || params.has('google_calendar') || params.has('todoist') || params.has('microsoft_todo') || params.has('google_tasks') || params.has('familywall')) window.history.replaceState({}, '', window.location.pathname)
     // Run OAuth callback handling once: functions and URL state intentionally reflect the initial page load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -4892,7 +4948,21 @@ function ConnectAppsScreen({
       setLocalEventsStatusFailed(true)
     })
   }, [activeDeviceId])
-  const apps = INTEGRATION_CATALOGUE.map(definition => definition.key === 'google-tasks' && googleTasksEligible
+  useEffect(() => {
+    if (!pendingFamilyWallEnable || !familyWallStatusResolved || !familyWallConnected || !familyWallEligible || !activeDeviceId || !frameSettingsReady) return
+    if (sessionStorage.getItem('remind:familywall-oauth-device') !== activeDeviceId) return
+    if (legacyIntegrationDiscoveryPending) return
+    changeFrameIntegration('familywall', { enabled: true })
+    updateConnectionDisplayStatus('familywall', true)
+    sessionStorage.removeItem('remind:familywall-oauth-device')
+    sessionStorage.removeItem('remind:familywall-oauth-result')
+    setPendingFamilyWallEnable(false)
+    window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
+    // One-time completion, following the existing OAuth activation pattern.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingFamilyWallEnable, familyWallStatusResolved, familyWallConnected, familyWallEligible, activeDeviceId, frameSettingsReady, legacyIntegrationDiscoveryPending])
+
+  const apps = INTEGRATION_CATALOGUE.map(definition => (definition.key === 'google-tasks' && googleTasksEligible) || (definition.key === 'familywall' && familyWallEligible)
       ? { ...definition, connectable: true, status: 'available' as const } : definition)
     .filter(definition => !startup || (definition.connectable && (definition.status === 'available' || definition.key === 'spond')))
     .filter(definition => startup || integrationMatchesSearch(definition, connectSearch))
@@ -4909,6 +4979,7 @@ function ConnectAppsScreen({
       : app.key === 'teams' ? teamsAccountConnected
       : app.key === 'google-calendar' ? googleAccountConnected
       : app.key === 'calendar-link' ? calendarLinkConnected
+      : app.key === 'familywall' ? familyWallConnected
       : app.key === 'todoist' ? todoistAccountConnected
       : app.key === 'microsoft-todo' ? microsoftTodoAccountConnected
       : app.key === 'google-tasks' ? googleTasksAccountConnected && googleTasksEligible
@@ -5054,7 +5125,7 @@ function ConnectAppsScreen({
 
         <div className={`${startup ? '' : 'mt-4'} space-y-2.5`}>
 
-          {!startup && connectSearch.trim() && sortedApps.length === 0 && !matchesFamilyWallSearch(connectSearch) && (
+          {!startup && connectSearch.trim() && sortedApps.length === 0 && (
             <div role="status" className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-6 text-center">
               <p className="text-sm font-medium text-[color:var(--fg-90)]">{language === 'no' ? 'Ingen apper funnet' : 'No matching apps'}</p>
               <p className="mt-1 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Prøv et annet søk, eller foreslå en integrasjon nedenfor.' : 'Try another search, or request an integration below.'}</p>
@@ -5091,7 +5162,7 @@ function ConnectAppsScreen({
               : app.key === 'bonnetid' && bonnetidCity
                 ? (language === 'no' ? `Sted: ${bonnetidCity}` : `Location: ${bonnetidCity}`)
               : null
-            const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar' || app.key === 'calendar-link' || app.key === 'todoist' || app.key === 'microsoft-todo' || app.key === 'google-tasks'
+            const credentialProvider = app.key === 'spond' || app.key === 'teams' || app.key === 'google-calendar' || app.key === 'calendar-link' || app.key === 'todoist' || app.key === 'microsoft-todo' || app.key === 'google-tasks' || app.key === 'familywall'
             const accountLabel = app.key === 'spond' ? spondAccount : app.key === 'teams' ? teamsAccount : app.key === 'google-calendar' ? googleAccount : app.key === 'todoist' ? todoistAccount : app.key === 'microsoft-todo' ? microsoftTodoAccount : app.key === 'google-tasks' ? googleTasksAccount : null
             const googleTasksMissingAccount = connected && app.key === 'google-tasks' && googleTasksStatusResolved && !googleTasksStatusFailed && !googleTasksAccount
             return (
@@ -5199,7 +5270,7 @@ function ConnectAppsScreen({
                   ) : (
                     <button
                       type="button"
-                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved) || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved)) || (app.key === 'todoist' && (todoistLoading || !todoistStatusResolved)) || (app.key === 'microsoft-todo' && (microsoftTodoLoading || !microsoftTodoStatusResolved)) || (app.key === 'google-tasks' && (googleTasksLoading || !googleTasksStatusResolved)) || (app.key === 'calendar-link' && !calendarLinkStatusResolved)}
+                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved) || (app.key === 'teams' && (teamsLoading || !teamsStatusResolved)) || (app.key === 'google-calendar' && (googleLoading || !googleStatusResolved)) || (app.key === 'todoist' && (todoistLoading || !todoistStatusResolved)) || (app.key === 'microsoft-todo' && (microsoftTodoLoading || !microsoftTodoStatusResolved)) || (app.key === 'google-tasks' && (googleTasksLoading || !googleTasksStatusResolved)) || (app.key === 'calendar-link' && !calendarLinkStatusResolved) || (app.key === 'familywall' && (!familyWallStatusResolved || familyWallLoading))}
                       onClick={() => {
                         if (app.key === 'spond') {
                           if (spondAccountConnected) { setSpondConnected(true); changeFrameIntegration('spond', { enabled: true }) }
@@ -5212,6 +5283,9 @@ function ConnectAppsScreen({
                         } else if (app.key === 'google-calendar') {
                           if (googleAccountConnected) { setGoogleConnected(true); changeFrameIntegration('google-calendar', { enabled: true }) }
                           else void connectGoogleCalendar()
+                        } else if (app.key === 'familywall') {
+                          if (familyWallConnected) { changeFrameIntegration('familywall', { enabled: true }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }
+                          else void connectFamilyWall()
                         } else if (app.key === 'calendar-link') {
                           setCalendarLinkOpen(true)
                         } else if (app.key === 'google-tasks') {
@@ -5247,7 +5321,7 @@ function ConnectAppsScreen({
                         ? (language === 'no' ? 'KOBLE TIL' : 'CONNECT')
                         : (app.key === 'google-calendar' && !googleStatusResolved) || (app.key === 'teams' && !teamsStatusResolved) || (app.key === 'waste' && !wasteStatusResolved) || (app.key === 'bonnetid' && !bonnetidStatusResolved) || (app.key === 'todoist' && !todoistStatusResolved) || (app.key === 'microsoft-todo' && !microsoftTodoStatusResolved)
                           ? (language === 'no' ? 'SJEKKER…' : 'CHECKING…')
-                          : ((app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading) || (app.key === 'todoist' && todoistLoading) || (app.key === 'microsoft-todo' && microsoftTodoLoading))
+                          : ((app.key === 'teams' && teamsLoading) || (app.key === 'google-calendar' && googleLoading) || (app.key === 'todoist' && todoistLoading) || (app.key === 'microsoft-todo' && microsoftTodoLoading) || (app.key === 'familywall' && familyWallLoading))
                             ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…')
                             : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
                     </button>
@@ -5257,7 +5331,6 @@ function ConnectAppsScreen({
               </div>
             )
           })}
-          {!startup && !showConnectPlaceholders && matchesFamilyWallSearch(connectSearch) && <FamilyWallConnectCard language={language} userId={userId} />}
         </div>
 
         {!startup && <IntegrationRequestCard language={language} />}
@@ -11911,7 +11984,7 @@ type ReminderRepeatKey =
   | 'custom'
 
 type ReminderTag = 'work' | 'personal' | 'sports' | 'chores' | 'event'
-type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'calendar-link' | 'todoist' | 'microsoft-todo' | 'google-tasks' | 'waste' | 'local-events' | 'bonnetid'
+type ReminderSource = 'remind' | 'spond' | 'teams' | 'google-calendar' | 'calendar-link' | 'todoist' | 'microsoft-todo' | 'google-tasks' | 'waste' | 'local-events' | 'bonnetid' | 'familywall'
 type ReminderSourceFilter = ReminderSource
 
 type ReminderUiItem = {
@@ -12015,7 +12088,7 @@ function isReminderTag(v: any): v is ReminderTag {
 function integrationProviderToReminderSource(provider: any): ReminderSource | null {
   const value = String(provider ?? '').trim().toLowerCase()
   if (value === 'edge-of-norway') return 'local-events'
-  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'calendar-link' || value === 'todoist' || value === 'microsoft-todo' || value === 'google-tasks' || value === 'waste' || value === 'bonnetid') return value
+  if (value === 'spond' || value === 'teams' || value === 'google-calendar' || value === 'calendar-link' || value === 'familywall' || value === 'todoist' || value === 'microsoft-todo' || value === 'google-tasks' || value === 'waste' || value === 'bonnetid') return value
   return null
 }
 
@@ -12051,7 +12124,7 @@ function integrationReminderTitle(row: any, source: ReminderSource, language: Ap
 
 function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
   if (source === 'teams') return 'work'
-  if (source === 'google-calendar' || source === 'calendar-link') return 'event'
+  if (source === 'google-calendar' || source === 'calendar-link' || source === 'familywall') return 'event'
   if (source === 'todoist' || source === 'microsoft-todo' || source === 'google-tasks') return 'personal'
   if (source === 'spond') return 'sports'
   if (source === 'waste') return 'chores'
@@ -12064,6 +12137,7 @@ function integrationReminderSourceLabel(language: AppLanguage, source?: Reminder
   if (source === 'teams') return 'Teams'
   if (source === 'google-calendar') return 'Google Calendar'
   if (source === 'calendar-link') return language === 'no' ? 'Kalenderlenke' : 'Calendar Link'
+  if (source === 'familywall') return 'FamilyWall'
   if (source === 'todoist') return 'Todoist'
   if (source === 'microsoft-todo') return 'Microsoft To Do'
   if (source === 'google-tasks') return 'Google Tasks'
@@ -15975,7 +16049,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           const source = integrationProviderToReminderSource(connection.provider)
           if (source) connectedSources.add(source)
         }
-        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'calendar-link', 'todoist', 'microsoft-todo', 'google-tasks', 'spond', 'local-events', 'waste', 'bonnetid'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
+        nextAvailableSources = ['remind', 'teams', 'google-calendar', 'calendar-link', 'familywall', 'todoist', 'microsoft-todo', 'google-tasks', 'spond', 'local-events', 'waste', 'bonnetid'].filter((source) => connectedSources.has(source as ReminderSourceFilter) && (source !== 'waste' || integrationActiveForPilot('waste'))) as ReminderSourceFilter[]
         // Provider chips do not depend on potentially slow upstream event refreshes.
         if (generation !== requestGenerationRef.current) return
         setAvailableSources(nextAvailableSources)
@@ -16011,6 +16085,13 @@ const manualItems: ReminderUiItem[] = (data || [])
           } catch (error) {
             console.warn('[reminders] Google Calendar refresh failed', error)
           }
+        }
+
+        if (isActive && !skipProviderSync && connectedSources.has('familywall')) {
+          try {
+            const token = (await supabase.auth.getSession()).data.session?.access_token
+            if (token) await fetch('/api/integrations/familywall/probe?mode=sync', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' })
+          } catch { /* Keep the last successful FamilyWall snapshot. */ }
         }
 
         if (isActive && !skipProviderSync && connectedSources.has('calendar-link')) {
@@ -16098,9 +16179,9 @@ const manualItems: ReminderUiItem[] = (data || [])
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
-          .in('provider', ['spond', 'teams', 'google-calendar', 'calendar-link', 'todoist', 'microsoft-todo', 'google-tasks', 'waste', 'edge-of-norway', 'bonnetid'])
+          .in('provider', ['spond', 'teams', 'google-calendar', 'calendar-link', 'familywall', 'todoist', 'microsoft-todo', 'google-tasks', 'waste', 'edge-of-norway', 'bonnetid'])
           .or(activeDeviceId ? `user_id.eq.${sessionUserId},device_id.eq.${activeDeviceId}` : `user_id.eq.${sessionUserId}`)
-          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.bonnetid,provider.eq.todoist,provider.eq.microsoft-todo,provider.eq.google-tasks`)
+          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso},provider.eq.waste,provider.eq.bonnetid,provider.eq.todoist,provider.eq.microsoft-todo,provider.eq.google-tasks,provider.eq.familywall`)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (integrationError) {
@@ -16118,6 +16199,7 @@ const manualItems: ReminderUiItem[] = (data || [])
             : { data: null }
           const selectedLocalEventArea = String(((localEventsIntegrationData?.encrypted_credentials as any)?.areaPreference?.primaryPlaceId) || '').trim()
           const visibleIntegrationData = (integrationData || []).filter((row) =>
+            (row.provider !== 'familywall' || (connectedSources.has('familywall') && row.raw?.type === 'event')) &&
             (String(row.provider || '') !== 'waste' || (integrationActiveForPilot('waste') && String(row.raw?.collection_date || row.raw?.date || '') >= todayYmd)) &&
             (String(row.provider || '') !== 'edge-of-norway' || !selectedLocalEventArea || (Array.isArray(row.raw?.areaKeys) ? row.raw.areaKeys.includes(selectedLocalEventArea) : String(row.raw?.areaKey || row.raw?.primaryPlaceId || '').trim() === selectedLocalEventArea)))
           const localEventExternalIds = visibleIntegrationData
@@ -16224,7 +16306,7 @@ const manualItems: ReminderUiItem[] = (data || [])
   // Keep all timed integration filters current at the exact minute boundary.
   // This timer updates the phone UI only; it does not trigger any API polling.
   useEffect(() => {
-    if (sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'google-calendar' && sourceFilter !== 'calendar-link' && sourceFilter !== 'spond' && sourceFilter !== 'bonnetid') return
+    if (sourceFilter !== 'local-events' && sourceFilter !== 'teams' && sourceFilter !== 'google-calendar' && sourceFilter !== 'calendar-link' && sourceFilter !== 'familywall' && sourceFilter !== 'spond' && sourceFilter !== 'bonnetid') return
     setEventNowMs(Date.now())
     let interval: number | undefined
     const delayUntilNextMinute = 60_000 - (Date.now() % 60_000) + 50
