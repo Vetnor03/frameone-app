@@ -41,7 +41,7 @@ test('Skipping is explicit and setup waits for provider discovery and OAuth retu
 
 test('Onboarding offers working integrations plus experimental Spond, but hides unavailable providers', () => {
   const catalogue = readFileSync(new URL('../app/lib/integrations/catalog.ts', import.meta.url), 'utf8')
-  assert.match(source, /INTEGRATION_CATALOGUE\.map\(definition => definition\.key === 'google-tasks' && googleTasksEligible[\s\S]*?\.filter\(definition => !startup \|\| \(definition\.connectable && \(definition\.status === 'available' \|\| definition\.key === 'spond'\)\)\)/)
+  assert.match(source, /INTEGRATION_CATALOGUE\.map\(definition => \(definition\.key === 'google-tasks' && googleTasksEligible\) \|\| \(definition\.key === 'familywall' && familyWallEligible\)[\s\S]*?\.filter\(definition => !startup \|\| \(definition\.connectable && \(definition\.status === 'available' \|\| definition\.key === 'spond'\)\)\)/)
   assert.match(catalogue, /key: 'spond'[^\n]*status: 'experimental', connectable: true/)
   assert.match(source, /app\.status === 'experimental' && app\.connectable && <span/)
   assert.match(source, /\.\.\.dynamicTabs,\s*\{ key: 'connect'/)
