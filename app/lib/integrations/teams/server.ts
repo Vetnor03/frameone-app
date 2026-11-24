@@ -123,24 +123,28 @@ export function parseTeamsOAuthState(raw: string) {
   return { ...state, time_zone: normalizeTimeZone(state.time_zone) }
 }
 
-async function refreshIfNeeded(userId: string, credentials: TeamsStoredCredentials) {
+async function refreshIfNeeded(credentials: TeamsStoredCredentials) {
   const expiresAt = new Date(credentials.expires_at).getTime()
   if (Number.isFinite(expiresAt) && expiresAt - Date.now() > 2 * 60 * 1000) return credentials
-
-  const refreshed = await refreshMicrosoftToken(credentials)
-  const next = { ...credentials, ...refreshed }
-  const supabase = getSupabaseAdmin()
-  const { error } = await supabase
-    .from('user_integrations')
-    .update({ encrypted_credentials: encryptJson(next), updated_at: new Date().toISOString(), last_error: null })
-    .eq('user_id', userId)
-    .eq('provider', TEAMS_PROVIDER)
-  if (error) throw new Error(error.message)
-  return next
+  // Never persist a refreshed token over a concurrently changed selection.
+  return { ...credentials, ...await refreshMicrosoftToken(credentials) }
 }
 
-export async function syncTeamsForUser(userId: string, tokenSet: TeamsStoredCredentials, timeZone: string, options: { horizonDays?: number } = {}) {
+class OutlookCalendarSyncConflict extends Error {
+  constructor() { super('Outlook calendar connection changed during sync; retry the operation') }
+}
+
+async function readTeamsConnectionRevision(userId: string): Promise<string | null> {
+  const { data, error } = await getSupabaseAdmin().from('user_integrations')
+    .select('updated_at').eq('user_id', userId).eq('provider', TEAMS_PROVIDER).maybeSingle()
+  if (error) throw new Error(error.message)
+  return data?.updated_at ?? null
+}
+
+export async function syncTeamsForUser(userId: string, tokenSet: TeamsStoredCredentials, timeZone: string, options: { horizonDays?: number; expectedRevision?: string | null } = {}) {
   const supabase = getSupabaseAdmin()
+  // Capture the version before contacting Graph, including first connection.
+  const expectedRevision = options.expectedRevision === undefined ? await readTeamsConnectionRevision(userId) : options.expectedRevision
   const safeTimeZone = normalizeTimeZone(timeZone)
   const credentials: TeamsStoredCredentials = { ...tokenSet, time_zone: safeTimeZone }
   const profile = await fetchMicrosoftProfile(credentials.access_token)
@@ -169,55 +173,43 @@ export async function syncTeamsForUser(userId: string, tokenSet: TeamsStoredCred
 
   // Never delete/reinsert unchanged meetings. Integration rows trigger a
   // physical-frame revision for every write, even when the meeting is identical.
-  const { data: existing, error: existingError } = await supabase
-    .from('integration_items')
-    .select('external_id,title,body,starts_at,due_at,priority,raw')
-    .eq('user_id', userId)
-    .eq('provider', TEAMS_PROVIDER)
-    .limit(5000)
-  if (existingError) throw new Error(existingError.message)
-  if ((existing || []).length >= 5000) throw new Error('Teams calendar cache exceeds safe sync limit')
-  const { changed, obsoleteIds } = integrationSyncDelta(rows, existing || [])
-
-  for (let i = 0; i < obsoleteIds.length; i += 200) {
-    const { error: deleteError } = await supabase.from('integration_items')
-      .delete().eq('user_id', userId).eq('provider', TEAMS_PROVIDER)
-      .in('external_id', obsoleteIds.slice(i, i + 200))
-    if (deleteError) throw new Error(deleteError.message)
+  const existing = []
+  // PostgREST's per-request row limit can be below our sync safety limit.
+  for (let offset = 0; offset < 5000; offset += 500) {
+    const { data, error } = await supabase.from('integration_items')
+      .select('external_id,title,body,starts_at,due_at,priority,raw')
+      .eq('user_id', userId).eq('provider', TEAMS_PROVIDER)
+      .order('external_id', { ascending: true }).range(offset, offset + 499)
+    if (error) throw new Error(error.message)
+    existing.push(...(data || []))
+    if ((data || []).length < 500) break
   }
-
-  for (let i = 0; i < changed.length; i += 200) {
-    const { error: upsertError } = await supabase.from('integration_items')
-      .upsert(changed.slice(i, i + 200), { onConflict: 'user_id,provider,external_id' })
-    if (upsertError) throw new Error(upsertError.message)
-  }
+  if (existing.length >= 5000 || rows.length >= 5000) throw new Error('Outlook calendar cache exceeds safe sync limit')
+  const { changed, obsoleteIds } = integrationSyncDelta(rows, existing)
 
   const email = typeof profile.mail === 'string' && profile.mail ? profile.mail : typeof profile.userPrincipalName === 'string' ? profile.userPrincipalName : null
   const label = (typeof profile.displayName === 'string' && profile.displayName.trim()) || email
-  const { data, error } = await supabase
-    .from('user_integrations')
-    .upsert({
-      user_id: userId,
-      provider: TEAMS_PROVIDER,
-      status: 'connected',
-      encrypted_credentials: encryptJson(credentials),
-      external_account_id: typeof profile.id === 'string' ? profile.id : null,
-      external_account_label: label,
-      last_sync_at: now,
-      last_error: null,
-      updated_at: now,
-    }, { onConflict: 'user_id,provider' })
-    .select('provider,status,external_account_label,last_sync_at,updated_at')
-    .single()
+  // The database locks the account, compares the captured revision, and commits
+  // credentials and the complete cache delta together. Old syncs cannot restore a deselected calendar.
+  const { data, error } = await supabase.rpc('commit_outlook_calendar_sync', {
+    p_user_id: userId,
+    p_expected_revision: expectedRevision,
+    p_credentials: encryptJson(credentials),
+    p_account_id: typeof profile.id === 'string' ? profile.id : null,
+    p_account_label: label,
+    p_changed: changed,
+    p_obsolete_ids: obsoleteIds,
+  })
   if (error) throw new Error(error.message)
-  return { integration: data, meetings }
+  if (data !== true) throw new OutlookCalendarSyncConflict()
+  return { integration: { provider: TEAMS_PROVIDER, status: 'connected', external_account_label: label, last_sync_at: now }, meetings }
 }
 
 export async function syncTeamsFromStoredConnection(userId: string, options: { horizonDays?: number } = {}) {
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase
     .from('user_integrations')
-    .select('encrypted_credentials,status')
+    .select('encrypted_credentials,status,updated_at')
     .eq('user_id', userId)
     .eq('provider', TEAMS_PROVIDER)
     .maybeSingle()
@@ -226,15 +218,17 @@ export async function syncTeamsFromStoredConnection(userId: string, options: { h
 
   try {
     const stored = decryptJson<TeamsStoredCredentials>(data.encrypted_credentials)
-    const credentials = await refreshIfNeeded(userId, stored)
-    const result = await syncTeamsForUser(userId, credentials, credentials.time_zone || DEFAULT_TZ, options)
+    const credentials = await refreshIfNeeded(stored)
+    const result = await syncTeamsForUser(userId, credentials, credentials.time_zone || DEFAULT_TZ, { ...options, expectedRevision: data.updated_at })
     return { connected: true, meetings: result.meetings }
   } catch (error) {
+    if (error instanceof OutlookCalendarSyncConflict) throw error
     await supabase
       .from('user_integrations')
       .update({ last_error: error instanceof Error ? error.message : 'Failed to sync Teams', updated_at: new Date().toISOString() })
       .eq('user_id', userId)
       .eq('provider', TEAMS_PROVIDER)
+      .eq('updated_at', data.updated_at)
     throw error
   }
 }
@@ -306,23 +300,25 @@ export function bearerOrQueryAccessToken(req: Request) {
 
 async function getOutlookCalendarCredentials(userId: string) {
   const { data, error } = await getSupabaseAdmin().from('user_integrations')
-    .select('encrypted_credentials,status').eq('user_id', userId).eq('provider', TEAMS_PROVIDER).maybeSingle()
+    .select('encrypted_credentials,status,updated_at').eq('user_id', userId).eq('provider', TEAMS_PROVIDER).maybeSingle()
   if (error) throw new Error(error.message)
   if (!data || data.status !== 'connected') return null
-  return refreshIfNeeded(userId, decryptJson<TeamsStoredCredentials>(data.encrypted_credentials))
+  return { credentials: await refreshIfNeeded(decryptJson<TeamsStoredCredentials>(data.encrypted_credentials)), expectedRevision: data.updated_at as string }
 }
 
 export async function getOutlookCalendarSelection(userId: string) {
-  const credentials = await getOutlookCalendarCredentials(userId)
-  if (!credentials) return null
+  const connection = await getOutlookCalendarCredentials(userId)
+  if (!connection) return null
+  const { credentials } = connection
   const calendars = await fetchMicrosoftCalendars(credentials.access_token)
   const selectedIds = credentials.calendar_ids ?? calendars.filter(calendar => calendar.isDefaultCalendar).map(calendar => calendar.id)
   return { calendars, selectedIds }
 }
 
 export async function saveOutlookCalendarSelection(userId: string, ids: string[]) {
-  const credentials = await getOutlookCalendarCredentials(userId)
-  if (!credentials) return null
+  const connection = await getOutlookCalendarCredentials(userId)
+  if (!connection) return null
+  const { credentials } = connection
   const calendars = await fetchMicrosoftCalendars(credentials.access_token)
   const selectedIds = [...new Set(ids)]
   if (!selectedIds.length || selectedIds.length > 20 || selectedIds.some(id => !calendars.some(calendar => calendar.id === id))) {
@@ -330,6 +326,6 @@ export async function saveOutlookCalendarSelection(userId: string, ids: string[]
   }
   // Fetch every chosen calendar successfully before reconciling the cached events.
   // The persisted selection lives in the existing encrypted provider credentials.
-  await syncTeamsForUser(userId, { ...credentials, calendar_ids: selectedIds }, credentials.time_zone || DEFAULT_TZ)
+  await syncTeamsForUser(userId, { ...credentials, calendar_ids: selectedIds }, credentials.time_zone || DEFAULT_TZ, { expectedRevision: connection.expectedRevision })
   return { calendars, selectedIds }
 }
