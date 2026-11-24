@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 import { getAuthenticatedUserId } from '@/app/lib/integrations/spond/server'
 import { decryptJson, encryptJson, integrationCredentialsKeySetupError } from '@/app/lib/integrations/credentialsCrypto'
-import { startFamilyWallProbe, exchangeProbeCode, discoverFamilyWallTools, type PendingProbe } from '@/app/lib/integrations/familywall/probe'
+import { startFamilyWallProbe, exchangeProbeCode, runFamilyWallReadProbe, type PendingProbe, type ReadProbeCheck } from '@/app/lib/integrations/familywall/probe'
 
 export const runtime = 'nodejs'
+export const maxDuration = 60
 const path = '/api/integrations/familywall/probe'
 const cookieName = '__Secure-remind_familywall_probe'
+const resultCookie = '__Secure-remind_familywall_result'
 const maxAge = 600
+const resultMaxAge = 900
 function allowed(userId: string) {
   return process.env.FAMILYWALL_MCP_PROBE_ENABLED === 'true' &&
     (process.env.FAMILYWALL_MCP_TEST_USER_IDS || '').split(',').map(id => id.trim()).includes(userId)
@@ -27,6 +30,24 @@ function result(data: unknown, status = 200, clear = false) {
   if (clear) response.cookies.set(cookieName, '', { path, secure: true, httpOnly: true, sameSite: 'lax', maxAge: 0 })
   return response
 }
+function clearCookie(response: NextResponse, name: string) {
+  response.cookies.set(name, '', { path, secure: true, httpOnly: true, sameSite: 'lax', maxAge: 0 })
+}
+
+function redirectBack(redirectUri: string, status: 'success' | 'error', summary?: { userId: string; checks: ReadProbeCheck[] }) {
+  const url = new URL('/', redirectUri)
+  url.searchParams.set('tab', 'connect')
+  url.searchParams.set('familywall_test', status)
+  const response = NextResponse.redirect(url, { status: 303, headers: { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } })
+  clearCookie(response, cookieName)
+  clearCookie(response, resultCookie)
+  if (summary) {
+    const payload = Buffer.from(JSON.stringify(encryptJson({ ...summary, createdAt: Date.now() }))).toString('base64url')
+    if (payload.length <= 3500) response.cookies.set(resultCookie, payload, { path, secure: true, httpOnly: true, sameSite: 'lax', maxAge: resultMaxAge })
+  }
+  return response
+}
+
 export async function POST(req: NextRequest) {
   const userId = await getAuthenticatedUserId(req)
   if (!userId) return result({ error: 'Unauthorized' }, 401)
@@ -37,6 +58,7 @@ export async function POST(req: NextRequest) {
     if (new URL(req.url).origin !== new URL(settings.redirectUri).origin) return result({ error: 'Unexpected app origin' }, 400)
     const { url, pending } = await startFamilyWallProbe(settings)
     const response = result({ url })
+    clearCookie(response, resultCookie)
     const payload = Buffer.from(JSON.stringify(encryptJson({ ...pending, userId }))).toString('base64url')
     if (payload.length > 3500) throw new Error('OAuth state exceeds cookie limit')
     response.cookies.set(cookieName, payload, { path, secure: true, httpOnly: true, sameSite: 'lax', maxAge })
@@ -46,9 +68,22 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   if (req.nextUrl.searchParams.get('mode') === 'status') {
     const userId = await getAuthenticatedUserId(req)
-    return result({ eligible: !!userId && allowed(userId) }, userId ? 200 : 401)
+    if (!userId) return result({ eligible: false }, 401)
+    if (!allowed(userId)) return result({ eligible: false })
+    let checks: ReadProbeCheck[] | null = null
+    try {
+      const raw = req.cookies.get(resultCookie)?.value || ''
+      if (raw && raw.length <= 3500) {
+        const summary = decryptJson<{ userId: string; createdAt: number; checks: ReadProbeCheck[] }>(JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')))
+        const age = Date.now() - summary.createdAt
+        if (summary.userId === userId && Number.isFinite(age) && age >= 0 && age <= resultMaxAge * 1000 && Array.isArray(summary.checks)) checks = summary.checks
+      }
+    } catch { /* Expired or invalid diagnostic result; no data is persisted. */ }
+    return result({ eligible: true, checks })
   }
   if (process.env.FAMILYWALL_MCP_PROBE_ENABLED !== 'true') return result({ error: 'Not found' }, 404)
+  let settings: ReturnType<typeof config>
+  try { settings = config() } catch { return result({ error: 'Probe configuration unavailable' }, 503, true) }
   const state = req.nextUrl.searchParams.get('state') || ''
   const code = req.nextUrl.searchParams.get('code') || ''
   const cookie = req.cookies.get(cookieName)?.value || ''
@@ -58,11 +93,11 @@ export async function GET(req: NextRequest) {
     const age = Date.now() - pending.createdAt
     if (!allowed(pending.userId) || !Number.isFinite(age) || age < 0 || age > maxAge * 1000 ||
       pending.state.length !== state.length || !timingSafeEqual(Buffer.from(state), Buffer.from(pending.state))) throw new Error('Invalid state')
-    const settings = config()
     if (pending.redirectUri !== settings.redirectUri || new URL(req.url).origin !== new URL(settings.redirectUri).origin) throw new Error('Invalid redirect')
     const token = await exchangeProbeCode(pending, code, settings.trustedOrigins)
-    const tools = await discoverFamilyWallTools(token)
-    // No user data, tool calls, database writes or token persistence in this discovery phase.
-    return result({ authenticated: true, probeOnly: true, tools }, 200, true)
-  } catch { return result({ error: 'FamilyWall authorization or tool discovery failed. Restart the probe.' }, 400, true) }
+    const checks = await runFamilyWallReadProbe(token)
+    // The diagnostic result contains only fixed tool names, statuses and redacted schema shapes.
+    // Do not persist credentials or family data.
+    return redirectBack(settings.redirectUri, 'success', { userId: pending.userId, checks })
+  } catch { return redirectBack(settings.redirectUri, 'error') }
 }
