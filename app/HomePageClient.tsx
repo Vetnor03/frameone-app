@@ -36,6 +36,7 @@ const BonnetidSetupModal = dynamic(() => import('./components/BonnetidSetupModal
 const CalendarLinkSetup = dynamic(() => import('./components/CalendarLinkSetup'))
 const IntegrationRequestCard = dynamic(() => import('./components/IntegrationRequestCard'))
 import ConnectAppLogo from './components/ConnectAppLogo'
+import FamilyWallConnectCard, { matchesFamilyWallSearch } from './components/FamilyWallConnectCard'
 import AppSheet, { AppSheetVisibilityContext } from './components/AppSheet'
 import { StartupSplash } from './components/StartupSplash'
 const NewsModuleSettingsTab = dynamic(() => import('./components/NewsModuleSettingsTab'))
@@ -5053,7 +5054,7 @@ function ConnectAppsScreen({
 
         <div className={`${startup ? '' : 'mt-4'} space-y-2.5`}>
 
-          {!startup && connectSearch.trim() && sortedApps.length === 0 && (
+          {!startup && connectSearch.trim() && sortedApps.length === 0 && !matchesFamilyWallSearch(connectSearch) && (
             <div role="status" className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-6 text-center">
               <p className="text-sm font-medium text-[color:var(--fg-90)]">{language === 'no' ? 'Ingen apper funnet' : 'No matching apps'}</p>
               <p className="mt-1 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Prøv et annet søk, eller foreslå en integrasjon nedenfor.' : 'Try another search, or request an integration below.'}</p>
@@ -5256,6 +5257,7 @@ function ConnectAppsScreen({
               </div>
             )
           })}
+          {!startup && !showConnectPlaceholders && matchesFamilyWallSearch(connectSearch) && <FamilyWallConnectCard language={language} userId={userId} />}
         </div>
 
         {!startup && <IntegrationRequestCard language={language} />}
