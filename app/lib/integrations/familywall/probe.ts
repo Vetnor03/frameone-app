@@ -145,7 +145,10 @@ function rpcResult(text: string, contentType: string, id: number): Json {
   return record(result.result)
 }
 
-export async function discoverFamilyWallTools(accessToken: string, fetcher: Fetcher = fetch) {
+type Rpc = (method: string, params: Json, notification?: boolean) => Promise<Json>
+type DiscoveredTool = { name: string; readOnlyHint: boolean; inputSchema: Json }
+
+async function withFamilyWallSession<T>(accessToken: string, fetcher: Fetcher, run: (rpc: Rpc) => Promise<T>) {
   let session: string | null = null
   let protocol = PROTOCOL
   let nextId = 0
@@ -170,21 +173,7 @@ export async function discoverFamilyWallTools(accessToken: string, fetcher: Fetc
     protocol = required(initialized.protocolVersion)
     if (!['2025-06-18', '2025-11-25', '2025-03-26'].includes(protocol)) throw new Error('Unsupported MCP protocol version')
     await rpc('notifications/initialized', {}, true)
-    const tools: { name: string; readOnlyHint: boolean; inputSchema: Json }[] = []
-    let cursor: string | undefined
-    for (let page = 0; page < 5; page++) {
-      const result = await rpc('tools/list', cursor ? { cursor } : {})
-      if (!Array.isArray(result.tools)) throw new Error('Invalid FamilyWall tool list')
-      for (const entry of result.tools) {
-        const tool = record(entry)
-        const annotations = tool.annotations ? record(tool.annotations) : {}
-        tools.push({ name: required(tool.name), readOnlyHint: annotations.readOnlyHint === true, inputSchema: record(tool.inputSchema) })
-        if (tools.length > 250) throw new Error('FamilyWall tool list too large')
-      }
-      if (!result.nextCursor) return tools
-      cursor = required(result.nextCursor)
-    }
-    throw new Error('FamilyWall tool pagination exceeds safe limit')
+    return await run(rpc)
   } finally {
     if (session) {
       await request(fetcher, FAMILYWALL_RESOURCE, { method: 'DELETE', headers: {
@@ -192,4 +181,103 @@ export async function discoverFamilyWallTools(accessToken: string, fetcher: Fetc
       } }).then(response => response.body?.cancel()).catch(() => undefined)
     }
   }
+}
+
+async function listFamilyWallTools(rpc: Rpc) {
+  const tools: DiscoveredTool[] = []
+  let cursor: string | undefined
+  for (let page = 0; page < 5; page++) {
+    const result = await rpc('tools/list', cursor ? { cursor } : {})
+    if (!Array.isArray(result.tools)) throw new Error('Invalid FamilyWall tool list')
+    for (const entry of result.tools) {
+      const tool = record(entry)
+      const annotations = tool.annotations ? record(tool.annotations) : {}
+      tools.push({ name: required(tool.name), readOnlyHint: annotations.readOnlyHint === true, inputSchema: record(tool.inputSchema) })
+      if (tools.length > 250) throw new Error('FamilyWall tool list too large')
+    }
+    if (!result.nextCursor) return tools
+    cursor = required(result.nextCursor)
+  }
+  throw new Error('FamilyWall tool pagination exceeds safe limit')
+}
+
+export async function discoverFamilyWallTools(accessToken: string, fetcher: Fetcher = fetch) {
+  return withFamilyWallSession(accessToken, fetcher, listFamilyWallTools)
+}
+
+export type ReadProbeCheck = { tool: 'list_events' | 'list_lists' | 'list_items'; status: 'ok' | 'failed' | 'unavailable' | 'skipped'; shape?: string }
+
+// Only these known schema field names are exposed in diagnostics. Unknown keys
+// might be user-defined names, so never expose them or any actual field value.
+const SAFE_FIELDS = new Set('data result results events event lists list items item tasks task calendar calendars entries content records id list_id listId event_id eventId external_id title name label type kind category text description notes body start end start_date end_date startDate endDate starts_at ends_at startsAt endsAt start_time end_time date due_date dueDate due_at dueAt all_day allDay isAllDay completed done checked is_done isDone status quantity unit count total priority updated_at created_at updatedAt createdAt location recurrence recurring timezone timeZone owner members assigned_to assignedTo assignees color shopping_list shoppingList taskList taskLists listType list_type has_more nextCursor cursor'.split(' '))
+
+function diagnosticShape(value: unknown, depth = 0): string {
+  if (value === null) return 'null'
+  if (Array.isArray(value)) return value.length === 0 ? '[]' : depth >= 4 ? '[…]' : '[' + diagnosticShape(value[0], depth + 1) + ']'
+  if (typeof value !== 'object') return typeof value
+  if (depth >= 4) return '{…}'
+  const entries = Object.entries(value as Json)
+  const known = entries.filter(([key]) => SAFE_FIELDS.has(key)).slice(0, 10)
+  const fields = known.map(([key, field]) => key + ':' + diagnosticShape(field, depth + 1))
+  if (known.length < entries.length) fields.push('…')
+  return '{' + fields.join(', ') + '}'
+}
+
+function readToolValue(result: Json): unknown {
+  if (result.isError === true) throw new Error('FamilyWall read tool failed')
+  if (result.structuredContent !== undefined) return result.structuredContent
+  if (!Array.isArray(result.content) || !result.content.length) throw new Error('Missing FamilyWall tool result')
+  const text = result.content.find(entry => entry && typeof entry === 'object' && entry.type === 'text' && typeof entry.text === 'string')
+  if (!text) throw new Error('Unsupported FamilyWall tool content')
+  try { return JSON.parse(text.text) } catch { return text.text }
+}
+
+function firstListId(value: unknown, depth = 0): string | null {
+  if (depth > 4 || !value || typeof value !== 'object') return null
+  if (Array.isArray(value)) {
+    for (const item of value.slice(0, 20)) {
+      const id = firstListId(item, depth + 1)
+      if (id) return id
+    }
+    return null
+  }
+  const obj = value as Json
+  for (const key of ['id', 'list_id', 'listId']) {
+    const candidate = obj[key]
+    // FamilyWall's documented list ID format from the live tools/list schema.
+    if (typeof candidate === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,39}\\/[A-Za-z0-9_-]{1,120}$/.test(candidate)) return candidate
+  }
+  for (const key of ['lists', 'data', 'result', 'results', 'items', 'taskLists']) {
+    const id = firstListId(obj[key], depth + 1)
+    if (id) return id
+  }
+  return null
+}
+
+/** A one-time, owner-only diagnostic. Never execute a tool outside the explicit allowlist. */
+export async function runFamilyWallReadProbe(accessToken: string, fetcher: Fetcher = fetch) {
+  return withFamilyWallSession(accessToken, fetcher, async rpc => {
+    const tools = await listFamilyWallTools(rpc)
+    const checks: ReadProbeCheck[] = []
+    async function check(tool: ReadProbeCheck['tool'], args: Json) {
+      if (!tools.some(entry => entry.name === tool && entry.readOnlyHint)) {
+        checks.push({ tool, status: 'unavailable' })
+        return null
+      }
+      try {
+        const value = readToolValue(await rpc('tools/call', { name: tool, arguments: args }))
+        checks.push({ tool, status: 'ok', shape: diagnosticShape(value).slice(0, 400) })
+        return value
+      } catch {
+        checks.push({ tool, status: 'failed' })
+        return null
+      }
+    }
+    await check('list_events', { days: 7 })
+    const lists = await check('list_lists', {})
+    const id = firstListId(lists)
+    if (id) await check('list_items', { list_id: id, include_done: false })
+    else checks.push({ tool: 'list_items', status: 'skipped' })
+    return checks
+  })
 }
