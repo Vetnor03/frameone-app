@@ -19,7 +19,9 @@ test('AI Follow implementation remains intact behind the release UI switch', () 
 
 test('AI Follow tab stays hidden while the lightweight RE:MIND helper remains available', () => {
   assert.match(home, /deriveDynamicModuleKeys<ModuleKey>\(activeLayoutModules, pinnedModuleTabs\)/)
-  assert.match(home, /setPinnedModuleTabs\(\(prev\) => \{[\s\S]*markDirty\(\{ pinnedModuleTabs: nextPinned \}\)/)
+  assert.match(home, /const nextPinned = togglePinnedModuleTab\(pinnedModuleTabsRef\.current, moduleKey\)/)
+  assert.match(home, /setPinnedModuleTabs\(nextPinned\)\s*writePinnedModuleTabs\(window\.localStorage, userId, activeDeviceId, nextPinned\)/)
+  assert.doesNotMatch(home, /markDirty\(\{ pinnedModuleTabs:/)
   assert.match(home, /const mountedModuleKeys = activeTab === 'assistant'/)
   assert.match(home, /new Set\(\[\.\.\.renderedModuleKeys, 'assistant' as ModuleKey\]\)/)
   assert.match(home, /moduleKey === 'assistant' \? \(\s*(?:<React\.Suspense fallback=\{null\}>\s*)?<AIAssistantTab language=\{language\} activeDeviceId=\{activeDeviceId\}/)
