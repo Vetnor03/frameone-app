@@ -44,7 +44,7 @@ import { wasteCollectionDisplayTitle } from './lib/integrations/waste/display'
 import { hasChosenWeatherLocation, norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders } from './lib/onboardingDefaults'
 import { firstReminderOccurrenceDate, nextReminderOccurrenceDate as nextReminderOccurrenceDateShared, normalizeRepeatWeekdays } from './lib/reminders/recurrence'
 import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
-import { deriveDynamicModuleKeys } from './lib/dynamicModuleTabs.mjs'
+import { deriveDynamicModuleKeys, readPinnedModuleTabs, writePinnedModuleTabs, togglePinnedModuleTab } from './lib/dynamicModuleTabs.mjs'
 import { dynamicPeriodAt, normalizeDynamicLayout, resolveDynamicFrameSettings } from './lib/device/dynamicLayout.mjs'
 import type { DynamicChoice, DynamicConfig, DynamicPeriod } from './lib/device/dynamicLayout.mjs'
 import { initializeProductAnalytics, trackProductEvent } from './lib/productAnalytics.mjs'
@@ -1315,7 +1315,12 @@ export default function HomePage() {
   const updateOperationIdRef = useRef(0)
   const activeDeviceIdRef = useRef(activeDeviceId)
   activeDeviceIdRef.current = activeDeviceId
-  const [pinnedModuleTabs, setPinnedModuleTabs] = useState<ModuleKey[]>([])
+  const [pinnedModuleTabs, setPinnedModuleTabsState] = useState<ModuleKey[]>([])
+  const pinnedModuleTabsRef = useRef<ModuleKey[]>([])
+  function setPinnedModuleTabs(next: ModuleKey[]) {
+    pinnedModuleTabsRef.current = next
+    setPinnedModuleTabsState(next)
+  }
 
   function restoreManualUpdateState(deviceId: string | null) {
     const persisted = deviceId && typeof window !== 'undefined'
@@ -1828,7 +1833,6 @@ export default function HomePage() {
     layoutKey: LayoutKey
     cellsByLayout: Record<LayoutKey, Record<number, ModuleKey | null>>
     modulesJson: Record<string, any>
-    pinnedModuleTabs: ModuleKey[]
     dynamicLayout?: DynamicConfig | null
   }) {
     const normalizedModules = normalizeModulesForSave(args.modulesJson)
@@ -1844,7 +1848,7 @@ export default function HomePage() {
       layout: args.dynamicLayout?.enabled ? 'dynamic' : args.layoutKey,
       cells: args.dynamicLayout?.enabled ? [] : cellsMapToArray(args.cellsByLayout[args.layoutKey]),
       modules: normalizedModules,
-      pinned_tabs: args.pinnedModuleTabs,
+      // Pinning is app navigation, not a physical frame configuration change.
       dynamic_layout: args.dynamicLayout ?? null,
     })
   }
@@ -1858,7 +1862,6 @@ export default function HomePage() {
     layoutKey?: LayoutKey
     cellsByLayout?: Record<LayoutKey, Record<number, ModuleKey | null>>
     modulesJson?: Record<string, any>
-    pinnedModuleTabs?: ModuleKey[]
     dynamicLayout?: DynamicConfig | null
   } | null>(null)
 
@@ -1870,7 +1873,6 @@ export default function HomePage() {
     layoutKey?: LayoutKey
     cellsByLayout?: Record<LayoutKey, Record<number, ModuleKey | null>>
     modulesJson?: Record<string, any>
-    pinnedModuleTabs?: ModuleKey[]
     dynamicLayout?: DynamicConfig | null
   }
 
@@ -1883,7 +1885,6 @@ export default function HomePage() {
       layoutKey: next?.layoutKey ?? layoutKey,
       cellsByLayout: next?.cellsByLayout ?? cellsByLayout,
       modulesJson: next?.modulesJson ?? modulesJson,
-      pinnedModuleTabs: next?.pinnedModuleTabs ?? pinnedModuleTabs,
       dynamicLayout: next?.dynamicLayout === undefined ? dynamicLayout : next.dynamicLayout,
     })
   }
@@ -2306,9 +2307,13 @@ export default function HomePage() {
 
     // Reusable modules were fetched in parallel with settings and layouts.
     const normalizedModules = normalizeModulesForSave(mergeReusableUserModules(rawModules, reusableModules))
-    const nextPinnedTabs = Array.isArray((json as any).pinned_tabs)
-      ? ((json as any).pinned_tabs as unknown[]).filter((m): m is ModuleKey => isModuleKey(m) && m !== 'date')
-      : []
+    // A stored empty array is an explicit unpin-all, not a cache miss.
+    const localPins = typeof window !== 'undefined'
+      ? readPinnedModuleTabs(window.localStorage, ownerId, deviceId)
+      : null
+    const serverPins = Array.isArray(json.pinned_tabs) ? json.pinned_tabs : []
+    const nextPinnedTabs = [...new Set((localPins ?? serverPins)
+      .filter((m): m is ModuleKey => isModuleKey(m) && m !== 'date'))]
 
     // Commit layouts and settings in one React update after every fetch settles.
     // A failed custom-layout endpoint must not blank an already shown preview.
@@ -2336,7 +2341,6 @@ export default function HomePage() {
       layoutKey: nextLayout,
       cellsByLayout: nextCellsByLayout,
       modulesJson: normalizedModules,
-      pinnedModuleTabs: nextPinnedTabs,
       dynamicLayout: nextDynamicLayout,
     })
     savedStateRef.current = loadedState
@@ -2403,7 +2407,7 @@ export default function HomePage() {
     if (data !== true) throw new Error('Not allowed to initialize this frame.')
   }
 
-  function applyCachedLaunchPreview(cached: NonNullable<ReturnType<typeof readLaunchPreview>>) {
+  function applyCachedLaunchPreview(cached: NonNullable<ReturnType<typeof readLaunchPreview>>, ownerId: string) {
     const { preview } = cached
     const nextLayout = preview.layout === 'custom' ? 'default' : preview.layout
     const nextCells = cellsArrayToMap(nextLayout, preview.cells.map((cell) => ({
@@ -2416,7 +2420,8 @@ export default function HomePage() {
     setFontSize(preview.fontSize)
     setCellsByLayout({ ...makeEmptyCellsByLayout(), [nextLayout]: nextCells })
     setLayoutKey(nextLayout)
-    setPinnedModuleTabs(preview.pinned_tabs.filter((key): key is ModuleKey => isModuleKey(key)))
+    const localPins = readPinnedModuleTabs(window.localStorage, ownerId, cached.deviceId)
+    setPinnedModuleTabs((localPins ?? preview.pinned_tabs).filter((key): key is ModuleKey => isModuleKey(key) && key !== 'date'))
     const custom = preview.customLayout
     setCustomLayouts(custom ? [custom] : [])
     setActiveCustomLayoutId(custom?.id ?? null)
@@ -2492,7 +2497,7 @@ export default function HomePage() {
       if (cached) {
         // Preview is visible immediately, but all controls are inert until
         // membership and the authoritative device settings are validated.
-        applyCachedLaunchPreview(cached)
+        applyCachedLaunchPreview(cached, session.user.id)
       } else {
         setShowSplash(!disableLaunchSplash)
         setBooting(!disableLaunchSplash)
@@ -2747,7 +2752,7 @@ export default function HomePage() {
     setPinnedModuleTabs(nextPinnedTabs)
     setPowerSaver(DEFAULT_POWER_SAVER)
     setDynamicLayout(null)
-    savedStateRef.current = serializeComparableState({ frameTheme, powerSaver: DEFAULT_POWER_SAVER, language, fontSize, layoutKey: nextLayout, cellsByLayout: nextCellsByLayout, modulesJson: nextModules, pinnedModuleTabs: nextPinnedTabs, dynamicLayout: null })
+    savedStateRef.current = serializeComparableState({ frameTheme, powerSaver: DEFAULT_POWER_SAVER, language, fontSize, layoutKey: nextLayout, cellsByLayout: nextCellsByLayout, modulesJson: nextModules, dynamicLayout: null })
     desiredStateRef.current = savedStateRef.current
     setDirty(false)
     sessionStorage.removeItem(`remind:onboarding:${activeDeviceId}`)
@@ -3029,7 +3034,7 @@ export default function HomePage() {
       const draftLayoutKey = layoutKey
       const draftCellsByLayout = cellsByLayout
       const draftModules = normalizeModulesForSave(overrides.modulesJson ?? latestModulesJsonRef.current)
-      const draftPinnedTabs = pinnedModuleTabs
+      const draftPinnedTabs = pinnedModuleTabsRef.current
       const draftDynamicLayout = dynamicLayout
       const currentCells = draftCellsByLayout[draftLayoutKey] || emptyCellsFor(draftLayoutKey)
       const nextLayoutModuleMemory = mergeCellsIntoSlotMemory(
@@ -3045,7 +3050,6 @@ export default function HomePage() {
         layoutKey: draftLayoutKey,
         cellsByLayout: draftCellsByLayout,
         modulesJson: draftModules,
-        pinnedModuleTabs: draftPinnedTabs,
         dynamicLayout: draftDynamicLayout,
       })
 
@@ -3093,7 +3097,7 @@ export default function HomePage() {
         ? serializeComparableState({
           frameTheme: draftTheme, powerSaver: draftPowerSaver, language: draftLanguage,
           fontSize: draftFontSize, layoutKey: draftLayoutKey, cellsByLayout: draftCellsByLayout,
-          modulesJson: committedModules, pinnedModuleTabs: draftPinnedTabs, dynamicLayout: draftDynamicLayout,
+          modulesJson: committedModules, dynamicLayout: draftDynamicLayout,
         })
         : persistedSignature
       const nextCellsByLayout = { ...makeEmptyCellsByLayout(), [draftLayoutKey]: { ...currentCells } }
@@ -3556,17 +3560,17 @@ async function handleSelectTab(k: TabKey) {
                     )}
 
                     <button
+                      type="button"
+                      disabled={appControlsLocked || !activeDeviceId || !userId}
+                      aria-pressed={pinnedModuleTabs.includes(moduleKey)}
                       onClick={() => {
-                        const selectedModule = moduleKey
-                        setPinnedModuleTabs((prev) => {
-                          const exists = prev.includes(selectedModule)
-                          const nextPinned = exists ? prev.filter((m) => m !== selectedModule) : [...prev, selectedModule]
-                          markDirty({ pinnedModuleTabs: nextPinned })
-                          return nextPinned
-                        })
+                        if (appControlsLocked || !activeDeviceId || !userId || activeDeviceIdRef.current !== activeDeviceId) return
+                        const nextPinned = togglePinnedModuleTab(pinnedModuleTabsRef.current, moduleKey)
+                        setPinnedModuleTabs(nextPinned)
+                        writePinnedModuleTabs(window.localStorage, userId, activeDeviceId, nextPinned)
                       }}
-                      className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-[color:var(--bd-20)] text-[color:var(--fg-70)]"
-                      title={pinnedModuleTabs.includes(moduleKey as ModuleKey) ? 'Unpin tab' : 'Pin tab'}
+                      className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-[color:var(--bd-20)] text-[color:var(--fg-70)] disabled:opacity-50"
+                      title={pinnedModuleTabs.includes(moduleKey) ? 'Unpin tab' : 'Pin tab'}
                     >
                       <svg
                         viewBox="0 0 24 24"
