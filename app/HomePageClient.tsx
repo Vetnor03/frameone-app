@@ -1833,7 +1833,6 @@ export default function HomePage() {
     layoutKey: LayoutKey
     cellsByLayout: Record<LayoutKey, Record<number, ModuleKey | null>>
     modulesJson: Record<string, any>
-    pinnedModuleTabs: ModuleKey[]
     dynamicLayout?: DynamicConfig | null
   }) {
     const normalizedModules = normalizeModulesForSave(args.modulesJson)
@@ -1863,7 +1862,6 @@ export default function HomePage() {
     layoutKey?: LayoutKey
     cellsByLayout?: Record<LayoutKey, Record<number, ModuleKey | null>>
     modulesJson?: Record<string, any>
-    pinnedModuleTabs?: ModuleKey[]
     dynamicLayout?: DynamicConfig | null
   } | null>(null)
 
@@ -1875,7 +1873,6 @@ export default function HomePage() {
     layoutKey?: LayoutKey
     cellsByLayout?: Record<LayoutKey, Record<number, ModuleKey | null>>
     modulesJson?: Record<string, any>
-    pinnedModuleTabs?: ModuleKey[]
     dynamicLayout?: DynamicConfig | null
   }
 
@@ -1888,7 +1885,6 @@ export default function HomePage() {
       layoutKey: next?.layoutKey ?? layoutKey,
       cellsByLayout: next?.cellsByLayout ?? cellsByLayout,
       modulesJson: next?.modulesJson ?? modulesJson,
-      pinnedModuleTabs: pinnedModuleTabsRef.current,
       dynamicLayout: next?.dynamicLayout === undefined ? dynamicLayout : next.dynamicLayout,
     })
   }
@@ -2315,7 +2311,8 @@ export default function HomePage() {
     const localPins = typeof window !== 'undefined'
       ? readPinnedModuleTabs(window.localStorage, ownerId, deviceId)
       : null
-    const nextPinnedTabs = [...new Set((localPins ?? json.pinned_tabs ?? [])
+    const serverPins = Array.isArray(json.pinned_tabs) ? json.pinned_tabs : []
+    const nextPinnedTabs = [...new Set((localPins ?? serverPins)
       .filter((m): m is ModuleKey => isModuleKey(m) && m !== 'date'))]
 
     // Commit layouts and settings in one React update after every fetch settles.
@@ -2344,7 +2341,6 @@ export default function HomePage() {
       layoutKey: nextLayout,
       cellsByLayout: nextCellsByLayout,
       modulesJson: normalizedModules,
-      pinnedModuleTabs: nextPinnedTabs,
       dynamicLayout: nextDynamicLayout,
     })
     savedStateRef.current = loadedState
@@ -2756,7 +2752,7 @@ export default function HomePage() {
     setPinnedModuleTabs(nextPinnedTabs)
     setPowerSaver(DEFAULT_POWER_SAVER)
     setDynamicLayout(null)
-    savedStateRef.current = serializeComparableState({ frameTheme, powerSaver: DEFAULT_POWER_SAVER, language, fontSize, layoutKey: nextLayout, cellsByLayout: nextCellsByLayout, modulesJson: nextModules, pinnedModuleTabs: nextPinnedTabs, dynamicLayout: null })
+    savedStateRef.current = serializeComparableState({ frameTheme, powerSaver: DEFAULT_POWER_SAVER, language, fontSize, layoutKey: nextLayout, cellsByLayout: nextCellsByLayout, modulesJson: nextModules, dynamicLayout: null })
     desiredStateRef.current = savedStateRef.current
     setDirty(false)
     sessionStorage.removeItem(`remind:onboarding:${activeDeviceId}`)
@@ -3054,7 +3050,6 @@ export default function HomePage() {
         layoutKey: draftLayoutKey,
         cellsByLayout: draftCellsByLayout,
         modulesJson: draftModules,
-        pinnedModuleTabs: draftPinnedTabs,
         dynamicLayout: draftDynamicLayout,
       })
 
@@ -3102,7 +3097,7 @@ export default function HomePage() {
         ? serializeComparableState({
           frameTheme: draftTheme, powerSaver: draftPowerSaver, language: draftLanguage,
           fontSize: draftFontSize, layoutKey: draftLayoutKey, cellsByLayout: draftCellsByLayout,
-          modulesJson: committedModules, pinnedModuleTabs: draftPinnedTabs, dynamicLayout: draftDynamicLayout,
+          modulesJson: committedModules, dynamicLayout: draftDynamicLayout,
         })
         : persistedSignature
       const nextCellsByLayout = { ...makeEmptyCellsByLayout(), [draftLayoutKey]: { ...currentCells } }
