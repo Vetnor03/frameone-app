@@ -5158,6 +5158,14 @@ function ConnectAppsScreen({
           </div>
         )}
 
+        {!startup && !moduleFilter && (
+          <p className="mt-2 px-2 text-center text-xs leading-snug text-[color:var(--fg-60)]">
+            {connectScope === 'active'
+              ? (language === 'no' ? 'Apper for dine aktive moduler og eksisterende tilkoblinger.' : 'Apps for your active modules and existing connections.')
+              : (language === 'no' ? 'Utforsk integrasjoner for alle RE:MIND-moduler.' : 'Explore integrations for all RE:MIND modules.')}
+          </p>
+        )}
+
         {!startup && moduleFilter && (
           <div className="mt-2.5 flex flex-wrap items-center gap-2 px-1">
             <button
