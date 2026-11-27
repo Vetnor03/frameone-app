@@ -22,3 +22,26 @@ test('Connect logos do not fetch remote images on startup', () => {
   assert.doesNotMatch(logoSource, /<img|<Image|https?:\/\//)
   assert.match(logoSource, /aria-hidden="true"/)
 })
+
+test('each integration has distinct, locally rendered artwork or a deliberate text identifier', () => {
+  const marks = new Map([...logoSource.matchAll(/^  "([^"]+)": (\{.*\}),$/gm)]
+    .map((match) => [match[1], JSON.parse(match[2])]))
+  assert.equal(marks.size, INTEGRATION_CATALOGUE.length)
+  const artwork = new Set()
+  for (const integration of INTEGRATION_CATALOGUE) {
+    const mark = marks.get(integration.key)
+    assert.ok(mark, integration.key)
+    assert.match(mark.background, /^#[0-9a-f]{6}$/i)
+    assert.ok(mark.paths?.length || mark.wordmark, integration.key)
+    assert.ok(!(mark.paths?.length && mark.wordmark), integration.key)
+    const signature = mark.wordmark || mark.paths.map(path => path.d).join('|')
+    assert.ok(!artwork.has(signature), 'Duplicate artwork: ' + integration.key)
+    artwork.add(signature)
+    if (mark.paths) {
+      for (const path of mark.paths) assert.match(path.d, /^[mM]/)
+    }
+  }
+  assert.match(logoSource, /h-9 w-9/)
+  assert.match(logoSource, /rounded-xl/)
+  assert.match(logoSource, /h-\[25px\] w-\[25px\]/)
+})
