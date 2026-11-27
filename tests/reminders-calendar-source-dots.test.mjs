@@ -19,3 +19,8 @@ test('reminder calendar dots use only occurrences from the selected source', () 
   assert.match(dotPipeline, /for \(const item of visibleOccurrences\)/)
   assert.doesNotMatch(dotPipeline, /item\.source === 'local-events'/)
 })
+
+test('tapping any reminder source filter clears the selected calendar day', () => {
+  assert.match(homePage, /availableSources\.map\(\(source\) => \{[\s\S]*?onClick=\{\(\) => \{\s*setSourceFilter\(source\)\s*setSelectedDayYmd\(null\)\s*\}\}/)
+  assert.match(homePage, /function toggleSelectedDay\(ymd: string\) \{\s*setSelectedDayYmd\(\(prev\) => \(prev === ymd \? null : ymd\)\)/)
+})
