@@ -30,7 +30,7 @@ import { nextBonnetidWithOccasions } from './lib/integrations/bonnetid/nextOccur
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, getLocalEventPlace, normalizeLocalEventAreaPreference, nationwideLocalEventArea, type LocalEventAreaPreference } from './lib/integrations/local-events/places'
 import { localEventGroupKeyFromRaw, groupSkipId } from './lib/integrations/local-events/grouping'
-import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst, type ConnectAppKey } from './lib/integrations/catalog'
+import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationMatchesModule, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst, type ConnectAppKey } from './lib/integrations/catalog'
 const WasteSetupModal = dynamic(() => import('./components/WasteSetupModal'))
 const BonnetidSetupModal = dynamic(() => import('./components/BonnetidSetupModal'))
 const CalendarLinkSetup = dynamic(() => import('./components/CalendarLinkSetup'))
@@ -1230,6 +1230,7 @@ export default function HomePage() {
   }, [isPhoneLandscapeMirror])
 
   const [activeTab, setActiveTab] = useState<TabKey>('frame')
+  const [connectModuleFilter, setConnectModuleFilter] = useState<ModuleKey | null>(null)
   // Module content is retained only in authenticated in-memory React state,
   // never persisted to the browser's long-term storage.
   const [moduleTabCache, setModuleTabCache] = useState<{ scope: string; keys: WarmModuleKey[] }>({ scope: '', keys: [] })
@@ -1699,6 +1700,7 @@ export default function HomePage() {
     }
     if (tab === 'connect' || searchParams?.has('teams') || searchParams?.has('google_calendar') || searchParams?.has('todoist') || searchParams?.has('microsoft_todo') || searchParams?.has('google_tasks')) {
       preferInstantScrollRef.current = true
+      setConnectModuleFilter(null)
       setActiveTab('connect')
       return
     }
@@ -3342,7 +3344,8 @@ export default function HomePage() {
   const appText = 'text-[color:var(--fg)]'
 
 
-async function handleSelectTab(k: TabKey) {
+async function handleSelectTab(k: TabKey, moduleFilter: ModuleKey | null = null) {
+  setConnectModuleFilter(k === 'connect' ? moduleFilter : null)
   preferInstantScrollRef.current = false
   stickySettingsRef.current = k === 'settings'
   if (k !== 'settings') { setSettingsSubpage(null); setAppThemePickerOpen(false) }
@@ -3379,7 +3382,7 @@ async function handleSelectTab(k: TabKey) {
       case 'weather': setActiveTab('weather'); return
       case 'groceries': case 'recipes': setActiveTab('groceries'); return
       case 'reminders': setActiveTab('reminders'); return
-      case 'spond': setActiveTab('connect'); return
+      case 'spond': void handleSelectTab('connect'); return
       case 'countdown': setActiveTab('countdown'); return
       case 'date': setActiveTab('date'); return
       case 'football': setActiveTab('soccer'); return
@@ -3530,6 +3533,8 @@ async function handleSelectTab(k: TabKey) {
                   frameSettingsReady={loadedSettingsDeviceId === activeDeviceId}
                   onBack={() => setActiveTab('reminders')}
                   asTab
+                  moduleFilter={connectModuleFilter}
+                  onClearModuleFilter={() => setConnectModuleFilter(null)}
                   remindersVisibleOnFrame={!activeDeviceId || remindersShownOnFrame}
                   onIntegrationChanged={(key, config = { enabled: true }, legacyEnabled = []) => {
                     const nextModules = integrationModulesAfterChange(latestModulesJsonRef.current, key, config, legacyEnabled)
@@ -3549,15 +3554,13 @@ async function handleSelectTab(k: TabKey) {
                 return (
                 <div key={`${moduleTabScope}:${moduleKey}`} className={isActive ? 'relative h-full' : 'hidden'} aria-hidden={!isActive} inert={!isActive}>
                   <div className="absolute right-0 -top-4 z-20 flex items-center gap-2">
-                    {moduleKey === 'reminders' && (
-                      <button
-                        type="button"
-                        onClick={() => void handleSelectTab('connect')}
-                        className="inline-flex h-7 items-center justify-center rounded-full border border-[color:var(--bd-20)] px-3 text-[10px] tracking-widest text-[color:var(--fg-70)] bg-[color:var(--app-bg)]/80"
-                      >
-                        {language === 'no' ? 'KOBLE TIL' : 'CONNECT'}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleSelectTab('connect', moduleKey)}
+                      className="inline-flex h-7 items-center justify-center rounded-full border border-[color:var(--bd-20)] px-3 text-[10px] tracking-widest text-[color:var(--fg-70)] bg-[color:var(--app-bg)]/80"
+                    >
+                      {language === 'no' ? 'KOBLE TIL' : 'CONNECT'}
+                    </button>
 
                     <button
                       type="button"
@@ -3867,6 +3870,8 @@ function ConnectAppsScreen({
   onBack,
   startup = false,
   asTab = false,
+  moduleFilter = null,
+  onClearModuleFilter,
   onOnboardingConnectionCheckChange,
   remindersVisibleOnFrame = true,
   onIntegrationChanged,
@@ -3879,6 +3884,8 @@ function ConnectAppsScreen({
   onBack: () => void
   startup?: boolean
   asTab?: boolean
+  moduleFilter?: ModuleKey | null
+  onClearModuleFilter?: () => void
   onOnboardingConnectionCheckChange?: (checking: boolean) => void
   remindersVisibleOnFrame?: boolean
   onIntegrationChanged?: (key: ConnectAppKey, config?: Record<string, unknown>, legacyEnabled?: ConnectAppKey[]) => void
@@ -4969,6 +4976,7 @@ function ConnectAppsScreen({
   const apps = INTEGRATION_CATALOGUE.map(definition => (definition.key === 'google-tasks' && googleTasksEligible) || (definition.key === 'familywall' && familyWallEligible)
       ? { ...definition, connectable: true, status: definition.key === 'familywall' ? 'experimental' as const : 'available' as const } : definition)
     .filter(definition => !startup || (definition.connectable && (definition.status === 'available' || definition.key === 'spond' || definition.key === 'familywall')))
+    .filter(definition => startup || integrationMatchesModule(definition, moduleFilter))
     .filter(definition => startup || integrationMatchesSearch(definition, connectSearch))
     .map(definition => ({
     ...definition,
@@ -5119,7 +5127,23 @@ function ConnectAppsScreen({
           </div>
         )}
 
-        {asTab && !remindersVisibleOnFrame && (
+        {!startup && moduleFilter && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-2 px-1">
+            <button
+              type="button"
+              onClick={onClearModuleFilter}
+              aria-label={language === 'no' ? `Fjern filter: ${moduleLabel(language, moduleFilter)}` : `Remove filter: ${moduleLabel(language, moduleFilter)}`}
+              className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#2aa3ff]/35 bg-[#2aa3ff]/10 pl-3.5 pr-2.5 text-xs font-medium text-[#2aa3ff] transition active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-[#2aa3ff]"
+            >
+              {moduleLabel(language, moduleFilter)}
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-4 w-4">
+                <path d="m6 6 12 12M18 6 6 18" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {asTab && (!moduleFilter || moduleFilter === 'reminders') && !remindersVisibleOnFrame && (
           <div role="note" className="mt-4 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 py-3 text-xs leading-snug text-[color:var(--fg-70)]">
             {language === 'no'
               ? 'Påminnelser fra tilkoblede apper vises ikke på rammen før du legger til Påminnelser-modulen i oppsettet.'
@@ -5129,13 +5153,17 @@ function ConnectAppsScreen({
 
         <div className={`${startup ? '' : 'mt-4'} space-y-2.5`}>
 
-          {!startup && connectSearch.trim() && sortedApps.length === 0 && (
+          {!startup && sortedApps.length === 0 && (moduleFilter || connectSearch.trim()) && (
             <div role="status" className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-6 text-center">
-              <p className="text-sm font-medium text-[color:var(--fg-90)]">{language === 'no' ? 'Ingen apper funnet' : 'No matching apps'}</p>
-              <p className="mt-1 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Prøv et annet søk, eller foreslå en integrasjon nedenfor.' : 'Try another search, or request an integration below.'}</p>
+              <p className="text-sm font-medium text-[color:var(--fg-90)]">{moduleFilter && !INTEGRATION_CATALOGUE.some(definition => integrationMatchesModule(definition, moduleFilter))
+                ? (language === 'no' ? 'Ingen apper for denne modulen ennå' : 'No apps for this module yet')
+                : (language === 'no' ? 'Ingen apper funnet' : 'No matching apps')}</p>
+              <p className="mt-1 text-xs leading-relaxed text-[color:var(--fg-45)]">{moduleFilter && !INTEGRATION_CATALOGUE.some(definition => integrationMatchesModule(definition, moduleFilter))
+                ? (language === 'no' ? 'Fjern filteret for å se alle apper, eller foreslå en integrasjon nedenfor.' : 'Remove the filter to see all apps, or request an integration below.')
+                : (language === 'no' ? 'Prøv et annet søk, eller foreslå en integrasjon nedenfor.' : 'Try another search, or request an integration below.')}</p>
             </div>
           )}
-          {showConnectPlaceholders && (
+          {showConnectPlaceholders && sortedApps.length > 0 && (
             <div role="status" aria-label={language === 'no' ? 'Laster tilkoblinger' : 'Loading connections'} className="space-y-2.5">
               {[0, 1, 2, 3].map(index => (
                 <div key={index} className="flex h-[72px] animate-pulse items-center gap-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3">

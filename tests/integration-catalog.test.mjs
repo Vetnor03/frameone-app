@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { INTEGRATION_CATALOGUE, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst } from '../app/lib/integrations/catalog.ts'
+import { INTEGRATION_CATALOGUE, integrationMatchesModule, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst } from '../app/lib/integrations/catalog.ts'
 
 test('shared integrations are ordered and expose lifecycle capabilities', () => {
-  assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'calendar-link', 'google-calendar', 'bonnetid', 'local-events', 'spond', 'waste', 'todoist', 'google-tasks', 'microsoft-todo', 'vigilo', 'transponder', 'familywall', 'planta'])
+  assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'calendar-link', 'google-calendar', 'bonnetid', 'local-events', 'spond', 'waste', 'todoist', 'google-tasks', 'microsoft-todo', 'vigilo', 'transponder', 'familywall', 'planta', 'surfline', 'meldinga', 'fotmob', 'sofascore', 'yr', 'storm', 'skistar', 'bring', 'listonic', 'nordnet', 'vg', 'aftenposten', 'timeanddate'])
   const waste = INTEGRATION_CATALOGUE.find(item => item.key === 'waste')
   assert.deepEqual({ status: waste.status, connectable: waste.connectable }, { status: 'experimental', connectable: true })
   assert.equal(waste.description.en, 'Show waste collection dates in Reminders')
@@ -14,7 +14,7 @@ test('shared integrations are ordered and expose lifecycle capabilities', () => 
   const spond = INTEGRATION_CATALOGUE.find(item => item.key === 'spond')
   assert.deepEqual({ status: spond.status, connectable: spond.connectable }, { status: 'experimental', connectable: true })
   assert.deepEqual(INTEGRATION_CATALOGUE.find(item => item.key === 'bonnetid') && (({ status, connectable }) => ({ status, connectable }))(INTEGRATION_CATALOGUE.find(item => item.key === 'bonnetid')), { status: 'available', connectable: true })
-  for (const key of ['google-tasks', 'transponder', 'familywall', 'planta']) {
+  for (const key of ['google-tasks', 'transponder', 'familywall', 'planta', 'surfline', 'meldinga', 'fotmob', 'sofascore', 'yr', 'storm', 'skistar', 'bring', 'listonic', 'nordnet', 'vg', 'aftenposten', 'timeanddate']) {
     const integration = INTEGRATION_CATALOGUE.find(item => item.key === key)
     assert.deepEqual({ status: integration.status, connectable: integration.connectable }, { status: 'under-evaluation', connectable: false })
   }
@@ -31,8 +31,8 @@ test('Connect Apps search matches names, localizations and evaluation statuses',
   assert.deepEqual(keys('calendar'), ['teams', 'calendar-link', 'google-calendar', 'familywall'])
   assert.deepEqual(keys('ical'), ['calendar-link'])
   assert.deepEqual(keys('iCal'), ['calendar-link'])
-  assert.deepEqual(keys('under evaluation'), ['google-tasks', 'transponder', 'familywall', 'planta'])
-  assert.deepEqual(keys('under vurdering'), ['google-tasks', 'transponder', 'familywall', 'planta'])
+  assert.deepEqual(keys('under evaluation'), ['google-tasks', 'transponder', 'familywall', 'planta', 'surfline', 'meldinga', 'fotmob', 'sofascore', 'yr', 'storm', 'skistar', 'bring', 'listonic', 'nordnet', 'vg', 'aftenposten', 'timeanddate'])
+  assert.deepEqual(keys('under vurdering'), ['google-tasks', 'transponder', 'familywall', 'planta', 'surfline', 'meldinga', 'fotmob', 'sofascore', 'yr', 'storm', 'skistar', 'bring', 'listonic', 'nordnet', 'vg', 'aftenposten', 'timeanddate'])
   assert.deepEqual(keys('not a real integration'), [])
   assert.deepEqual(keys('  '), INTEGRATION_CATALOGUE.map(item => item.key))
 })
@@ -50,7 +50,7 @@ test('Connect Apps puts connected apps first, alphabetically within each status'
     'google-calendar', 'spond', 'waste', // connected (alphabetical, regardless of status)
     'calendar-link', 'bonnetid', 'local-events', 'microsoft-todo', 'teams', 'todoist', // available
     'vigilo', // experimental
-    'familywall', 'google-tasks', 'planta', 'transponder', // under evaluation
+    'aftenposten', 'bring', 'familywall', 'fotmob', 'google-tasks', 'listonic', 'meldinga', 'nordnet', 'planta', 'skistar', 'sofascore', 'storm', 'surfline', 'timeanddate', 'transponder', 'vg', 'yr', // under evaluation
   ])
   assert.deepEqual(keys(apps), INTEGRATION_CATALOGUE.map(item => item.key), 'does not mutate the catalogue order')
 
@@ -60,7 +60,7 @@ test('Connect Apps puts connected apps first, alphabetically within each status'
     'spond', 'waste',
     'calendar-link', 'google-calendar', 'bonnetid', 'local-events', 'microsoft-todo', 'teams', 'todoist',
     'vigilo', // experimental
-    'familywall', 'google-tasks', 'planta', 'transponder', // under evaluation
+    'aftenposten', 'bring', 'familywall', 'fotmob', 'google-tasks', 'listonic', 'meldinga', 'nordnet', 'planta', 'skistar', 'sofascore', 'storm', 'surfline', 'timeanddate', 'transponder', 'vg', 'yr', // under evaluation
   ])
 })
 
@@ -72,7 +72,7 @@ test('Unconnected apps sort alphabetically with Done, Experimental and Under Eva
   assert.deepEqual(sortConnectedAppsFirst(apps).map(item => item.app.key), [
     'google-calendar', 'bonnetid', 'calendar-link', 'local-events', 'microsoft-todo', 'teams', 'todoist', // available / Done
     'waste', 'spond', 'vigilo', // experimental: Renovasjon before Spond, then Vigilo
-    'familywall', 'google-tasks', 'planta', 'transponder', // under evaluation
+    'aftenposten', 'bring', 'familywall', 'fotmob', 'google-tasks', 'listonic', 'meldinga', 'nordnet', 'planta', 'skistar', 'sofascore', 'storm', 'surfline', 'timeanddate', 'transponder', 'vg', 'yr', // under evaluation
   ])
 })
 
@@ -82,5 +82,42 @@ test('all live Connect descriptions share a short, consistent purpose in both la
     assert.match(integration.description.no, /^Vis .+ i Påminnelser$/, integration.key)
     assert.ok(integration.description.en.length < 80, integration.key)
     assert.ok(integration.description.no.length < 90, integration.key)
+  }
+})
+
+test('module filtering shows only supported apps and clearing restores the full catalogue', () => {
+  const keys = (module) => INTEGRATION_CATALOGUE.filter(item => integrationMatchesModule(item, module)).map(item => item.key)
+  assert.deepEqual(keys(null), INTEGRATION_CATALOGUE.map(item => item.key))
+  assert.ok(keys('reminders').includes('teams'))
+  assert.ok(keys('reminders').includes('familywall'))
+  assert.deepEqual(keys('weather'), ['yr', 'storm'])
+  assert.deepEqual(keys('groceries'), ['bring', 'listonic'])
+  const multiModule = { ...INTEGRATION_CATALOGUE[0], modules: ['reminders', 'groceries'] }
+  assert.equal(integrationMatchesModule(multiModule, 'reminders'), true)
+  assert.equal(integrationMatchesModule(multiModule, 'groceries'), true)
+  assert.equal(integrationMatchesModule(multiModule, 'surf'), false)
+  assert.deepEqual(INTEGRATION_CATALOGUE.filter(item => integrationMatchesModule(item, 'reminders') && integrationMatchesSearch(item, 'Todoist')).map(item => item.key), ['todoist'])
+})
+
+test('new candidates are module-specific and never connectable before evaluation', () => {
+  const expected = {
+    surf: ['surfline', 'meldinga'],
+    soccer: ['fotmob', 'sofascore'],
+    weather: ['yr', 'storm'],
+    ski: ['skistar'],
+    groceries: ['bring', 'listonic'],
+    stocks: ['nordnet'],
+    news: ['vg', 'aftenposten'],
+    countdown: ['timeanddate'],
+    date: ['timeanddate'],
+    assistant: [],
+  }
+  for (const [module, keys] of Object.entries(expected)) {
+    const apps = INTEGRATION_CATALOGUE.filter(item => integrationMatchesModule(item, module))
+    assert.deepEqual(apps.map(item => item.key), keys)
+    for (const app of apps) {
+      assert.equal(app.status, 'under-evaluation')
+      assert.equal(app.connectable, false)
+    }
   }
 })
