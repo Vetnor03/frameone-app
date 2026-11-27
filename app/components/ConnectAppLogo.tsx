@@ -47,7 +47,7 @@ const ICONS: Record<ConnectAppKey, LogoMark> = {
   "nordnet": {"background":"#050505","viewBox":"0 0 24 24","paths":[{"d":"M1 15 8 9h3.2l-7 6zM11.2 9h2.6v6h-2.6zM13.8 15l7-6H24l-7 6z"}]},
   "vg": {"background":"#E30613","viewBox":"0 0 24 24","color":"#fff","wordmark":"VG","fontSize":14,"fontFamily":"Arial, sans-serif"},
   "aftenposten": {"background":"#FFFFFF","viewBox":"0 0 24 24","paths":[{"fill":"#050A23","d":"M18 2c.8 1.3 2.1 2.2 3.3 2.8-.5.7-.8 1.5-.8 2.5v12.3c0 1.3 1.1 1.8 2.4.7-.6 2.2-2.4 3.4-4.1 3.4-2.1 0-3.3-1.6-3.3-3.8v-2.6C13.3 22 9.7 24 6.6 24 3.1 24 .9 22 .9 19.5c0-2 1.2-3.4 3.1-3.4 1 0 1.9.4 2.5 1.2-1.4-.7-2.4.2-2.4 1.4 0 2.3 3.8 2.6 6.1 1.3 3.1-1.7 5.3-4.1 5.3-7.4h-3.8v3c0 2.5-1.9 4.1-5.1 4.5.8-.7.9-1.9.9-3.1V8.2c0-2.6 1.5-3.7 4.3-4.5C15 2.8 16.5 2.1 18 2zm-6.3 9.4h3.8V6.8c0-1.6-.6-2.5-1.9-2.5-1.2 0-1.9.9-1.9 2.5z"}]},
-  "timeanddate": {"background":"#24557A","viewBox":"0 0 24 24","color":"#fff","wordmark":"time\\nanddate","fontSize":6.2,"fontFamily":"Arial, sans-serif"},
+  "timeanddate": {"background":"#24557A","viewBox":"0 0 24 24","color":"#fff","wordmark":"time\nanddate","fontSize":6.2,"fontFamily":"Arial, sans-serif"},
 }
 
 export default function ConnectAppLogo({ appKey }: { appKey: ConnectAppKey }) {
