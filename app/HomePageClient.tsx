@@ -30,7 +30,7 @@ import { nextBonnetidWithOccasions } from './lib/integrations/bonnetid/nextOccur
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, getLocalEventPlace, normalizeLocalEventAreaPreference, nationwideLocalEventArea, type LocalEventAreaPreference } from './lib/integrations/local-events/places'
 import { localEventGroupKeyFromRaw, groupSkipId } from './lib/integrations/local-events/grouping'
-import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationMatchesModule, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst, type ConnectAppKey } from './lib/integrations/catalog'
+import { INTEGRATION_CATALOGUE, integrationActiveForPilot, integrationMatchesModule, integrationMatchesScope, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst, type ConnectAppKey } from './lib/integrations/catalog'
 const WasteSetupModal = dynamic(() => import('./components/WasteSetupModal'))
 const BonnetidSetupModal = dynamic(() => import('./components/BonnetidSetupModal'))
 const CalendarLinkSetup = dynamic(() => import('./components/CalendarLinkSetup'))
@@ -3533,6 +3533,7 @@ async function handleSelectTab(k: TabKey, moduleFilter: ModuleKey | null = null)
                   frameSettingsReady={loadedSettingsDeviceId === activeDeviceId}
                   onBack={() => setActiveTab('reminders')}
                   asTab
+                  activeModuleKeys={configuredModuleKeys}
                   moduleFilter={connectModuleFilter}
                   onClearModuleFilter={() => setConnectModuleFilter(null)}
                   remindersVisibleOnFrame={!activeDeviceId || remindersShownOnFrame}
@@ -3870,6 +3871,7 @@ function ConnectAppsScreen({
   onBack,
   startup = false,
   asTab = false,
+  activeModuleKeys = null,
   moduleFilter = null,
   onClearModuleFilter,
   onOnboardingConnectionCheckChange,
@@ -3884,6 +3886,7 @@ function ConnectAppsScreen({
   onBack: () => void
   startup?: boolean
   asTab?: boolean
+  activeModuleKeys?: readonly ModuleKey[] | null
   moduleFilter?: ModuleKey | null
   onClearModuleFilter?: () => void
   onOnboardingConnectionCheckChange?: (checking: boolean) => void
@@ -3933,6 +3936,21 @@ function ConnectAppsScreen({
   }, [startup, userId, activeDeviceId])
 
   const [connectSearch, setConnectSearch] = useState('')
+  const [connectScope, setConnectScope] = useState<'active' | 'all'>('active')
+  useLayoutEffect(() => {
+    if (startup || !userId) return
+    try {
+      setConnectScope(window.localStorage.getItem(`remind:connect-scope:${userId}`) === 'all' ? 'all' : 'active')
+    } catch { setConnectScope('active') }
+  }, [startup, userId])
+
+  function selectConnectScope(scope: 'active' | 'all') {
+    setConnectScope(scope)
+    onClearModuleFilter?.()
+    if (!startup && userId) {
+      try { window.localStorage.setItem(`remind:connect-scope:${userId}`, scope) } catch { /* optional preference */ }
+    }
+  }
   const [, setSpondConnected] = useState(false)
   const [spondAccount, setSpondAccount] = useState<string | null>(null)
   const [spondAccountConnected, setSpondAccountConnected] = useState(false)
@@ -5011,6 +5029,7 @@ function ConnectAppsScreen({
   }
 
   const sortedApps = sortConnectedAppsFirst(apps.map(app => ({ app, connected: getAppConnected(app) })))
+    .filter(({ app, connected }) => startup || integrationMatchesScope(app, connected, connectScope, activeModuleKeys, moduleFilter))
   const disconnectAppName = disconnectConfirmApp
     ? INTEGRATION_CATALOGUE.find(app => app.key === disconnectConfirmApp)?.name[language] || disconnectConfirmApp
     : ''
@@ -5127,6 +5146,18 @@ function ConnectAppsScreen({
           </div>
         )}
 
+        {!startup && (
+          <div role="group" aria-label={language === 'no' ? 'Apputvalg' : 'App scope'} className="mt-3 grid grid-cols-2 gap-1 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-1">
+            {(['active', 'all'] as const).map(scope => (
+              <button key={scope} type="button" aria-pressed={!moduleFilter && connectScope === scope}
+                onClick={() => selectConnectScope(scope)}
+                className={`min-h-9 rounded-xl px-2 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-[#2aa3ff] ${!moduleFilter && connectScope === scope ? 'bg-[color:var(--panel-10)] text-[color:var(--fg-90)] shadow-sm' : 'text-[color:var(--fg-60)]'}`}>
+                {scope === 'active' ? (language === 'no' ? 'Aktive moduler' : 'Active modules') : (language === 'no' ? 'Alle apper' : 'All apps')}
+              </button>
+            ))}
+          </div>
+        )}
+
         {!startup && moduleFilter && (
           <div className="mt-2.5 flex flex-wrap items-center gap-2 px-1">
             <button
@@ -5143,7 +5174,7 @@ function ConnectAppsScreen({
           </div>
         )}
 
-        {asTab && (!moduleFilter || moduleFilter === 'reminders') && !remindersVisibleOnFrame && (
+        {asTab && (!moduleFilter || moduleFilter === 'reminders') && !remindersVisibleOnFrame && sortedApps.some(({ app }) => app.modules.includes('reminders')) && (
           <div role="note" className="mt-4 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 py-3 text-xs leading-snug text-[color:var(--fg-70)]">
             {language === 'no'
               ? 'Påminnelser fra tilkoblede apper vises ikke på rammen før du legger til Påminnelser-modulen i oppsettet.'
@@ -5153,17 +5184,21 @@ function ConnectAppsScreen({
 
         <div className={`${startup ? '' : 'mt-4'} space-y-2.5`}>
 
-          {!startup && sortedApps.length === 0 && (moduleFilter || connectSearch.trim()) && (
+          {!startup && sortedApps.length === 0 && (!showConnectPlaceholders || !!moduleFilter) && (
             <div role="status" className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-6 text-center">
               <p className="text-sm font-medium text-[color:var(--fg-90)]">{moduleFilter && !INTEGRATION_CATALOGUE.some(definition => integrationMatchesModule(definition, moduleFilter))
                 ? (language === 'no' ? 'Ingen apper for denne modulen ennå' : 'No apps for this module yet')
-                : (language === 'no' ? 'Ingen apper funnet' : 'No matching apps')}</p>
+                : !moduleFilter && connectScope === 'active' && !connectSearch.trim()
+                  ? (language === 'no' ? 'Ingen apper for aktive moduler ennå' : 'No apps for active modules yet')
+                  : (language === 'no' ? 'Ingen apper funnet' : 'No matching apps')}</p>
               <p className="mt-1 text-xs leading-relaxed text-[color:var(--fg-45)]">{moduleFilter && !INTEGRATION_CATALOGUE.some(definition => integrationMatchesModule(definition, moduleFilter))
-                ? (language === 'no' ? 'Fjern filteret for å se alle apper, eller foreslå en integrasjon nedenfor.' : 'Remove the filter to see all apps, or request an integration below.')
-                : (language === 'no' ? 'Prøv et annet søk, eller foreslå en integrasjon nedenfor.' : 'Try another search, or request an integration below.')}</p>
+                ? (language === 'no' ? 'Velg Alle apper for å se hele utvalget, eller foreslå en integrasjon nedenfor.' : 'Choose All apps to explore the catalogue, or request an integration below.')
+                : !moduleFilter && connectScope === 'active'
+                  ? (language === 'no' ? 'Velg Alle apper for å se hele utvalget.' : 'Choose All apps to explore the full catalogue.')
+                  : (language === 'no' ? 'Prøv et annet søk, eller foreslå en integrasjon nedenfor.' : 'Try another search, or request an integration below.')}</p>
             </div>
           )}
-          {showConnectPlaceholders && sortedApps.length > 0 && (
+          {showConnectPlaceholders && (sortedApps.length > 0 || (!moduleFilter && connectScope === 'active')) && (
             <div role="status" aria-label={language === 'no' ? 'Laster tilkoblinger' : 'Loading connections'} className="space-y-2.5">
               {[0, 1, 2, 3].map(index => (
                 <div key={index} className="flex h-[72px] animate-pulse items-center gap-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3">
