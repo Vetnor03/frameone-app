@@ -5161,8 +5161,8 @@ function ConnectAppsScreen({
         {!startup && !moduleFilter && (
           <p className="mt-2 px-2 text-center text-xs leading-snug text-[color:var(--fg-60)]">
             {connectScope === 'active'
-              ? (language === 'no' ? 'Apper for dine aktive moduler og eksisterende tilkoblinger.' : 'Apps for your active modules and existing connections.')
-              : (language === 'no' ? 'Utforsk integrasjoner for alle RE:MIND-moduler.' : 'Explore integrations for all RE:MIND modules.')}
+              ? (language === 'no' ? 'Viser apper som er relevante for dine aktive moduler.' : 'Shows apps relevant to your active modules.')
+              : (language === 'no' ? 'Viser apper for alle RE:MIND-moduler.' : 'Shows apps for all RE:MIND modules.')}
           </p>
         )}
 
