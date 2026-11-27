@@ -32,7 +32,7 @@ const ICONS: Record<ConnectAppKey, LogoMark> = {
   "google-tasks": {"background":"#4285F4","viewBox":"0 0 24 24","paths":[{"d":"M11.383.617C5.097.617 0 5.714 0 12c0 6.286 5.097 11.383 11.383 11.383 6.286 0 11.38-5.097 11.38-11.383a11.34 11.34 0 0 0-.878-4.389l-3.203 3.203c.062.387.1.782.1 1.186a7.398 7.398 0 1 1-7.4-7.398c1.499 0 2.889.448 4.054 1.214l2.857-2.857a11.325 11.325 0 0 0-6.91-2.342zm9.674.756c-.292 0-.583.112-.805.334-2.97 2.965-5.934 5.934-8.9 8.902L9.596 8.854a1.139 1.139 0 0 0-1.61 0l-1.775 1.773a1.139 1.139 0 0 0 0 1.61l4.166 4.163a1.421 1.421 0 0 0 2.012 0L23.666 5.121a1.136 1.136 0 0 0 0-1.61l-1.805-1.804a1.136 1.136 0 0 0-.804-.334z"}]},
   "microsoft-todo": {"background":"#FFFFFF","viewBox":"-0.02 53.05 512.07 405.9","color":"#fff","paths":[{"d":"m6.5 240.3 74.8-74.8c8.6-8.6 22.7-8.6 31.3 0l180.8 180.8c8.6 8.6 8.6 22.7 0 31.3l-74.8 74.8c-8.6 8.6-22.7 8.6-31.3 0L6.5 271.7c-8.7-8.7-8.7-22.7 0-31.4","fill":"#195ABD"},{"d":"m430.8 59.5 74.8 74.8c8.6 8.6 8.6 22.7 0 31.3l-287 286.9c-8.6 8.6-22.7 8.6-31.3 0l-74.8-74.8c-8.6-8.6-8.6-22.7 0-31.3L399.4 59.5c8.7-8.6 22.7-8.6 31.4 0","fill":"#39A4EB"}]},
   "vigilo": {"background":"#080D59","viewBox":"0 0 24 24","color":"#fff","paths":[{"d":"M3.5 6a3 3 0 0 1 4.3 0L12 10.2l3.5-3.5a3 3 0 0 1 4.3 4.3L14 17 9.7 12.7 3.5 10.3a3 3 0 0 1 0-4.3z","fill":"#4666F2"},{"d":"m9 10.5 4.1 4.1 2.3-2.3 2.9 2.9-4.2 4.2a3 3 0 0 1-4.2 0L6 15.5z","fill":"#DFB6AB"},{"d":"m11.5 13 3.7-3.6 4 4-4 4a2.2 2.2 0 0 0-1.2-3.5c-.8-.2-1.2.6-2.1.5-.9-.1-1.1-.6-.4-1.4z","fill":"#FFDBC3"}]},
-  "transponder": {"background":"#45546F","viewBox":"0 0 24 24","color":"#fff","wordmark":"Transponder","fontSize":4.1,"fontFamily":"Arial, sans-serif"},
+  "transponder": {"background":"#56A66C","viewBox":"0 0 24 24","paths":[{"d":"M7.6 7.3a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM17 2.8c5.2 5.2 5.2 13.4 0 18.6l-2.4-3.1c3.5-3.5 3.5-9 0-12.5z"}]},
   "familywall": {"background":"#2B91C9","viewBox":"0 0 24 24","color":"#fff","paths":[{"d":"M13 4.2a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM9.5 13.2c1 .7 2.2 1 3.5 1s2.5-.3 3.5-1c1.1 2.1 1.6 4.5 1.6 7.1H7.9c0-2.6.5-5 1.6-7.1zM7.7 6.3c.8 0 1.5.2 2.1.6-.8 1.6-.8 3.5 0 5-1.2 1.5-4 1.5-5.3-.3-.7-1-1-2.4-.8-3.4.8.4 1.4-.4 1.9-.9.6-.6 1.3-1 2.1-1zM5 13.7c1 .4 2 .4 3 .2-.8 1.9-1.2 4-1.2 6.4H3.4c0-2.5.5-4.6 1.6-6.6zM18.8 8.1c1.1-1.4 2.5-1.2 3-.1.2.5.8.8 1.2.4.2 1.5-1.6 2-2.4.6a2.8 2.8 0 1 1-2.4 4.7c.6-1.4.8-3 .3-4.4zM19 14.5c.9.2 1.7 0 2.4-.4.6 1.8.9 3.9.9 6.2h-3.1c0-2.1-.3-4-.9-5.8zM.5 12.7l1.2.4.1-1.3 1.1.6.5-1.1c.5 1.6 1.1 2.2 2 2.9a2.5 2.5 0 0 1-4.9-1.5zm1 4.2c.8.3 1.4.2 2.1-.1-.2 1.3-.3 2.4-.3 3.5H1.5z"}]},
   "planta": {"background":"#006C60","viewBox":"0 0 24 24","paths":[{"d":"M5 4h7c5.6 0 8.5 3.5 8.5 7.3S17.4 18.5 12 18.5H9.8c0-2.7 2-4.7 4.7-4.7 2.1 0 3.6-1.6 3.6-3.4 0-2-1.5-3.5-3.7-3.5H9.7v14.2c0 2-1.9 3-4.7 3z","fill":"#FFFFFF"},{"d":"M5 4h9.4c3.6 0 5.6 3.1 5.6 6.4 0 2.4-1.7 4-4 4.6 1.4-1 2-2.2 2-3.6 0-2-1.5-3.6-3.6-3.6H9.7v12.5c0 2.2-2.1 3.7-4.7 3.7z","fill":"#CDE39B"},{"d":"M5 4h9.4C11 4 9.7 5.7 9.7 8v8.5C8.9 12.7 5 10.8 5 7z","fill":"#91C74D"}]},
   "surfline": {"background":"#151B24","viewBox":"0 0 24 24","color":"#fff","paths":[{"d":"M12 2C9.7 5.3 4 11.3 4 15.1a8 8 0 0 0 16 0c0-3.8-5.7-9.8-8-13.1z","fill":"#F4F8F8"},{"d":"M7.2 16c1.8-3.5 5.7-5.9 9.4-4.1-2.3-.3-4.5 1.5-4.5 3.6 0 1.7 1.2 2.6 3.8 2.9-3.1 1.9-7.3 1.1-8.7-2.4z","fill":"#151B24"}]},
@@ -46,8 +46,8 @@ const ICONS: Record<ConnectAppKey, LogoMark> = {
   "listonic": {"background":"#0D982F","viewBox":"0 0 24 24","color":"#fff","paths":[{"d":"M3 4h13v13h5v2a3 3 0 0 1-3 3H7a4 4 0 0 1-4-4z","fill":"#FFF"},{"d":"M5 8h8v1.7H5zm0 4h8v1.7H5zm0 4h6v1.7H5z","fill":"#62C842"},{"d":"m14 10 1.5-4 4.7-4.7 2.5 2.5L18 8.5z","fill":"#FFD044"},{"d":"m14 10 1.5-4 2.5 2.5z","fill":"#9B4636"}]},
   "nordnet": {"background":"#050505","viewBox":"0 0 24 24","paths":[{"d":"M1 15 8 9h3.2l-7 6zM11.2 9h2.6v6h-2.6zM13.8 15l7-6H24l-7 6z"}]},
   "vg": {"background":"#E30613","viewBox":"0 0 24 24","color":"#fff","wordmark":"VG","fontSize":14,"fontFamily":"Arial, sans-serif"},
-  "aftenposten": {"background":"#202020","viewBox":"0 0 24 24","color":"#fff","wordmark":"A","fontSize":18,"fontFamily":"Georgia, serif"},
-  "timeanddate": {"background":"#24557A","viewBox":"0 0 24 24","color":"#fff","wordmark":"timeanddate","fontSize":4.3,"fontFamily":"Arial, sans-serif"},
+  "aftenposten": {"background":"#FFFFFF","viewBox":"0 0 24 24","paths":[{"fill":"#050A23","d":"M18 2c.8 1.3 2.1 2.2 3.3 2.8-.5.7-.8 1.5-.8 2.5v12.3c0 1.3 1.1 1.8 2.4.7-.6 2.2-2.4 3.4-4.1 3.4-2.1 0-3.3-1.6-3.3-3.8v-2.6C13.3 22 9.7 24 6.6 24 3.1 24 .9 22 .9 19.5c0-2 1.2-3.4 3.1-3.4 1 0 1.9.4 2.5 1.2-1.4-.7-2.4.2-2.4 1.4 0 2.3 3.8 2.6 6.1 1.3 3.1-1.7 5.3-4.1 5.3-7.4h-3.8v3c0 2.5-1.9 4.1-5.1 4.5.8-.7.9-1.9.9-3.1V8.2c0-2.6 1.5-3.7 4.3-4.5C15 2.8 16.5 2.1 18 2zm-6.3 9.4h3.8V6.8c0-1.6-.6-2.5-1.9-2.5-1.2 0-1.9.9-1.9 2.5z"}]},
+  "timeanddate": {"background":"#24557A","viewBox":"0 0 24 24","color":"#fff","wordmark":"time\\nanddate","fontSize":6.2,"fontFamily":"Arial, sans-serif"},
 }
 
 export default function ConnectAppLogo({ appKey }: { appKey: ConnectAppKey }) {
@@ -66,7 +66,9 @@ export default function ConnectAppLogo({ appKey }: { appKey: ConnectAppKey }) {
           <text x="12" y="12" dominantBaseline="central" textAnchor="middle"
             fontFamily={icon.fontFamily || 'Arial, sans-serif'} fontSize={icon.fontSize || 9}
             fontWeight="700" fill={icon.color || '#fff'}>
-            {icon.wordmark}
+            {icon.wordmark.split('\n').map((line, index, lines) => (
+              <tspan key={line} x="12" dy={index === 0 ? (lines.length > 1 ? '-0.6em' : '0') : '1.2em'}>{line}</tspan>
+            ))}
           </text>
         )}
       </svg>
