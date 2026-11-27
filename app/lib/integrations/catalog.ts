@@ -1,6 +1,6 @@
 export type IntegrationStatus = 'available' | 'experimental' | 'under-evaluation'
 
-export type ConnectAppKey = 'waste' | 'teams' | 'google-calendar' | 'local-events' | 'spond' | 'vigilo' | 'transponder' | 'planta' | 'bonnetid' | 'todoist' | 'microsoft-todo' | 'google-tasks' | 'calendar-link' | 'familywall'
+export type ConnectAppKey = 'waste' | 'teams' | 'google-calendar' | 'local-events' | 'spond' | 'vigilo' | 'transponder' | 'planta' | 'bonnetid' | 'todoist' | 'microsoft-todo' | 'google-tasks' | 'calendar-link' | 'familywall' | 'surfline' | 'meldinga' | 'fotmob' | 'sofascore' | 'yr' | 'storm' | 'skistar' | 'bring' | 'listonic' | 'nordnet' | 'vg' | 'aftenposten' | 'timeanddate'
 
 export type IntegrationDefinition = {
   key: ConnectAppKey
@@ -27,6 +27,19 @@ export const INTEGRATION_CATALOGUE: readonly IntegrationDefinition[] = [
   { key: 'transponder', name: { en: 'Transponder', no: 'Transponder' }, description: { en: "Messages from schools and activities", no: "Meldinger fra skole og aktiviteter" }, status: 'under-evaluation', connectable: false, modules: ['reminders'] },
   { key: 'familywall', name: { en: 'FamilyWall', no: 'FamilyWall' }, description: { en: 'Show FamilyWall calendar events in Reminders', no: 'Vis FamilyWall-kalenderavtaler i Påminnelser' }, status: 'under-evaluation', connectable: false, modules: ['reminders'] },
   { key: 'planta', name: { en: 'PLANTA', no: 'PLANTA' }, description: { en: "Plant care reminders", no: "Påminnelser om plantestell" }, status: 'under-evaluation', connectable: false, modules: ['reminders'] },
+  { key: 'surfline', name: { en: "Surfline", no: "Surfline" }, description: { en: "Show surf forecasts for your favourite spots", no: "Vis surfevarsel for favorittspottene dine" }, status: 'under-evaluation', connectable: false, modules: ['surf'] },
+  { key: 'meldinga', name: { en: "Meldinga", no: "Meldinga" }, description: { en: "Show Norwegian surf forecasts and surf scores", no: "Vis norske surfevarsler og surfscore" }, status: 'under-evaluation', connectable: false, modules: ['surf'] },
+  { key: 'fotmob', name: { en: "FotMob", no: "FotMob" }, description: { en: "Show football scores and upcoming matches", no: "Vis fotballresultater og kommende kamper" }, status: 'under-evaluation', connectable: false, modules: ['soccer'] },
+  { key: 'sofascore', name: { en: "Sofascore", no: "Sofascore" }, description: { en: "Show football results and match schedules", no: "Vis fotballresultater og kampoppsett" }, status: 'under-evaluation', connectable: false, modules: ['soccer'] },
+  { key: 'yr', name: { en: "Yr", no: "Yr" }, description: { en: "Show weather forecasts from Yr and MET Norway", no: "Vis værvarsler fra Yr og Meteorologisk institutt" }, status: 'under-evaluation', connectable: false, modules: ['weather'] },
+  { key: 'storm', name: { en: "Storm.no", no: "Storm.no" }, description: { en: "Show weather forecasts from Storm", no: "Vis værvarsler fra Storm" }, status: 'under-evaluation', connectable: false, modules: ['weather'] },
+  { key: 'skistar', name: { en: "SkiStar", no: "SkiStar" }, description: { en: "Show snow conditions and lift status", no: "Vis snøforhold og heisstatus" }, status: 'under-evaluation', connectable: false, modules: ['ski'] },
+  { key: 'bring', name: { en: "Bring!", no: "Bring!" }, description: { en: "Show your shared shopping lists in Groceries", no: "Vis delte handlelister i Handleliste" }, status: 'under-evaluation', connectable: false, modules: ['groceries'] },
+  { key: 'listonic', name: { en: "Listonic", no: "Listonic" }, description: { en: "Show your Listonic shopping lists in Groceries", no: "Vis Listonic-handlelister i Handleliste" }, status: 'under-evaluation', connectable: false, modules: ['groceries'] },
+  { key: 'nordnet', name: { en: "Nordnet", no: "Nordnet" }, description: { en: "Show your selected investments and market updates", no: "Vis utvalgte investeringer og markedsoppdateringer" }, status: 'under-evaluation', connectable: false, modules: ['stocks'] },
+  { key: 'vg', name: { en: "VG", no: "VG" }, description: { en: "Show headlines from VG in News", no: "Vis overskrifter fra VG i Nyheter" }, status: 'under-evaluation', connectable: false, modules: ['news'] },
+  { key: 'aftenposten', name: { en: "Aftenposten", no: "Aftenposten" }, description: { en: "Show headlines from Aftenposten in News", no: "Vis overskrifter fra Aftenposten i Nyheter" }, status: 'under-evaluation', connectable: false, modules: ['news'] },
+  { key: 'timeanddate', name: { en: "timeanddate", no: "timeanddate" }, description: { en: "Show holidays and countdowns to upcoming dates", no: "Vis helligdager og nedtellinger til kommende datoer" }, status: 'under-evaluation', connectable: false, modules: ['date', 'countdown'] },
 ]
 
 export function integrationStatusLabel(status: IntegrationStatus, language: 'en' | 'no') {
