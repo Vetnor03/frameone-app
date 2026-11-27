@@ -16794,7 +16794,10 @@ const ungroupedSortedReminders = useMemo(() => {
               return (
                 <button
                   key={source}
-                  onClick={() => setSourceFilter(source)}
+                  onClick={() => {
+                    setSourceFilter(source)
+                    setSelectedDayYmd(null)
+                  }}
                   className={`h-8 max-[420px]:h-[30px] rounded-xl border px-3 text-[11px] tracking-widest transition ${
                     active
                       ? 'border-[#2aa3ff] text-[#2aa3ff]'
