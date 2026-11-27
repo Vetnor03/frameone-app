@@ -4,6 +4,7 @@ import type { ConnectAppKey } from '@/app/lib/integrations/catalog'
  * Bundled vector marks: Simple Icons (CC0) for Google Calendar, Google Tasks,
  * Spond and Todoist; Material Design Icons (Apache-2.0) for Teams and for
  * services where a suitable official brand mark isn't available.
+ * Evaluation candidates use local category illustrations, not official brand marks.
  * No external image requests, loading shifts or branding fallbacks at runtime.
  */
 const ICONS: Record<ConnectAppKey, { background: string; viewBox: string; path: string }> = {
@@ -21,6 +22,19 @@ const ICONS: Record<ConnectAppKey, { background: string; viewBox: string; path: 
   "transponder": { background: "#655D8A", viewBox: "0 0 24 24", path: "M20,2H4A2,2 0 0,0 2,4V22L6,18H20A2,2 0 0,0 22,16V4A2,2 0 0,0 20,2M6,9H18V11H6M14,14H6V12H14M18,8H6V6H18" },
   "familywall": { background: "#527DDA", viewBox: "0 0 24 24", path: "M12 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM5 6a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Zm14 0a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5ZM7 20v-5a5 5 0 0 1 10 0v5H7ZM2 19v-4a3 3 0 0 1 4-2.8V19H2Zm16 0v-6.8a3 3 0 0 1 4 2.8v4h-4Z" },
   "planta": { background: "#498065", viewBox: "0 0 24 24", path: "M17,8C8,10 5.9,16.17 3.82,21.34L5.71,22L6.66,19.7C7.14,19.87 7.64,20 8,20C19,20 22,3 22,3C21,5 14,5.25 9,6.25C4,7.25 2,11.5 2,13.5C2,15.5 3.75,17.25 3.75,17.25C7,8 17,8 17,8Z" },
+  "surfline": {"background":"#176AC4","viewBox":"0 0 24 24","path":"M2 14c4 0 5-6 10-6 4 0 6 3 6 5-2-1-4 0-4 2 0 2 3 3 8 3v3H2v-3h6c-3-1-5-2-6-4z"},
+  "meldinga": {"background":"#246D86","viewBox":"0 0 24 24","path":"M2 14c4 0 5-6 10-6 4 0 6 3 6 5-2-1-4 0-4 2 0 2 3 3 8 3v3H2v-3h6c-3-1-5-2-6-4z"},
+  "fotmob": {"background":"#16865B","viewBox":"0 0 24 24","path":"M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2 3 2-1 4h-4L9 6l3-2zm-8 7 3-2 3 3-2 4-3-1-1-4zm16 0-1 4-3 1-2-4 3-3 3 2zm-8 9-3-2 1-4h4l1 4-3 2z"},
+  "sofascore": {"background":"#3157D5","viewBox":"0 0 24 24","path":"M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2 3 2-1 4h-4L9 6l3-2zm-8 7 3-2 3 3-2 4-3-1-1-4zm16 0-1 4-3 1-2-4 3-3 3 2zm-8 9-3-2 1-4h4l1 4-3 2z"},
+  "yr": {"background":"#1875B9","viewBox":"0 0 24 24","path":"M6 18a4 4 0 0 1-1-7.9 6 6 0 0 1 11.6-1.4A4.7 4.7 0 1 1 18 18H6z"},
+  "storm": {"background":"#4C708A","viewBox":"0 0 24 24","path":"M6 18a4 4 0 0 1-1-7.9 6 6 0 0 1 11.6-1.4A4.7 4.7 0 1 1 18 18H6z"},
+  "skistar": {"background":"#27548A","viewBox":"0 0 24 24","path":"M3 19 10 5l4 8 3-5 5 11H3zm7-10-2 4 2-1 2 1-2-4z"},
+  "bring": {"background":"#24824B","viewBox":"0 0 24 24","path":"M2 4h3l2 11h12l3-8H7l-.5-3H2zm7 13a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm9 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"},
+  "listonic": {"background":"#4D9565","viewBox":"0 0 24 24","path":"M2 4h3l2 11h12l3-8H7l-.5-3H2zm7 13a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm9 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"},
+  "nordnet": {"background":"#355C80","viewBox":"0 0 24 24","path":"M3 3h2v16h16v2H3V3zm4 11 5-5 4 3 5-7v5h-2v-2l-3 5-4-3-4 4-1-1z"},
+  "vg": {"background":"#C83C40","viewBox":"0 0 24 24","path":"M3 4h18v16H3V4zm3 3v4h5V7H6zm7 0v2h5V7h-5zm0 4v2h5v-2h-5zM6 14v2h12v-2H6z"},
+  "aftenposten": {"background":"#4A5967","viewBox":"0 0 24 24","path":"M3 4h18v16H3V4zm3 3v4h5V7H6zm7 0v2h5V7h-5zm0 4v2h5v-2h-5zM6 14v2h12v-2H6z"},
+  "timeanddate": {"background":"#9C683F","viewBox":"0 0 24 24","path":"M4 4h3V2h2v2h6V2h2v2h3v17H4V4zm2 5v10h12V9H6zm3 2h2v2H9zm4 0h2v2h-2zm-4 4h2v2H9z"},
 }
 
 export default function ConnectAppLogo({ appKey }: { appKey: ConnectAppKey }) {
