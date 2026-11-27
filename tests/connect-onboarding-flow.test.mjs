@@ -145,3 +145,12 @@ test('Connect scope uses configured module tabs, remembers the choice and leaves
   assert.match(connect, /All apps/)
   assert.match(connect, /aria-pressed=\{!moduleFilter && connectScope === scope\}/)
 })
+
+test('Connect scope explains the selected view without duplicating module shortcut filters or onboarding', () => {
+  const connect = source.slice(source.indexOf('function ConnectAppsScreen('), source.indexOf('function FrameSetupFlow('))
+  assert.match(connect, /!startup && !moduleFilter && \(\s*<p[^>]*>\s*\{connectScope === 'active'/)
+  assert.match(connect, /Apps shown here adapt to the modules you use\./)
+  assert.match(connect, /Explore apps for all RE:MIND modules\./)
+  assert.match(connect, /Appene som vises her, tilpasses modulene du bruker\./)
+  assert.match(connect, /Utforsk apper for alle RE:MIND-moduler\./)
+})
