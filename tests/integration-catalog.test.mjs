@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { INTEGRATION_CATALOGUE, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst } from '../app/lib/integrations/catalog.ts'
+import { INTEGRATION_CATALOGUE, integrationMatchesModule, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst } from '../app/lib/integrations/catalog.ts'
 
 test('shared integrations are ordered and expose lifecycle capabilities', () => {
   assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'calendar-link', 'google-calendar', 'bonnetid', 'local-events', 'spond', 'waste', 'todoist', 'google-tasks', 'microsoft-todo', 'vigilo', 'transponder', 'familywall', 'planta'])
@@ -83,4 +83,18 @@ test('all live Connect descriptions share a short, consistent purpose in both la
     assert.ok(integration.description.en.length < 80, integration.key)
     assert.ok(integration.description.no.length < 90, integration.key)
   }
+})
+
+test('module filtering shows only supported apps and clearing restores the full catalogue', () => {
+  const keys = (module) => INTEGRATION_CATALOGUE.filter(item => integrationMatchesModule(item, module)).map(item => item.key)
+  assert.deepEqual(keys(null), INTEGRATION_CATALOGUE.map(item => item.key))
+  assert.ok(keys('reminders').includes('teams'))
+  assert.ok(keys('reminders').includes('familywall'))
+  assert.deepEqual(keys('weather'), [])
+  assert.deepEqual(keys('groceries'), [])
+  const multiModule = { ...INTEGRATION_CATALOGUE[0], modules: ['reminders', 'groceries'] }
+  assert.equal(integrationMatchesModule(multiModule, 'reminders'), true)
+  assert.equal(integrationMatchesModule(multiModule, 'groceries'), true)
+  assert.equal(integrationMatchesModule(multiModule, 'surf'), false)
+  assert.deepEqual(INTEGRATION_CATALOGUE.filter(item => integrationMatchesModule(item, 'reminders') && integrationMatchesSearch(item, 'Todoist')).map(item => item.key), ['todoist'])
 })
