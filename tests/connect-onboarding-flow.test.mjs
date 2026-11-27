@@ -111,3 +111,24 @@ test('Connect page supports live searching and clear/no-results states without c
   assert.match(connect, /No matching apps/)
   assert.match(connect, /role="status"/)
 })
+
+test('all module tabs share the same Connect shortcut and direct navigation resets its filter', () => {
+  const toolbar = source.slice(source.indexOf('{mountedModuleKeys.map((moduleKey)'), source.indexOf("{moduleKey === 'assistant' ? (", source.indexOf('{mountedModuleKeys.map((moduleKey)')))
+  assert.match(toolbar, /onClick=\{\(\) => void handleSelectTab\('connect', moduleKey\)\}/)
+  assert.doesNotMatch(toolbar, /moduleKey === 'reminders'/)
+  assert.match(source, /function handleSelectTab\(k: TabKey, moduleFilter: ModuleKey \| null = null\)/)
+  assert.match(source, /setConnectModuleFilter\(k === 'connect' \? moduleFilter : null\)/)
+  assert.match(source, /moduleFilter=\{connectModuleFilter\}/)
+  assert.match(source, /onClearModuleFilter=\{\(\) => setConnectModuleFilter\(null\)\}/)
+})
+
+test('Connect module filtering is removable, composes with search, and does not affect onboarding', () => {
+  const connect = source.slice(source.indexOf('function ConnectAppsScreen('), source.indexOf('function FrameSetupFlow('))
+  assert.match(connect, /\.filter\(definition => startup \|\| integrationMatchesModule\(definition, moduleFilter\)\)/)
+  assert.match(connect, /!startup && moduleFilter && \(/)
+  assert.match(connect, /onClick=\{onClearModuleFilter\}/)
+  assert.match(connect, /Remove filter:/)
+  assert.match(connect, /No apps for this module yet/)
+  assert.match(connect, /showConnectPlaceholders && sortedApps.length > 0/)
+  assert.match(connect, /sortConnectedAppsFirst\(apps.map/)
+})
