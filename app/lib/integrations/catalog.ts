@@ -53,6 +53,20 @@ export function integrationMatchesModule(definition: IntegrationDefinition, modu
   return module === null || definition.modules.includes(module)
 }
 
+/** Active-module scope never hides an existing connection. An explicit module
+ * shortcut takes precedence over the catalogue scope. */
+export function integrationMatchesScope(
+  definition: Pick<IntegrationDefinition, 'modules'>,
+  connected: boolean,
+  scope: 'active' | 'all',
+  activeModules: readonly string[] | null,
+  moduleFilter: string | null,
+): boolean {
+  if (moduleFilter !== null) return definition.modules.includes(moduleFilter)
+  return scope === 'all' || activeModules === null || connected ||
+    definition.modules.some(module => activeModules.includes(module))
+}
+
 /** Match integrations by name, key, description or availability in either app language. */
 export function integrationMatchesSearch(definition: IntegrationDefinition, query: string): boolean {
   const term = query.trim().toLocaleLowerCase()

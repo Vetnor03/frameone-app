@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { INTEGRATION_CATALOGUE, integrationMatchesModule, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst } from '../app/lib/integrations/catalog.ts'
+import { INTEGRATION_CATALOGUE, integrationMatchesModule, integrationMatchesScope, integrationMatchesSearch, integrationStatusLabel, sortConnectedAppsFirst } from '../app/lib/integrations/catalog.ts'
 
 test('shared integrations are ordered and expose lifecycle capabilities', () => {
   assert.deepEqual(INTEGRATION_CATALOGUE.map(item => item.key), ['teams', 'calendar-link', 'google-calendar', 'bonnetid', 'local-events', 'spond', 'waste', 'todoist', 'google-tasks', 'microsoft-todo', 'vigilo', 'transponder', 'familywall', 'planta', 'surfline', 'meldinga', 'fotmob', 'sofascore', 'yr', 'storm', 'skistar', 'bring', 'listonic', 'nordnet', 'vg', 'aftenposten', 'timeanddate'])
@@ -120,4 +120,19 @@ test('new candidates are module-specific and never connectable before evaluation
       assert.equal(app.connectable, false)
     }
   }
+})
+
+test('active scope includes active modules and connected apps, with explicit module precedence', () => {
+  const keys = (scope, active, connected = [], module = null) => INTEGRATION_CATALOGUE
+    .filter(app => integrationMatchesScope(app, connected.includes(app.key), scope, active, module))
+    .map(app => app.key)
+  assert.deepEqual(keys('active', ['weather']), ['yr', 'storm'])
+  assert.deepEqual(keys('active', ['weather'], ['todoist']), ['todoist', 'yr', 'storm'])
+  assert.deepEqual(keys('active', ['countdown']), ['timeanddate'])
+  assert.deepEqual(keys('active', [], ['todoist']), ['todoist'])
+  assert.deepEqual(keys('active', []), [])
+  assert.deepEqual(keys('all', ['weather']), INTEGRATION_CATALOGUE.map(app => app.key))
+  assert.deepEqual(keys('active', null), INTEGRATION_CATALOGUE.map(app => app.key))
+  assert.deepEqual(keys('active', ['weather'], ['todoist'], 'surf'), ['surfline', 'meldinga'])
+  assert.deepEqual(keys('all', ['weather'], ['todoist'], 'surf'), ['surfline', 'meldinga'])
 })
