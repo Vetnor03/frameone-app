@@ -12209,7 +12209,7 @@ function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
 }
 
 function integrationReminderSourceLabel(language: AppLanguage, source?: ReminderSource) {
-  if (source === 'teams') return 'Teams'
+  if (source === 'teams') return 'Outlook'
   if (source === 'google-calendar') return 'Google Calendar'
   if (source === 'calendar-link') return language === 'no' ? 'Kalenderlenke' : 'Calendar Link'
   if (source === 'familywall') return 'FamilyWall'
